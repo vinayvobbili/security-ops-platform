@@ -27,10 +27,43 @@ export async function exportToExcel() {
 
         const filters = getCurrentFilters();
 
+        if (filters.useCustomDate && filters.customDateStart && filters.customDateEnd) {
+            const start = new Date(filters.customDateStart);
+            const end = new Date(filters.customDateEnd);
+            const spanDays = Math.round((end - start) / (1000 * 60 * 60 * 24));
+            if (spanDays > 366) {
+                alert(`Custom date range cannot exceed 366 days (selected ${spanDays} days). Please narrow the range.`);
+                return;
+            }
+        }
+
         const exportType = includeNotes ? 'with notes' : 'without notes';
         exportBtn.textContent = `⏳ Starting export ${exportType}...`;
         exportBtn.style.background = 'linear-gradient(135deg, #0369a1 0%, #0284c7 100%)';
         exportBtn.disabled = true;
+
+        // Show progress bar
+        const progBox = document.getElementById('exportProgress');
+        const progText = document.getElementById('exportProgressText');
+        const progSub = document.getElementById('exportProgressSub');
+        const progFill = document.getElementById('exportProgressFill');
+        const progWait = document.getElementById('exportProgressWait');
+        if (progBox) {
+            progBox.style.display = '';
+            progText.textContent = `Starting export ${exportType}…`;
+            progSub.textContent = '';
+            progFill.style.width = '5%';
+            progWait.textContent = includeNotes
+                ? 'Please wait, enriching notes can take several minutes…'
+                : 'Please wait…';
+            progBox.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+        }
+        const exportStart = Date.now();
+        const elapsedTimer = setInterval(() => {
+            const s = Math.round((Date.now() - exportStart) / 1000);
+            const str = s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+            if (progSub) progSub.textContent = `Elapsed: ${str}`;
+        }, 1000);
 
         const startResponse = await fetch('/api/meaningful-metrics/export-async/start', {
             method: 'POST',
@@ -45,21 +78,19 @@ export async function exportToExcel() {
 
         if (!startResponse.ok) {
             const error = await startResponse.json();
-            // Throw exceptions for flow control in async operations
             throw new Error(error.error || 'Failed to start export');
         }
 
         const {job_id} = await startResponse.json();
 
-        // Poll for progress
-        const pollInterval = 30000;
+        // Poll for progress (fast interval for responsive UI)
+        const pollInterval = 3000;
 
         while (true) {
             await new Promise(resolve => setTimeout(resolve, pollInterval));
 
             const statusResponse = await fetch(`/api/meaningful-metrics/export-async/status/${job_id}`);
             if (!statusResponse.ok) {
-                // Throw for flow control
                 throw new Error('Failed to check export status');
             }
 
@@ -73,15 +104,19 @@ export async function exportToExcel() {
                 if (includeNotes) {
                     exportBtn.textContent = `⏳ Enriching notes: ${progress}/${total} (${percentage}%)`;
                     exportBtn.style.background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
+                    if (progText) progText.textContent = `Enriching notes: ${progress} / ${total} tickets (${percentage}%)`;
                 } else {
                     exportBtn.textContent = `⏳ Exporting: ${percentage}%`;
+                    if (progText) progText.textContent = `Exporting: ${percentage}%`;
                 }
+                if (progFill) progFill.style.width = `${Math.max(5, Math.min(percentage, 90))}%`;
             } else if (status.status === 'complete') {
+                if (progText) progText.textContent = 'Downloading…';
+                if (progFill) progFill.style.width = '95%';
                 exportBtn.textContent = '⬇️ Downloading...';
 
                 const downloadResponse = await fetch(`/api/meaningful-metrics/export-async/download/${job_id}`);
                 if (!downloadResponse.ok) {
-                    // Throw for flow control
                     throw new Error('Failed to download export file');
                 }
 
@@ -107,20 +142,33 @@ export async function exportToExcel() {
                 document.body.removeChild(a);
                 window.URL.revokeObjectURL(url);
 
+                clearInterval(elapsedTimer);
+                const finalSecs = Math.round((Date.now() - exportStart) / 1000);
+                const finalStr = finalSecs < 60 ? `${finalSecs}s` : `${Math.floor(finalSecs / 60)}m ${finalSecs % 60}s`;
+                if (progFill) progFill.style.width = '100%';
+                if (progText) progText.textContent = '✅ Export complete!';
+                if (progSub) progSub.textContent = `Finished in ${finalStr}`;
                 exportBtn.textContent = '✅ Export Complete!';
                 exportBtn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
                 exportBtn.disabled = false;
 
                 showExportSuccessNotification(filename);
 
+                if (Array.isArray(status.warnings) && status.warnings.length > 0) {
+                    alert(
+                        'Export completed with warnings:\n\n- '
+                        + status.warnings.join('\n- ')
+                    );
+                }
+
                 setTimeout(() => {
                     exportBtn.textContent = originalText;
                     exportBtn.style.background = '';
+                    if (progBox) progBox.style.display = 'none';
                 }, 4000);
 
                 break;
             } else if (status.status === 'failed') {
-                // Throw for flow control
                 throw new Error(status.error || 'Export failed');
             }
         }
@@ -131,5 +179,9 @@ export async function exportToExcel() {
         exportBtn.textContent = '📥 Export to Excel';
         exportBtn.style.background = '';
         exportBtn.disabled = false;
+        const progBox = document.getElementById('exportProgress');
+        if (progBox) progBox.style.display = 'none';
+        // elapsedTimer may not be defined if error occurred before it was created
+        if (typeof elapsedTimer !== 'undefined') clearInterval(elapsedTimer);
     }
 }

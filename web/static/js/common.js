@@ -226,37 +226,35 @@ function initBurgerMenu() {
 // THEME TOGGLING (Dark / Light Mode)
 function applyTheme(mode) {
     const body = document.body;
-    const btn = document.getElementById('themeToggleBtn');
     const isDark = mode === 'dark';
     body.classList.toggle('dark-mode', isDark);
-    if (btn) {
-        btn.textContent = isDark ? '☀️' : '🌙';
-        btn.setAttribute('aria-label', isDark ? 'Switch to light mode' : 'Switch to dark mode');
-        btn.setAttribute('title', isDark ? 'Switch to light mode' : 'Switch to dark mode');
-        btn.setAttribute('aria-pressed', isDark ? 'true' : 'false');
-    }
-    // Notify any page-specific misc_scripts (e.g., charts) of theme change
+    // Sync slider radio buttons
+    const lightRadio = document.getElementById('themeModeLight');
+    const darkRadio = document.getElementById('themeModeDark');
+    if (lightRadio) lightRadio.checked = !isDark;
+    if (darkRadio) darkRadio.checked = isDark;
+    // Notify any page-specific scripts (e.g., charts) of theme change
     window.dispatchEvent(new CustomEvent('themechange', {detail: {mode}}));
 }
 
 function detectOSTheme() {
-    // Always use OS/system preference
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
-function toggleTheme() {
-    const isCurrentlyDark = document.body.classList.contains('dark-mode');
-    applyTheme(isCurrentlyDark ? 'light' : 'dark');
-}
-
 function initTheme() {
-    const btn = document.getElementById('themeToggleBtn');
-    if (btn && !btn.dataset.themeInitialized) {
-        btn.addEventListener('click', toggleTheme);
-        btn.dataset.themeInitialized = 'true';
+    const slider = document.getElementById('themeSlider');
+    if (slider && !slider.dataset.themeInitialized) {
+        slider.addEventListener('change', (e) => {
+            if (e.target.name === 'themeMode') {
+                localStorage.setItem('theme', e.target.value);
+                applyTheme(e.target.value);
+            }
+        });
+        slider.dataset.themeInitialized = 'true';
     }
-    // Always apply OS theme on page load
-    applyTheme(detectOSTheme());
+    // Use saved preference, fall back to OS preference
+    const saved = localStorage.getItem('theme');
+    applyTheme(saved || detectOSTheme());
 }
 
 // Initialize theme after DOM ready if not already invoked explicitly
@@ -310,4 +308,86 @@ if (typeof initBurgerMenu === 'function') {
     } else {
         initBurgerMenu();
     }
+}
+
+// ── Edit Auth ──
+// Matches the ticket cannon silencer pattern:
+// - Masked password modal prompt per action (no session caching)
+// - Password injected into the request body (JSON field or FormData field)
+// - Server returns 403 on failure
+
+/** Show a masked password modal. Returns a Promise<string|null> (null = cancelled). */
+function askEditPassword(title) {
+    return new Promise(resolve => {
+        const existing = document.getElementById('_editPwdOverlay');
+        if (existing) existing.remove();
+
+        const isDark = document.body.classList.contains('dark-mode');
+        const overlay = document.createElement('div');
+        overlay.id = '_editPwdOverlay';
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99999;display:flex;align-items:center;justify-content:center;';
+
+        overlay.innerHTML = `
+<div style="background:${isDark ? '#1e293b' : '#fff'};border-radius:14px;width:90%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden;font-family:inherit;">
+  <div style="padding:16px 20px;background:linear-gradient(135deg,#0046AD,#00A651);color:#fff;display:flex;justify-content:space-between;align-items:center;">
+    <span style="font-weight:700;font-size:1rem;">🔒 ${title || 'Enter Password'}</span>
+    <button id="_editPwdX" style="background:none;border:none;color:#fff;font-size:1.3rem;cursor:pointer;opacity:0.8;line-height:1;">&times;</button>
+  </div>
+  <div style="padding:20px 20px 4px;">
+    <input id="_editPwdInput" type="password" autocomplete="current-password"
+      style="width:100%;padding:9px 12px;border:1px solid ${isDark ? '#334155' : '#cbd5e1'};border-radius:8px;font-size:0.9rem;font-family:inherit;background:${isDark ? '#0f172a' : '#fff'};color:${isDark ? '#e2e8f0' : '#1e293b'};box-sizing:border-box;"
+      placeholder="Password">
+  </div>
+  <div style="display:flex;justify-content:flex-end;gap:10px;padding:16px 20px;">
+    <button id="_editPwdCancel" style="padding:8px 18px;border:none;border-radius:8px;background:${isDark ? '#334155' : '#e2e8f0'};color:${isDark ? '#e2e8f0' : '#475569'};font-weight:600;font-size:0.88rem;cursor:pointer;">Cancel</button>
+    <button id="_editPwdOk" style="padding:8px 18px;border:none;border-radius:8px;background:#0046AD;color:#fff;font-weight:600;font-size:0.88rem;cursor:pointer;">OK</button>
+  </div>
+</div>`;
+
+        document.body.appendChild(overlay);
+        setTimeout(() => document.getElementById('_editPwdInput').focus(), 50);
+
+        function confirm() {
+            const val = document.getElementById('_editPwdInput').value;
+            overlay.remove();
+            resolve(val || null);
+        }
+        function dismiss() { overlay.remove(); resolve(null); }
+
+        document.getElementById('_editPwdOk').addEventListener('click', confirm);
+        document.getElementById('_editPwdX').addEventListener('click', dismiss);
+        document.getElementById('_editPwdCancel').addEventListener('click', dismiss);
+        document.getElementById('_editPwdInput').addEventListener('keydown', e => {
+            if (e.key === 'Enter') confirm();
+            if (e.key === 'Escape') dismiss();
+        });
+        overlay.addEventListener('click', e => { if (e.target === overlay) dismiss(); });
+    });
+}
+
+/**
+ * Wrapper around fetch() that prompts for a password and injects it into
+ * the request body (JSON field or FormData field). Returns null if cancelled.
+ */
+async function editFetch(url, options) {
+    const pwd = await askEditPassword('Enter Password');
+    if (pwd === null) return null;
+
+    options = options || {};
+
+    if (options.body instanceof FormData) {
+        options.body.append('password', pwd);
+    } else if (typeof options.body === 'string') {
+        try {
+            const obj = JSON.parse(options.body);
+            obj.password = pwd;
+            options.body = JSON.stringify(obj);
+        } catch (_) {}
+    } else {
+        // No body yet (e.g. rebuild endpoint) — create one
+        options.body = JSON.stringify({ password: pwd });
+        options.headers = Object.assign({}, options.headers || {}, { 'Content-Type': 'application/json' });
+    }
+
+    return fetch(url, options);
 }

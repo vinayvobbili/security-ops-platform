@@ -38,99 +38,273 @@ except ImportError:
 DOCUMENTS_COLLECTION = "local_documents"
 
 
-class OllamaEmbeddingFunction:
-    """Custom embedding function using Ollama API with batch support."""
+from my_bot.utils.embedding_function import OpenAIEmbeddingFunction
 
-    def __init__(self, model: str = "nomic-embed-text", batch_size: int = 50):
-        self.model = model
-        self.api_url = "http://localhost:11434/api/embed"
-        self.batch_size = batch_size  # Max texts per API call
+logger = logging.getLogger(__name__)
 
-    def __call__(self, input: List[str]) -> List[List[float]]:
-        """Generate embeddings for a list of texts using batch API calls."""
-        if not input:
-            return []
 
-        # For small inputs, use single batch call
-        if len(input) <= self.batch_size:
-            return self._embed_batch(input)
+class OllamaEmbeddingFunction(OpenAIEmbeddingFunction):
+    """Legacy alias — delegates to OpenAIEmbeddingFunction (OpenAI-compatible API)."""
 
-        # For large inputs, process in parallel batches
-        from concurrent.futures import ThreadPoolExecutor, as_completed
 
-        all_embeddings = [None] * len(input)  # Pre-allocate to maintain order
-        batches = []
+# ------------------------------------------------------------------ Structured loaders
+#
+# The default LangChain `UnstructuredWordDocumentLoader` / `UnstructuredExcelLoader`
+# flatten tables into prose, which destroys row→column relationships. Security
+# policies, SOC 2 matrices, ticket exports, questionnaire banks, and rule
+# catalogs all live in tables. The loaders below use python-docx and openpyxl
+# directly to emit one atomic chunk per table row with column headers embedded
+# in the content, plus heading-hierarchy `section` metadata for Word documents.
+#
+# These are app-agnostic — any RAG ingest pipeline in IR can call them. First
+# consumer is the Customer Assurance KB; docs_library, rules catalog, etc. can
+# opt in on their next re-index.
 
-        # Split into batches with their original indices
-        for i in range(0, len(input), self.batch_size):
-            batch_texts = input[i:i + self.batch_size]
-            batches.append((i, batch_texts))
 
-        logging.info(f"Processing {len(input)} texts in {len(batches)} parallel batches...")
+def _iter_docx_blocks(doc):
+    from docx.oxml.ns import qn
+    from docx.table import Table as DocxTable
+    from docx.text.paragraph import Paragraph as DocxParagraph
 
-        # Process batches in parallel (limit workers to avoid overwhelming Ollama)
-        max_workers = min(4, len(batches))
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_batch = {
-                executor.submit(self._embed_batch, batch_texts): (start_idx, batch_texts)
-                for start_idx, batch_texts in batches
-            }
+    body = doc.element.body
+    for child in body.iterchildren():
+        if child.tag == qn("w:p"):
+            yield DocxParagraph(child, doc)
+        elif child.tag == qn("w:tbl"):
+            yield DocxTable(child, doc)
 
-            for future in as_completed(future_to_batch):
-                start_idx, batch_texts = future_to_batch[future]
+
+def load_word_structured(path: str) -> List[dict]:
+    """Extract structured (content, metadata) items from a .docx file.
+
+    Paragraphs become items tagged with the running heading stack as `section`.
+    Tables become one item per data row with column headers serialized as
+    key-value lines inside the content, so embedding retrieval sees structured
+    text (e.g. `Control ID: AC-2\\nOwner: Identity Team`) instead of a row blob.
+
+    Returns a list of {"content": str, "metadata": dict}. Metadata includes
+    `source`, `element_type` ("paragraph" or "table_row"), `section`, and for
+    table rows also `table_headers` and `row_index`.
+    """
+    from docx import Document as DocxDocument
+    from docx.table import Table as DocxTable
+    from docx.text.paragraph import Paragraph as DocxParagraph
+
+    source = os.path.basename(path)
+    items: List[dict] = []
+
+    try:
+        doc = DocxDocument(path)
+    except Exception as e:
+        logger.error(f"[document_processor] python-docx failed on {source}: {e}")
+        return items
+
+    heading_stack: List[str] = []
+
+    for block in _iter_docx_blocks(doc):
+        if isinstance(block, DocxParagraph):
+            text = (block.text or "").strip()
+            if not text:
+                continue
+            style_name = ""
+            try:
+                style_name = (block.style.name or "") if block.style else ""
+            except Exception:
+                style_name = ""
+
+            if style_name.startswith("Heading"):
                 try:
-                    batch_embeddings = future.result()
-                    for j, embedding in enumerate(batch_embeddings):
-                        all_embeddings[start_idx + j] = embedding
-                except Exception as e:
-                    logging.error(f"Batch embedding failed at index {start_idx}: {e}")
-                    # Fallback: try individual embeddings for failed batch
-                    for j, text in enumerate(batch_texts):
-                        try:
-                            all_embeddings[start_idx + j] = self._embed_single(text)
-                        except Exception as inner_e:
-                            logging.error(f"Single embedding fallback failed: {inner_e}")
-                            raise
+                    level = int(style_name.replace("Heading", "").strip() or "1")
+                except ValueError:
+                    level = 1
+                heading_stack = heading_stack[: max(0, level - 1)]
+                heading_stack.append(text)
+                continue
 
-        return all_embeddings
+            if len(text) < 20:
+                continue
 
-    def _embed_batch(self, texts: List[str], max_retries: int = 3) -> List[List[float]]:
-        """Generate embeddings for a batch of texts in a single API call."""
-        for attempt in range(max_retries):
+            section = " > ".join(heading_stack)
+            content = f"[Section: {section}]\n\n{text}" if section else text
+            items.append({
+                "content": content,
+                "metadata": {
+                    "source": source,
+                    "element_type": "paragraph",
+                    "section": section,
+                },
+            })
+
+        elif isinstance(block, DocxTable):
+            rows = list(block.rows)
+            if len(rows) < 2:
+                continue
+
+            headers = [(cell.text or "").strip() for cell in rows[0].cells]
+            if not any(headers):
+                continue
+
+            section = " > ".join(heading_stack)
+            headers_joined = " | ".join(h for h in headers if h)
+
+            for row_idx, row in enumerate(rows[1:], start=1):
+                cells = [(cell.text or "").strip() for cell in row.cells]
+                if not any(cells):
+                    continue
+
+                kv_lines: List[str] = []
+                for h, v in zip(headers, cells):
+                    if h and v:
+                        kv_lines.append(f"{h}: {v}")
+                    elif v:
+                        kv_lines.append(v)
+                if not kv_lines:
+                    continue
+
+                header_prefix = f"[Table row in: {section}]" if section else "[Table row]"
+                content = header_prefix + "\n" + "\n".join(kv_lines)
+                items.append({
+                    "content": content,
+                    "metadata": {
+                        "source": source,
+                        "element_type": "table_row",
+                        "section": section,
+                        "table_headers": headers_joined,
+                        "row_index": row_idx,
+                    },
+                })
+
+    return items
+
+
+def load_excel_structured(path: str) -> List[dict]:
+    """Extract structured (content, metadata) items from an .xlsx file.
+
+    Each sheet is treated as a separate table; row 1 is assumed to be headers;
+    each subsequent non-empty row becomes one atomic chunk with key-value lines.
+    Response banks, SOC 2 control matrices, and questionnaire libraries follow
+    this shape almost universally.
+    """
+    from openpyxl import load_workbook
+
+    source = os.path.basename(path)
+    items: List[dict] = []
+
+    try:
+        wb = load_workbook(path, data_only=True, read_only=True)
+    except Exception as e:
+        logger.error(f"[document_processor] openpyxl failed on {source}: {e}")
+        return items
+
+    try:
+        for sheet_name in wb.sheetnames:
             try:
-                response = requests.post(
-                    self.api_url,
-                    json={"model": self.model, "input": texts},
-                    timeout=120  # Longer timeout for batches
-                )
-                response.raise_for_status()
-                result = response.json()
-                return result["embeddings"]
+                ws = wb[sheet_name]
+                rows_iter = ws.iter_rows(values_only=True)
             except Exception as e:
-                if attempt < max_retries - 1:
-                    logging.warning(f"Batch embedding failed (attempt {attempt + 1}): {e}")
-                    time.sleep(2)
-                else:
-                    raise RuntimeError(f"Failed to embed batch of {len(texts)} texts: {e}")
+                logger.warning(f"[document_processor] skipping sheet {sheet_name} in {source}: {e}")
+                continue
 
-    def _embed_single(self, text: str, max_retries: int = 3) -> List[float]:
-        """Generate embedding for a single text (fallback method)."""
-        for attempt in range(max_retries):
             try:
-                response = requests.post(
-                    self.api_url,
-                    json={"model": self.model, "input": text},
-                    timeout=60
-                )
-                response.raise_for_status()
-                result = response.json()
-                return result["embeddings"][0]
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    logging.warning(f"Embedding failed (attempt {attempt + 1}): {e}")
-                    time.sleep(2)
-                else:
-                    raise RuntimeError(f"Failed to embed text: {e}")
+                header_row = next(rows_iter)
+            except StopIteration:
+                continue
+
+            headers = [(str(h).strip() if h is not None else "") for h in (header_row or [])]
+            if not any(headers):
+                continue
+
+            headers_joined = " | ".join(h for h in headers if h)
+            section = f"Sheet: {sheet_name}"
+
+            for row_idx, row in enumerate(rows_iter, start=2):
+                cells = [("" if v is None else str(v).strip()) for v in (row or [])]
+                if not any(cells):
+                    continue
+
+                kv_lines: List[str] = []
+                for h, v in zip(headers, cells):
+                    if h and v:
+                        kv_lines.append(f"{h}: {v}")
+                    elif v:
+                        kv_lines.append(v)
+                if not kv_lines:
+                    continue
+
+                content = f"[{section} — row {row_idx}]\n" + "\n".join(kv_lines)
+                items.append({
+                    "content": content,
+                    "metadata": {
+                        "source": source,
+                        "element_type": "xlsx_row",
+                        "section": section,
+                        "table_headers": headers_joined,
+                        "row_index": row_idx,
+                    },
+                })
+    finally:
+        try:
+            wb.close()
+        except Exception:
+            pass
+
+    return items
+
+
+# ------------------------------------------------------------------ Reranker client
+#
+# App-agnostic cross-encoder reranker client. Posts a (query, documents) batch
+# to an HTTP reranker endpoint and returns the top_k documents with a
+# calibrated relevance score attached to metadata under `rerank_score`.
+#
+# The endpoint defaults to http://localhost:8020 (local lab-vm1 CPU service,
+# `deployment/reranker_server.py` behind `ir-reranker.service`). When the
+# mac-m3 reranker with a larger model is stood up, flip `RERANKER_BASE_URL`
+# in .env and restart — zero code change here or in callers.
+#
+# Graceful fallback: if the endpoint is unreachable or errors, the function
+# returns the first top_k input documents unchanged, so upstream flows never
+# break because the reranker is down.
+
+
+def rerank_documents(
+    query: str,
+    documents: List[Document],
+    top_k: int = 5,
+    timeout: float = 10.0,
+) -> List[Document]:
+    if not documents:
+        return []
+
+    base_url = (os.environ.get("RERANKER_BASE_URL") or "http://localhost:8020").rstrip("/")
+
+    try:
+        resp = requests.post(
+            f"{base_url}/rerank",
+            json={
+                "query": query,
+                "documents": [d.page_content for d in documents],
+                "top_k": top_k,
+            },
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        results = (resp.json() or {}).get("results") or []
+    except Exception as e:
+        logger.warning(f"[rerank] endpoint unreachable, returning input unreranked: {e}")
+        return documents[:top_k]
+
+    reranked: List[Document] = []
+    for r in results:
+        idx = r.get("index")
+        if idx is None or idx < 0 or idx >= len(documents):
+            continue
+        orig = documents[idx]
+        new_meta = dict(orig.metadata or {})
+        new_meta["rerank_score"] = r.get("score")
+        reranked.append(Document(page_content=orig.page_content, metadata=new_meta))
+
+    return reranked if reranked else documents[:top_k]
 
 
 class ChromaRetriever(BaseRetriever):

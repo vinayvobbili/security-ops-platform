@@ -156,7 +156,7 @@ def start(room_id):
     try:
         ticket_handler = TicketHandler(XsoarEnvironment.PROD)
         query = f'-status:closed -category:job type:{CONFIG.team_name} sirtincidentnotificationsla.runStatus:running sirtincidentnotificationsla.slaStatus:2'
-        tickets = ticket_handler.get_tickets(query)
+        tickets = ticket_handler.get_tickets(query, paginate=False, test_connection=False)
 
         if not tickets:
             return  # Silent when no tickets at risk

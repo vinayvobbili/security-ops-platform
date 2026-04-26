@@ -90,10 +90,12 @@ from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
 from webexpythonsdk import WebexAPI
 from webexpythonsdk.models.cards import (
-    Colors, TextBlock, FontWeight, Column, AdaptiveCard, ColumnSet, HorizontalAlignment, ActionSet, ActionStyle,
-    options
+    Colors, TextBlock, FontWeight, FontSize, Column, AdaptiveCard, ColumnSet, HorizontalAlignment, ActionSet,
+    ActionStyle, ImageSize, Image, Container, options
 )
 from webexpythonsdk.models.cards.actions import Submit
+from webex_bot.commands.help import HelpCommand
+from webex_bot.models.response import response_from_adaptive_card
 
 import src.components.oncall as oncall
 from src.components import birthdays_anniversaries
@@ -101,16 +103,20 @@ from data.data_maps import azdo_projects, azdo_orgs, azdo_area_paths
 
 from services import xsoar, azdo
 from services.approved_testing_utils import add_approved_testing_entry
+from services.ticket_cannon_utils import CATEGORIES, SILENCER_FIELDS, get_entries, create_entry
 from services.crowdstrike import CrowdStrikeClient
 from services.xsoar import ListHandler, TicketHandler, XsoarEnvironment
 
 # Import cards from extracted package
 from webex_bots.cards import (
     NEW_TICKET_CARD, IOC_HUNT, THREAT_HUNT, AZDO_CARD,
-    APPROVED_TESTING_CARD, TICKET_IMPORT_CARD, TUNING_REQUEST_CARD,
+    APPROVED_TESTING_CARD, TICKET_CANNON_CARD, NOISE_SUPPRESSOR_CARD, TICKET_IMPORT_CARD, TUNING_REQUEST_CARD,
     URL_BLOCK_VERDICT_CARD, DOMAIN_LOOKALIKE_CARD, BIRTHDAY_ANNIVERSARY_CARD,
-    all_options_card
+    BROWSER_HISTORY_CARD, FILE_PULL_CARD, all_options_card,
+    CONTACTS_MENU_CARD, build_contacts_add_card
 )
+from my_bot.tools.crowdstrike_tools import collect_browser_history, get_and_clear_generated_file_path
+from services.crowdstrike_rtr import download_rtr_file
 from src.components.url_lookup_traffic import URLChecker
 from src.utils.http_utils import get_session
 from src.utils.toodles_decorators import toodles_log_activity
@@ -243,44 +249,34 @@ prod_list_handler = ListHandler(XsoarEnvironment.PROD)
 
 def get_url_card():
     """
-    Get URL card with {CONFIG.team_name} URLs from XSOAR.
-    Returns a card with error message if XSOAR is not configured or list is unavailable.
+    Get URL card with favorite URLs from local JSON store.
+    Returns a card with error message if data is unavailable.
     """
     try:
-        team_urls = prod_list_handler.get_list_data_by_name(f'{CONFIG.team_name} URLs')
+        from src.components.web.favorite_urls_handler import load_urls
+
+        team_urls = load_urls()
         actions = []
 
-        # Handle case where list is not found or XSOAR is not configured
-        if team_urls is None:
-            logger.warning(f"⚠️ {CONFIG.team_name} URLs list not available from XSOAR")
-            actions = [{
-                "type": "Action.Submit",
-                "title": "URLs unavailable (XSOAR not configured)",
-                "data": {}
-            }]
-        else:
-            # Iterate through the list of URLs and create button actions
-            for item in team_urls:
-                if "url" in item:  # Handle URL buttons with Action.OpenUrl
-                    url = item['url']
-                    # Ensure URL has a protocol (add https:// if missing)
-                    if not url.startswith(('http://', 'https://')):
-                        url = f"https://{url}"
+        for item in team_urls:
+            if item.get("url"):
+                url = item['url']
+                if not url.startswith(('http://', 'https://')):
+                    url = f"https://{url}"
 
-                    actions.append({
-                        "type": "Action.OpenUrl",
-                        "title": item['name'],
-                        "url": url,
-                        "style": "positive"
-                    })
-                elif "phone_number" in item:  # Handle data buttons by just displaying it
-                    actions.append({
-                        "type": "Action.Submit",
-                        "title": f"{item['name']} ({item['phone_number']})",
-                        "data": {}  # No actual data submission, just for display
-                    })
+                actions.append({
+                    "type": "Action.OpenUrl",
+                    "title": item['name'],
+                    "url": url,
+                    "style": "positive"
+                })
+            elif item.get("phone_number"):
+                actions.append({
+                    "type": "Action.Submit",
+                    "title": f"{item['name']} ({item['phone_number']})",
+                    "data": {}
+                })
 
-        # Create the adaptive card
         card = {
             "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
             "type": "AdaptiveCard",
@@ -301,7 +297,6 @@ def get_url_card():
 
     except Exception as e:
         logger.error(f"❌ Error creating URL card: {e}", exc_info=True)
-        # Return a minimal error card
         return {
             "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
             "type": "AdaptiveCard",
@@ -317,7 +312,7 @@ def get_url_card():
 
 
 class URLs(CardOnlyCommand):
-    """Display favorite URLs dynamically loaded from XSOAR."""
+    """Display favorite URLs from the local store."""
     command_keyword = "urls"
     help_message = "Favorite URLs 🔗"
     card = None  # Will be set dynamically in __init__
@@ -427,13 +422,13 @@ class IOCHunt(the notification serviceCommand):
 
 class ThreatHunt(CardOnlyCommand):
     """Display the threat hunt form."""
-    command_keyword = "threat"
+    command_keyword = "show_threat_hunt_form"
     card = THREAT_HUNT
 
 
 class CreateThreatHunt(the notification serviceCommand):
     """Create a new Threat Hunt in XSOAR and announce it."""
-    command_keyword = "threat_hunt"
+    command_keyword = "submit_threat_hunt"
     card = None
 
     @toodles_log_activity
@@ -461,10 +456,17 @@ class CreateThreatHunt(the notification serviceCommand):
         return None
 
 
+class GetAZDOCard(CardOnlyCommand):
+    """Show the AZDO work item creation form."""
+    command_keyword = "azdo"
+    help_message = ""
+    card = AZDO_CARD
+
+
 class CreateAZDOWorkItem(the notification serviceCommand):
     """Create an Azure DevOps work item."""
     command_keyword = "azdo_wit"
-    help_message = "Create AZDO Work Item 💼"
+    help_message = ""
     card = AZDO_CARD
 
     @toodles_log_activity
@@ -618,87 +620,9 @@ class GetCurrentApprovedTestingEntries(the notification serviceCommand):
             return format_user_response(
                 activity,
                 "the current list is too long to be displayed here. "
-                "You may find the same list at http://your-team-portal.example.com/get-approved-testing-entries"
+                f"You may find the same list at http://gdnr.{CONFIG.my_web_domain}/get-approved-testing-entries"
             )
         return result
-
-
-def announce_new_approved_testing_entry(new_item) -> None:
-    payload = {
-        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-        "type": "AdaptiveCard",
-        "version": "1.3",
-        "body": [
-            {
-                "type": "TextBlock",
-                "text": "New Approved Testing",
-                "style": "heading",
-                "size": "Large",
-                "weight": "Bolder",
-                "color": "Attention",
-                "horizontalAlignment": "center"
-            },
-            {
-                "type": "FactSet",
-                "facts": [
-                    {
-                        "title": "Submitter",
-                        "value": new_item.get('submitter')
-                    },
-                    {
-                        "title": "Description",
-                        "wrap": True,
-                        "value": new_item.get('description')
-                    },
-                    {
-                        "title": "Username(s)",
-                        "wrap": True,
-                        "value": new_item.get('usernames')
-                    },
-                    {
-                        "title": "IPs/Hostnames of Tester",
-                        "wrap": True,
-                        "value": new_item.get('items_of_tester')
-                    },
-                    {
-                        "title": "IPs/Hostnames to be tested",
-                        "wrap": True,
-                        "value": new_item.get('items_to_be_tested')
-                    },
-                    {
-                        "title": "Scope",
-                        "wrap": True,
-                        "value": new_item.get('scope')
-                    },
-                    {
-                        "title": "Keep until",
-                        "value": new_item.get('expiry_date')
-                    }
-                ],
-                "height": "stretch",
-                "style": "accent"
-            },
-            {
-                "type": "ActionSet",
-                "spacing": "small",
-                "actions": [
-                    {
-                        "type": "Action.Submit",
-                        "title": "Get Current List",
-                        "data": {
-                            "callback_keyword": "current_approved_testing"
-                        }
-                    }
-                ],
-                "horizontalAlignment": "right"
-            }
-        ]
-    }
-    webex_api.messages.create(
-        roomId=CONFIG.webex_room_id_gosc_t2,
-        text="New Approved Testing!",
-        attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": payload}]
-    )
 
 
 def is_valid_ip(address: str) -> bool:
@@ -721,6 +645,7 @@ class AddApprovedTestingEntry(the notification serviceCommand):
         items_to_be_tested = get_input_value(attachment_actions, 'ip_addresses_and_host_names_to_be_tested')
         description = get_input_value(attachment_actions, 'description')
         scope = get_input_value(attachment_actions, 'scope')
+        ttps = get_input_value(attachment_actions, 'ttps')
         submitter = get_user_email(activity)
         expiry_date = attachment_actions.inputs['expiry_date']
         if attachment_actions.inputs['callback_keyword'] == 'add_approved_testing' and expiry_date == "":
@@ -738,7 +663,8 @@ class AddApprovedTestingEntry(the notification serviceCommand):
                 scope,
                 submitter,
                 expiry_date,
-                submit_date
+                submit_date,
+                ttps=ttps
             )
         except ValueError as e:
             return str(e)
@@ -757,6 +683,130 @@ class RemoveApprovedTestingEntry(CardOnlyCommand):
     """Placeholder for removing approved testing entries."""
     command_keyword = "remove_approved_testing"
     card = None
+
+
+# --- Ticket Cannon Silencer & Noise Suppression ---
+
+class GetTicketCannonCard(CardOnlyCommand):
+    """Display the ticket cannon silencer form."""
+    command_keyword = "silencer"
+    help_message = ""
+    card = TICKET_CANNON_CARD
+
+
+class GetNoiseSuppressorCard(CardOnlyCommand):
+    """Display the noisy rule suppressor form."""
+    command_keyword = "suppressor"
+    help_message = ""
+    card = NOISE_SUPPRESSOR_CARD
+
+
+class CreateSilencerEntry(the notification serviceCommand):
+    """Create a new silencer or suppressor entry."""
+    command_keyword = "create_silencer"
+    card = None
+
+    @toodles_log_activity
+    def execute(self, message, attachment_actions, activity):
+        # Category comes from the card's Action.Submit data, not an input field
+        category = attachment_actions.inputs.get('category', 'ticket_cannon')
+        description = get_input_value(attachment_actions, 'description')
+        expiry_days_str = get_input_value(attachment_actions, 'expiry_days') or '1'
+        submitter = get_user_email(activity)
+
+        if not description:
+            return format_user_response(activity, "description is required.")
+
+        # Build fields dict from the 3 field slots
+        fields = {}
+        for i in range(1, 4):
+            key = get_input_value(attachment_actions, f'field{i}_key')
+            val = get_input_value(attachment_actions, f'field{i}_value')
+            if key and val:
+                fields[key] = val
+
+        # Custom free-text field
+        custom_key = get_input_value(attachment_actions, 'custom_key')
+        custom_val = get_input_value(attachment_actions, 'custom_value')
+        logger.info(f"Silencer custom field: key='{custom_key}', val='{custom_val}', all_inputs={attachment_actions.inputs}")
+        if custom_key and custom_val:
+            fields[custom_key] = custom_val
+
+        if not fields:
+            return format_user_response(activity, "at least one filter field is required.")
+
+        try:
+            expiry_days = int(expiry_days_str)
+        except ValueError:
+            expiry_days = 1
+
+        try:
+            entry = create_entry(
+                list_handler=prod_list_handler,
+                team_name=CONFIG.team_name,
+                category=category,
+                description=description,
+                fields=fields,
+                expiry_days=expiry_days,
+                created_by=submitter,
+            )
+        except ValueError as e:
+            return format_user_response(activity, str(e))
+
+        category_label = CATEGORIES.get(category, {}).get("label", category)
+        cat_emoji = "🔇" if category == "ticket_cannon" else "🔕"
+        field_lines = "\n".join(f"  🔹 **{SILENCER_FIELDS.get(k, k)}**: `{v}`" for k, v in fields.items())
+        return format_user_response(
+            activity,
+            f"✅ **{category_label} created!**\n\n"
+            f"{cat_emoji} **{description}**\n"
+            f"{field_lines}\n"
+            f"⏰ Expires: {entry['expiry_date']}\n\n"
+            f"🌐 [View all on web dashboard](http://gdnr.{CONFIG.my_web_domain}/ticket-cannon)"
+        )
+
+
+class GetCurrentSilencers(the notification serviceCommand):
+    """Show current active silencers and suppressors."""
+    command_keyword = "current_silencers"
+    card = None
+    delete_previous_message = False
+
+    @toodles_log_activity
+    def execute(self, message, attachment_actions, activity):
+        cat_emojis = {"ticket_cannon": "🔇", "noise_suppression": "🔕"}
+        lines = []
+        total_active = 0
+        for cat_key, cat_info in CATEGORIES.items():
+            emoji = cat_emojis.get(cat_key, "📋")
+            entries = get_entries(prod_list_handler, CONFIG.team_name, cat_key)
+            active = [e for e in entries if e.get("active", False)]
+            total_active += len(active)
+            lines.append(f"{emoji} **{cat_info['label']}** — {len(active)} active")
+            if not active:
+                lines.append("  _No entries yet_ ✨")
+            for e in active:
+                field_parts = " | ".join(f"**{SILENCER_FIELDS.get(k, k)}**: `{v}`" for k, v in e.get("fields", {}).items())
+                matches = e.get('match_count', 0)
+                match_str = f"🎯 {matches} match{'es' if matches != 1 else ''}" if matches > 0 else "🆕 0 matches"
+                lines.append(
+                    f"  🔸 **{e.get('description', '?')}**\n"
+                    f"    {field_parts}\n"
+                    f"    ⏰ Expires {e.get('expiry_date', '?')} | {match_str} | 👤 {e.get('created_by', '?')}"
+                )
+            lines.append("")
+
+        lines.append(f"🌐 [View all on web dashboard](http://gdnr.{CONFIG.my_web_domain}/ticket-cannon)")
+
+        result = "\n".join(lines).strip()
+        if len(result) > 7400:
+            return format_user_response(
+                activity,
+                f"📋 Too many entries for Webex! View them at http://gdnr.{CONFIG.my_web_domain}/ticket-cannon"
+            )
+
+        header = f"🛡️ **{total_active} active filter{'s' if total_active != 1 else ''}** standing guard:\n\n"
+        return format_user_response(activity, f"{header}{result}")
 
 
 def add_entry_to_reviews(dict_full, ticket_id, person, date, message):
@@ -792,7 +842,7 @@ class Who(the notification serviceCommand):
         on_call_person = oncall.get_on_call_person()
         return format_user_response(
             activity,
-            f"the on-call person is {on_call_person.get('name')} - {on_call_person.get('email_address')} - {on_call_person.get('phone_number')}"
+            f"the DnR On-call person is {on_call_person.get('name')} - {on_call_person.get('email_address')} - {on_call_person.get('phone_number')}"
         )
 
 
@@ -848,10 +898,16 @@ class GetAllOptions(CardOnlyCommand):
     delete_previous_message = False  # Keep the welcome card visible
 
 
-class ImportTicket(the notification serviceCommand):
-    """Import a ticket from production to dev."""
+class ImportTicket(CardOnlyCommand):
+    """Show the import ticket form."""
     command_keyword = "import"
     card = TICKET_IMPORT_CARD.to_dict()
+
+
+class DoImportTicket(the notification serviceCommand):
+    """Import a ticket from production to dev."""
+    command_keyword = "do_import"
+    card = None
 
     @toodles_log_activity
     def execute(self, message, attachment_actions, activity):
@@ -864,10 +920,16 @@ class ImportTicket(the notification serviceCommand):
         )
 
 
+class GetTuningRequestCard(CardOnlyCommand):
+    """Show the tuning request form."""
+    command_keyword = "tuning"
+    help_message = ""
+    card = TUNING_REQUEST_CARD.to_dict()
+
+
 class CreateTuningRequest(the notification serviceCommand):
     """Create a tuning request in Azure DevOps."""
     command_keyword = "tuning_request"
-    help_message = "Create Tuning Request 🎶"
     card = TUNING_REQUEST_CARD.to_dict()
 
     @toodles_log_activity
@@ -927,7 +989,7 @@ SEARCH_X_CARD = AdaptiveCard(
 class GetSearchXSOARCard(CardOnlyCommand):
     """Display the XSOAR search form."""
     command_keyword = "get_search_xsoar_card"
-    help_message = "Search 𝗫"
+    help_message = ""
     card = SEARCH_X_CARD.to_dict()
 
 
@@ -1137,17 +1199,32 @@ class Hi(the notification serviceCommand):
     command_keyword = "hi"
     card = None
     delete_previous_message = False
-    exact_command_keyword_match = False
 
     @toodles_log_activity
     def execute(self, message, attachment_actions, activity):
         return "Hi 👋🏾"
 
 
+class RemoveWatchlistDomain(the notification serviceCommand):
+    """Remove a domain from the realtime watchlist via heartbeat card action."""
+    command_keyword = "watchlist_remove"
+    card = None
+    delete_previous_message = False
+
+    @toodles_log_activity
+    def execute(self, message, attachment_actions, activity):
+        domain = attachment_actions.inputs.get("domain_to_remove", "").strip()
+        if not domain:
+            return "❌ No domain selected."
+        from src.components.domain_monitoring.watchlist_poller import remove_watchlist_domain
+        result = remove_watchlist_domain(domain)
+        person_id = attachment_actions.personId
+        return f"Thanks <@personId:{person_id}>! {result}"
+
+
 class GetDomainLookalikeCard(CardOnlyCommand):
     """Display the domain lookalike scanner form."""
     command_keyword = "domain_lookalike"
-    help_message = "Domain Lookalike Scanner 🔍"
     card = DOMAIN_LOOKALIKE_CARD
 
 
@@ -1183,10 +1260,365 @@ class ProcessDomainLookalike(the notification serviceCommand):
             return domain_scanner.start_quick_scan(domain, room_id)
 
 
+
+
+def _check_host_online(hostname: str) -> bool:
+    """Return True if host is online in CrowdStrike."""
+    cs = CrowdStrikeClient()
+    return cs.get_device_online_state(hostname) == "online"
+
+
+def _offline_host_card(ticket_number, hostname, rtr_action, file_path=None):
+    """Build an Adaptive Card asking if the analyst wants to monitor the offline host."""
+    submit_data = {
+        'callback_keyword': 'monitor_offline_host',
+        'ticket_number': ticket_number,
+        'hostname': hostname,
+        'rtr_action': rtr_action,
+    }
+    if file_path:
+        submit_data['file_path'] = file_path
+
+    card = AdaptiveCard(body=[
+        Container(
+            items=[
+                TextBlock(
+                    text=f"🔴  Host {hostname} is offline",
+                    size=FontSize.MEDIUM,
+                    weight=FontWeight.BOLDER,
+                    color=Colors.ATTENTION,
+                ),
+                TextBlock(
+                    text="RTR requires the device to be online. Would you like to monitor this host and automatically perform the action when it comes back online?",
+                    spacing=options.Spacing.SMALL,
+                    wrap=True,
+                ),
+                TextBlock(
+                    text="The host will be checked every 15 minutes until it comes online.",
+                    spacing=options.Spacing.SMALL,
+                    isSubtle=True,
+                    wrap=True,
+                ),
+            ],
+            style=options.ContainerStyle.EMPHASIS,
+            bleed=True,
+        ),
+        ActionSet(actions=[
+            Submit(
+                title="👁️ Yes, monitor and run when online",
+                style=ActionStyle.POSITIVE,
+                data=submit_data,
+            ),
+        ]),
+    ])
+    return response_from_adaptive_card(adaptive_card=card)
+
+
+class MonitorOfflineHost(the notification serviceCommand):
+    """Queue an offline host for deferred RTR execution via the scheduler."""
+    command_keyword = "monitor_offline_host"
+    card = None
+
+    @toodles_log_activity
+    def execute(self, message, attachment_actions, activity):
+        from src.deferred_rtr import add_entry
+
+        room_id = attachment_actions.roomId if attachment_actions else None
+
+        hostname = get_input_value(attachment_actions, 'hostname')
+        ticket_number = get_input_value(attachment_actions, 'ticket_number')
+        rtr_action = get_input_value(attachment_actions, 'rtr_action')
+        file_path = get_input_value(attachment_actions, 'file_path')
+
+        if not hostname or not ticket_number or not rtr_action:
+            return "Missing required information to monitor host."
+
+        requester = get_user_email(activity)
+        add_entry(hostname, ticket_number, rtr_action, room_id, file_path=file_path, requester=requester)
+
+        return f"👁️ Now monitoring **{hostname}** (X#{ticket_number}). The scheduler will check every 15 minutes and run `{rtr_action}` as soon as the host comes online."
+
+
+def _closed_ticket_card(ticket_number, retry_action, file_path=None):
+    """Build an Adaptive Card prompting to reopen a closed ticket and retry."""
+    ticket_url = build_incident_url(ticket_number)
+    submit_data = {
+        'callback_keyword': 'reopen_and_retry',
+        'ticket_number': ticket_number,
+        'retry_action': retry_action,
+    }
+    if file_path:
+        submit_data['file_path'] = file_path
+
+    card = AdaptiveCard(body=[
+        Container(
+            items=[
+                TextBlock(
+                    text=f"🔒  Ticket X#{ticket_number} is closed",
+                    size=FontSize.MEDIUM,
+                    weight=FontWeight.BOLDER,
+                    color=Colors.ATTENTION,
+                ),
+                TextBlock(
+                    text="Reopen the ticket to attach files.",
+                    spacing=options.Spacing.SMALL,
+                ),
+            ],
+            style=options.ContainerStyle.EMPHASIS,
+            bleed=True,
+        ),
+        ActionSet(actions=[
+            Submit(
+                title="🔓 Reopen & Retry",
+                style=ActionStyle.POSITIVE,
+                data=submit_data,
+            ),
+        ]),
+    ])
+    return response_from_adaptive_card(adaptive_card=card)
+
+
+class ReopenAndRetry(the notification serviceCommand):
+    """Reopen a closed XSOAR ticket and re-run the original action."""
+    command_keyword = "reopen_and_retry"
+    card = None
+
+    @toodles_log_activity
+    def execute(self, message, attachment_actions, activity):
+        ticket_number = get_input_value(attachment_actions, 'ticket_number')
+        retry_action = get_input_value(attachment_actions, 'retry_action')
+        if not ticket_number or not retry_action:
+            return "Missing ticket number or action."
+
+        # Reopen the ticket
+        try:
+            prod_incident_handler.update_incident(ticket_number, {'status': 1})
+            logger.info(f"Reopened ticket X#{ticket_number} for {retry_action}")
+        except Exception as e:
+            logger.error(f"Failed to reopen ticket X#{ticket_number}: {e}")
+            return f"⚠️ Failed to reopen ticket X#{ticket_number}: `{e}`"
+
+        # Re-dispatch to the original command
+        for cmd in [FetchBrowserHistory(), FetchFilePull()]:
+            if cmd.command_keyword == retry_action:
+                return cmd.execute(message, attachment_actions, activity)
+
+        return f"⚠️ Unknown retry action: `{retry_action}`"
+
+
+class GetBrowserHistoryCard(CardOnlyCommand):
+    """Display the browser history collection form."""
+    command_keyword = "get_browser_history_card"
+    help_message = "Browser History 🌐"
+    card = BROWSER_HISTORY_CARD
+
+
+class FetchBrowserHistory(the notification serviceCommand):
+    """Collect browser history from a device via CrowdStrike RTR."""
+    command_keyword = "fetch_browser_history"
+    card = None
+
+    @toodles_log_activity
+    def execute(self, message, attachment_actions, activity):
+        import os
+
+        room_id = attachment_actions.roomId if attachment_actions else None
+
+        ticket_number = get_input_value(attachment_actions, 'ticket_number')
+        if not ticket_number:
+            return "Please enter an XSOAR ticket number."
+
+        # Strip common prefixes
+        ticket_number = ticket_number.strip().lstrip('#')
+        if ticket_number.upper().startswith('X#'):
+            ticket_number = ticket_number[2:]
+        elif ticket_number.upper().startswith('X'):
+            ticket_number = ticket_number[1:]
+
+        # Fetch ticket from XSOAR
+        try:
+            case_data = prod_incident_handler.get_case_data(ticket_number)
+        except Exception as e:
+            logger.error(f"Error fetching ticket X#{ticket_number}: {e}")
+            return f"Could not find ticket X#{ticket_number} in XSOAR."
+
+        if not case_data or not case_data.get('id'):
+            return f"Could not find ticket X#{ticket_number} in XSOAR."
+
+        if case_data.get('status') == 2:
+            return _closed_ticket_card(ticket_number, 'fetch_browser_history')
+
+        # Extract hostname from ticket
+        custom_fields = case_data.get('CustomFields') or {}
+        hostname = custom_fields.get('hostname', '').strip()
+        if not hostname or hostname.lower() in ('n/a', 'na', 'none', ''):
+            return f"No hostname found on ticket X#{ticket_number}."
+
+        # Look up device in CrowdStrike
+        try:
+            cs = CrowdStrikeClient()
+            device_id = cs.get_device_id(hostname)
+        except Exception as e:
+            logger.error(f"CrowdStrike lookup error for {hostname}: {e}")
+            return f"Error looking up **{hostname}** in CrowdStrike: {e}"
+
+        if not device_id:
+            return f"Host **{hostname}** not found in CrowdStrike."
+
+        # Check platform
+        try:
+            details = cs.get_device_details(device_id)
+            platform = details.get('platform_name', 'Unknown')
+            if platform not in ('Windows', 'Mac'):
+                return f"Browser history collection is only supported on Windows and Mac devices. **{hostname}** is {platform}."
+        except Exception as e:
+            logger.warning(f"Could not check platform for {hostname}: {e}")
+            platform = None
+
+        # Check if host is online before attempting RTR
+        if not _check_host_online(hostname):
+            return _offline_host_card(ticket_number, hostname, 'fetch_browser_history')
+
+        # Collect browser history via RTR
+        try:
+            webex_api.messages.create(
+                roomId=room_id,
+                markdown=f"Collecting browser history from **{hostname}** (X#{ticket_number})... this may take a minute."
+            )
+        except Exception:
+            pass
+
+        try:
+            result_message = collect_browser_history.func(hostname, platform=platform)
+        except Exception as e:
+            logger.error(f"Failed to collect browser history from {hostname}: {e}")
+            return f"⚠️ Failed to collect browser history from **{hostname}**: `{e}`"
+        file_path = get_and_clear_generated_file_path()
+
+        if file_path and os.path.exists(file_path):
+            # Upload to XSOAR war room
+            try:
+                prod_incident_handler.upload_file_to_attachment(
+                    ticket_number, file_path,
+                    comment=f"Browser history collected from {hostname}"
+                )
+            except Exception as e:
+                logger.error(f"Failed to upload browser history to XSOAR X#{ticket_number}: {e}")
+
+            # Notify in Webex (file is already on the ticket)
+            ticket_url = build_incident_url(ticket_number)
+            return format_user_response(
+                activity,
+                f"🌐 Browser history collected from **{hostname}**\n\n"
+                f"📎 File attached to [X#{ticket_number}]({ticket_url})"
+            )
+
+        # No file generated (few entries or error) — return the text response
+        return result_message
+
+
+class GetFilePullCard(CardOnlyCommand):
+    """Display the file pull form."""
+    command_keyword = "get_file_pull_card"
+    help_message = "File Pull 📁"
+    card = FILE_PULL_CARD
+
+
+class FetchFilePull(the notification serviceCommand):
+    """Pull a file from an endpoint via CrowdStrike RTR."""
+    command_keyword = "fetch_file_pull"
+    card = None
+
+    @toodles_log_activity
+    def execute(self, message, attachment_actions, activity):
+        import os
+
+        room_id = attachment_actions.roomId if attachment_actions else None
+
+        ticket_number = get_input_value(attachment_actions, 'ticket_number')
+        if not ticket_number:
+            return "Please enter an XSOAR ticket number."
+
+        file_path = get_input_value(attachment_actions, 'file_path')
+        if not file_path:
+            return "Please enter a file path."
+
+        # Strip common prefixes
+        ticket_number = ticket_number.strip().lstrip('#')
+        if ticket_number.upper().startswith('X#'):
+            ticket_number = ticket_number[2:]
+        elif ticket_number.upper().startswith('X'):
+            ticket_number = ticket_number[1:]
+
+        # Fetch ticket from XSOAR
+        try:
+            case_data = prod_incident_handler.get_case_data(ticket_number)
+        except Exception as e:
+            logger.error(f"Error fetching ticket X#{ticket_number}: {e}")
+            return f"Could not find ticket X#{ticket_number} in XSOAR."
+
+        if not case_data or not case_data.get('id'):
+            return f"Could not find ticket X#{ticket_number} in XSOAR."
+
+        if case_data.get('status') == 2:
+            return _closed_ticket_card(ticket_number, 'fetch_file_pull', file_path=file_path)
+
+        # Extract hostname from ticket
+        custom_fields = case_data.get('CustomFields') or {}
+        hostname = custom_fields.get('hostname', '').strip()
+        if not hostname or hostname.lower() in ('n/a', 'na', 'none', ''):
+            return f"No hostname found on ticket X#{ticket_number}."
+
+        # Check if host is online before attempting RTR
+        if not _check_host_online(hostname):
+            return _offline_host_card(ticket_number, hostname, 'fetch_file_pull', file_path=file_path)
+
+        # Send progress message
+        basename = os.path.basename(file_path.replace('\\', '/'))
+        try:
+            webex_api.messages.create(
+                roomId=room_id,
+                markdown=f"Pulling **{basename}** from **{hostname}** (X#{ticket_number})... this may take a few minutes."
+            )
+        except Exception:
+            pass
+
+        # Build local path and pull file via RTR
+        local_path = f"/tmp/rtr_file_pull_{hostname}_{basename}"
+        result = download_rtr_file(hostname, file_path, local_path)
+
+        if not result.get('success'):
+            return f"File pull failed: {result.get('error', 'Unknown error')}"
+
+        actual_path = result.get('local_path', local_path)
+
+        # Upload to XSOAR attachments
+        try:
+            prod_incident_handler.upload_file_to_attachment(
+                ticket_number, actual_path,
+                comment=f"File pulled from {hostname}: {file_path}"
+            )
+        except Exception as e:
+            logger.error(f"Failed to upload file to XSOAR X#{ticket_number}: {e}")
+
+        # Cleanup local file (already uploaded to XSOAR)
+        try:
+            os.remove(actual_path)
+        except OSError:
+            pass
+
+        # Notify in Webex (file is already on the ticket)
+        ticket_url = build_incident_url(ticket_number)
+        return format_user_response(
+            activity,
+            f"📁 **{basename}** pulled from **{hostname}**\n\n"
+            f"📎 File attached to [X#{ticket_number}]({ticket_url})"
+        )
+
+
 class GetUrlBlockVerdictForm(CardOnlyCommand):
     """Display the URL block verdict form."""
     command_keyword = "get_url_block_verdict_form"
-    help_message = "URL Block Verdict ⚖️"
     card = URL_BLOCK_VERDICT_CARD
     delete_previous_message = False
 
@@ -1419,6 +1851,69 @@ class SaveBirthdayAnniversary(the notification serviceCommand):
             return f"{activity['actor']['displayName']}, sorry, there was an error saving your information. Please try again."
 
 
+class the notification serviceHelpCommand(HelpCommand):
+    """Custom help command with centered title and two-column button grid."""
+
+    def build_card(self, message, attachment_actions, activity):
+        heading = TextBlock("🛠️ the notification service ✨", weight=FontWeight.BOLDER, wrap=True,
+                            size=FontSize.LARGE, horizontalAlignment=HorizontalAlignment.CENTER,
+                            color=Colors.ACCENT)
+        subtitle = TextBlock(self.bot_help_subtitle, wrap=True, size=FontSize.SMALL,
+                             color=Colors.LIGHT, horizontalAlignment=HorizontalAlignment.CENTER)
+
+        image = Image(url=self.bot_help_image, size=ImageSize.SMALL)
+
+        header_column = Column(items=[heading, subtitle], width=2)
+        header_image_column = Column(items=[image], width=1)
+
+        header_container = Container(
+            items=[ColumnSet(columns=[header_column, header_image_column])],
+            style=options.ContainerStyle.ACCENT,
+            bleed=True
+        )
+
+        thread_parent_id = None
+        if 'parent' not in activity:
+            thread_parent_id = activity['id']
+
+        # Collect commands with help messages
+        cmds = []
+        if self.commands:
+            for cmd in sorted(self.commands, key=lambda c: (c.command_keyword or '')):
+                if cmd.help_message and cmd.command_keyword != 'help':
+                    cmds.append(cmd)
+
+        # Sort by label length (longest first), split into left/right columns
+        cmds.sort(key=lambda c: len(c.help_message), reverse=True)
+        mid = (len(cmds) + 1) // 2
+        left_cmds = cmds[:mid]
+        right_cmds = cmds[mid:]
+
+        def make_action_set(cmd):
+            return ActionSet(actions=[Submit(
+                title=cmd.help_message,
+                data={'command_keyword': cmd.command_keyword,
+                      'thread_parent_id': thread_parent_id}
+            )])
+
+        left_col = Column(items=[make_action_set(c) for c in left_cmds], width="stretch")
+        right_col = Column(items=[make_action_set(c) for c in right_cmds], width="auto")
+
+        button_grid = Container(
+            items=[ColumnSet(columns=[left_col, right_col])],
+            style=options.ContainerStyle.EMPHASIS,
+            bleed=True,
+            spacing=options.Spacing.NONE
+        )
+
+        card = AdaptiveCard(
+            body=[
+                header_container,
+                button_grid
+            ])
+        return response_from_adaptive_card(adaptive_card=card)
+
+
 def toodles_bot_factory():
     """Create the notification service bot instance"""
     # Clean up stale device registrations before starting
@@ -1438,18 +1933,110 @@ def toodles_bot_factory():
         CONFIG.webex_bot_email_pinger,  # Pinger bot for keepalive
     ]
 
+    # Fetch bot avatar for the custom help card
+    bot_avatar = webex_api.people.me().avatar
+
+    help_cmd = the notification serviceHelpCommand(
+        bot_name="the notification service",
+        bot_help_subtitle="✨ Your friendly toolbox bot!",
+        bot_help_image=bot_avatar
+    )
+
     return WebexBot(
         CONFIG.webex_bot_access_token_toodles,
-        bot_name="the notification service Bot",
-        approved_domains=[CONFIG.my_web_domain],
+        bot_name="the notification service",
+        approved_domains=[d.strip() for d in (CONFIG.company_domains or CONFIG.my_web_domain).split(",") if d.strip()],
         approved_users=approved_bot_emails,  # Allow other bots for peer ping
         # approved_rooms disabled - bot lacks spark:memberships_read scope for validation
         # Security: Only add this bot to authorized rooms to control access
         log_level="ERROR",
         threads=True,
-        bot_help_subtitle="Your friendly toolbox bot!",
+        help_command=help_cmd,
         allow_bot_to_bot=True  # Enable peer ping health checks from other bots
     )
+
+
+# ---------------------------------------------------------------------------
+# Escalation Contacts
+# ---------------------------------------------------------------------------
+
+class GetContactsCard(CardOnlyCommand):
+    """Display the contacts menu card with Show All and Add New buttons."""
+    command_keyword = "contacts"
+    help_message = "Escalation Contacts 📇"
+    card = CONTACTS_MENU_CARD
+
+
+class GetContactsAddForm(the notification serviceCommand):
+    """Display the Add New Contact form with dynamic region choices."""
+    command_keyword = "get_contacts_add_form"
+    card = None
+
+    @toodles_log_activity
+    def execute(self, message, attachment_actions, activity):
+        from src.components.web.escalation_contacts_handler import get_regions
+        regions = get_regions() or ["Global", "APAC", "EMEA", "LATAM", "JAPAN"]
+        card = build_contacts_add_card(regions)
+
+        room_id = attachment_actions.roomId if attachment_actions else None
+        if room_id:
+            webex_api.messages.create(
+                roomId=room_id,
+                text="Add New Contact",
+                attachments=[{
+                    "contentType": "application/vnd.microsoft.card.adaptive",
+                    "content": card
+                }]
+            )
+        return None
+
+
+class AddNewContact(the notification serviceCommand):
+    """Process the Add New Contact form submission."""
+    command_keyword = "add_new_contact"
+    card = None
+    delete_previous_message = False
+
+    @toodles_log_activity
+    def execute(self, message, attachment_actions, activity):
+        from src.components.web.escalation_contacts_handler import create_contact, rebuild_embeddings
+
+        region = get_input_value(attachment_actions, 'region')
+        custom_region = get_input_value(attachment_actions, 'custom_region')
+        team = get_input_value(attachment_actions, 'team')
+        name = get_input_value(attachment_actions, 'name')
+        title = get_input_value(attachment_actions, 'title')
+        email = get_input_value(attachment_actions, 'email')
+        phone = get_input_value(attachment_actions, 'phone')
+
+        # Use custom region if "New Region" was selected
+        if region == "__new__":
+            region = custom_region
+        if not region or not team or not name:
+            return "⚠️ **Region**, **Team**, and **Name** are required fields."
+
+        try:
+            contact_id = create_contact(region=region, team=team, name=name,
+                                        title=title, email=email, phone=phone)
+        except Exception as e:
+            logger.error("Failed to create contact: %s", e, exc_info=True)
+            return f"❌ Failed to add contact: {e}"
+
+        # Rebuild embeddings in background
+        import threading
+        threading.Thread(target=rebuild_embeddings, daemon=True).start()
+
+        user_name = get_user_display_name(activity)
+        parts = [f"✅ **{user_name}** added a new contact:"]
+        parts.append(f"- **Name:** {name}")
+        if title:
+            parts.append(f"- **Title:** {title}")
+        parts.append(f"- **Region:** {region} / **Team:** {team}")
+        if email:
+            parts.append(f"- **Email:** {email}")
+        if phone:
+            parts.append(f"- **Phone:** {phone}")
+        return "\n".join(parts)
 
 
 def toodles_initialization(bot=None):
@@ -1460,6 +2047,11 @@ def toodles_initialization(bot=None):
         bot.add_command(GetCurrentApprovedTestingEntries())
         bot.add_command(AddApprovedTestingEntry())
         bot.add_command(RemoveApprovedTestingEntry())
+        # Ticket Cannon Silencer / Noise Suppression
+        bot.add_command(GetTicketCannonCard())
+        bot.add_command(GetNoiseSuppressorCard())
+        bot.add_command(CreateSilencerEntry())
+        bot.add_command(GetCurrentSilencers())
         bot.add_command(Who())
         bot.add_command(Rotation())
         bot.add_command(ContainmentStatusCS())
@@ -1471,9 +2063,12 @@ def toodles_initialization(bot=None):
         bot.add_command(URLs())
         bot.add_command(ThreatHunt())
         bot.add_command(CreateThreatHunt())
+        bot.add_command(GetAZDOCard())
         bot.add_command(CreateAZDOWorkItem())
         bot.add_command(GetAllOptions())
         bot.add_command(ImportTicket())
+        bot.add_command(DoImportTicket())
+        bot.add_command(GetTuningRequestCard())
         bot.add_command(CreateTuningRequest())
         bot.add_command(GetSearchXSOARCard())
         bot.add_command(FetchXSOARTickets())
@@ -1484,9 +2079,23 @@ def toodles_initialization(bot=None):
         bot.add_command(ProcessUrlBlockVerdict())
         bot.add_command(GetBirthdayAnniversaryForm())
         bot.add_command(SaveBirthdayAnniversary())
-        # Domain Lookalike Scanner
+        # Domain monitoring
+        bot.add_command(RemoveWatchlistDomain())
         bot.add_command(GetDomainLookalikeCard())
         bot.add_command(ProcessDomainLookalike())
+        # Browser History
+        bot.add_command(ReopenAndRetry())
+        bot.add_command(GetBrowserHistoryCard())
+        bot.add_command(FetchBrowserHistory())
+        # File Pull
+        bot.add_command(GetFilePullCard())
+        bot.add_command(FetchFilePull())
+        # Offline host monitoring (callback from RTR offline prompt)
+        bot.add_command(MonitorOfflineHost())
+        # Escalation Contacts
+        bot.add_command(GetContactsCard())
+        bot.add_command(GetContactsAddForm())
+        bot.add_command(AddNewContact())
         return True
     return False
 

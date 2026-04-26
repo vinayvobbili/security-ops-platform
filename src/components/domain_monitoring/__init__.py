@@ -4,7 +4,7 @@ This package provides comprehensive domain monitoring capabilities:
 
 ## Overview
 
-Scheduled by all_jobs.py to run daily at 8 AM ET. Sends alerts to Webex
+Scheduled by scheduler.py to run daily at 8 AM ET. Sends alerts to Webex
 when threats are detected. Results are saved to web-accessible JSON.
 
 ## Monitoring Capabilities
@@ -44,11 +44,11 @@ when threats are detected. Results are saved to web-accessible JSON.
 ```python
 from src.components.domain_monitoring import run_daily_monitoring, ALERT_ROOM_ID_PROD
 
-# Run with production alerts
-run_daily_monitoring(room_id=ALERT_ROOM_ID_PROD)
-
-# Run with test alerts (default)
+# Run with production alerts (default)
 run_daily_monitoring()
+
+# Run with test alerts
+run_daily_monitoring(room_id=ALERT_ROOM_ID_TEST)
 ```
 
 ## Configuration
@@ -65,9 +65,12 @@ Domains are configured in:
 
 from .config import ALERT_ROOM_ID_PROD, ALERT_ROOM_ID_TEST
 from .orchestrator import run_daily_monitoring
+from .watchlist_poller import poll_watchlist, send_heartbeat as send_watchlist_heartbeat
 
 __all__ = [
     "run_daily_monitoring",
+    "poll_watchlist",
+    "send_watchlist_heartbeat",
     "ALERT_ROOM_ID_PROD",
     "ALERT_ROOM_ID_TEST",
 ]

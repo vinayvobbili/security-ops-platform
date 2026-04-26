@@ -1,18 +1,14 @@
 {% extends 'base_layout.html' %}
-{% set page_title_text = 'Amazing Actionable Analytics' %}
+{% set page_title_text = 'Meaningful Metrics' %}
 {% set page_title_left_icon = '📊' %}
 {% set page_title_right_icon = '💰' %}
 {% block head_scripts %}
     <link rel="icon" href="{{ url_for('static', filename='icons/metrics-dashboard-icon.ico') }}" type="image/x-icon">{% endblock %}
 {% block body_classes %}{% endblock %}
 {% block extra_css %}
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/meaningful_metrics.css') }}">{% endblock %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/meaningful_metrics.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/chat_widget.css') }}">{% endblock %}
 {% block content %}
-    <!-- Dark Mode Toggle -->
-    <div class="theme-toggle" id="themeToggleWrapper">
-        <button id="themeToggleBtn" aria-label="Toggle dark mode" title="Toggle dark mode">🌙</button>
-    </div>
-
     <div class="dashboard-container">
         <!-- Filters Section -->
         <div class="filters-section">
@@ -26,12 +22,23 @@
                                  style="position: absolute; top: -35px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 10; display: none;">
                                 30
                             </div>
-                            <label for="dateRangeSlider"></label><input type="range" id="dateRangeSlider" class="date-range-slider" min="1" max="90" value="30" step="1">
-                            <div class="slider-labels">
-                                <span class="range-preset" data-value="1" style="cursor: pointer;">1</span>
-                                <span class="range-preset" data-value="30" style="cursor: pointer;">30</span>
-                                <span class="range-preset" data-value="90" style="cursor: pointer;">90</span>
+                            <div id="dateSliderMode">
+                                <label for="dateRangeSlider"></label><input type="range" id="dateRangeSlider" class="date-range-slider" min="1" max="90" value="30" step="1">
+                                <div class="slider-labels">
+                                    <span class="range-preset" data-value="1" style="cursor: pointer;">1</span>
+                                    <span class="range-preset" data-value="30" style="cursor: pointer;">30</span>
+                                    <span class="range-preset" data-value="90" style="cursor: pointer;">90</span>
+                                </div>
                             </div>
+                            <div id="dateCustomMode" style="display: none;">
+                                <div class="custom-date-inputs">
+                                    <input type="date" id="customDateStart" class="custom-date-input" title="Start date">
+                                    <span class="custom-date-sep">to</span>
+                                    <input type="date" id="customDateEnd" class="custom-date-input" title="End date">
+                                    <button id="customDateApplyBtn" class="custom-date-apply-btn" title="Apply date range">Apply</button>
+                                </div>
+                            </div>
+                            <a href="#" id="toggleDateMode" class="toggle-date-mode">Custom range</a>
                         </div>
                     </div>
                     <div class="slider-field">
@@ -134,6 +141,14 @@
                         <label><input type="checkbox" value="Unknown"> Unknown</label>
                     </div>
                 </div>
+                <div class="filter-group">
+                    <label class="filter-label">👤 Assignment</label>
+                    <div id="assignmentFilter" class="checkbox-filter checkbox-filter--inline">
+                        <label><input type="radio" name="assignmentFilter" value="assigned" checked> Assigned</label>
+                        <label><input type="radio" name="assignmentFilter" value="unassigned"> Unassigned</label>
+                        <label><input type="radio" name="assignmentFilter" value="both"> Both</label>
+                    </div>
+                </div>
             </div>
             <div class="filter-summary" id="filterSummary">
                 <div class="filter-summary-content"><strong>Active Filters:</strong>
@@ -142,11 +157,139 @@
                     <span class="filter-tag">Last 30 days</span>
                 </span>
                 </div>
-                <button class="clear-all-btn" id="resetFiltersBtn">Reset</button>
+                <div class="filter-actions">
+                    <div class="saved-views-wrapper">
+                        <select id="savedViewsSelect" class="saved-views-select" title="Load a saved view">
+                            <option value="">Saved Views...</option>
+                        </select>
+                        <button class="delete-view-btn" id="deleteViewBtn" title="Delete selected view" style="display: none;">✕</button>
+                    </div>
+                    <button class="story-toggle-btn" id="storyToggleBtn" title="Toggle Data Story narrative mode">📖 Story</button>
+                    <button class="compare-toggle-btn" id="mmCompareBtn" title="Compare periods">⚖️ Compare</button>
+                    <button class="pdf-export-btn" id="exportPdfBtn" title="Export dashboard as PDF">📄 PDF</button>
+                    <button class="share-link-btn" id="shareLinkBtn" title="Copy shareable link">🔗 Share</button>
+                    <button class="save-view-btn" id="saveViewBtn" title="Save current filters as a view">Save View</button>
+                    <button class="clear-all-btn" id="resetFiltersBtn">Reset</button>
+                </div>
             </div>
         </div>
-        <div id="loading" class="loading">🔄 Loading security alerts data...</div>
+        <!-- Comparison Config Bar -->
+        <div id="mmComparisonBar" style="display: none;"></div>
+
+        <!-- Stepper Story Section -->
+        <div class="story-section" id="mmStorySection" style="display: none;">
+            <div class="story-header" id="mmStoryHeader">
+                <div class="story-header-left">
+                    <span class="story-header-icon">📖</span>
+                    <span class="story-header-title">Data Story</span>
+                    <span class="story-header-subtitle">A guided narrative through your incident metrics</span>
+                </div>
+                <div class="story-header-right">
+                    <span class="story-step-label" id="mmStepLabel">Step 1 of 5</span>
+                    <span class="story-chevron" id="mmStoryChevron">▾</span>
+                </div>
+            </div>
+            <div class="story-viewport" id="mmStoryViewport">
+                <div class="story-progress-bar">
+                    <div class="story-progress-fill" id="mmProgressFill" style="width: 20%"></div>
+                </div>
+                <div class="story-slides" id="mmStorySlides">
+                    <!-- Step 1: The Volume -->
+                    <div class="story-slide active" data-step="0">
+                        <div class="story-text">
+                            <h3 class="story-step-title">📈 The Volume</h3>
+                            <p class="story-step-desc" id="mmDescVolume">Your team's daily inflow vs outflow of cases.</p>
+                        </div>
+                        <div class="story-chart-area" id="mmChartVolume"></div>
+                    </div>
+                    <!-- Step 2: The Response -->
+                    <div class="story-slide" data-step="1">
+                        <div class="story-text">
+                            <h3 class="story-step-title">⏱️ The Response</h3>
+                            <p class="story-step-desc" id="mmDescResponse">How quickly your team responds and contains incidents.</p>
+                        </div>
+                        <div class="story-kpi-row" id="mmKpiRow"></div>
+                    </div>
+                    <!-- Step 3: The Landscape -->
+                    <div class="story-slide" data-step="2">
+                        <div class="story-text">
+                            <h3 class="story-step-title">🎫 The Landscape</h3>
+                            <p class="story-step-desc" id="mmDescLandscape">Cases span multiple ticket types — here's the breakdown.</p>
+                        </div>
+                        <div class="story-chart-area" id="mmChartLandscape"></div>
+                    </div>
+                    <!-- Step 4: The Geography -->
+                    <div class="story-slide" data-step="3">
+                        <div class="story-text">
+                            <h3 class="story-step-title">🌍 The Geography</h3>
+                            <p class="story-step-desc" id="mmDescGeography">Incidents originated from multiple countries.</p>
+                        </div>
+                        <div class="story-chart-area" id="mmChartGeography"></div>
+                    </div>
+                    <!-- Step 5: The Outcome -->
+                    <div class="story-slide" data-step="4">
+                        <div class="story-text">
+                            <h3 class="story-step-title">💥 The Outcome</h3>
+                            <p class="story-step-desc" id="mmDescOutcome">The impact breakdown and resolution outcomes.</p>
+                        </div>
+                        <div class="story-chart-area" id="mmChartOutcome"></div>
+                    </div>
+                </div>
+                <div class="story-nav">
+                    <button class="story-nav-btn story-nav-back" id="mmStoryBack" disabled>← Back</button>
+                    <button class="story-audio-toggle" id="mmAudioToggle" title="Toggle story audio">🔇</button>
+                    <button class="story-narration-toggle" id="mmNarrationToggle" title="Enable narration (text-to-speech)">🔕</button>
+                    <button class="story-effect-btn" id="mmSpotlightToggle" title="Spotlight mode (S)">🔦</button>
+                    <button class="story-effect-btn" id="mmExportSlide" title="Export slide as PNG (P)">📷</button>
+                    <button class="story-effect-btn" id="mmShortcutsBtn" title="Keyboard shortcuts (?)">⌨️</button>
+                    <div class="story-dots" id="mmStoryDots">
+                        <span class="story-dot active" data-dot="0"></span>
+                        <span class="story-dot" data-dot="1"></span>
+                        <span class="story-dot" data-dot="2"></span>
+                        <span class="story-dot" data-dot="3"></span>
+                        <span class="story-dot" data-dot="4"></span>
+                    </div>
+                    <button class="story-nav-btn story-nav-next" id="mmStoryNext">Next →</button>
+                </div>
+            </div>
+        </div>
+        <div id="loading" class="loading-skeleton">
+            <div id="loadingProgress" class="loading-progress" style="display: none;">
+                <div class="loading-progress-header">
+                    <span class="loading-progress-label" id="loadingProgressText">Connecting to XSOAR…</span>
+                    <span class="loading-progress-count" id="loadingProgressSub"></span>
+                </div>
+                <div class="loading-progress-track">
+                    <div class="loading-progress-fill" id="loadingProgressFill" style="width: 0%"></div>
+                </div>
+                <div class="loading-progress-wait">Please wait, this may take several minutes for large date ranges…</div>
+            </div>
+            <div class="skeleton-metrics-grid">
+                <div class="skeleton-card"></div>
+                <div class="skeleton-card"></div>
+                <div class="skeleton-card"></div>
+                <div class="skeleton-card"></div>
+                <div class="skeleton-card"></div>
+                <div class="skeleton-card"></div>
+                <div class="skeleton-card"></div>
+            </div>
+            <div class="skeleton-charts-grid">
+                <div class="skeleton-chart"></div>
+                <div class="skeleton-chart"></div>
+                <div class="skeleton-chart"></div>
+                <div class="skeleton-chart"></div>
+                <div class="skeleton-chart"></div>
+                <div class="skeleton-chart"></div>
+            </div>
+            <div class="skeleton-sankey"></div>
+            <div class="skeleton-table"></div>
+        </div>
         <div id="error" class="error" style="display: none;"></div>
+        <div id="executiveSummary" style="display: none;"></div>
+        <div class="metrics-grid-header" id="metricsGridHeader" style="display: none;">
+            <span>Key Metrics</span>
+            <button class="goal-settings-btn" id="goalSettingsBtn" title="Configure SLA targets">⚙️</button>
+        </div>
         <div id="metricsGrid" class="metrics-grid" style="display: none;"></div>
         <div id="chartsGrid" class="charts-grid" style="display: none;">
             <div class="chart-container">
@@ -185,7 +328,98 @@
                 <div class="chart-title">⏱️ Average Resolution Time by Ticket Type</div>
                 <div id="resolutionTimeChart" class="chart-canvas"></div>
             </div>
+            <div class="chart-container">
+                <div class="chart-title">💬 Ticket Name Keywords</div>
+                <div id="wordCloudChart" class="chart-canvas"></div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title">📝 Notes Keywords</div>
+                <div id="notesWordCloudChart" class="chart-canvas"></div>
+            </div>
+            <div class="chart-container chart-container-wide">
+                <div class="chart-title">🕐 Incident Heatmap (Day x Hour)</div>
+                <div id="dayHourHeatmap" class="chart-canvas"></div>
+            </div>
         </div>
+        <!-- Resolution Flow (Sankey Diagram) -->
+        <div id="sankeySection" class="sankey-section" style="display: none;">
+            <div class="sankey-header">
+                <div class="sankey-title">
+                    Resolution Flow
+                    <button id="sankeyPauseBtn" class="sankey-pause-btn" title="Pause / Resume animation">&#9646;&#9646;</button>
+                </div>
+                <div class="sankey-legend">
+                    <span class="sankey-legend-item"><span class="sankey-legend-dot" style="background: #dc3545;"></span>Severity</span>
+                    <span class="sankey-legend-arrow">→</span>
+                    <span class="sankey-legend-item"><span class="sankey-legend-dot" style="background: #4ECDC4;"></span>Ticket Type</span>
+                    <span class="sankey-legend-arrow">→</span>
+                    <span class="sankey-legend-item"><span class="sankey-legend-dot" style="background: #1f77b4;"></span>Impact</span>
+                    <span class="sankey-legend-arrow">→</span>
+                    <span class="sankey-legend-item"><span class="sankey-legend-dot" style="background: #28a745;"></span>Status</span>
+                </div>
+            </div>
+            <div id="sankeyChart" class="sankey-canvas"></div>
+        </div>
+        <!-- Animated Ticket Timeline (Bar Chart Race) -->
+        <div id="timelineSection" class="timeline-section" style="display: none;">
+            <div class="xt-header" id="xtHeaderToggle">
+                <div class="xt-header-title">
+                    <span>Animated Ticket Timeline</span>
+                </div>
+                <span class="xt-header-chevron" id="xtChevron">&#9654;</span>
+            </div>
+            <div class="xt-content" id="xtContent" style="display: none;">
+                <!-- Summary bar -->
+                <div class="xt-summary" id="xtSummary">
+                    <div class="xt-summary-item">
+                        <span>Total Tickets:</span>
+                        <span class="xt-summary-value" id="xtTotalTickets">—</span>
+                    </div>
+                    <div class="xt-summary-item">
+                        <span>Date Range:</span>
+                        <span class="xt-summary-value" id="xtDateRange">—</span>
+                    </div>
+                    <div class="xt-summary-item">
+                        <span>Last Synced:</span>
+                        <span class="xt-summary-value" id="xtLastSync">—</span>
+                    </div>
+                </div>
+
+                <!-- Dimension tabs -->
+                <div class="xt-tabs">
+                    <button class="xt-tab active" data-dimension="severity">Severity</button>
+                    <button class="xt-tab" data-dimension="category">Security Categories</button>
+                    <button class="xt-tab" data-dimension="region">Affected Regions</button>
+                    <button class="xt-tab" data-dimension="type">Ticket Types</button>
+                    <button class="xt-tab" data-dimension="impact">Impact</button>
+                </div>
+
+                <!-- Controls -->
+                <div class="xt-controls">
+                    <button class="xt-play-btn" id="xtPlayBtn" title="Play / Pause">&#9654;</button>
+                    <div class="xt-speed-group">
+                        <button class="xt-speed-btn" data-speed="2000">Slow</button>
+                        <button class="xt-speed-btn active" data-speed="1000">Normal</button>
+                        <button class="xt-speed-btn" data-speed="500">Fast</button>
+                        <button class="xt-speed-btn" data-speed="200">Very Fast</button>
+                    </div>
+                    <div class="xt-month-display" id="xtMonthDisplay">—</div>
+                    <div class="xt-slider-group">
+                        <input type="range" class="xt-time-slider" id="xtTimeSlider" min="0" max="0" value="0">
+                        <span class="xt-month-counter" id="xtMonthCounter">0 / 0</span>
+                    </div>
+                </div>
+
+                <!-- Bar chart race -->
+                <div class="xt-chart-title">Monthly Ticket Distribution</div>
+                <div class="xt-chart-container" id="xtBarChart"></div>
+
+                <!-- Cumulative trend -->
+                <div class="xt-chart-title">Cumulative Trend</div>
+                <div class="xt-cumulative-container" id="xtCumulativeChart"></div>
+            </div>
+        </div>
+
         <div id="dataTableSection" class="data-table-section" style="display: none; position: relative;">
             <div id="dataTableEmptyHint" class="empty-hint" aria-hidden="true">No data. Adjust filters to see results.</div>
             <div id="tableStatusLive" class="sr-only" aria-live="polite" aria-atomic="true"></div>
@@ -229,6 +463,16 @@
                 </table>
             </div>
             <div id="tableInfoBar" class="table-info-bar" aria-live="polite"></div>
+            <div id="exportProgress" class="loading-progress" style="display: none;">
+                <div class="loading-progress-header">
+                    <span class="loading-progress-label" id="exportProgressText">Starting export…</span>
+                    <span class="loading-progress-count" id="exportProgressSub"></span>
+                </div>
+                <div class="loading-progress-track">
+                    <div class="loading-progress-fill" id="exportProgressFill" style="width: 0%"></div>
+                </div>
+                <div class="loading-progress-wait" id="exportProgressWait">Please wait, this may take a few minutes when including notes…</div>
+            </div>
             <div class="export-section">
                 <button class="export-btn" id="exportExcelBtn">📥 Export to Excel</button>
             </div>
@@ -240,11 +484,78 @@
         </div>
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+{% include '_chat_widget.html' %}
 {% endblock %}
 {% block extra_js %}
     <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script src="{{ url_for('static', filename='js/story_audio.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/story_effects.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/comparison_mode.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/dashboard_export.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/goal_targets.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/drilldown_drawer.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/exec_summary.js') }}"></script>
     <script type="module" src="{{ url_for('static', filename='js/metrics/main.js') }}"></script>
     <script>if (typeof initTheme === 'function') initTheme();
     if (typeof initBurgerMenu === 'function') initBurgerMenu();
     if (typeof initRandomMusic === 'function') initRandomMusic();</script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="{{ url_for('static', filename='js/chat_widget.js') }}"></script>
+    <script>
+    initChatWidget({
+        title: 'Ask about Metrics',
+        greeting: 'Hi! Ask me anything about the incident metrics on this page.',
+        loadingMessages: [
+            'Analyzing incident data\u2026',
+            'Reviewing metric trends\u2026',
+            'Checking response times\u2026',
+            'Examining geographic patterns\u2026',
+            'Summarizing key findings\u2026'
+        ],
+        chips: [
+            {label: 'Key takeaways', q: 'What are the key takeaways from this data?'},
+            {label: 'Response time trends', q: 'How are response times trending?'},
+            {label: 'Top incident types', q: 'What are the top incident types?'},
+            {label: 'Geographic hotspots', q: 'Which regions have the most incidents?'}
+        ],
+        getContext: function() {
+            var parts = [];
+            // Active filters
+            var filters = document.getElementById('activeFiltersContainer');
+            if (filters) parts.push('**Active Filters:** ' + filters.textContent.trim());
+            // Executive summary
+            var exec = document.querySelector('.exec-summary-text');
+            if (exec) parts.push('**Executive Summary:**\n' + exec.textContent.trim());
+            // KPI metrics
+            var cards = document.querySelectorAll('.metrics-grid .metric-card');
+            if (cards.length) {
+                var kpis = [];
+                cards.forEach(function(c) {
+                    var label = c.querySelector('.metric-label');
+                    var val = c.querySelector('.metric-value');
+                    if (label && val) kpis.push('- ' + label.textContent.trim() + ': ' + val.textContent.trim());
+                });
+                if (kpis.length) parts.push('**Key Metrics:**\n' + kpis.join('\n'));
+            }
+            // Chart titles and visible data
+            var charts = document.querySelectorAll('.chart-container');
+            if (charts.length) {
+                var chartInfo = [];
+                charts.forEach(function(c) {
+                    var title = c.querySelector('.chart-title');
+                    if (title) chartInfo.push('- ' + title.textContent.trim());
+                });
+                if (chartInfo.length) parts.push('**Charts on page:**\n' + chartInfo.join('\n'));
+            }
+            // Data table summary
+            var tableInfo = document.getElementById('tableInfoBar');
+            if (tableInfo && tableInfo.textContent.trim()) parts.push('**Table:** ' + tableInfo.textContent.trim());
+            // Data freshness
+            var ts = document.getElementById('dataTimestamp');
+            if (ts) parts.push('**Data generated:** ' + ts.textContent.trim());
+            return parts.join('\n\n') || null;
+        }
+    });
+    </script>
 {% endblock %}

@@ -42,8 +42,9 @@ def get_next_assignee() -> str:
     save_pattern_analysis_leads(rotated)
     return assignee
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
-OLLAMA_MODEL = "qwen2:0.5b"
+from my_config import get_config as _get_config
+_config = _get_config()
+LLM_URL = f"{_config.m1_analysis_base_url}/chat/completions"
 
 # Risky keywords to flag in ticket names (avoid overly broad terms like "admin")
 RISKY_KEYWORDS = [
@@ -79,6 +80,10 @@ def get_stats(df: pd.DataFrame, days: int = 7) -> dict:
 
     df['created_dt'] = pd.to_datetime(df['created'], format='ISO8601', utc=True)
     recent = df[df['created_dt'] >= cutoff].copy()
+
+    # Exclude tickets closed as Duplicate
+    if 'closeReason' in recent.columns:
+        recent = recent[recent['closeReason'].str.lower() != 'duplicate']
 
     # Filter out Unknown/empty/N/A hostnames for top_hosts
     valid_hosts = recent[
@@ -184,13 +189,15 @@ Total tickets: {stats['total_tickets']}
 """
 
     try:
-        resp = requests.post(OLLAMA_URL, json={
-            "model": OLLAMA_MODEL,
-            "prompt": prompt,
-            "stream": False
-        }, timeout=60)
+        from my_config import get_config
+        model = get_config().llm_model or "default"
+        resp = requests.post(LLM_URL, json={
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 300,
+        }, headers={"api-key": "not-needed"}, timeout=60)
         resp.raise_for_status()
-        return resp.json().get('response', '').strip()[:500]  # Cap at 500 chars
+        return resp.json()["choices"][0]["message"]["content"].strip()[:500]  # Cap at 500 chars
     except Exception as e:
         logger.error(f"LLM insight failed: {e}")
         return "_Unable to generate insight._"

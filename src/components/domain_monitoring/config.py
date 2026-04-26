@@ -21,19 +21,32 @@ CONFIG = get_config()
 EASTERN_TZ = ZoneInfo("America/New_York")
 
 # Webex room configuration
-# Default to test space for development; 8 AM job passes prod room
 ALERT_ROOM_ID_TEST = CONFIG.webex_room_id_dev_test_space
 ALERT_ROOM_ID_PROD = CONFIG.webex_room_id_domain_monitoring
 
 # Module-level active room ID, set by run_daily_monitoring
-_active_room_id = ALERT_ROOM_ID_TEST
+_active_room_id = ALERT_ROOM_ID_PROD
 
 # Results storage - in transient data directory (git ignored)
 RESULTS_DIR = Path(__file__).parent.parent.parent.parent / "data" / "transient" / "domain_monitoring"
 CONFIG_FILE = RESULTS_DIR / "config.json"
 
 # Web base URL for report links
-WEB_BASE_URL = CONFIG.web_server_url if hasattr(CONFIG, 'web_server_url') else "https://your-server.com"
+WEB_BASE_URL = CONFIG.web_server_url
+
+# Feature flags — toggle monitoring modules on/off
+ENABLE_DARK_WEB = False       # Dark web monitoring (search_dark_web)
+ENABLE_INTELX = False         # IntelligenceX dark web search (Tor/I2P)
+ENABLE_CT_LOGS = True         # Certificate Transparency monitoring
+ENABLE_WHOIS = True           # WHOIS change detection
+ENABLE_VT = True              # VirusTotal bulk scan
+ENABLE_HIBP = True            # HaveIBeenPwned breach check
+ENABLE_SHODAN = True          # Shodan infrastructure exposure
+ENABLE_ABUSECH = True         # abuse.ch malware/C2 check
+ENABLE_ABUSEIPDB = True       # AbuseIPDB malicious IP check
+ENABLE_BRAND_CT = True        # Brand impersonation via crt.sh CT search
+ENABLE_WATCHLIST = True       # Watchlist semantic impersonation domains
+ENABLE_REALTIME_WATCHLIST = True  # 5-min lightweight DNS/HTTP/SSL poller
 
 
 def get_active_room_id() -> str:
@@ -106,6 +119,18 @@ def load_defensive_domains(domain: str) -> list[str]:
         except (json.JSONDecodeError, IOError) as e:
             logger.error(f"Error loading defensive domains config: {e}")
     return legitimate
+
+
+def load_known_good_buckets(domain: str) -> list[str]:
+    """Load known-good S3 buckets for a monitored domain."""
+    if CONFIG_FILE.exists():
+        try:
+            with open(CONFIG_FILE, "r") as f:
+                config = json.load(f)
+                return config.get("known_good_buckets", {}).get(domain, [])
+        except (json.JSONDecodeError, IOError) as e:
+            logger.error(f"Error loading known-good buckets config: {e}")
+    return []
 
 
 def get_webex_api() -> WebexTeamsAPI:

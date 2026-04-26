@@ -16,14 +16,14 @@ if os.path.exists(CUSTOM_CA_BUNDLE):
 from src.utils.env_encryption import load_encrypted_env, load_plaintext_env, EncryptionError
 
 # Load environment variables from two sources:
-# 1. .env (project root) - non-sensitive config like model names
-# 2. .secrets.age (data/transient/) - encrypted secrets (API keys, passwords)
+# 1. data/transient/.env - non-sensitive config like room IDs, model names
+# 2. data/transient/.secrets.age - encrypted secrets (API keys, passwords)
 
 # Load plaintext .env first (low confidentiality config)
-env_file = ROOT_DIR / '.env'
+env_file = ROOT_DIR / 'data' / 'transient' / '.env'
 if env_file.exists():
     load_plaintext_env(env_file)
-    print(f"✓ Loaded config from .env")
+    print(f"✓ Loaded config from {env_file}")
 
 # Load encrypted secrets from data/transient/.secrets.age with optional dev bypass
 DEV_ALLOW_MISSING_SECRETS = os.environ.get('DEV_ALLOW_MISSING_SECRETS', '').lower() == 'true'
@@ -36,7 +36,16 @@ except EncryptionError as e:
         raise
 
 
-def get_config():
+def _env_with_prefix(bot_name: str | None, key: str, default: str = "") -> str:
+    """Check BOT_NAME_KEY first, then KEY, then default."""
+    if bot_name:
+        val = os.environ.get(f"{bot_name.upper()}_{key}")
+        if val:
+            return val
+    return os.environ.get(key, default)
+
+
+def get_config(bot_name: str | None = None):
     # Derive company_name from MY_WEB_DOMAIN if COMPANY_NAME is not set
     company_name = os.environ.get("COMPANY_NAME")
     if not company_name:
@@ -57,6 +66,7 @@ def get_config():
         webex_bot_access_token_hal9000=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_HAL9000"),
         webex_bot_access_token_pokedex=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_POKEDEX"),
         webex_bot_access_token_pinger=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_PINGER"),
+        webex_bot_access_token_winai=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_WINAI"),
         webex_bot_email_pokedex=os.environ.get("WEBEX_BOT_EMAIL_POKEDEX"),
         webex_bot_email_hal9000=os.environ.get("WEBEX_BOT_EMAIL_HAL9000"),
         webex_bot_email_toodles=os.environ.get("WEBEX_BOT_EMAIL_TOODLES"),
@@ -67,6 +77,7 @@ def get_config():
         webex_bot_email_money_ball=os.environ.get("WEBEX_BOT_EMAIL_MONEY_BALL"),
         webex_bot_email_msoar=os.environ.get("WEBEX_BOT_EMAIL_the case orchestrator"),
         webex_bot_email_pinger=os.environ.get("WEBEX_BOT_EMAIL_PINGER"),
+        webex_bot_email_winai=os.environ.get("WEBEX_BOT_EMAIL_WINAI"),
         webex_room_id_aging_tickets=os.environ.get("WEBEX_ROOM_ID_AGING_TICKETS"),
         webex_room_id_dev_test_space=os.environ.get("WEBEX_ROOM_ID_DEV_TEST_SPACE"),
         webex_room_id_soc_shift_updates=os.environ.get("WEBEX_ROOM_ID_SOC_SHIFT_UPDATES"),
@@ -88,6 +99,8 @@ def get_config():
         webex_room_id_celebrations=os.environ.get("WEBEX_ROOM_ID_CELEBRATIONS"),
         webex_room_id_domain_monitoring=os.environ.get("WEBEX_ROOM_ID_DOMAIN_MONITORING"),
         webex_room_id_threat_tipper_analysis=os.environ.get("WEBEX_ROOM_ID_THREAT_TIPPER_ANALYSIS"),
+        webex_room_id_sentinel_triage=os.environ.get("WEBEX_ROOM_ID_SENTINEL_TRIAGE"),
+        webex_room_id_gs_ai=os.environ.get("WEBEX_ROOM_ID_GS_AI"),
         xsoar_prod_api_base_url=os.environ.get("XSOAR_PROD_API_BASE_URL"),
         xsoar_prod_ui_base_url=os.environ.get("XSOAR_PROD_UI_BASE_URL"),
         xsoar_dev_api_base_url=os.environ.get("XSOAR_DEV_API_BASE_URL"),
@@ -100,8 +113,19 @@ def get_config():
         barnacles_approved_users=os.environ.get("BARNACLES_APPROVED_USERS"),
         team_name=os.environ.get("TEAM_NAME"),
         company_name=company_name,  # Derived from MY_WEB_DOMAIN if not explicitly set
-        ollama_llm_model=os.environ.get("OLLAMA_LLM_MODEL"),
-        ollama_embedding_model=os.environ.get("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text"),
+        claude_api_key=os.environ.get("CLAUDE_API_KEY"),
+        barnacles_claude_api_key=os.environ.get("BARNACLES_CLAUDE_API_KEY"),
+        claude_model=os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6"),
+        llm_model=os.environ.get("LLM_MODEL"),
+        router_model=os.environ.get("ROUTER_MODEL", os.environ.get("LLM_MODEL")),
+        embedding_model=os.environ.get("EMBEDDING_MODEL"),
+        m3_embeds_base_url=_env_with_prefix(bot_name, "M3_EMBEDS_BASE_URL", ""),
+        m1_analysis_base_url=_env_with_prefix(bot_name, "M1_ANALYSIS_BASE_URL", ""),
+        m1_router_base_url=_env_with_prefix(bot_name, "M1_ROUTER_BASE_URL", ""),
+        sahil_upload_token=os.environ.get("SAHIL_UPLOAD_TOKEN"),
+        eric_upload_token=os.environ.get("ERIC_UPLOAD_TOKEN"),
+        mcp_server_url=os.environ.get("MCP_SERVER_URL", "http://127.0.0.1:8200/mcp"),
+        mcp_api_key=os.environ.get("MCP_API_KEY"),
         azdo_org=os.environ.get("AZDO_ORGANIZATION"),
         azdo_de_project=os.environ.get("AZDO_DE_PROJECT"),
         azdo_re_project=os.environ.get("AZDO_RE_PROJECT"),
@@ -131,8 +155,12 @@ def get_config():
         snow_functional_account_id=os.environ.get("SNOW_FUNCTIONAL_ACCOUNT_ID"),
         snow_functional_account_password=os.environ.get("SNOW_FUNCTIONAL_ACCOUNT_PASSWORD"),
         snow_base_url=os.environ.get("SNOW_BASE_URL"),
+        snow_instance_url=os.environ.get("SNOW_INSTANCE_URL"),
         my_name=os.environ.get("MY_NAME"),
+        watermark_author=os.environ.get("WATERMARK_AUTHOR", ""),
+        watermark_tag=os.environ.get("WATERMARK_TAG", ""),
         my_web_domain=os.environ.get("MY_WEB_DOMAIN"),
+        company_domains=os.environ.get("COMPANY_DOMAINS"),
         resp_eng_auto_lead=os.environ.get("RESP_ENG_AUTO_LEAD"),
         resp_eng_ops_lead=os.environ.get("RESP_ENG_OPS_LEAD"),
         efficacy_charts_receiver=os.environ.get("EFFICACY_CHARTS_RECEIVER"),
@@ -151,9 +179,19 @@ def get_config():
         tanium_cloud_api_token=os.environ.get("TANIUM_CLOUD_API_TOKEN"),
         tanium_cloud_signals_api_token=os.environ.get("TANIUM_CLOUD_SIGNALS_API_TOKEN"),
         tanium_cloud_api_url=os.environ.get("TANIUM_CLOUD_API_URL"),
+        tanium_cloud_ui_url=os.environ.get("TANIUM_CLOUD_UI_URL"),
         tanium_onprem_api_token=os.environ.get("TANIUM_ONPREM_API_TOKEN"),
         tanium_onprem_signals_api_token=os.environ.get("TANIUM_ONPREM_SIGNALS_API_TOKEN"),
         tanium_onprem_api_url=os.environ.get("TANIUM_ONPREM_API_URL"),
+        tanium_cloud_add_tags_win_pkg_id=os.environ.get("TANIUM_CLOUD_ADD_TAGS_WIN_PKG_ID"),
+        tanium_cloud_add_tags_nonwin_pkg_id=os.environ.get("TANIUM_CLOUD_ADD_TAGS_NONWIN_PKG_ID"),
+        tanium_cloud_remove_single_tag_win_pkg_id=os.environ.get("TANIUM_CLOUD_REMOVE_SINGLE_TAG_WIN_PKG_ID"),
+        tanium_cloud_remove_single_tag_nonwin_pkg_id=os.environ.get("TANIUM_CLOUD_REMOVE_SINGLE_TAG_NONWIN_PKG_ID"),
+        tanium_cloud_remove_all_tags_win_pkg_id=os.environ.get("TANIUM_CLOUD_REMOVE_ALL_TAGS_WIN_PKG_ID"),
+        tanium_onprem_add_tags_pkg_id=os.environ.get("TANIUM_ONPREM_ADD_TAGS_PKG_ID"),
+        tanium_onprem_remove_single_tag_pkg_id=os.environ.get("TANIUM_ONPREM_REMOVE_SINGLE_TAG_PKG_ID"),
+        tanium_auto_approve_remove_tags=str(
+            os.environ.get("TANIUM_AUTO_APPROVE_REMOVE_TAGS", "False")).lower() == "true",
         infoblox_base_url=os.environ.get("INFOBLOX_BASE_URL"),
         infoblox_username=os.environ.get("INFOBLOX_USERNAME"),
         infoblox_password=os.environ.get("INFOBLOX_PASSWORD"),
@@ -169,22 +207,37 @@ def get_config():
         teams_toodles_app_password=os.environ.get("TEAMS_TOODLES_APP_PASSWORD"),
         teams_toodles_tenant_id=os.environ.get("TEAMS_TOODLES_TENANT_ID"),
         toodles_password=os.environ.get("TOODLES_PASSWORD"),
+        ticket_cannon_password=os.environ.get("TICKET_CANNON_PASSWORD"),
+        contacts_edit_password=os.environ.get("CONTACTS_EDIT_PASSWORD"),
+        docs_edit_password=os.environ.get("DOCS_EDIT_PASSWORD"),
+        wiki_edit_password=os.environ.get("WIKI_EDIT_PASSWORD"),
+        favorites_edit_password=os.environ.get("FAVORITES_EDIT_PASSWORD"),
+        scan_s3_password=os.environ.get("SCAN_S3_PASSWORD"),
+        m3_proxy=os.environ.get("M3_PROXY"),
         flask_secret_key=os.environ.get("FLASK_SECRET_KEY"),
+        analyst_hourly_cost=int(os.environ.get("ANALYST_HOURLY_COST", "20")),
         abnormal_security_api_key=os.environ.get("ABNORMAL_SECURITY_API_KEY"),
         logs_viewer_url=os.environ.get("LOGS_VIEWER_URL"),
         virustotal_api_key=os.environ.get("VIRUSTOTAL_API_KEY"),
         github_token=os.environ.get("GITHUB_TOKEN"),
         hibp_api_key=os.environ.get("HIBP_API_KEY"),
         shodan_api_key=os.environ.get("SHODAN_API_KEY"),
+        nvd_api_key=os.environ.get("NVD_API_KEY"),
         abuseipdb_api_key=os.environ.get("ABUSEIPDB_API_KEY"),
         intelx_api_key=os.environ.get("INTELLIGENCE_X_API_KEY"),
         intelx_api_base_url=os.environ.get("INTELLIGENCE_X_API_BASE_URL"),
         recorded_future_api_key=os.environ.get("RECORDED_FUTURE_API_KEY"),
         recorded_future_api_base_url=os.environ.get("RECORDED_FUTURE_API_BASE_URL"),
+        attackiq_api_key=os.environ.get("ATTACKIQ_API_KEY"),
+        attackiq_base_url=os.environ.get("ATTACKIQ_BASE_URL"),
         urlscan_api_key=os.environ.get("URLSCAN_API_KEY"),
         qradar_api_url=os.environ.get("QRADAR_API_URL"),
         qradar_api_key=os.environ.get("QRADAR_API_KEY"),
         qradar_console_url=os.environ.get("QRADAR_CONSOLE_URL"),
+        xsiam_prod_api_auth_id=os.environ.get("XSIAM_PROD_API_AUTH_ID"),
+        xsiam_prod_api_key=os.environ.get("XSIAM_PROD_API_KEY"),
+        xsiam_prod_api_base_url=os.environ.get("XSIAM_PROD_API_BASE_URL"),
+        xsiam_prod_ui_base_url=os.environ.get("XSIAM_PROD_UI_BASE_URL"),
         vectra_api_base_url=os.environ.get("VECTRA_API_BASE_URL"),
         vectra_client_id=os.environ.get("VECTRA_API_CLIENT_ID"),
         vectra_api_key=os.environ.get("VECTRA_API_KEY"),
@@ -200,6 +253,19 @@ def get_config():
         # DFIR-IRIS
         dfir_iris_url=os.environ.get("DFIR_IRIS_URL"),
         dfir_iris_api_key=os.environ.get("DFIR_IRIS_API_KEY"),
+        # Power BI
+        power_bi_tenant_id=os.environ.get("POWER_BI_TENANT_ID"),
+        power_bi_client_id=os.environ.get("POWER_BI_CLIENT_ID"),
+        power_bi_client_secret=os.environ.get("POWER_BI_CLIENT_SECRET"),
+        power_bi_workspace_id=os.environ.get("POWER_BI_WORKSPACE_ID"),
+        power_bi_dataset_id=os.environ.get("POWER_BI_DATASET_ID"),
+        power_bi_cert_path=os.environ.get("POWER_BI_CERT_PATH"),
+        power_bi_cert_thumbprint=os.environ.get("POWER_BI_CERT_THUMBPRINT"),
+        # the internal LLM gateway
+        metiq_api_key=os.environ.get("METIQ_API_KEY"),
+        metiq_use_case_id=os.environ.get("METIQ_USE_CASE_ID"),
+        metiq_endpoint=os.environ.get("METIQ_APIM_ENDPOINT"),
+        ocp_apim_subscription_key=os.environ.get("OCP_APIM_SUBSCRIPTION_KEY"),
     )
 
 
@@ -217,6 +283,7 @@ class Config:
     webex_bot_access_token_hal9000: Optional[str] = None
     webex_bot_access_token_pokedex: Optional[str] = None
     webex_bot_access_token_pinger: Optional[str] = None
+    webex_bot_access_token_winai: Optional[str] = None
     webex_bot_email_pokedex: Optional[str] = None
     webex_bot_email_hal9000: Optional[str] = None
     webex_bot_email_toodles: Optional[str] = None
@@ -225,6 +292,7 @@ class Config:
     webex_bot_email_money_ball: Optional[str] = None
     webex_bot_email_msoar: Optional[str] = None
     webex_bot_email_pinger: Optional[str] = None
+    webex_bot_email_winai: Optional[str] = None
     webex_bot_email_tars: Optional[str] = None
     webex_bot_email_case: Optional[str] = None
     webex_room_id_aging_tickets: Optional[str] = None
@@ -248,6 +316,8 @@ class Config:
     webex_room_id_celebrations: Optional[str] = None
     webex_room_id_domain_monitoring: Optional[str] = None
     webex_room_id_threat_tipper_analysis: Optional[str] = None
+    webex_room_id_sentinel_triage: Optional[str] = None
+    webex_room_id_gs_ai: Optional[str] = None
     xsoar_prod_api_base_url: Optional[str] = None
     xsoar_prod_ui_base_url: Optional[str] = None
     xsoar_dev_api_base_url: Optional[str] = None
@@ -259,8 +329,19 @@ class Config:
     xsoar_lists_filename: Optional[str] = None
     team_name: Optional[str] = None
     company_name: Optional[str] = None
-    ollama_llm_model: Optional[str] = None
-    ollama_embedding_model: Optional[str] = None
+    claude_api_key: Optional[str] = None
+    barnacles_claude_api_key: Optional[str] = None
+    claude_model: Optional[str] = None
+    llm_model: Optional[str] = None
+    router_model: Optional[str] = None
+    embedding_model: Optional[str] = None
+    m3_embeds_base_url: Optional[str] = None
+    m1_analysis_base_url: Optional[str] = None
+    m1_router_base_url: Optional[str] = None
+    sahil_upload_token: Optional[str] = None
+    eric_upload_token: Optional[str] = None
+    mcp_server_url: Optional[str] = None
+    mcp_api_key: Optional[str] = None
     barnacles_approved_users: Optional[str] = None
     azdo_org: Optional[str] = None
     azdo_de_project: Optional[str] = None
@@ -291,8 +372,12 @@ class Config:
     snow_functional_account_id: Optional[str] = None
     snow_functional_account_password: Optional[str] = None
     snow_base_url: Optional[str] = None
+    snow_instance_url: Optional[str] = None
     my_name: Optional[str] = None
+    watermark_author: str = ""
+    watermark_tag: str = ""
     my_web_domain: Optional[str] = None
+    company_domains: Optional[str] = None  # Comma-separated list of company domains to exclude from IOC aggregation
     resp_eng_auto_lead: Optional[str] = None
     resp_eng_ops_lead: Optional[str] = None
     efficacy_charts_receiver: Optional[str] = None
@@ -311,9 +396,18 @@ class Config:
     tanium_cloud_api_token: Optional[str] = None
     tanium_cloud_signals_api_token: Optional[str] = None
     tanium_cloud_api_url: Optional[str] = None
+    tanium_cloud_ui_url: Optional[str] = None  # UI portal URL (e.g. https://metportal.cloud.tanium.com)
     tanium_onprem_api_token: Optional[str] = None
     tanium_onprem_signals_api_token: Optional[str] = None
     tanium_onprem_api_url: Optional[str] = None
+    tanium_cloud_add_tags_win_pkg_id: Optional[str] = None
+    tanium_cloud_add_tags_nonwin_pkg_id: Optional[str] = None
+    tanium_cloud_remove_single_tag_win_pkg_id: Optional[str] = None  # Removes one specific tag (parameterized)
+    tanium_cloud_remove_single_tag_nonwin_pkg_id: Optional[str] = None  # Removes one specific tag (parameterized)
+    tanium_cloud_remove_all_tags_win_pkg_id: Optional[str] = None  # Removes ALL custom tags (no params)
+    tanium_onprem_add_tags_pkg_id: Optional[str] = None
+    tanium_onprem_remove_single_tag_pkg_id: Optional[str] = None  # Removes one specific tag (parameterized)
+    tanium_auto_approve_remove_tags: bool = False  # Auto-approve remove tag actions if package requires approval
     infoblox_base_url: Optional[str] = None
     infoblox_username: Optional[str] = None
     infoblox_password: Optional[str] = None
@@ -329,6 +423,14 @@ class Config:
     teams_toodles_app_password: Optional[str] = None
     teams_toodles_tenant_id: Optional[str] = None
     toodles_password: Optional[str] = None
+    ticket_cannon_password: Optional[str] = None
+    contacts_edit_password: Optional[str] = None
+    docs_edit_password: Optional[str] = None
+    wiki_edit_password: Optional[str] = None
+    favorites_edit_password: Optional[str] = None
+    scan_s3_password: Optional[str] = None
+    m3_proxy: Optional[str] = None
+    analyst_hourly_cost: int = 20
     flask_secret_key: Optional[str] = None
     abnormal_security_api_key: Optional[str] = None
     logs_viewer_url: Optional[str] = None
@@ -336,15 +438,22 @@ class Config:
     github_token: Optional[str] = None
     hibp_api_key: Optional[str] = None
     shodan_api_key: Optional[str] = None
+    nvd_api_key: Optional[str] = None
     abuseipdb_api_key: Optional[str] = None
     intelx_api_key: Optional[str] = None
     intelx_api_base_url: Optional[str] = None
     recorded_future_api_key: Optional[str] = None
     recorded_future_api_base_url: Optional[str] = None
+    attackiq_api_key: Optional[str] = None
+    attackiq_base_url: Optional[str] = None
     urlscan_api_key: Optional[str] = None
     qradar_api_url: Optional[str] = None
     qradar_api_key: Optional[str] = None
     qradar_console_url: Optional[str] = None
+    xsiam_prod_api_auth_id: Optional[str] = None
+    xsiam_prod_api_key: Optional[str] = None
+    xsiam_prod_api_base_url: Optional[str] = None
+    xsiam_prod_ui_base_url: Optional[str] = None
     vectra_api_base_url: Optional[str] = None
     vectra_client_id: Optional[str] = None
     vectra_api_key: Optional[str] = None
@@ -360,3 +469,16 @@ class Config:
     # DFIR-IRIS configuration
     dfir_iris_url: Optional[str] = None
     dfir_iris_api_key: Optional[str] = None
+    # Power BI configuration
+    power_bi_tenant_id: Optional[str] = None
+    power_bi_client_id: Optional[str] = None
+    power_bi_client_secret: Optional[str] = None
+    power_bi_workspace_id: Optional[str] = None
+    power_bi_dataset_id: Optional[str] = None
+    power_bi_cert_path: Optional[str] = None
+    power_bi_cert_thumbprint: Optional[str] = None
+    # the internal LLM gateway configuration
+    metiq_api_key: Optional[str] = None
+    metiq_use_case_id: Optional[str] = None
+    metiq_endpoint: Optional[str] = None
+    ocp_apim_subscription_key: Optional[str] = None

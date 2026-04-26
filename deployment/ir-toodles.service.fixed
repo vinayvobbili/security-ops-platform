@@ -1,5 +1,5 @@
 [Unit]
-Description=IR the notification service Bot
+Description=Notification Service Bot
 After=network-online.target
 Wants=network-online.target
 
@@ -7,10 +7,10 @@ Wants=network-online.target
 Type=simple
 User=user
 Group=user
-WorkingDirectory=/home/user/pub/IR
-Environment="PYTHONPATH=/home/user/pub/IR"
-Environment="PATH=/home/user/pub/IR/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-ExecStart=/home/user/pub/IR/.venv/bin/python webex_bots/toodles.py
+WorkingDirectory=/home/user/IR
+Environment="PYTHONPATH=/home/user/IR"
+Environment="PATH=/home/user/IR/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/home/user/IR/.venv/bin/python webex_bots/toodles.py
 
 # Restart on failure
 Restart=on-failure

@@ -28,6 +28,9 @@ logging.getLogger('webexteamssdk').setLevel(logging.WARNING)
 
 CONFIG = get_config()
 
+# Track bots that have already sent a config-error notification (once per process lifetime)
+_ping_config_error_notified: set = set()
+
 # List of all bots to ping
 # PingBot pings all production bots to keep NAT paths active
 BOTS_TO_PING = [
@@ -98,8 +101,21 @@ def send_peer_pings(access_token: str):
         #             failed_bots.append(bot_name)
         except Exception as e:
             logger.error(f"  ❌ Failed to ping {bot_name}: {e}")
-            # fail_count += 1
-            # failed_bots.append(bot_name)
+            # Notify on config errors (400 Bad Request) — these won't self-recover
+            if bot_name not in _ping_config_error_notified and '400' in str(e) and 'Bad Request' in str(e):
+                _ping_config_error_notified.add(bot_name)
+                try:
+                    dev_room = CONFIG.webex_room_id_dev_test_space
+                    if dev_room:
+                        api.messages.create(
+                            roomId=dev_room,
+                            markdown=f"⚠️ **Peer ping config error for {bot_name}**\n\n"
+                                     f"Bot email `{bot_email}` is returning 400 Bad Request. "
+                                     f"Check the bot email config value.\n\n"
+                                     f"Error: `{str(e)[:200]}`"
+                        )
+                except Exception:
+                    pass  # Don't let notification failures break the ping loop
     #
     # # Build summary message
     # summary = f"✅ Peer ping cycle complete: {success_count} successful, {fail_count} failed"

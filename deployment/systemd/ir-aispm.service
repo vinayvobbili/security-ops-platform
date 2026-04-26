@@ -1,0 +1,37 @@
+[Unit]
+Description=AISPM Sidecar (containerized) — serves AI SPM UI at :8026
+After=network.target
+# Note: docker.service is a system-level unit; user-level systemd can't Requires= it,
+# but docker is enabled at boot so it's always up by the time user services start.
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=60
+TimeoutStopSec=20
+
+# Best-effort cleanup of any leftover container from a previous run.
+ExecStartPre=-/usr/bin/docker stop ir-aispm
+ExecStartPre=-/usr/bin/docker rm ir-aispm
+
+# Run the current image. The :current tag is updated by the deploy portal on
+# activate/rollback. Container is read-only except for /app/backup (bind mount
+# for registry state) and tmpfs for /tmp and /run. Only 127.0.0.1 is exposed —
+# external access is via the Flask reverse proxy at /ai-spm-app/*.
+ExecStart=/usr/bin/docker run --rm --name ir-aispm \
+  -p 127.0.0.1:8026:8026 \
+  --user 1001:1001 \
+  --read-only \
+  --tmpfs /tmp:rw,size=64M \
+  --tmpfs /run:rw,size=16M \
+  --memory=1g --cpus=1.0 --pids-limit=128 \
+  --security-opt no-new-privileges \
+  --cap-drop=ALL \
+  -v /home/vinay/security-ops-platform/external/aispm/backup:/app/backup \
+  ir-aispm:current
+
+ExecStop=/usr/bin/docker stop ir-aispm
+
+[Install]
+WantedBy=default.target

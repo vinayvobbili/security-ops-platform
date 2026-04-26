@@ -6,7 +6,7 @@ from my_config import get_config
 from services import xsoar
 from services.xsoar import XsoarEnvironment
 
-CONFIG = get_config()
+CONFIG = get_config(bot_name='web_app')
 
 # Server configuration constants
 SHOULD_START_PROXY = True
@@ -26,9 +26,11 @@ PUBLIC_CONFIG = {
     'email_domain': CONFIG.my_web_domain,
     'security_email': f"security@{CONFIG.my_web_domain}",
     'logs_viewer_url': CONFIG.logs_viewer_url,
+    'watermark_author': CONFIG.watermark_author,
 }
 
 # Initialize XSOAR handlers (shared across routes)
 prod_list_handler = xsoar.ListHandler(XsoarEnvironment.PROD)
+dev_list_handler = xsoar.ListHandler(XsoarEnvironment.DEV)
 prod_ticket_handler = xsoar.TicketHandler(XsoarEnvironment.PROD)
 dev_ticket_handler = xsoar.TicketHandler(XsoarEnvironment.DEV)

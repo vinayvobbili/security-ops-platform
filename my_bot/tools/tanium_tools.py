@@ -20,6 +20,7 @@ from langchain_core.tools import tool
 
 from services.tanium import TaniumClient, TaniumAPIError
 from src.utils.tool_decorator import log_tool_call
+from src.utils.llm_decorators import validate_args, HOSTNAME_PATTERN
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +113,7 @@ def _format_search_results(computers: list, search_term: str, instance_name: str
 
 
 @tool
+@validate_args(hostname=HOSTNAME_PATTERN)
 @log_tool_call
 def lookup_endpoint_tanium(hostname: str) -> str:
     """Look up an endpoint by hostname in Tanium.

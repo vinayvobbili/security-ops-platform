@@ -2,11 +2,17 @@
 Monitor ServiceNow for new Major Incidents assigned to configured groups.
 
 Polls ServiceNow every 15 minutes for incidents assigned to groups defined in
-data/transient/secops/assignment_groups.json and sends notifications to Webex.
+data/transient/secOps/assignment_groups.json and sends notifications to Webex.
+
+Asks SNOW for the last 24 hours of incidents per group, then dedupes via a
+per-group seen-ID set so each new INC alerts exactly once. The 24h window is
+wide enough to absorb late-MIM-assignment lag (an INC created hours before
+being assigned to the group still falls inside it).
 """
 
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 
 from webexpythonsdk import WebexAPI
@@ -22,21 +28,52 @@ from src.utils.webex_utils import send_card_with_retry, send_message_with_retry
 
 logger = logging.getLogger(__name__)
 
-CONFIG_FILE = Path(__file__).parent.parent.parent / "data/transient/secops/assignment_groups.json"
+CONFIG_FILE = Path(__file__).parent.parent.parent / "data/transient/secOps/assignment_groups.json"
+_SEEN_IDS_FILE = Path(__file__).parent.parent.parent / "data/transient/secOps/mim_seen_ids.json"
+
+# Lookback window for SNOW query. The API has no date-range param, so this is
+# applied client-side in get_recent_incidents. 24h is wide enough to absorb
+# late-assignment lag (an INC created hours before getting assigned to MIM)
+# while excluding historical tickets that cycle through the 100-result window.
+_LOOKBACK_MINUTES = 1440
+
+# Guard to send missing-config Webex alert only once per scheduler lifetime
+_config_missing_notified = False
+
+
+def _load_seen_ids():
+    """Load per-group sets of previously seen incident numbers from disk."""
+    if _SEEN_IDS_FILE.exists():
+        try:
+            with open(_SEEN_IDS_FILE) as f:
+                data = json.load(f)
+            # Convert lists back to sets
+            return {group: set(ids) for group, ids in data.items()}
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning(f"Failed to read seen-IDs state, starting fresh: {e}")
+    return {}
+
+
+def _save_seen_ids(state):
+    """Persist per-group sets of seen incident numbers to disk."""
+    try:
+        _SEEN_IDS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        # Convert sets to lists for JSON serialization
+        with open(_SEEN_IDS_FILE, 'w') as f:
+            json.dump({group: sorted(ids) for group, ids in state.items()}, f, indent=2)
+    except OSError as e:
+        logger.error(f"Failed to save seen-IDs state: {e}")
 
 
 def _get_snow_incident_url(sys_id):
     """Build ServiceNow incident URL from sys_id."""
+    if not sys_id:
+        return None
     config = get_config()
-    # Extract base instance URL from snow_base_url (e.g., https://company.service-now.com/api/... -> https://company.service-now.com)
-    base_url = config.snow_base_url or ""
-    # Parse to get just the scheme and host
-    if base_url:
-        from urllib.parse import urlparse
-        parsed = urlparse(base_url)
-        instance_url = f"{parsed.scheme}://{parsed.netloc}"
-        return f"{instance_url}/nav_to.do?uri=incident.do?sys_id={sys_id}"
-    return None
+    instance_url = (config.snow_instance_url or "").rstrip("/")
+    if not instance_url:
+        return None
+    return f"{instance_url}/now/nav/ui/classic/params/target/incident.do%3Fsys_id%3D{sys_id}"
 
 # Priority colors and emojis
 PRIORITY_CONFIG = {
@@ -69,19 +106,88 @@ def _get_priority_info(priority):
     })
 
 
-def _create_incident_card(incidents_by_group):
-    """Create a colorful adaptive card for incident notifications.
+def _render_ticket_items(ticket, ticket_type="INC"):
+    """Render card items for a single INC or CHG ticket.
+
+    Returns:
+        Tuple of (container_items, actions)
+    """
+    priority_info = _get_priority_info(ticket.get('priority'))
+    number = ticket.get('number', 'Unknown')
+    short_desc = ticket.get('shortDescription', ticket.get('short_description', 'No description'))
+    created = ticket.get('createdDate', ticket.get('sys_created_on', 'Unknown'))
+    sys_id = ticket.get('id', ticket.get('sys_id', ''))
+
+    snow_url = _get_snow_incident_url(sys_id) if sys_id else None
+
+    if ticket_type == "INC":
+        caller = ticket.get('caller', 'Unknown')
+        label_emoji = "🚨"
+        extra_facts = [Fact(title="👤 Caller", value=caller)]
+    else:
+        label_emoji = "🔧"
+        state = ticket.get('state', 'Unknown')
+        extra_facts = [Fact(title="📌 State", value=state)]
+
+    items = [
+        ColumnSet(
+            columns=[
+                Column(
+                    width="auto",
+                    items=[TextBlock(
+                        text=f"{label_emoji} {number}",
+                        size=options.FontSize.MEDIUM,
+                        weight=options.FontWeight.BOLDER,
+                        color=priority_info['color']
+                    )]
+                ),
+                Column(
+                    width="stretch",
+                    items=[TextBlock(
+                        text=f"  {priority_info['label']}",
+                        size=options.FontSize.SMALL,
+                        color=priority_info['color'],
+                        horizontalAlignment=options.HorizontalAlignment.RIGHT
+                    )]
+                )
+            ]
+        ),
+        TextBlock(text=short_desc, wrap=True, size=options.FontSize.DEFAULT),
+        FactSet(facts=[
+            *extra_facts,
+            Fact(title="⏰ Created", value=f"{created} ET"),
+        ])
+    ]
+
+    actions = []
+    if snow_url:
+        actions.append(OpenUrl(url=snow_url, title=f"🔗 Open {number} in ServiceNow"))
+
+    return items, actions
+
+
+def _create_alert_card(incidents_by_group, changes_by_group):
+    """Create a colorful adaptive card for MIM incident and change notifications.
 
     Args:
         incidents_by_group: Dict of {group_name: [incidents]}
+        changes_by_group: Dict of {group_name: [changes]}
 
     Returns:
         AdaptiveCard instance
     """
-    total_count = sum(len(incs) for incs in incidents_by_group.values())
+    total_incs = sum(len(v) for v in incidents_by_group.values())
+    total_chgs = sum(len(v) for v in changes_by_group.values())
+    total_count = total_incs + total_chgs
 
-    # Header with fire emoji and attention-grabbing styling
-    card_body = [
+    parts = []
+    if total_incs:
+        parts.append(f"{total_incs} incident(s)")
+    if total_chgs:
+        parts.append(f"{total_chgs} change(s)")
+    subtitle = " · ".join(parts) + " detected"
+
+    card_body: list = [
         Container(
             style=options.ContainerStyle.ATTENTION,
             items=[
@@ -93,7 +199,7 @@ def _create_incident_card(incidents_by_group):
                     color=options.Colors.LIGHT
                 ),
                 TextBlock(
-                    text=f"{total_count} new incident(s) detected",
+                    text=subtitle,
                     size=options.FontSize.MEDIUM,
                     horizontalAlignment=options.HorizontalAlignment.CENTER,
                     color=options.Colors.LIGHT
@@ -102,9 +208,16 @@ def _create_incident_card(incidents_by_group):
         )
     ]
 
-    # Add each group's incidents
-    for group_name, incidents in incidents_by_group.items():
-        # Group header
+    all_groups = set(list(incidents_by_group.keys()) + list(changes_by_group.keys()))
+    for group_name in sorted(all_groups):
+        group_incs = incidents_by_group.get(group_name, [])
+        group_chgs = changes_by_group.get(group_name, [])
+        summary_parts = []
+        if group_incs:
+            summary_parts.append(f"{len(group_incs)} INC")
+        if group_chgs:
+            summary_parts.append(f"{len(group_chgs)} CHG")
+
         card_body.append(
             Container(
                 style=options.ContainerStyle.EMPHASIS,
@@ -116,7 +229,7 @@ def _create_incident_card(incidents_by_group):
                         color=options.Colors.ACCENT
                     ),
                     TextBlock(
-                        text=f"{len(incidents)} incident(s)",
+                        text=" · ".join(summary_parts),
                         size=options.FontSize.SMALL,
                         isSubtle=True
                     )
@@ -124,91 +237,27 @@ def _create_incident_card(incidents_by_group):
             )
         )
 
-        # Each incident in this group
-        # Field names per ITSM API KB0224060
-        for incident in incidents:
-            priority_info = _get_priority_info(incident.get('priority'))
-            number = incident.get('number', 'Unknown')
-            short_desc = incident.get('shortDescription', incident.get('short_description', 'No description'))
-            created = incident.get('createdDate', incident.get('sys_created_on', 'Unknown'))
-            caller = incident.get('caller', 'Unknown')
-            sys_id = incident.get('id', incident.get('sys_id', ''))
-
-            # Build ServiceNow URL for this incident
-            snow_url = _get_snow_incident_url(sys_id) if sys_id else None
-
-            # Incident container with priority-based styling
-            incident_items = [
-                # Incident number and priority
-                ColumnSet(
-                    columns=[
-                        Column(
-                            width="auto",
-                            items=[
-                                TextBlock(
-                                    text=f"{priority_info['emoji']} {number}",
-                                    size=options.FontSize.MEDIUM,
-                                    weight=options.FontWeight.BOLDER,
-                                    color=priority_info['color']
-                                )
-                            ]
-                        ),
-                        Column(
-                            width="stretch",
-                            items=[
-                                TextBlock(
-                                    text=f"  {priority_info['label']}",
-                                    size=options.FontSize.SMALL,
-                                    color=priority_info['color'],
-                                    horizontalAlignment=options.HorizontalAlignment.RIGHT
-                                )
-                            ]
-                        )
-                    ]
-                ),
-                # Description
-                TextBlock(
-                    text=short_desc,
-                    wrap=True,
-                    size=options.FontSize.DEFAULT
-                ),
-                # Facts (metadata)
-                FactSet(
-                    facts=[
-                        Fact(title="👤 Caller", value=caller),
-                        Fact(title="⏰ Created", value=f"{created} ET"),
-                    ]
-                )
-            ]
-
-            # Add action button if we have a URL
-            actions = []
-            if snow_url:
-                actions.append(OpenUrl(url=snow_url, title=f"🔗 Open {number} in ServiceNow"))
-
-            incident_container = Container(
-                style=options.ContainerStyle.DEFAULT,
-                items=incident_items
-            )
-
-            card_body.append(incident_container)
-
-            # Add action set after container if we have actions
+        for incident in group_incs:
+            items, actions = _render_ticket_items(incident, ticket_type="INC")
+            card_body.append(Container(style=options.ContainerStyle.DEFAULT, items=items))
             if actions:
                 card_body.append(ActionSet(actions=actions))
 
-    # Footer
+        for change in group_chgs:
+            items, actions = _render_ticket_items(change, ticket_type="CHG")
+            card_body.append(Container(style=options.ContainerStyle.DEFAULT, items=items))
+            if actions:
+                card_body.append(ActionSet(actions=actions))
+
     card_body.append(
-        Container(
-            items=[
-                TextBlock(
-                    text="💡 Check ServiceNow for full details",
-                    size=options.FontSize.SMALL,
-                    isSubtle=True,
-                    horizontalAlignment=options.HorizontalAlignment.CENTER
-                )
-            ]
-        )
+        Container(items=[
+            TextBlock(
+                text="💡 Check ServiceNow for full details",
+                size=options.FontSize.SMALL,
+                isSubtle=True,
+                horizontalAlignment=options.HorizontalAlignment.CENTER
+            )
+        ])
     )
 
     return AdaptiveCard(body=card_body)
@@ -238,7 +287,24 @@ def check_for_new_incidents(room_id=None):
 
         groups = load_assignment_groups()
         if not groups:
+            global _config_missing_notified
             logger.warning("No assignment groups configured for monitoring")
+            if not _config_missing_notified and not CONFIG_FILE.exists():
+                _config_missing_notified = True
+                try:
+                    dev_room = config.webex_room_id_dev_test_space
+                    if dev_room and webex_token:
+                        webex_api = WebexAPI(access_token=webex_token)
+                        send_message_with_retry(
+                            webex_api, dev_room,
+                            markdown=f"⚠️ **Major Incident Monitor disabled** — config file missing:\n"
+                                     f"`{CONFIG_FILE}`\n\n"
+                                     f"No SNOW assignment groups are being polled. "
+                                     f"Recreate the file and restart the scheduler."
+                        )
+                        logger.warning("Sent missing-config notification to dev test space")
+                except Exception as notify_err:
+                    logger.error(f"Failed to send missing-config notification: {notify_err}")
             return
 
         # Initialize ServiceNow client with error handling
@@ -249,41 +315,47 @@ def check_for_new_incidents(room_id=None):
             return
 
         incidents_by_group = {}
+        seen_ids = _load_seen_ids()
 
         for group in groups:
             group_name = group.get('name')
-            poll_interval = group.get('poll_interval_minutes', 15)
-
-            logger.info(f"Checking incidents for group: {group_name} (past {poll_interval} mins)")
 
             try:
-                incidents = client.get_recent_incidents_by_group_name(group_name, minutes=poll_interval)
-
-                if isinstance(incidents, dict) and 'error' in incidents:
-                    logger.error(f"Error fetching incidents for {group_name}: {incidents.get('error')}")
-                    continue
-
-                if incidents:
-                    logger.info(f"Found {len(incidents)} new incident(s) for {group_name}")
-                    incidents_by_group[group_name] = incidents
-                else:
-                    logger.debug(f"No new incidents for {group_name}")
-
+                recent_incidents = client.get_recent_incidents_by_group_name(group_name, minutes=_LOOKBACK_MINUTES)
+                if isinstance(recent_incidents, dict) and 'error' in recent_incidents:
+                    logger.error(f"Error fetching incidents for {group_name}: {recent_incidents.get('error')}")
+                    continue  # Don't update seen IDs on error
             except Exception as e:
-                logger.error(f"Exception while fetching incidents for {group_name}: {e}")
-                continue  # Continue to next group even if one fails
+                logger.error(f"Exception fetching incidents for {group_name}: {e}")
+                continue
+
+            current_ids = {inc.get('number') for inc in recent_incidents if inc.get('number')}
+            previously_seen = seen_ids.get(group_name, set())
+
+            # First run for this group: seed the seen set without alerting
+            if not previously_seen:
+                logger.info(f"First run for {group_name}: seeding {len(current_ids)} seen IDs (no alert)")
+                seen_ids[group_name] = current_ids
+                continue
+
+            new_ids = current_ids - previously_seen
+            if new_ids:
+                new_incidents = [inc for inc in recent_incidents if inc.get('number') in new_ids]
+                logger.info(f"Found {len(new_incidents)} new INC(s) for {group_name}: {sorted(new_ids)}")
+                incidents_by_group[group_name] = new_incidents
+
+            seen_ids[group_name] = current_ids
+
+        _save_seen_ids(seen_ids)
 
         # Send notification if any incidents found
         if incidents_by_group:
-            total_count = sum(len(incs) for incs in incidents_by_group.values())
-            logger.info(f"Sending adaptive card notification for {total_count} total incident(s)")
+            total_count = sum(len(v) for v in incidents_by_group.values())
+            logger.info(f"Sending alert card: {total_count} INC(s)")
 
-            # Create Webex API instance
             webex_api = WebexAPI(access_token=webex_token)
-
-            # Create and send adaptive card
-            card = _create_incident_card(incidents_by_group)
-            fallback_text = f"🚨 {total_count} new Major Incident(s) detected! Check ServiceNow for details."
+            card = _create_alert_card(incidents_by_group, {})
+            fallback_text = f"🚨 {total_count} new Major Incident(s)! Check ServiceNow for details."
 
             try:
                 send_card_with_retry(
@@ -295,22 +367,17 @@ def check_for_new_incidents(room_id=None):
                         "content": card.to_dict()
                     }]
                 )
-                logger.info("Adaptive card notification sent successfully")
+                logger.info("Alert card sent successfully")
             except Exception as e:
-                logger.error(f"Failed to send adaptive card: {e}")
-                # Fallback to markdown message
+                logger.error(f"Failed to send alert card: {e}")
                 try:
                     message_parts = [f"🚨 **MAJOR INCIDENT ALERT** ({total_count} new)\n"]
                     for group_name, incidents in incidents_by_group.items():
                         message_parts.append(f"\n**📋 {group_name}**")
                         for inc in incidents:
                             priority_info = _get_priority_info(inc.get('priority'))
-                            message_parts.append(
-                                f"- {priority_info['emoji']} **{inc.get('number')}** - {priority_info['label']}"
-                            )
                             short_desc = inc.get('shortDescription', inc.get('short_description', 'No description'))
-                            message_parts.append(f"  > {short_desc}")
-
+                            message_parts.append(f"- {priority_info['emoji']} **{inc.get('number')}** {short_desc}")
                     send_message_with_retry(webex_api, room_id, markdown="\n".join(message_parts))
                     logger.info("Fallback markdown message sent")
                 except Exception as fallback_error:

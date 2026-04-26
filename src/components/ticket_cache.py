@@ -53,6 +53,8 @@ SYSTEM_FIELDS = {
     'owner': 'owner',
     'created': 'created',
     'closed': 'closed',
+    'closeNotes': 'closeNotes',
+    'closeReason': 'closeReason',
 }
 
 CUSTOM_FIELDS = {
@@ -249,6 +251,44 @@ class TicketCache:
             log.debug("=" * 80)
             log.debug("TicketCache.generate() EXIT")
             log.debug("=" * 80)
+
+    @classmethod
+    def fetch_for_range(cls, start_date_str: str, end_date_str: str,
+                        progress_callback=None) -> List[Ticket]:
+        """Fetch and process tickets for an arbitrary date range (on-demand, no caching).
+
+        Args:
+            start_date_str: Start date as YYYY-MM-DD
+            end_date_str: End date as YYYY-MM-DD
+            progress_callback: Optional callback(page, page_count, total) for progress tracking
+
+        Returns:
+            List of processed UI tickets (same format as cached data).
+        """
+        instance = cls()
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').replace(
+            hour=23, minute=59, second=59, tzinfo=timezone.utc
+        )
+
+        query = (
+            f"created:>={start_date.strftime('%Y-%m-%dT%H:%M:%SZ')} "
+            f"created:<={end_date.strftime('%Y-%m-%dT%H:%M:%SZ')} "
+            f"type:{CONFIG.team_name} -closeReason:Duplicate"
+        )
+
+        log.info(f"On-demand fetch: {start_date_str} to {end_date_str}")
+        raw_tickets = instance.ticket_handler.get_tickets(
+            query, paginate=True, progress_callback=progress_callback
+        )
+        tickets = [] if raw_tickets is None else [t for t in raw_tickets if isinstance(t, dict)]
+        log.info(f"On-demand fetch returned {len(tickets)} tickets")
+
+        # Skip notes — they are enriched on-demand at export time
+        for ticket in tickets:
+            ticket['notes'] = []
+
+        return instance._process_for_ui(tickets)
 
     def _fetch_raw_tickets(self, lookback_days: int) -> List[Ticket]:
         """Fetch tickets from XSOAR and enrich with notes in parallel."""
@@ -542,7 +582,7 @@ class TicketCache:
 
         # Extract system fields
         for ui_field, sys_field in SYSTEM_FIELDS.items():
-            default = 'Unknown' if ui_field in ('name', 'owner') else 0
+            default = 'Unknown' if ui_field in ('name', 'owner') else '' if ui_field == 'closeNotes' else 0
             ui_ticket[ui_field] = ticket.get(sys_field, default)
 
         # Extract custom fields
@@ -551,8 +591,9 @@ class TicketCache:
             ui_ticket[ui_field] = custom_fields.get(custom_field, 'Unknown')
 
         # Extract SLA timing for computed fields
-        ui_ticket['_timetorespond'] = custom_fields.get('timetorespond', {})
-        ui_ticket['_timetocontain'] = custom_fields.get('timetocontain', {})
+        # Newer tickets use 'timetorespond'/'timetocontain'; older tickets use 'responsesla'/'containmentsla'
+        ui_ticket['_timetorespond'] = custom_fields.get('timetorespond') or custom_fields.get('responsesla') or {}
+        ui_ticket['_timetocontain'] = custom_fields.get('timetocontain') or custom_fields.get('containmentsla') or {}
 
         # Apply name transformations
         ui_ticket['type'] = clean_type_name(ui_ticket['type'])

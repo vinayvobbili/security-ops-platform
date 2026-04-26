@@ -1,10 +1,10 @@
 #!/bin/bash
 
-cd /home/user/pub/IR || exit 1
+cd /home/user/IR || exit 1
 
 SERVICE_NAME="ir-barnacles.service"
 BOT_NAME="the alert triage service"
-LOG_FILE="/home/user/pub/IR/logs/barnacles.log"
+LOG_FILE="/home/user/IR/logs/barnacles.log"
 LOG_VIEWER_PORT=8036
 
 echo "Managing $BOT_NAME via systemd service: $SERVICE_NAME"
@@ -54,7 +54,7 @@ else
 fi
 
 # Restart log viewer to ensure it shows latest logs
-/home/user/pub/IR/deployment/restart_log_viewer.sh $LOG_VIEWER_PORT "$BOT_NAME Bot" "$LOG_FILE"
+/home/user/IR/deployment/restart_log_viewer.sh $LOG_VIEWER_PORT "$BOT_NAME Bot" "$LOG_FILE"
 
 # Start the systemd service
 echo ""

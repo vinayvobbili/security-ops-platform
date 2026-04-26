@@ -1,0 +1,398 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'RUAI Screening Review' %}
+{% set page_title_left_icon = '🤖' %}
+{% set page_title_right_icon = '📝' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ruai.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="ruai-page-bg">
+    <div class="ruai-orb ruai-orb-1"></div>
+    <div class="ruai-orb ruai-orb-2"></div>
+    <div class="ruai-orb ruai-orb-3"></div>
+</div>
+<div class="ruai-container">
+
+    <!-- Header -->
+    <div class="ruai-detail-header">
+        <div>
+            <div class="ruai-detail-title">{{ s.use_case_name }}</div>
+            <div class="ruai-detail-meta">
+                {{ s.use_case_id or '#' ~ s.id }} &middot;
+                {{ s.owner_name }} ({{ s.owner_email }}) &middot;
+                {{ s.lob }} &middot;
+                Submitted {{ s.submitted_at[:16] if s.submitted_at else '' }}
+            </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <span class="ruai-status ruai-status-{{ s.status }}">{{ s.status|replace('_', ' ')|title }}</span>
+            {% if s.ai_review and s.ai_review.overall_risk_score %}
+            <span class="ruai-risk-badge ruai-risk-{{ s.ai_review.overall_risk_score|lower }}" style="font-size:0.9rem; padding:4px 14px;">{{ s.ai_review.overall_risk_score }} Risk</span>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if s.status == 'ai_reviewing' %}
+    <!-- AI review still running — auto-refreshes every 8 seconds -->
+    <div class="ruai-detail-panel ruai-status-panel">
+        <div style="font-size:2rem; margin-bottom:12px;">⏳</div>
+        <h3>AI Review In Progress</h3>
+        <p>The AI is analyzing your submission. This typically takes about a minute.<br>This page will refresh automatically.</p>
+    </div>
+    <script>setTimeout(function() { location.reload(); }, 8000);</script>
+
+    {% elif s.status == 'pending_review' %}
+    <!-- Already sent to reviewers -->
+    <div class="ruai-detail-panel ruai-status-panel">
+        <div style="font-size:2rem; margin-bottom:12px;">✅</div>
+        <h3>Sent to RUAI Review Team</h3>
+        <p>Your submission is in the reviewer queue. You'll be contacted if the team has questions.</p>
+    </div>
+
+    {% elif s.status in ('approved', 'rejected') %}
+    <!-- Final decision -->
+    <div class="ruai-detail-panel ruai-status-panel">
+        <div style="font-size:2rem; margin-bottom:12px;">{% if s.status == 'approved' %}✅{% else %}❌{% endif %}</div>
+        <h3>{{ s.status|title }}</h3>
+        <p>This submission has been {{ s.status }} by the RUAI review team.</p>
+    </div>
+
+    {% else %}
+    <!-- Main view: AI feedback + editable form -->
+
+    {% if s.status == 'changes_requested' and s.reviewer_actions %}
+    <!-- Show what changes the reviewer requested -->
+    <div class="ruai-detail-panel" style="margin-bottom:24px; border-left: 3px solid #f59e0b;">
+        <h3>Changes Requested by Reviewer</h3>
+        {% for action in s.reviewer_actions|reverse %}
+        {% if action.action == 'request_changes' %}
+        <div class="ruai-qa-item">
+            <div class="ruai-qa-label">{{ action.reviewer_name }} — {{ action.created_at }}</div>
+            {% if action.notes %}<div class="ruai-qa-value">{{ action.notes }}</div>{% endif %}
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if s.ai_review %}
+    <!-- AI Feedback Panel -->
+    <div class="ruai-submitter-feedback">
+        <div class="ruai-detail-panel ruai-ai-panel" style="margin-bottom:24px;">
+            <h3>AI Feedback on Your Submission</h3>
+            <p style="font-size:0.85rem; color:#64748b; margin-top:-8px; margin-bottom:16px;">
+                Review the feedback below. You can revise your answers and resubmit, or send directly to the RUAI team if you're satisfied.
+            </p>
+
+            {% set ai = s.ai_review %}
+
+            <!-- Overall Score + Per-Area Grid -->
+            <div style="display:flex; align-items:center; gap:24px; flex-wrap:wrap; margin-bottom:20px;">
+                {% if ai.overall_risk_score %}
+                <div style="text-align:center;">
+                    <div style="font-size:0.75rem; color:#64748b; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.5px;">Overall Risk</div>
+                    <span class="ruai-risk-badge ruai-risk-{{ ai.overall_risk_score|lower }}" style="font-size:1.1rem; padding:6px 20px;">{{ ai.overall_risk_score }}</span>
+                </div>
+                {% endif %}
+                {% if ai.preliminary_risk_assessment %}
+                <div class="ruai-risk-grid" style="flex:1;">
+                    {% for area, level in ai.preliminary_risk_assessment.items() %}
+                    <div class="ruai-risk-cell">
+                        <div class="ruai-risk-cell-label">{{ area|replace('_', ' ')|title }}</div>
+                        <span class="ruai-risk-badge ruai-risk-{{ level|lower }}">{{ level }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Completeness Issues -->
+            {% if ai.completeness_issues %}
+            <div class="ruai-detail-section">
+                <h4>Completeness Issues</h4>
+                {% for issue in ai.completeness_issues %}
+                <div class="ruai-ai-issue">{{ issue }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Risk Flags -->
+            {% if ai.risk_flags %}
+            <div class="ruai-detail-section">
+                <h4>Risk Flags</h4>
+                {% for flag in ai.risk_flags %}
+                <div class="ruai-ai-risk-flag risk-{{ flag.level|lower }}">
+                    <span class="ruai-risk-badge ruai-risk-{{ flag.level|lower }}">{{ flag.level }}</span>
+                    <div><strong>{{ flag.area }}</strong>: {{ flag.reason }}</div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Clarifying Questions -->
+            {% if ai.clarifying_questions %}
+            <div class="ruai-detail-section">
+                <h4>Questions to Address</h4>
+                {% for q in ai.clarifying_questions %}
+                <div class="ruai-ai-question">{{ q }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Summary -->
+            {% if ai.review_summary_md %}
+            <div class="ruai-detail-section">
+                <h4>AI Summary</h4>
+                <div class="ruai-ai-summary">{{ ai.review_summary_md }}</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Editable Form (pre-populated) -->
+    <div class="ruai-detail-panel" style="margin-bottom:24px;">
+        <h3>Your Responses <span style="font-size:0.82rem; font-weight:400; color:#64748b;">(edit any answers below, then save or send to review)</span></h3>
+        <form id="ruai-edit-form" enctype="multipart/form-data">
+            <div id="ruai-edit-fields"></div>
+
+            <div style="margin-top:16px;">
+                <label style="font-weight:600; font-size:0.92rem; color:#334155; display:block; margin-bottom:6px;">Upload Additional Documents</label>
+                <input type="file" name="documents" multiple id="ruai-edit-files" style="font-size:0.88rem;">
+                {% if s.documents %}
+                <div style="font-size:0.82rem; color:#64748b; margin-top:4px;">Existing: {{ s.documents }}</div>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+
+    <!-- Action Buttons -->
+    <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:32px;">
+        <button class="ruai-btn ruai-btn-primary" onclick="saveRevision()" id="btn-save">Save & Re-run AI Review</button>
+        <button class="ruai-btn ruai-btn-success" onclick="sendForReview()" id="btn-send">Send to RUAI Review Team</button>
+    </div>
+    {% endif %}
+
+</div>
+
+<div id="ruai-modal" class="ruai-modal">
+    <div class="ruai-modal-content" id="ruai-modal-body"></div>
+</div>
+<div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    'use strict';
+
+    var formConfig = {{ form_config|tojson }};
+    var existingData = buildExistingData();
+    var submissionId = {{ s.id }};
+
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof initTheme === 'function') initTheme();
+        renderEditFields();
+    });
+
+    function buildExistingData() {
+        // Merge structured columns + responses JSON into one flat dict
+        var data = {};
+        var structured = {
+            use_case_name: {{ s.use_case_name|tojson }},
+            use_case_description: {{ s.use_case_description|tojson }},
+            use_case_stage: {{ s.use_case_stage|tojson }},
+            owner_name: {{ s.owner_name|tojson }},
+            owner_email: {{ s.owner_email|tojson }},
+            lob: {{ s.lob|tojson }},
+            region: {{ (s.region or '')|tojson }},
+            vendor_or_inhouse: {{ s.vendor_or_inhouse|tojson }},
+            vendor_name: {{ (s.vendor_name or '')|tojson }}
+        };
+        Object.assign(data, structured);
+        {% if s.responses %}
+        var resp = {{ s.responses|tojson }};
+        Object.assign(data, resp);
+        {% endif %}
+        return data;
+    }
+
+    function shouldShow(item) {
+        if (item.always_show) return true;
+        if (!item.depends_on) return true;
+        return Object.entries(item.depends_on).every(function(e) {
+            return existingData[e[0]] === e[1];
+        });
+    }
+
+    function renderEditFields() {
+        var container = document.getElementById('ruai-edit-fields');
+        if (!container) return;
+        var html = '';
+
+        formConfig.forEach(function(section) {
+            if (!shouldShow(section)) return;
+            html += '<div class="ruai-detail-section"><h4>' + esc(section.title) + '</h4>';
+
+            section.fields.forEach(function(field) {
+                var fieldVisible = !field.depends_on || Object.entries(field.depends_on).every(function(e) {
+                    return existingData[e[0]] === e[1];
+                });
+                var hidden = fieldVisible ? '' : ' hidden';
+                var depAttr = field.depends_on ? ' data-depends=\'' + JSON.stringify(field.depends_on) + '\'' : '';
+                var req = field.required ? '<span class="required">*</span>' : '';
+                var val = existingData[field.name] || '';
+
+                html += '<div class="ruai-field' + hidden + '" data-field="' + field.name + '"' + depAttr + '>';
+                html += '<label>' + esc(field.label) + req + '</label>';
+
+                switch (field.type) {
+                    case 'text':
+                    case 'email':
+                        html += '<input type="' + field.type + '" name="' + field.name + '" value="' + esc(val) + '"' + (field.required ? ' required' : '') + '>';
+                        break;
+                    case 'textarea':
+                        html += '<textarea name="' + field.name + '"' + (field.required ? ' required' : '') + '>' + esc(val) + '</textarea>';
+                        break;
+                    case 'select':
+                        html += '<select name="' + field.name + '"' + (field.required ? ' required' : '') + '>';
+                        html += '<option value="">-- Select --</option>';
+                        (field.options || []).forEach(function(opt) {
+                            var sel = val === opt ? ' selected' : '';
+                            html += '<option value="' + esc(opt) + '"' + sel + '>' + esc(opt) + '</option>';
+                        });
+                        html += '</select>';
+                        break;
+                    case 'yesno':
+                        html += '<div class="ruai-yesno">';
+                        html += '<label><input type="radio" name="' + field.name + '" value="yes"' + (val === 'yes' ? ' checked' : '') + (field.required ? ' required' : '') + '> Yes</label>';
+                        html += '<label><input type="radio" name="' + field.name + '" value="no"' + (val === 'no' ? ' checked' : '') + '> No</label>';
+                        html += '</div>';
+                        break;
+                    case 'checklist':
+                        html += '<div class="ruai-checklist">';
+                        var checked = Array.isArray(val) ? val : [];
+                        (field.options || []).forEach(function(opt) {
+                            var isChecked = checked.indexOf(opt) !== -1 ? ' checked' : '';
+                            html += '<label><input type="checkbox" name="' + field.name + '" value="' + esc(opt) + '"' + isChecked + '> ' + esc(opt) + '</label>';
+                        });
+                        html += '</div>';
+                        break;
+                    default:
+                        html += '<input type="text" name="' + field.name + '" value="' + esc(val) + '">';
+                }
+                html += '</div>';
+            });
+            html += '</div>';
+        });
+
+        container.innerHTML = html;
+
+        // Bind change events for depends_on toggling
+        container.querySelectorAll('input, select, textarea').forEach(function(el) {
+            el.addEventListener('change', function() {
+                collectFormData();
+                container.querySelectorAll('.ruai-field[data-depends]').forEach(function(div) {
+                    var deps = JSON.parse(div.dataset.depends);
+                    var show = Object.entries(deps).every(function(e) {
+                        return existingData[e[0]] === e[1];
+                    });
+                    div.classList.toggle('hidden', !show);
+                });
+            });
+        });
+    }
+
+    function collectFormData() {
+        existingData = {};
+        document.querySelectorAll('#ruai-edit-fields input, #ruai-edit-fields select, #ruai-edit-fields textarea').forEach(function(el) {
+            if (el.type === 'checkbox') {
+                if (!existingData[el.name]) existingData[el.name] = [];
+                if (el.checked) existingData[el.name].push(el.value);
+            } else if (el.type === 'radio') {
+                if (el.checked) existingData[el.name] = el.value;
+            } else {
+                if (el.value) existingData[el.name] = el.value;
+            }
+        });
+        return existingData;
+    }
+
+    window.saveRevision = function() {
+        var data = collectFormData();
+        var formData = new FormData();
+        formData.append('form_data', JSON.stringify(data));
+
+        var fileInput = document.getElementById('ruai-edit-files');
+        if (fileInput && fileInput.files) {
+            for (var i = 0; i < fileInput.files.length; i++) {
+                formData.append('documents', fileInput.files[i]);
+            }
+        }
+
+        var btn = document.getElementById('btn-save');
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+
+        fetch('/api/ruai/' + submissionId + '/update', {
+            method: 'POST',
+            body: formData
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(result) {
+            if (result.status === 'success') {
+                if (typeof showToast === 'function') showToast(result.message);
+                // Reload after short delay to let AI review start
+                setTimeout(function() { location.reload(); }, 1500);
+            } else {
+                if (typeof showToast === 'function') showToast(result.message);
+                btn.disabled = false;
+                btn.textContent = 'Save & Re-run AI Review';
+            }
+        })
+        .catch(function() {
+            if (typeof showToast === 'function') showToast('Network error');
+            btn.disabled = false;
+            btn.textContent = 'Save & Re-run AI Review';
+        });
+    };
+
+    window.sendForReview = function() {
+        var btn = document.getElementById('btn-send');
+        btn.disabled = true;
+        btn.textContent = 'Sending...';
+
+        fetch('/api/ruai/' + submissionId + '/send-for-review', {method: 'POST'})
+        .then(function(r) { return r.json(); })
+        .then(function(result) {
+            var modal = document.getElementById('ruai-modal');
+            var body = document.getElementById('ruai-modal-body');
+            if (result.status === 'success') {
+                body.innerHTML = '<h3>Sent for Review</h3><p>' + esc(result.message) + '</p>' +
+                    '<a href="/ruai-screening/' + submissionId + '" class="ruai-btn ruai-btn-primary" style="display:inline-block;margin-top:12px;text-decoration:none;">OK</a>';
+            } else {
+                body.innerHTML = '<h3 style="color:#dc2626">Error</h3><p>' + esc(result.message) + '</p>' +
+                    '<button class="ruai-btn ruai-btn-secondary" onclick="document.getElementById(\'ruai-modal\').classList.remove(\'show\')">Close</button>';
+                btn.disabled = false;
+                btn.textContent = 'Send to RUAI Review Team';
+            }
+            modal.classList.add('show');
+        })
+        .catch(function() {
+            if (typeof showToast === 'function') showToast('Network error');
+            btn.disabled = false;
+            btn.textContent = 'Send to RUAI Review Team';
+        });
+    };
+
+    function esc(str) {
+        if (!str) return '';
+        var div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+})();
+</script>
+{% endblock %}

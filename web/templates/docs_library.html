@@ -1,0 +1,192 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'Docs Library' %}
+{% set page_title_left_icon = '📚' %}
+{% set page_title_right_icon = '🔍' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/docs_library.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/chat_widget.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="dl-container">
+
+    <!-- Stats Bar -->
+    <div class="dl-stats-bar">
+        <div class="dl-stat">
+            <span class="dl-stat-icon">📁</span>
+            <div class="dl-stat-body">
+                <span class="dl-stat-value" id="dlDocCount">{{ docs|length }}</span>
+                <span class="dl-stat-label">Documents</span>
+            </div>
+        </div>
+        <div class="dl-stat">
+            <span class="dl-stat-icon">🧩</span>
+            <div class="dl-stat-body">
+                <span class="dl-stat-value" id="dlChunkCount">{{ stats.total_chunks | default(0) }}</span>
+                <span class="dl-stat-label">Vector Chunks</span>
+            </div>
+        </div>
+        <div class="dl-stat" style="flex: 1; justify-content: flex-end;">
+            <span class="dl-status-badge {{ stats.status | default('empty') }}" id="dlStatusBadge">
+                {% if stats.status == 'initialized' %}✓ Indexed
+                {% elif stats.status == 'error' %}✕ Error
+                {% else %}○ Empty{% endif %}
+            </span>
+        </div>
+    </div>
+
+    <!-- Sync Banner -->
+    <div class="dl-sync-banner" id="dlSyncBanner">
+        <div class="dl-spinner"></div>
+        <span id="dlSyncMsg">Rebuilding vector store…</span>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="dl-toolbar">
+        <div class="dl-toolbar-left">
+            <span class="dl-count">{{ docs|length }} document{{ 's' if docs|length != 1 else '' }} in store</span>
+        </div>
+        <div class="dl-toolbar-right">
+            <button class="dl-btn dl-btn-rebuild" onclick="triggerRebuild()">⟳ Full Rebuild</button>
+            <button class="dl-btn dl-btn-upload" onclick="openUploadModal()">+ Upload Document</button>
+        </div>
+    </div>
+
+    <!-- Documents Table -->
+    {% if docs %}
+    <div class="dl-table-wrap">
+        <table class="dl-table">
+            <thead>
+                <tr>
+                    <th style="width:36px;"></th>
+                    <th>Filename</th>
+                    <th style="width:90px;">Size</th>
+                    <th style="width:140px;">Modified</th>
+                    <th class="dl-th-actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="dlTbody">
+                {% for doc in docs %}
+                <tr data-filename="{{ doc.filename | e }}">
+                    <td class="dl-type-icon">
+                        {% if doc.ext == '.pdf' %}📄
+                        {% elif doc.ext in ['.docx', '.doc'] %}📝
+                        {% elif doc.ext in ['.xlsx', '.xls'] %}📊
+                        {% else %}📁{% endif %}
+                    </td>
+                    <td class="dl-filename">{{ doc.filename }}</td>
+                    <td class="dl-size">{{ doc.size_str }}</td>
+                    <td class="dl-modified">{{ doc.modified }}</td>
+                    <td class="dl-td-actions">
+                        <a class="dl-btn-icon dl-btn-download"
+                           href="{{ url_for('docs_library.download_doc', filename=doc.filename) }}"
+                           download="{{ doc.filename | e }}"
+                           title="Download">&#11015;</a>
+                        <button class="dl-btn-icon dl-btn-delete"
+                                data-filename="{{ doc.filename | e }}"
+                                onclick="deleteDoc(this.dataset.filename)"
+                                title="Delete">&#128465;</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="dl-table-wrap">
+        <table class="dl-table">
+            <thead>
+                <tr>
+                    <th style="width:36px;"></th>
+                    <th>Filename</th>
+                    <th style="width:90px;">Size</th>
+                    <th style="width:140px;">Modified</th>
+                    <th class="dl-th-actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="dlTbody">
+                <tr id="dlEmptyRow">
+                    <td colspan="5" class="dl-empty">No documents yet. Click "+ Upload Document" to add one.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+</div>
+
+<!-- Upload Modal -->
+<div class="dl-modal-overlay" id="dlUploadModal" style="display:none;" onclick="closeUploadModal(event)">
+    <div class="dl-modal" onclick="event.stopPropagation()">
+        <div class="dl-modal-header">
+            <h3>Upload Document</h3>
+            <button class="dl-modal-close" onclick="closeUploadModal()">&times;</button>
+        </div>
+        <div class="dl-modal-body">
+            <p style="margin: 0 0 14px; font-size: 0.88rem; color: #64748b;">
+                Supported formats: PDF, Word (.docx/.doc), Excel (.xlsx/.xls) &mdash; max 16 MB.<br>
+                After upload, the vector store will be rebuilt automatically in the background.
+            </p>
+
+            <!-- Drop Zone -->
+            <div class="dl-drop-zone" id="dlDropZone">
+                <div class="dl-drop-icon">📂</div>
+                <div class="dl-drop-text">Drag &amp; drop a file here, or click to browse</div>
+                <div class="dl-drop-hint">PDF · DOCX · DOC · XLSX · XLS</div>
+            </div>
+            <input type="file" id="dlFileInput" accept=".pdf,.docx,.doc,.xlsx,.xls">
+
+            <!-- File Preview -->
+            <div class="dl-file-preview" id="dlFilePreview">
+                <span class="dl-preview-icon" id="dlPreviewIcon">📄</span>
+                <div class="dl-preview-info">
+                    <div class="dl-preview-name" id="dlPreviewName"></div>
+                    <div class="dl-preview-size" id="dlPreviewSize"></div>
+                </div>
+                <button class="dl-preview-clear" onclick="clearFileSelection()" title="Remove">&times;</button>
+            </div>
+        </div>
+        <div class="dl-modal-footer">
+            <button type="button" class="dl-btn dl-btn-cancel" onclick="closeUploadModal()">Cancel</button>
+            <button type="button" class="dl-btn dl-btn-upload" id="dlConfirmBtn"
+                    onclick="submitUpload()" disabled>
+                Upload &amp; Rebuild Vector Store
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="dl-toast" id="dlToast"></div>
+
+{% include '_chat_widget.html' %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/docs_library.js') }}"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="{{ url_for('static', filename='js/chat_widget.js') }}"></script>
+<script>
+initChatWidget({
+    stream_url: '/api/docs-library/chat/stream',
+    clear_url:  '/api/docs-library/chat/clear',
+    title:      'Ask the Docs',
+    greeting:   'Hi! Ask me anything about the documents in this library. I search the full document content to answer your question.',
+    loadingMessages: [
+        'Searching document library\u2026',
+        'Reading relevant sections\u2026',
+        'Cross-referencing procedures\u2026',
+        'Extracting key details\u2026',
+        'Composing answer from sources\u2026'
+    ],
+    chips: [
+        {label: 'What topics are covered?',      q: 'What topics and procedures are covered across the documents in this library?'},
+        {label: 'Incident response steps',        q: 'What are the incident response steps or procedures described in the documents?'},
+        {label: 'Network blocking / containment', q: 'What do the documents say about blocking or containing network threats?'},
+        {label: 'Cloud security guidance',        q: 'What cloud security guidance is in the documents?'}
+    ]
+});
+</script>
+{% endblock %}

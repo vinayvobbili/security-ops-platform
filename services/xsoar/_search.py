@@ -71,7 +71,10 @@ def get_tickets(
     team_name: str,
     period: Optional[Dict[str, Any]] = None,
     size: int = 20000,
-    paginate: bool = True
+    paginate: bool = True,
+    test_connection: bool = True,
+    read_timeout: Optional[int] = None,
+    progress_callback=None
 ) -> List[Dict[str, Any]]:
     """
     Fetch security incidents from XSOAR using demisto-py SDK.
@@ -84,6 +87,8 @@ def get_tickets(
         period: Optional time period filter
         size: Maximum number of results (used when paginate=False)
         paginate: Whether to fetch all results with pagination
+        test_connection: Whether to run connectivity test before querying (skip for frequent lightweight jobs)
+        read_timeout: Override read timeout in seconds for unpaginated queries (None = use client default)
 
     Returns:
         List of incident dictionaries
@@ -93,24 +98,26 @@ def get_tickets(
     log.debug(f"get_tickets() called with query: {query[:100]}...")
     log.debug(f"  Paginate: {paginate}, Size: {size}")
 
-    # Quick connectivity test
-    try:
-        test_connectivity(client, base_url)
-    except Exception as e:
-        log.error(f"✗ XSOAR API connectivity test failed: {truncate_error_message(e)}")
-        log.error("This may indicate network issues, API outage, or authentication problems")
-        raise
+    if test_connection:
+        # Quick connectivity test
+        try:
+            test_connectivity(client, base_url)
+        except Exception as e:
+            log.error(f"✗ XSOAR API connectivity test failed: {truncate_error_message(e)}")
+            log.error("This may indicate network issues, API outage, or authentication problems")
+            raise
 
     if paginate:
-        return _fetch_paginated(client, full_query, period)
-    return _fetch_unpaginated(client, full_query, period, size)
+        return _fetch_paginated(client, full_query, period, progress_callback=progress_callback)
+    return _fetch_unpaginated(client, full_query, period, size, read_timeout=read_timeout)
 
 
 def _fetch_paginated(
     client,
     query: str,
     period: Optional[Dict[str, Any]],
-    page_size: int = None
+    page_size: int = None,
+    progress_callback=None
 ) -> List[Dict[str, Any]]:
     """
     Fetch tickets with pagination using demisto-py SDK.
@@ -203,6 +210,10 @@ def _fetch_paginated(
                 if progress is not None:
                     progress.update(task_id, advance=len(data), description=f"Fetching tickets (page {page + 1})")
 
+                # Invoke progress callback
+                if progress_callback:
+                    progress_callback(page=page + 1, page_count=len(data), total=len(all_tickets))
+
                 # Show progress
                 if not use_progress_bar:
                     log.debug(f"  ✓ Page {page} complete: fetched {len(data)} tickets (total: {len(all_tickets)})")
@@ -284,7 +295,8 @@ def _fetch_unpaginated(
     client,
     query: str,
     period: Optional[Dict[str, Any]],
-    size: int
+    size: int,
+    read_timeout: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     """
     Fetch tickets directly from XSOAR API using demisto-py SDK (single page, no pagination).
@@ -294,6 +306,7 @@ def _fetch_unpaginated(
         query: XSOAR query string
         period: Optional time period filter
         size: Maximum number of results
+        read_timeout: Override read timeout in seconds (None = use client default)
 
     Returns:
         List of incident dictionaries
@@ -309,6 +322,17 @@ def _fetch_unpaginated(
 
     max_retries = 3
     server_error_retry_count = 0
+
+    # Temporarily override read timeout if specified
+    original_timeout = None
+    if read_timeout is not None:
+        try:
+            rest_client = client.api_client.rest_client
+            original_timeout = rest_client.timeout
+            rest_client.timeout = (original_timeout[0], read_timeout) if isinstance(original_timeout, tuple) else (30, read_timeout)
+            log.debug(f"Overriding read timeout to {read_timeout}s")
+        except AttributeError:
+            log.warning("Could not override read timeout on client")
 
     try:
         log.debug(f"API Request filter: {json.dumps(filter_data, indent=2)}")
@@ -351,5 +375,12 @@ def _fetch_unpaginated(
         log.error(f"Error in _fetch_unpaginated: {str(e)}")
         log.error(f"Query that failed: {query}")
         return []
+
+    finally:
+        if original_timeout is not None:
+            try:
+                client.api_client.rest_client.timeout = original_timeout
+            except AttributeError:
+                pass
 
     return []  # Should not reach here, but satisfy return type

@@ -302,7 +302,7 @@ THREAT_HUNT = {
                     "type": "Action.Submit",
                     "title": "🎯 Start Hunt",
                     "data": {
-                        "callback_keyword": "threat_hunt"
+                        "callback_keyword": "submit_threat_hunt"
                     },
                     "style": "positive"
                 }

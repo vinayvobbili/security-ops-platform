@@ -1,0 +1,20 @@
+{
+  "name": "DnR Mission Control",
+  "short_name": "Mission Control",
+  "start_url": "/",
+  "display": "minimal-ui",
+  "background_color": "#1a2030",
+  "theme_color": "#2d3748",
+  "icons": [
+    {
+      "src": "/icons/mission-control-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/mission-control-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

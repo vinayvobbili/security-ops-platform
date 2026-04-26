@@ -20,6 +20,7 @@ from langchain_core.tools import tool
 
 from services.shodan_monitor import ShodanClient
 from src.utils.tool_decorator import log_tool_call
+from src.utils.llm_decorators import validate_args, IP_ADDRESS_PATTERN, DOMAIN_PATTERN
 
 logger = logging.getLogger(__name__)
 
@@ -229,6 +230,7 @@ def _format_domain_result(data: dict) -> str:
 
 
 @tool
+@validate_args(ip_address=IP_ADDRESS_PATTERN)
 @log_tool_call
 def lookup_ip_shodan(ip_address: str) -> str:
     """Look up an IP address in Shodan for exposed services and vulnerabilities.
@@ -261,6 +263,7 @@ def lookup_ip_shodan(ip_address: str) -> str:
 
 
 @tool
+@validate_args(domain=DOMAIN_PATTERN)
 @log_tool_call
 def lookup_domain_shodan(domain: str) -> str:
     """Look up a domain's infrastructure in Shodan for exposed services.

@@ -1,0 +1,7 @@
+# Extends the official kroki-mermaid image with Noto Color Emoji so emojis
+# in diagram node labels render as glyphs instead of tofu boxes. The base
+# image is Alpine + chromium-headless and ships only Latin/CJK Noto fonts.
+FROM yuzutech/kroki-mermaid:latest
+USER root
+RUN apk add --no-cache font-noto-emoji
+USER kroki

@@ -16,6 +16,8 @@ import chromadb
 import pandas as pd
 import requests
 
+from my_bot.utils.embedding_function import OpenAIEmbeddingFunction
+
 logger = logging.getLogger(__name__)
 
 # Paths
@@ -31,38 +33,17 @@ class ContactsVectorStore:
         self.chroma_client = None
         self.collection = None
         self._initialized = False
-        self._embedding_batch_size = 50  # Max texts per API call
+        self._embedding_batch_size = 10  # Max texts per API call
 
     def _get_embedding(self, text: str) -> List[float]:
-        """Get embedding from Ollama for a single text."""
-        try:
-            response = requests.post(
-                "http://localhost:11434/api/embed",
-                json={"model": "nomic-embed-text", "input": text},
-                timeout=30
-            )
-            response.raise_for_status()
-            return response.json()["embeddings"][0]
-        except Exception as e:
-            logger.error(f"Embedding error: {e}")
-            raise
+        """Get embedding for a single text."""
+        return OpenAIEmbeddingFunction()([text])[0]
 
     def _get_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
-        """Get embeddings from Ollama for a batch of texts in a single API call."""
+        """Get embeddings for a batch of texts."""
         if not texts:
             return []
-
-        try:
-            response = requests.post(
-                "http://localhost:11434/api/embed",
-                json={"model": "nomic-embed-text", "input": texts},
-                timeout=120  # Longer timeout for batches
-            )
-            response.raise_for_status()
-            return response.json()["embeddings"]
-        except Exception as e:
-            logger.error(f"Batch embedding error: {e}")
-            raise
+        return OpenAIEmbeddingFunction()(texts)
 
     def initialize(self) -> bool:
         """Initialize or load the contacts vector store."""
@@ -89,24 +70,130 @@ class ContactsVectorStore:
             return False
 
     def _build_index(self):
-        """Build the vector store from the contacts Excel file."""
+        """Build the vector store from SQLite DB (preferred) or Excel (fallback)."""
+        documents, ids = self._load_documents_from_sqlite()
+        if not documents:
+            logger.info("SQLite DB empty or missing, falling back to Excel")
+            documents, ids = self._load_documents_from_excel()
+
+        if not documents:
+            logger.warning("No contacts found in SQLite or Excel")
+            return
+
+        embeddings = []
+        logger.info(f"Generating embeddings for {len(documents)} contact entries in batches...")
+
+        for i in range(0, len(documents), self._embedding_batch_size):
+            batch = documents[i:i + self._embedding_batch_size]
+            batch_embeddings = self._get_embeddings_batch(batch)
+            embeddings.extend(batch_embeddings)
+
+            if len(documents) > self._embedding_batch_size:
+                logger.info(f"  Processed {min(i + self._embedding_batch_size, len(documents))}/{len(documents)} embeddings...")
+
+        self.collection.add(
+            documents=documents,
+            ids=ids,
+            embeddings=embeddings
+        )
+        logger.info(f"Added {len(documents)} contacts to vector store")
+
+    def _load_documents_from_sqlite(self):
+        """Load contact documents from the SQLite database.
+
+        Pulls from BOTH the legacy `contacts` table (DnR escalation paths) and
+        the `sheet_rows` table (Regional Contact List worksheets), so the
+        the security assistant bot contacts tool can search across all of them.
+        """
+        try:
+            import json
+            from src.components.web.escalation_contacts_handler import DB_PATH, _get_connection
+            if not DB_PATH.exists():
+                return [], []
+
+            documents = []
+            ids = []
+            with _get_connection() as conn:
+                rows = conn.execute(
+                    "SELECT id, region, team, name, title, email, phone, comments FROM contacts ORDER BY region, sort_order, team, name"
+                ).fetchall()
+
+                for row in rows:
+                    r = dict(row)
+                    parts = [r["name"]]
+                    if r["title"]:
+                        parts.append(r["title"])
+                    if r["email"]:
+                        parts.append(r["email"])
+                    if r["phone"]:
+                        parts.append(r["phone"])
+                    doc_text = f"Region/Sheet: {r['region']}. Team: {r['team']}. Contact: {' | '.join(parts)}"
+                    if r.get("comments"):
+                        doc_text += f". Notes: {r['comments']}"
+                    documents.append(doc_text)
+                    ids.append(f"contact_{r['id']}")
+
+                # Also pull rows from worksheet tabs (Regional Contact List)
+                sheet_rows = conn.execute("""
+                    SELECT sr.id, sr.values_json, st.sheet_name, st.columns_json, st.is_doc
+                    FROM sheet_rows sr
+                    JOIN sheet_tabs st ON sr.sheet_id = st.id
+                    ORDER BY st.display_order, sr.row_index
+                """).fetchall()
+
+                for sr in sheet_rows:
+                    s = dict(sr)
+                    if s["is_doc"]:
+                        # Doc sheets are free-text process notes — index as-is
+                        try:
+                            text = " ".join(json.loads(s["values_json"]))
+                        except Exception:
+                            text = ""
+                        if text.strip():
+                            documents.append(f"Sheet: {s['sheet_name']}. {text}")
+                            ids.append(f"sheet_row_{s['id']}")
+                        continue
+
+                    try:
+                        cols = json.loads(s["columns_json"])
+                        vals = json.loads(s["values_json"])
+                    except Exception:
+                        continue
+                    parts = []
+                    for col, val in zip(cols, vals):
+                        v = (val or "").strip() if isinstance(val, str) else val
+                        if v:
+                            parts.append(f"{col.strip()}: {v}")
+                    if not parts:
+                        continue
+                    doc_text = f"Sheet: {s['sheet_name']}. {' | '.join(parts)}"
+                    documents.append(doc_text)
+                    ids.append(f"sheet_row_{s['id']}")
+
+            if not documents:
+                return [], []
+
+            logger.info(f"Loaded {len(documents)} contact entries from SQLite (contacts + sheet_rows)")
+            return documents, ids
+        except Exception as e:
+            logger.warning(f"Could not load from SQLite: {e}")
+            return [], []
+
+    def _load_documents_from_excel(self):
+        """Load contact documents from the Excel file (fallback)."""
         if not CONTACTS_FILE.exists():
-            raise FileNotFoundError(f"Contacts file not found: {CONTACTS_FILE}")
+            return [], []
 
         xl = pd.ExcelFile(CONTACTS_FILE)
         documents = []
         ids = []
-        embeddings = []
         doc_counter = 0
 
         for sheet_name in xl.sheet_names:
             df = pd.read_excel(CONTACTS_FILE, sheet_name=sheet_name)
-
-            # Track the last group name (first column) for continuation rows
             last_group_name = ""
 
             for idx, row in df.iterrows():
-                # Build a text representation of the row
                 parts = []
                 first_col_value = ""
 
@@ -118,69 +205,72 @@ class ContactsVectorStore:
                             if col_idx == 0:
                                 first_col_value = val_str
 
-                # Update group name if first column has a value
                 if first_col_value:
                     last_group_name = first_col_value
                 elif last_group_name and parts:
-                    # Continuation row - prepend the group name
                     parts.insert(0, f"({last_group_name})")
 
                 if parts:
-                    # Create document text with sheet context
                     doc_text = f"Region/Sheet: {sheet_name}. Contact: {' | '.join(parts)}"
-                    # Use counter for unique IDs
                     doc_id = f"contact_{doc_counter}"
                     doc_counter += 1
-
                     documents.append(doc_text)
                     ids.append(doc_id)
 
-        # Generate embeddings in batches (much faster than one-by-one)
-        logger.info(f"Generating embeddings for {len(documents)} contact entries in batches...")
-
-        # Process in batches for efficiency
-        for i in range(0, len(documents), self._embedding_batch_size):
-            batch = documents[i:i + self._embedding_batch_size]
-            batch_embeddings = self._get_embeddings_batch(batch)
-            embeddings.extend(batch_embeddings)
-
-            if len(documents) > self._embedding_batch_size:
-                logger.info(f"  Processed {min(i + self._embedding_batch_size, len(documents))}/{len(documents)} embeddings...")
-
-        # Add to collection
-        self.collection.add(
-            documents=documents,
-            ids=ids,
-            embeddings=embeddings
-        )
-        logger.info(f"Added {len(documents)} contacts to vector store")
+        return documents, ids
 
     def search(self, query: str, n_results: int = 10) -> List[str]:
-        """Search for contacts matching the query using hybrid approach."""
+        """Search for contacts matching the query using hybrid approach.
+
+        When any primary match has a "Notes:" field, expand by running a vector
+        search using the notes text as the query and append semantically-similar
+        contacts. This surfaces cross-referenced teams (e.g. Notes says "copy
+        ASIA-CIRT too" → "ASIA-CIRT DL" row is pulled in) without having to
+        dump the full directory into the LLM prompt.
+        """
         if not self._initialized:
             self.initialize()
 
         try:
-            # First, try keyword matching (more reliable for exact terms)
-            all_docs = self.collection.get()
-            keyword_matches = []
+            all_docs = self.collection.get()['documents']
             query_lower = query.lower()
+            keyword_matches = [d for d in all_docs if query_lower in d.lower()]
 
-            for doc in all_docs['documents']:
-                if query_lower in doc.lower():
-                    keyword_matches.append(doc)
-
-            # If we have keyword matches, return those
             if keyword_matches:
-                return keyword_matches[:n_results]
+                primary = keyword_matches[:n_results]
+            else:
+                query_embedding = self._get_embedding(query)
+                results = self.collection.query(
+                    query_embeddings=[query_embedding],
+                    n_results=n_results,
+                )
+                primary = results['documents'][0] if results['documents'] else []
 
-            # Otherwise, fall back to vector search
-            query_embedding = self._get_embedding(query)
-            results = self.collection.query(
-                query_embeddings=[query_embedding],
-                n_results=n_results
+            # Vector-expand on any Notes: fields in the primary results
+            notes_texts = []
+            for d in primary:
+                idx = d.find("Notes:")
+                if idx != -1:
+                    notes_texts.append(d[idx + len("Notes:"):].strip())
+
+            if not notes_texts:
+                return primary
+
+            combined_notes = " ".join(notes_texts)
+            notes_embedding = self._get_embedding(combined_notes)
+            note_results = self.collection.query(
+                query_embeddings=[notes_embedding],
+                n_results=n_results,
             )
-            return results['documents'][0] if results['documents'] else []
+            note_docs = note_results['documents'][0] if note_results['documents'] else []
+
+            seen = set(primary)
+            expanded = list(primary)
+            for d in note_docs:
+                if d not in seen:
+                    expanded.append(d)
+                    seen.add(d)
+            return expanded
         except Exception as e:
             logger.error(f"Search error: {e}")
             return []
@@ -193,6 +283,62 @@ class ContactsVectorStore:
             if ids:
                 self.collection.delete(ids=ids)
         self._build_index()
+
+    def _build_contact_doc(self, row_dict):
+        """Build the doc text for a single contact row — must match _load_documents_from_sqlite."""
+        parts = [row_dict["name"]]
+        if row_dict.get("title"):
+            parts.append(row_dict["title"])
+        if row_dict.get("email"):
+            parts.append(row_dict["email"])
+        if row_dict.get("phone"):
+            parts.append(row_dict["phone"])
+        doc_text = f"Region/Sheet: {row_dict['region']}. Team: {row_dict['team']}. Contact: {' | '.join(parts)}"
+        if row_dict.get("comments"):
+            doc_text += f". Notes: {row_dict['comments']}"
+        return doc_text
+
+    def upsert_contact(self, contact_id: int) -> bool:
+        """Upsert a single contact row by ID (re-embeds only that row).
+
+        If the contact no longer exists in SQLite, removes it from the vector store.
+        """
+        if not self._initialized:
+            self.initialize()
+        try:
+            from src.components.web.escalation_contacts_handler import _get_connection
+            with _get_connection() as conn:
+                row = conn.execute(
+                    "SELECT id, region, team, name, title, email, phone, comments FROM contacts WHERE id = ?",
+                    (contact_id,),
+                ).fetchone()
+            if not row:
+                return self.remove_contact(contact_id)
+
+            doc_text = self._build_contact_doc(dict(row))
+            embedding = self._get_embedding(doc_text)
+            self.collection.upsert(
+                ids=[f"contact_{contact_id}"],
+                documents=[doc_text],
+                embeddings=[embedding],
+            )
+            logger.info(f"Upserted contact {contact_id} in vector store")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to upsert contact {contact_id}: {e}", exc_info=True)
+            return False
+
+    def remove_contact(self, contact_id: int) -> bool:
+        """Remove a single contact from the vector store by ID."""
+        if not self._initialized:
+            self.initialize()
+        try:
+            self.collection.delete(ids=[f"contact_{contact_id}"])
+            logger.info(f"Removed contact {contact_id} from vector store")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to remove contact {contact_id}: {e}", exc_info=True)
+            return False
 
 
 # Singleton instance
@@ -238,12 +384,10 @@ def search_contacts_with_llm_with_metrics(query: str) -> dict:
             default_metrics['content'] = f"❌ No contacts found for '{query}'."
             return default_metrics
 
-        # Build context for LLM
         context = "Here are the relevant contacts from the escalation paths document:\n\n"
         for i, contact in enumerate(contacts, 1):
             context += f"{i}. {contact}\n"
 
-        # Query LLM with context
         prompt = f"""{context}
 
 Based on the contacts above, answer this query: "{query}"
@@ -252,32 +396,32 @@ Format each contact like this (make the values bold, not the labels):
 - Name: **[Full Name]**
   Email: [<redacted-email>]
 
-Include phone number only if available. Be concise."""
+Include phone number only if available. Be concise.
 
-        # Call Ollama directly for speed
-        from my_config import get_config
-        model_name = get_config().ollama_llm_model
-        response = requests.post(
-            "http://localhost:11434/api/generate",
-            json={
-                "model": model_name,
-                "prompt": prompt,
-                "stream": False,
-                "options": {"temperature": 0.1}
-            },
-            timeout=60
-        )
-        response.raise_for_status()
-        result = response.json()
+The list above may contain both the primary contact(s) for the query AND
+additional contacts that were pulled in because a primary contact's "Notes:"
+field references them (e.g. "copy ASIA-CIRT too", "escalate to X first").
+If you see such a reference, include the matching contact from the list in
+your answer with a short line explaining the relationship (e.g. "Copy on
+escalation, per note on AMthe company")."""
 
-        # Extract token metrics from Ollama response
-        input_tokens = result.get('prompt_eval_count', 0)
-        output_tokens = result.get('eval_count', 0)
-        prompt_time = result.get('prompt_eval_duration', 0) / 1e9  # ns to seconds
-        generation_time = result.get('eval_duration', 0) / 1e9  # ns to seconds
+        # Use shared LLM instance to go through the serializer
+        from my_bot.core.state_manager import get_state_manager
+        state_manager = get_state_manager()
+        llm = state_manager.llm
+
+        response = llm.invoke(prompt)
+        meta = response.response_metadata or {}
+
+        from my_bot.utils.llm_factory import extract_token_metrics
+        m = extract_token_metrics(meta)
+        input_tokens = m['input_tokens']
+        output_tokens = m['output_tokens']
+        prompt_time = m['prompt_time']
+        generation_time = m['generation_time']
         tokens_per_sec = output_tokens / generation_time if generation_time > 0 else 0.0
 
-        llm_response = result.get('response', '').strip()
+        llm_response = (response.content or '').strip()
         if llm_response:
             content = f"📇 Contacts for '**{query}**'\n\n{llm_response}"
         else:

@@ -6,22 +6,25 @@
     {% if page_title %}
         <h1 class="{{ page_title_class if page_title_class else 'dashboard-title' }}" aria-label="{{ page_title_aria if page_title_aria else (page_title|striptags) }}">{{ page_title|safe }}</h1>
     {% endif %}
-    {# Audio controls moved inside nav for alignment #}
+    {# Theme toggle + audio controls inside nav for alignment #}
+    <div class="nav-theme-slider" id="themeSlider">
+        <input type="radio" name="themeMode" id="themeModeLight" value="light">
+        <input type="radio" name="themeMode" id="themeModeDark" value="dark">
+        <label for="themeModeLight" class="nav-theme-slider-opt" data-mode="light">☀️</label>
+        <label for="themeModeDark" class="nav-theme-slider-opt" data-mode="dark">🌙</label>
+        <div class="nav-theme-slider-thumb"></div>
+    </div>
     {% set audio_controls_classes = 'audio-controls--enhanced audio-controls--in-nav' %}
     {% include 'audio_controls.html' %}
     <div id="burgerMenu" class="burger-menu-content" style="display:none;" aria-hidden="true">
-        <a href="/">🏠 Home</a>
-        <a href="/meaningful-metrics">💹 Analytics</a>
-        <a href="/shift-performance">⚖️ Shift Performance</a>
-        <a href="/epp-tagging-metrics">🏷️ EPP Tagging Metrics</a>
-        {% if config.logs_viewer_url %}<a href="{{ config.logs_viewer_url }}" target="_blank" rel="noopener noreferrer">🪵 Logs</a>{% endif %}
-        <a href="/msoc-form">📋️ MSOC Form</a>
-        <a href="/speak-up-form">📣 Speak Up Form</a>
-        <a href="/xsoar-ticket-import-form">📥 XSOAR Ticket Import</a>
-        <a href="/travel-form">✈️ Travel Form</a>
-        <a href="/red-team-testing-form">🧪 Red Team Testing</a>
-        <a href="/apt-other-names-search">🔎 APT Other Names Search</a>
-        <a href="/domain-lookalike">🌐 Domain Lookalike Detector</a>
-        <a href="/detection-rules">🛡️ Detection Rules Catalog</a>
+        <a href="/" target="_blank">🏠 Home</a>
+        <a href="/meaningful-metrics" target="_blank">📊 Meaningful Metrics</a>
+        <a href="/threat-intel-dashboard" target="_blank">🕵️ Threat Intel Dashboard</a>
+        <a href="/detection-rules" target="_blank">🛡️ Detection Rules Catalog</a>
+        <a href="/ruai-dashboard" target="_blank">🧭 RUAI Dashboard</a>
+        <a href="/oncall" target="_blank">📞 On-Call Schedule</a>
+        <a href="/roster" target="_blank">👥 Daily Roster</a>
+        <a href="/ai-intake" target="_blank">🤖 AI Project Intake</a>
+        <a href="/all-pages" target="_blank" class="burger-all-pages">📂 All Pages</a>
     </div>
 </div>

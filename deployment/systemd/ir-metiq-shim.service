@@ -1,0 +1,23 @@
+[Unit]
+Description=IR the internal LLM gateway Shim (OpenAI-compatible translator with m1 fallback)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/vinay/security-ops-platform
+ExecStart=/home/vinay/security-ops-platform/.venv/bin/python3 deployment/metiq_shim_server.py
+Restart=on-failure
+KillMode=mixed
+TimeoutStopSec=10
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/home/vinay/security-ops-platform
+Environment=METIQ_SHIM_HOST=127.0.0.1
+Environment=METIQ_SHIM_PORT=8011
+Environment=METIQ_SHIM_FALLBACK_URL=http://localhost:8015/v1
+Environment=METIQ_SHIM_MODEL_NAME=metiq-gpt-4.1
+StandardOutput=append:/home/vinay/security-ops-platform/data/transient/logs/metiq_shim.log
+StandardError=append:/home/vinay/security-ops-platform/data/transient/logs/metiq_shim.log
+
+[Install]
+WantedBy=default.target

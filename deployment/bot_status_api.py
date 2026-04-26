@@ -8,14 +8,15 @@ import os
 import subprocess
 import time
 import csv
+import threading
 from functools import wraps
 from datetime import datetime
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 
-# Load .env from project root
-load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
+# Load .env from data/transient
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', 'data', 'transient', '.env'))
 
 app = Flask(__name__)
 CORS(app)  # Allow CORS for the frontend
@@ -25,6 +26,41 @@ AUTH_USERNAME = os.environ['LOG_VIEWER_USERNAME']
 AUTH_PASSWORD = os.environ['LOG_VIEWER_PASSWORD']
 PROJECT_ROOT = os.environ.get('PROJECT_ROOT', os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 AUDIT_LOG_FILE = os.path.join(PROJECT_ROOT, 'data/transient/logs/log_viewer_audit_log.csv')
+
+# CPU utilization tracking (delta between /proc/stat reads)
+_cpu_lock = threading.Lock()
+_prev_cpu_idle = 0
+_prev_cpu_total = 0
+_prev_cpu_initialized = False
+
+
+def _get_cpu_utilization():
+    """Calculate real-time CPU utilization from /proc/stat delta between polls."""
+    global _prev_cpu_idle, _prev_cpu_total, _prev_cpu_initialized
+
+    try:
+        with open('/proc/stat') as f:
+            parts = f.readline().split()
+        # fields: cpu user nice system idle iowait irq softirq steal
+        idle = int(parts[4]) + int(parts[5])  # idle + iowait
+        total = sum(int(p) for p in parts[1:])
+
+        with _cpu_lock:
+            if _prev_cpu_initialized:
+                idle_delta = idle - _prev_cpu_idle
+                total_delta = total - _prev_cpu_total
+                cpu_pct = round((1.0 - idle_delta / total_delta) * 100, 1) if total_delta > 0 else 0.0
+            else:
+                cpu_pct = None  # First poll — no delta yet
+
+            _prev_cpu_idle = idle
+            _prev_cpu_total = total
+            _prev_cpu_initialized = True
+
+        return cpu_pct
+    except Exception:
+        return None
+
 
 # Bot configuration mapping bot name to process pattern
 BOTS = {
@@ -93,21 +129,76 @@ BOTS = {
         'systemd_service': 'ir-case.service'
     },
     'jobs': {
-        'name': 'All Jobs',
+        'name': 'IR Scheduler',
         'emoji': '⏰',
-        'process_pattern': 'src/all_jobs.py',
-        'start_script': 'startup_scripts/start_all_jobs.sh',
+        'process_pattern': 'src/ir_scheduler.py',
+        'start_script': 'startup_scripts/start_scheduler.sh',
         'log_port': 8037,
-        'systemd_service': 'ir-all-jobs.service'
+        'systemd_service': 'ir-scheduler.service'
+    },
+    'epp': {
+        'name': 'EPP Scheduler',
+        'emoji': '🛡️',
+        'process_pattern': 'src/epp_scheduler.py',
+        'start_script': 'startup_scripts/start_epp_scheduler.sh',
+        'log_port': 8044,
+        'systemd_service': 'ir-epp-scheduler.service'
+    },
+    'ai': {
+        'name': 'AI Scheduler',
+        'emoji': '🧠',
+        'process_pattern': 'src/ai_scheduler.py',
+        'log_port': 8045,
+        'systemd_service': 'ai-scheduler.service'
+    },
+    'de': {
+        'name': 'DE Scheduler',
+        'emoji': '🔍',
+        'process_pattern': 'src/de_scheduler.py',
+        'log_port': 8046,
+        'systemd_service': 'de-scheduler.service'
+    },
+    'winai': {
+        'name': 'the Windows triage agent',
+        'emoji': '📚',
+        'process_pattern': 'webex_bots/win_ai',
+        'log_port': 8043,
+        'systemd_service': 'win-ai.service'
     },
     'webserver': {
-        'name': 'Web Server',
+        'name': 'Web App',
         'emoji': '🌐',
-        'process_pattern': 'web/web_server',
+        'process_pattern': 'web/app',
         'start_script': 'startup_scripts/start_web_server.sh',
-        'log_port': 8039
+        'log_port': 8039,
+        'systemd_service': 'ir-web-app.service'
     }
 }
+
+
+LLM_ENDPOINTS = [
+    # Analysis / tool-calling: mac-m1 is the ONLY analysis LLM in the fleet.
+    # Powers the security assistant bot, the Windows triage agent, and any caller that needs tools. Also the
+    # graceful fallback for the the internal LLM gateway shim.
+    {'key': 'm1-analysis', 'label': 'M1 Analysis',   'port': 8015, 'model_size': '30 GB', 'remote': 'M1:8000'},
+    {'key': 'm1-router',   'label': 'M1 Router',     'port': 8016, 'model_size': '4.3 GB', 'remote': 'M1:8001'},
+    # RAG / non-tool analysis: the internal LLM gateway shim on lab-vm1 → the internal LLM gateway (GPT-4.1) with
+    # m1-analysis as automatic fallback on tools/stream/5xx/timeout.
+    {'key': 'metiq-shim',  'label': 'the internal LLM gateway Shim',    'port': 8011, 'display_model': 'metiq-gpt-4.1', 'model_size': 'remote', 'remote': 'local svc'},
+    # Support models on mac-m3: embeddings + reranker. Analysis GLM was
+    # retired from m3 — M3 now serves ONLY the small, cheap models that
+    # the RAG pipeline depends on.
+    {'key': 'm3-embed',    'label': 'M3 Embeds',     'port': 8019, 'display_model': 'Qwen3-Embedding-8B-4bit-DWQ', 'model_size': '4.0 GB', 'health_timeout': 60, 'remote': 'M3:8002'},
+    {'key': 'm3-reranker', 'label': 'M3 Reranker',   'port': 8020, 'display_model': 'bge-reranker-v2-m3', 'model_size': '2.2 GB', 'remote': 'M3:8020'},
+    # Transcription: faster-whisper + pyannote diarization on mac-m3.
+    # Uses /health instead of /v1/models — health_path override below.
+    {'key': 'm3-transcription', 'label': 'M3 Transcription', 'port': 11437, 'display_model': 'whisper-large-v3-turbo + pyannote', 'model_size': '~3 GB', 'remote': 'M3:11437', 'health_path': '/health'},
+    # TTS: kokoro-onnx for demo-video narration (and any other TTS caller).
+    {'key': 'm3-tts', 'label': 'M3 TTS', 'port': 8021, 'display_model': 'kokoro-onnx (54 voices)', 'model_size': '~80 MB', 'remote': 'M3:8021', 'health_path': '/health'},
+]
+
+# Track when each endpoint was first seen as "up" (reset on transition to down)
+_llm_up_since: dict[str, float] = {}
 
 
 def check_auth(username, password):
@@ -136,42 +227,20 @@ def requires_auth(f):
 
 
 def log_audit_event(ip_address, action, bot_name, success, message=''):
-    """
-    Log control actions to audit log CSV file.
-
-    Args:
-        ip_address: IP address of the requester
-        action: Action performed (start/stop/restart)
-        bot_name: Name of the bot
-        success: Boolean indicating if action succeeded
-        message: Optional message/error
-    """
+    """Log control actions to SQLite audit log."""
     try:
-        # Create directory if it doesn't exist
-        os.makedirs(os.path.dirname(AUDIT_LOG_FILE), exist_ok=True)
-
-        # Check if file exists to determine if we need to write headers
-        file_exists = os.path.exists(AUDIT_LOG_FILE)
-
-        with open(AUDIT_LOG_FILE, 'a', newline='') as f:
-            fieldnames = ['timestamp', 'ip_address', 'action', 'bot_name', 'success', 'message']
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-
-            # Write headers if file is new
-            if not file_exists:
-                writer.writeheader()
-
-            # Write audit event
-            writer.writerow({
-                'timestamp': datetime.now().isoformat(),
-                'ip_address': ip_address,
-                'action': action,
-                'bot_name': bot_name,
-                'success': success,
-                'message': message
-            })
+        import sys
+        sys.path.insert(0, PROJECT_ROOT)
+        from src.utils.bot_logs_db import log_viewer_audit
+        log_viewer_audit(
+            timestamp=datetime.now().isoformat(),
+            ip_address=ip_address,
+            action=action,
+            bot_name=bot_name,
+            success=success,
+            message=message,
+        )
     except Exception as e:
-        # Don't fail the request if audit logging fails, just print error
         print(f"Warning: Failed to write audit log: {e}")
 
 
@@ -185,67 +254,77 @@ def get_bot_status(bot_key):
         return None
 
     try:
-        # Check if process is running using pgrep
-        result = subprocess.run(
-            ['pgrep', '-f', bot_config['process_pattern']],
-            capture_output=True,
-            text=True,
-            timeout=5
+        # Get the main PID from systemd (avoids counting worker/child processes)
+        service_name = bot_config.get('systemd_service')
+        main_pid = None
+        if service_name:
+            pid_result = subprocess.run(
+                ['systemctl', '--user', 'show', service_name, '--property=MainPID', '--value'],
+                capture_output=True, text=True, timeout=5
+            )
+            if pid_result.returncode == 0 and pid_result.stdout.strip() not in ('', '0'):
+                main_pid = int(pid_result.stdout.strip())
+
+        # Fallback to pgrep if no systemd service or MainPID is 0
+        if main_pid:
+            pid_list = [main_pid]
+        else:
+            result = subprocess.run(
+                ['pgrep', '-f', bot_config['process_pattern']],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                pids = result.stdout.strip().split('\n')
+                pid_list = [int(p) for p in pids if p.strip().isdigit()]
+            else:
+                pid_list = []
+
+        if not pid_list:
+            return {
+                'status': 'stopped',
+                'pids': [],
+                'pid_count': 0,
+                'pid': None,
+                'uptime': None,
+                'cpu_percent': 0,
+                'memory_mb': 0,
+                'memory_percent': 0
+            }
+
+        # Get process details for all PIDs using ps
+        ps_result = subprocess.run(
+            ['ps', '-p', ','.join(map(str, pid_list)), '-o', 'pid,etime,%cpu,%mem,rss', '--no-headers'],
+            capture_output=True, text=True, timeout=5
         )
 
-        if result.returncode == 0 and result.stdout.strip():
-            pids = result.stdout.strip().split('\n')  # Get all PIDs
-            pid_list = [int(p) for p in pids if p.strip().isdigit()]
+        if ps_result.returncode == 0:
+            lines = ps_result.stdout.strip().split('\n')
 
-            if not pid_list:
-                return {
-                    'status': 'stopped',
-                    'pids': [],
-                    'pid_count': 0,
-                    'pid': None,
-                    'uptime': None,
-                    'cpu_percent': 0,
-                    'memory_mb': 0,
-                    'memory_percent': 0
-                }
+            total_cpu = 0
+            total_mem_mb = 0
+            total_mem_percent = 0
+            uptime = 'N/A'
 
-            # Get process details for all PIDs using ps
-            ps_result = subprocess.run(
-                ['ps', '-p', ','.join(map(str, pid_list)), '-o', 'pid,etime,%cpu,%mem,rss', '--no-headers'],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
+            for line in lines:
+                parts = line.split()
+                if len(parts) >= 5:
+                    if uptime == 'N/A':
+                        uptime = parts[1]
+                    total_cpu += float(parts[2]) if parts[2].replace('.', '').isdigit() else 0
+                    total_mem_percent += float(parts[3]) if parts[3].replace('.', '').isdigit() else 0
+                    mem_kb = parts[4]
+                    total_mem_mb += int(mem_kb) // 1024 if mem_kb.isdigit() else 0
 
-            if ps_result.returncode == 0:
-                lines = ps_result.stdout.strip().split('\n')
-
-                # Aggregate stats from all processes
-                total_cpu = 0
-                total_mem_mb = 0
-                total_mem_percent = 0
-                uptime = 'N/A'
-
-                for line in lines:
-                    parts = line.split()
-                    if len(parts) >= 5:
-                        if uptime == 'N/A':
-                            uptime = parts[1]  # Use first process's uptime
-                        total_cpu += float(parts[2]) if parts[2].replace('.', '').isdigit() else 0
-                        total_mem_percent += float(parts[3]) if parts[3].replace('.', '').isdigit() else 0
-                        mem_kb = parts[4]
-                        total_mem_mb += int(mem_kb) // 1024 if mem_kb.isdigit() else 0
-
-                return {
-                    'status': 'running',
-                    'pids': pid_list,
-                    'pid_count': len(pid_list),
-                    'pid': pid_list[0],  # Keep for backward compatibility
-                    'uptime': uptime,
-                    'cpu_percent': total_cpu,
-                    'memory_mb': total_mem_mb,
-                    'memory_percent': total_mem_percent
-                }
+            return {
+                'status': 'running',
+                'pids': pid_list,
+                'pid_count': len(pid_list),
+                'pid': pid_list[0],
+                'uptime': uptime,
+                'cpu_percent': total_cpu,
+                'memory_mb': total_mem_mb,
+                'memory_percent': total_mem_percent
+            }
 
         # Process not running
         return {
@@ -349,7 +428,7 @@ def control_bot(bot_key, action):
                 # Stop via systemd (may take time for graceful shutdown)
                 try:
                     result = subprocess.run(
-                        ['sudo', '-n', 'systemctl', 'stop', bot_config['systemd_service']],
+                        ['systemctl', '--user', 'stop', bot_config['systemd_service']],
                         timeout=90,
                         capture_output=True
                     )
@@ -396,15 +475,22 @@ def control_bot(bot_key, action):
             message = f"{bot_config['name']} stopped"
 
         elif action == 'start':
-            # Start the bot using its startup script
-            script_path = os.path.join(PROJECT_ROOT, bot_config['start_script'])
-            subprocess.Popen(
-                ['bash', script_path],
-                cwd=PROJECT_ROOT,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
-            time.sleep(2)  # Give it time to start
+            if 'systemd_service' in bot_config:
+                subprocess.run(
+                    ['systemctl', '--user', 'start', bot_config['systemd_service']],
+                    timeout=30,
+                    capture_output=True
+                )
+                time.sleep(2)
+            else:
+                script_path = os.path.join(PROJECT_ROOT, bot_config['start_script'])
+                subprocess.Popen(
+                    ['bash', script_path],
+                    cwd=PROJECT_ROOT,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                time.sleep(2)
             message = f"{bot_config['name']} started"
 
         elif action == 'restart':
@@ -413,7 +499,7 @@ def control_bot(bot_key, action):
                 # Restart via systemd (may take time for graceful shutdown + startup)
                 try:
                     result = subprocess.run(
-                        ['sudo', '-n', 'systemctl', 'restart', bot_config['systemd_service']],
+                        ['systemctl', '--user', 'restart', bot_config['systemd_service']],
                         timeout=120,
                         capture_output=True
                     )
@@ -599,7 +685,7 @@ def self_restart():
         # Spawn the restart command in the background and return immediately
         # The service will restart after we respond
         subprocess.Popen(
-            ['sudo', '-n', 'systemctl', 'restart', 'ir-bot-status-api.service'],
+            ['systemctl', '--user', 'restart', 'ir-bot-status-api.service'],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             start_new_session=True
@@ -712,6 +798,18 @@ def system_status():
         )
         load_parts = load_result.stdout.strip().split()
 
+        # Get CPU core count (server-side, not browser)
+        nproc_result = subprocess.run(
+            ['nproc'],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        cpu_count = int(nproc_result.stdout.strip()) if nproc_result.returncode == 0 else None
+
+        # Get real-time CPU utilization from /proc/stat delta
+        cpu_percent = _get_cpu_utilization()
+
         # Get uptime
         uptime_result = subprocess.run(
             ['uptime', '-p'],
@@ -740,6 +838,8 @@ def system_status():
                 '5min': load_parts[1] if len(load_parts) > 1 else 'N/A',
                 '15min': load_parts[2] if len(load_parts) > 2 else 'N/A'
             },
+            'cpu_count': cpu_count,
+            'cpu_percent': cpu_percent,
             'uptime': uptime_result.stdout.strip()
         })
 
@@ -750,6 +850,112 @@ def system_status():
         }), 500
 
 
+# lab-vm2 status (SSH-based, cached) — same shape as /api/system-status
+_lab_vm2_cache: dict = {}
+_lab_vm2_cache_ts: float = 0.0
+_LAB_VM2_TTL = 30  # seconds
+
+
+@app.route('/api/lab-vm2-status', methods=['GET'])
+def lab_vm2_status():
+    """Get lab-vm2 system stats via SSH (cached)."""
+    global _lab_vm2_cache, _lab_vm2_cache_ts
+    now = time.time()
+    if now - _lab_vm2_cache_ts < _LAB_VM2_TTL and _lab_vm2_cache:
+        return jsonify(_lab_vm2_cache)
+
+    cmd = [
+        'ssh', '-o', 'ConnectTimeout=5', '-o', 'BatchMode=yes', 'lab-vm2',
+        "df -h $HOME;"
+        " echo ---FREE---;"
+        " free -h;"
+        " echo ---LOADAVG---;"
+        " cat /proc/loadavg;"
+        " echo ---NPROC---;"
+        " nproc;"
+        " echo ---UPTIME---;"
+        " uptime -p;"
+        " echo ---CPU1---;"
+        " grep '^cpu ' /proc/stat;"
+        " sleep 1;"
+        " echo ---CPU2---;"
+        " grep '^cpu ' /proc/stat"
+    ]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+    except subprocess.TimeoutExpired:
+        return jsonify({'success': False, 'error': 'ssh timeout'}), 504
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)[:120]}), 500
+
+    if r.returncode != 0:
+        return jsonify({'success': False, 'error': (r.stderr.strip() or 'ssh failed')[:120]}), 502
+
+    sections: dict[str, list[str]] = {'DF': []}
+    current = 'DF'
+    for line in r.stdout.split('\n'):
+        if line.startswith('---') and line.endswith('---') and len(line) > 6:
+            current = line.strip('-')
+            sections[current] = []
+        else:
+            sections.setdefault(current, []).append(line)
+
+    disk_lines = sections.get('DF', [])
+    disk_info = disk_lines[1].split() if len(disk_lines) > 1 else []
+    mem_lines = sections.get('FREE', [])
+    mem_info = mem_lines[1].split() if len(mem_lines) > 1 else []
+    load_parts = (sections.get('LOADAVG', [''])[0] or '').split()
+    cpu_count_str = (sections.get('NPROC', [''])[0] or '').strip()
+    cpu_count = int(cpu_count_str) if cpu_count_str.isdigit() else None
+    uptime = (sections.get('UPTIME', [''])[0] or '').strip()
+    if uptime and not uptime.startswith('up '):
+        uptime = f'up {uptime}'
+
+    cpu_percent = None
+    try:
+        p1 = (sections.get('CPU1', [''])[0] or '').split()
+        p2 = (sections.get('CPU2', [''])[0] or '').split()
+        if len(p1) >= 8 and len(p2) >= 8:
+            idle1 = int(p1[4]) + int(p1[5])
+            idle2 = int(p2[4]) + int(p2[5])
+            total1 = sum(int(x) for x in p1[1:])
+            total2 = sum(int(x) for x in p2[1:])
+            idle_delta = idle2 - idle1
+            total_delta = total2 - total1
+            if total_delta > 0:
+                cpu_percent = round((1.0 - idle_delta / total_delta) * 100, 1)
+    except Exception:
+        pass
+
+    result = {
+        'success': True,
+        'disk': {
+            'filesystem': disk_info[0] if len(disk_info) > 0 else 'N/A',
+            'size': disk_info[1] if len(disk_info) > 1 else 'N/A',
+            'used': disk_info[2] if len(disk_info) > 2 else 'N/A',
+            'available': disk_info[3] if len(disk_info) > 3 else 'N/A',
+            'percent': disk_info[4] if len(disk_info) > 4 else 'N/A',
+        },
+        'memory': {
+            'total': mem_info[1] if len(mem_info) > 1 else 'N/A',
+            'used': mem_info[2] if len(mem_info) > 2 else 'N/A',
+            'free': mem_info[3] if len(mem_info) > 3 else 'N/A',
+            'available': mem_info[6] if len(mem_info) > 6 else 'N/A',
+        },
+        'load': {
+            '1min': load_parts[0] if len(load_parts) > 0 else 'N/A',
+            '5min': load_parts[1] if len(load_parts) > 1 else 'N/A',
+            '15min': load_parts[2] if len(load_parts) > 2 else 'N/A',
+        },
+        'cpu_count': cpu_count,
+        'cpu_percent': cpu_percent,
+        'uptime': uptime,
+    }
+    _lab_vm2_cache = result
+    _lab_vm2_cache_ts = now
+    return jsonify(result)
+
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Simple health check endpoint (no auth required)."""
@@ -757,6 +963,248 @@ def health_check():
         'status': 'healthy',
         'timestamp': datetime.now().isoformat()
     })
+
+
+@app.route('/api/llm-health', methods=['GET'])
+def llm_health():
+    """Check health of all inference model endpoints via SSH reverse tunnels."""
+    import requests as req
+    import socket
+    results = {}
+    for ep in LLM_ENDPOINTS:
+        if ep['port'] is None:
+            results[ep['key']] = {'status': 'unknown', 'label': ep['label'], 'port': None, 'error': 'Port not configured'}
+            continue
+        # TCP tunnel check first
+        tunnel_status = 'down'
+        try:
+            sock = socket.create_connection(('localhost', ep['port']), timeout=3)
+            sock.close()
+            tunnel_status = 'up'
+        except Exception:
+            pass
+        # HTTP model health check
+        start = time.time()
+        try:
+            health_timeout = ep.get('health_timeout', 5)
+            health_path = ep.get('health_path', '/v1/models')
+            resp = req.get(f"http://localhost:{ep['port']}{health_path}", timeout=health_timeout)
+            latency_ms = int((time.time() - start) * 1000)
+            if resp.ok:
+                body = resp.json() if health_path == '/v1/models' else {}
+                if health_path == '/v1/models':
+                    models = [m['id'].split('/')[-1] for m in body.get('data', [])]
+                else:
+                    # Custom health endpoint (e.g. transcription server /health)
+                    models = []
+                if ep.get('display_model'):
+                    models = [ep['display_model']]
+                if ep['key'] not in _llm_up_since:
+                    _llm_up_since[ep['key']] = time.time()
+                uptime_s = int(time.time() - _llm_up_since[ep['key']])
+                entry = {
+                    'status': 'up',
+                    'label': ep['label'],
+                    'port': ep['port'],
+                    'models': models,
+                    'latency_ms': latency_ms,
+                    'uptime_s': uptime_s,
+                    'model_size': ep.get('model_size'),
+                    'tunnel': tunnel_status,
+                    'remote': ep.get('remote'),
+                }
+                # the internal LLM gateway shim: the /v1/models probe only checks the shim process
+                # is alive. The shim itself tracks the health of its upstream
+                # (the internal LLM gateway API) and reports it alongside the models list. If the
+                # upstream is degraded, the shim is still serving traffic — via
+                # the m1 fallback — but callers that require the internal LLM gateway-only (e.g.
+                # RUAI) will be failing. Surface that as `degraded` so the
+                # dashboard doesn't show a green light while things are broken.
+                if ep.get('key') == 'metiq-shim':
+                    upstream = (body.get('metiq_shim') or {}).get('upstream') or {}
+                    u_status = upstream.get('status') or 'unknown'
+                    entry['upstream_status'] = u_status
+                    if u_status == 'degraded':
+                        entry['status'] = 'degraded'
+                        entry['upstream_error'] = upstream.get('last_failure_reason')
+                        entry['upstream_seconds_since_success'] = upstream.get('seconds_since_success')
+                results[ep['key']] = entry
+            else:
+                _llm_up_since.pop(ep['key'], None)
+                results[ep['key']] = {
+                    'status': 'down',
+                    'label': ep['label'],
+                    'port': ep['port'],
+                    'error': f"HTTP {resp.status_code}",
+                    'latency_ms': latency_ms,
+                    'tunnel': tunnel_status,
+                    'remote': ep.get('remote'),
+                }
+        except Exception as e:
+            _llm_up_since.pop(ep['key'], None)
+            results[ep['key']] = {
+                'status': 'down',
+                'label': ep['label'],
+                'port': ep['port'],
+                'error': str(e)[:80],
+                'latency_ms': None,
+                'tunnel': tunnel_status,
+                'remote': ep.get('remote'),
+            }
+    return jsonify({'timestamp': datetime.now().isoformat(), 'endpoints': results})
+
+
+# ---------- Mac hardware health (SSH-based, cached) ----------
+
+MAC_HOSTS = [
+    {'key': 'mac-m1', 'label': 'Mac M1', 'ssh_host': 'mac-m1', 'total_gb': 64},
+    {'key': 'mac-m3', 'label': 'Mac M3', 'ssh_host': 'mac-m3', 'total_gb': 36},
+]
+_mac_cache: dict[str, dict] = {}
+_mac_cache_ts: dict[str, float] = {}
+_MAC_TTL = 30  # seconds
+
+
+def _fetch_one_mac(host: dict) -> dict:
+    """SSH into a Mac and return parsed system stats."""
+    # Single command: vm_stat for memory, top for CPU, sysctl for cores, uptime
+    cmd = [
+        'ssh', '-o', 'ConnectTimeout=5', '-o', 'BatchMode=yes',
+        host['ssh_host'],
+        "vm_stat;"
+        " /usr/bin/top -l 1 -n 0 -s 0 2>/dev/null | grep 'CPU usage';"
+        " sysctl -n hw.ncpu;"
+        " echo CHIP:$(sysctl -n machdep.cpu.brand_string);"
+        " echo MACOS:$(sw_vers -productVersion);"
+        " echo PCORES:$(sysctl -n hw.perflevel0.logicalcpu 2>/dev/null || echo ?);"
+        " echo ECORES:$(sysctl -n hw.perflevel1.logicalcpu 2>/dev/null || echo ?);"
+        " echo DISK:$(df -k / | tail -1);"
+        " uptime"
+    ]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        if r.returncode != 0:
+            return {'status': 'down', 'error': (r.stderr.strip() or 'ssh failed')[:80]}
+    except subprocess.TimeoutExpired:
+        return {'status': 'down', 'error': 'ssh timeout'}
+    except Exception as e:
+        return {'status': 'down', 'error': str(e)[:80]}
+
+    import re
+    lines = r.stdout.strip().split('\n')
+    result: dict = {'status': 'up', 'label': host['label']}
+
+    # Parse vm_stat output to compute app memory (wired + active + compressor).
+    # Inactive/purgeable/speculative/free pages are reclaimable and excluded.
+    page_size = 16384  # Apple Silicon default
+    vm_pages: dict[str, int] = {}
+    for line in lines:
+        if 'page size of' in line:
+            m = re.search(r'page size of (\d+) bytes', line)
+            if m:
+                page_size = int(m.group(1))
+        for key in ('Pages active', 'Pages wired down', 'Pages occupied by compressor',
+                     'Pages free', 'Pages inactive', 'Pages speculative', 'Pages purgeable'):
+            if line.startswith(key):
+                m = re.search(r':\s+(\d+)', line)
+                if m:
+                    vm_pages[key] = int(m.group(1))
+
+    if vm_pages.get('Pages active') is not None:
+        app_pages = (vm_pages.get('Pages active', 0)
+                     + vm_pages.get('Pages wired down', 0)
+                     + vm_pages.get('Pages occupied by compressor', 0))
+        free_pages = (vm_pages.get('Pages free', 0)
+                      + vm_pages.get('Pages inactive', 0)
+                      + vm_pages.get('Pages speculative', 0)
+                      + vm_pages.get('Pages purgeable', 0))
+        total_gb = host['total_gb']
+        app_gb = round(app_pages * page_size / (1024 ** 3), 1)
+        free_gb = round(free_pages * page_size / (1024 ** 3), 1)
+        result['mem_used_gb'] = app_gb
+        result['mem_free_gb'] = free_gb
+        result['mem_total_gb'] = total_gb
+        result['mem_pct'] = round(app_gb / total_gb * 100, 1)
+
+    for line in lines:
+        # CPU usage: 5.55% user, 10.24% sys, 84.20% idle
+        if 'CPU usage' in line:
+            m = re.search(r'([\d.]+)%\s*idle', line)
+            if m:
+                result['cpu_pct'] = round(100 - float(m.group(1)), 1)
+
+        # last line from uptime: "18:19  up 12 days,  3:45, 2 users, load averages: 1.23 0.98 0.87"
+        elif 'load average' in line.lower():
+            m = re.search(r'up\s+(.+?),\s+\d+\s+user', line)
+            if m:
+                result['uptime'] = m.group(1).strip().rstrip(',')
+            m2 = re.search(r'load averages?:\s*([\d.]+)', line)
+            if m2:
+                result['load_1m'] = float(m2.group(1))
+
+        # Tagged fields
+        elif line.startswith('CHIP:'):
+            result['chip'] = line[5:].strip()
+        elif line.startswith('MACOS:'):
+            result['macos'] = line[6:].strip()
+        elif line.startswith('PCORES:'):
+            v = line[7:].strip()
+            if v.isdigit():
+                result['pcores'] = int(v)
+        elif line.startswith('ECORES:'):
+            v = line[7:].strip()
+            if v.isdigit():
+                result['ecores'] = int(v)
+
+        # df -k / output: filesystem 1K-blocks used avail capacity ... mountpoint
+        # APFS shares space across volumes, so "true" used = size - avail.
+        elif line.startswith('DISK:'):
+            parts = line[5:].strip().split()
+            if len(parts) >= 4:
+                try:
+                    size_kb = int(parts[1])
+                    avail_kb = int(parts[3])
+                    used_kb = size_kb - avail_kb
+                    size_gb = round(size_kb / (1024 ** 2), 1)
+                    used_gb = round(used_kb / (1024 ** 2), 1)
+                    result['disk_size_gb'] = size_gb
+                    result['disk_used_gb'] = used_gb
+                    result['disk_pct'] = round(used_gb / size_gb * 100, 1) if size_gb > 0 else 0.0
+                except (ValueError, ZeroDivisionError):
+                    pass
+
+        # sysctl -n hw.ncpu → plain integer
+        elif line.strip().isdigit():
+            result['ncpu'] = int(line.strip())
+
+    return result
+
+
+@app.route('/api/mac-health', methods=['GET'])
+def mac_health():
+    """Return cached hardware health for Mac inference hosts."""
+    now = time.time()
+    results = {}
+    threads = []
+
+    def _fetch_and_cache(host):
+        key = host['key']
+        if now - _mac_cache_ts.get(key, 0) < _MAC_TTL and key in _mac_cache:
+            results[key] = _mac_cache[key]
+            return
+        data = _fetch_one_mac(host)
+        _mac_cache[key] = data
+        _mac_cache_ts[key] = now
+        results[key] = data
+
+    for h in MAC_HOSTS:
+        t = threading.Thread(target=_fetch_and_cache, args=(h,))
+        t.start()
+        threads.append(t)
+    for t in threads:
+        t.join(timeout=20)
+
+    return jsonify({'timestamp': datetime.now().isoformat(), 'hosts': results})
 
 
 if __name__ == '__main__':

@@ -50,7 +50,8 @@ APPROVED_TESTING_CARD = {
                                 {
                                     "type": "Input.Text",
                                     "id": "usernames",
-                                    "placeholder": "Use comma as separator"
+                                    "placeholder": "Use comma as separator",
+                                    "isMultiline": True
                                 }
                             ]
                         }
@@ -179,7 +180,8 @@ APPROVED_TESTING_CARD = {
                                 {
                                     "type": "Input.Text",
                                     "id": "scope",
-                                    "placeholder": "Testing scope details"
+                                    "placeholder": "Testing scope details",
+                                    "isMultiline": True
                                 }
                             ]
                         }
@@ -195,7 +197,8 @@ APPROVED_TESTING_CARD = {
                             "items": [
                                 {
                                     "type": "TextBlock",
-                                    "text": "⏰ Keep until",
+                                    "text": "⚔️ MITRE ATT&CK TTPs",
+                                    "wrap": True,
                                     "horizontalAlignment": "Right",
                                     "weight": "Bolder",
                                     "color": "Accent"
@@ -208,32 +211,42 @@ APPROVED_TESTING_CARD = {
                             "width": 3,
                             "items": [
                                 {
-                                    "type": "ColumnSet",
-                                    "columns": [
-                                        {
-                                            "type": "Column",
-                                            "width": 2,
-                                            "items": [
-                                                {
-                                                    "type": "Input.Date",
-                                                    "id": "expiry_date",
-                                                    "placeholder": "Select expiry date"
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "type": "Column",
-                                            "width": 1,
-                                            "items": [
-                                                {
-                                                    "type": "TextBlock",
-                                                    "text": "🕔 5 PM ET",
-                                                    "isSubtle": True
-                                                }
-                                            ],
-                                            "verticalContentAlignment": "Center"
-                                        }
-                                    ]
+                                    "type": "Input.Text",
+                                    "id": "ttps",
+                                    "placeholder": "e.g. T1059, T1078, T1566.001",
+                                    "isMultiline": True
+                                }
+                            ]
+                        }
+                    ],
+                    "spacing": "Small"
+                },
+                {
+                    "type": "ColumnSet",
+                    "columns": [
+                        {
+                            "type": "Column",
+                            "width": 2,
+                            "items": [
+                                {
+                                    "type": "TextBlock",
+                                    "text": "⏰ Keep until (5 PM ET)",
+                                    "wrap": True,
+                                    "horizontalAlignment": "Right",
+                                    "weight": "Bolder",
+                                    "color": "Accent"
+                                }
+                            ],
+                            "verticalContentAlignment": "Center"
+                        },
+                        {
+                            "type": "Column",
+                            "width": 3,
+                            "items": [
+                                {
+                                    "type": "Input.Date",
+                                    "id": "expiry_date",
+                                    "placeholder": "Select expiry date"
                                 }
                             ]
                         }

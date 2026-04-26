@@ -19,7 +19,7 @@ from typing import Dict, List, Tuple, Optional, Any
 
 import pytz
 
-from src import secops
+from src.secops.metrics import BASE_QUERY
 
 logger = logging.getLogger(__name__)
 eastern = pytz.timezone('US/Eastern')
@@ -89,7 +89,7 @@ def fetch_inflow_tickets(date_obj: datetime, shift_name: str, ticket_handler) ->
     """
     start_dt, end_dt, start_str, end_str = compute_shift_window(date_obj, shift_name)
     time_filter = f'created:>="{start_str}" created:<="{end_str}"'
-    inflow_query = f'{secops.BASE_QUERY} {time_filter}'
+    inflow_query = f'{BASE_QUERY} {time_filter}'
 
     cached = _get_cached_inflow(inflow_query)
     if cached is not None:
@@ -117,7 +117,7 @@ def fetch_outflow_tickets(start_dt: datetime, end_dt: datetime, ticket_handler) 
     start_str = start_dt.strftime(time_format)
     end_str = end_dt.strftime(time_format)
     time_filter = f'created:>="{start_str}" created:<="{end_str}"'
-    outflow_query = f'{secops.BASE_QUERY} {time_filter} status:closed'
+    outflow_query = f'{BASE_QUERY} {time_filter} status:closed'
 
     return ticket_handler.get_tickets(query=outflow_query)
 

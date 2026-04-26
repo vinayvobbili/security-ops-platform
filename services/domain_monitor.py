@@ -10,9 +10,11 @@ Tracks:
 - Risk classification (defensive, parked, suspicious, high_risk)
 """
 
+import concurrent.futures
 import json
 import logging
 import os
+import socket
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
@@ -75,7 +77,7 @@ class DomainMonitor:
                     return json.load(f)
             except (json.JSONDecodeError, IOError) as e:
                 logger.error(f"Error loading state for {domain}: {e}")
-        return {"registered_domains": {}, "last_scan": None}
+        return {"registered_domains": {}, "last_scan": None, "expired_watchlist": {}}
 
     def _save_state(self, domain: str, state: Dict[str, Any]) -> None:
         """Save scan state for a domain."""
@@ -116,7 +118,7 @@ class DomainMonitor:
         previous_registered: Set[str] = set(previous_domains.keys())
 
         # Run new scan with DNS resolution
-        result = domain_lookalike.get_domain_lookalikes(domain, registered_only=True)
+        result = domain_lookalike.get_domain_lookalikes(domain, registered_only=True, include_dictionary_combos=True)
 
         if not result.get("success"):
             logger.error(f"Scan failed for {domain}: {result.get('error')}")
@@ -135,6 +137,65 @@ class DomainMonitor:
         new_domain_names = current_registered - previous_registered
         removed_domain_names = previous_registered - current_registered
         existing_domain_names = current_registered & previous_registered
+
+        # --- Expired domain watchlist ---
+        # Track removed domains so we can detect re-registrations (domain takeover)
+        expired_watchlist: Dict[str, Any] = dict(previous_state.get("expired_watchlist", {}))
+
+        # Add newly removed domains to watchlist with metadata
+        for domain_name in removed_domain_names:
+            prev_data = previous_domains.get(domain_name, {})
+            expired_watchlist[domain_name] = {
+                "last_ips": prev_data.get("dns_a", []),
+                "registrar": prev_data.get("registrar"),
+                "first_seen": prev_data.get("first_seen"),
+                "removed_date": scan_time.isoformat(),
+            }
+
+        # Cap at 500 entries, evict oldest first
+        if len(expired_watchlist) > 500:
+            sorted_entries = sorted(expired_watchlist.items(), key=lambda x: x[1].get("removed_date", ""))
+            expired_watchlist = dict(sorted_entries[-500:])
+
+        # Re-check expired watchlist for re-registrations (domain takeover detection)
+        reregistered = []
+        watchlist_to_check = [d for d in expired_watchlist if d not in current_registered]
+
+        if watchlist_to_check:
+            logger.info(f"Re-checking {len(watchlist_to_check)} expired watchlist domains for re-registration")
+
+            def _resolve_expired(dn):
+                try:
+                    ip = socket.gethostbyname(dn)
+                    return (dn, ip)
+                except socket.gaierror:
+                    return None
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+                for result_item in executor.map(_resolve_expired, watchlist_to_check):
+                    if result_item is not None:
+                        dn, ip = result_item
+                        watchlist_meta = expired_watchlist.pop(dn, {})
+                        rereg_data = {
+                            "domain": dn,
+                            "dns_a": [ip],
+                            "dns_aaaa": [],
+                            "dns_mx": [],
+                            "dns_ns": [],
+                            "geoip": "",
+                            "registered": True,
+                            "change_type": "reregistered",
+                            "previous_ips": watchlist_meta.get("last_ips", []),
+                            "previous_registrar": watchlist_meta.get("registrar"),
+                            "first_seen": watchlist_meta.get("first_seen"),
+                            "removed_date": watchlist_meta.get("removed_date"),
+                            "reregistered_date": scan_time.isoformat(),
+                        }
+                        reregistered.append(rereg_data)
+                        # Add back to current_domains so it persists in state
+                        current_domains[dn] = rereg_data
+                        current_registered.add(dn)
+                        logger.warning(f"HIGH PRIORITY: {dn} re-registered after expiration!")
 
         # Check parking status for all current domains (needed for comparison)
         if check_parking:
@@ -208,6 +269,19 @@ class DomainMonitor:
                 domain_data["registrar"] = whois_info.get("registrar")
                 domain_data["whois_name_servers"] = whois_info.get("name_servers", [])
 
+                # Flag newly registered domains (creation_date within last 30 days)
+                creation_str = whois_info.get("creation_date")
+                if creation_str and creation_str != "N/A":
+                    try:
+                        creation_date = datetime.strptime(creation_str, "%Y-%m-%d")
+                        age_days = (scan_time - creation_date).days
+                        if age_days <= 30:
+                            domain_data["newly_registered"] = True
+                            domain_data["domain_age_days"] = age_days
+                            logger.info(f"NRD detected: {domain_name} is {age_days} days old")
+                    except (ValueError, TypeError):
+                        pass
+
                 # Re-classify with WHOIS data (registrar may indicate defensive)
                 risk_level = classify_domain_risk(
                     domain_data,
@@ -234,10 +308,18 @@ class DomainMonitor:
             prev_parked = previous.get("parked")
             curr_parked = current.get("parked")
 
-            if prev_parked is True and curr_parked is False:
-                # PARKED → ACTIVE: High priority alert!
+            # Detect domains that became active:
+            # - parked (True) → active (False)
+            # - unreachable/unknown (None) → active (False)
+            # - no IPs → has IPs (domain went live)
+            prev_had_ips = bool(previous.get("dns_a"))
+            curr_has_ips = bool(current.get("dns_a"))
+            went_live = not prev_had_ips and curr_has_ips and curr_parked is False
+
+            if (prev_parked in (True, None) and curr_parked is False) or went_live:
+                prev_label = "parked" if prev_parked is True else "unreachable"
                 change_data = current.copy()
-                change_data["previous_status"] = "parked"
+                change_data["previous_status"] = prev_label
                 change_data["current_status"] = "active"
                 change_data["change_type"] = "became_active"
 
@@ -252,7 +334,7 @@ class DomainMonitor:
                     change_data["registrar"] = previous.get("registrar")
 
                 became_active.append(change_data)
-                logger.warning(f"HIGH PRIORITY: {domain_name} changed from PARKED to ACTIVE")
+                logger.warning(f"HIGH PRIORITY: {domain_name} changed from {prev_label.upper()} to ACTIVE")
 
             elif prev_parked is False and curr_parked is True:
                 # ACTIVE → PARKED
@@ -320,6 +402,7 @@ class DomainMonitor:
             f"{risk_counts['suspicious']} suspicious, {risk_counts['parked']} parked), "
             f"{len(new_domain_names)} new ({len(actionable_new)} actionable), "
             f"{len(removed_domain_names)} removed, "
+            f"{len(reregistered)} re-registered, "
             f"{len(became_active)} became active ({len(actionable_became_active)} actionable), "
             f"{len(became_parked)} became parked, "
             f"{len(ip_changes)} IP changes, {len(mx_changes)} MX changes"
@@ -331,6 +414,7 @@ class DomainMonitor:
             "last_scan": scan_time.isoformat(),
             "total_registered": len(current_registered),
             "risk_counts": risk_counts,
+            "expired_watchlist": expired_watchlist,
         }
         self._save_state(domain, new_state)
 
@@ -358,6 +442,9 @@ class DomainMonitor:
             "became_active_actionable_count": len(actionable_became_active),
             "became_parked": became_parked,
             "became_parked_count": len(became_parked),
+            # Re-registered domains (expired domain takeover detection)
+            "reregistered": reregistered,  # HIGH PRIORITY
+            "reregistered_count": len(reregistered),
             # Infrastructure changes
             "ip_changes": ip_changes,
             "ip_changes_count": len(ip_changes),
@@ -365,6 +452,8 @@ class DomainMonitor:
             "mx_changes_count": len(mx_changes),
             "geoip_changes": geoip_changes,
             "geoip_changes_count": len(geoip_changes),
+            # Expired watchlist stats
+            "expired_watchlist_size": len(expired_watchlist),
         }
 
     def get_monitored_domains(self) -> List[str]:

@@ -1,0 +1,1678 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'control-efficacy analytics' %}
+{% set page_title_left_icon = '🛡️' %}
+{% set page_title_right_icon = '📊' %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/defense_pulse.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/chat_widget.css') }}">
+{% endblock %}
+
+{% block content %}
+
+
+<div class="dp-container">
+
+    <div class="dp-header-bar">
+        <button class="dp-info-btn" onclick="document.getElementById('dpInfoModal').style.display='flex'" title="How does this work?">
+            <span class="dp-info-btn-icon">✦</span> How does this work?
+        </button>
+    </div>
+
+    <!-- Loading state -->
+    <div id="dpLoading" class="dp-loading">
+        <div class="dp-spinner"></div>
+        <div>Loading control-efficacy analytics data...</div>
+    </div>
+
+    <!-- Error state -->
+    <div id="dpError" class="dp-error" style="display:none;"></div>
+
+    <!-- Dashboard content (hidden until loaded) -->
+    <div id="dpContent" style="display:none;">
+
+        <!-- KPI stat cards -->
+        <div class="dp-kpi-grid">
+            <div class="dp-kpi-card dp-kpi-blue dp-kpi-clickable" data-drilldown="total">
+                <div class="dp-kpi-emoji">📊</div>
+                <div class="dp-kpi-content">
+                    <div class="dp-kpi-value" id="kpiTotal">-</div>
+                    <div class="dp-kpi-label">Total Incidents (90 days)
+                        <span class="dp-info-icon" tabindex="0">ⓘ
+                            <span class="dp-info-tooltip">All security incidents detected across 17 active sources over a rolling 90-day window. Click to see the breakdown by category.</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <div class="dp-kpi-card dp-kpi-clickable" id="kpiBlockedCard" data-drilldown="blocked">
+                <div class="dp-kpi-emoji">🛡️</div>
+                <div class="dp-kpi-content">
+                    <div class="dp-kpi-value" id="kpiBlocked">-</div>
+                    <div class="dp-kpi-label">Control Effectiveness
+                        <span class="dp-info-icon" tabindex="0">ⓘ
+                            <span class="dp-info-tooltip">Percentage of actionable incidents stopped by automated controls. Click to see per-source block rates.</span>
+                        </span>
+                    </div>
+                    <div class="dp-kpi-subtitle" id="kpiBlockedSubtitle"></div>
+                </div>
+            </div>
+            <div class="dp-kpi-card dp-kpi-red dp-kpi-clickable" data-drilldown="mtp">
+                <div class="dp-kpi-emoji">🎯</div>
+                <div class="dp-kpi-content">
+                    <div class="dp-kpi-value" id="kpiMTP">-</div>
+                    <div class="dp-kpi-label">Malicious True Positives
+                        <span class="dp-info-icon" tabindex="0">ⓘ
+                            <span class="dp-info-tooltip">Confirmed real threats. Click to see which categories produce the most true positives.</span>
+                        </span>
+                    </div>
+                    <div class="dp-kpi-subtitle">Human in the Loop</div>
+                </div>
+            </div>
+            <div class="dp-kpi-card dp-kpi-purple dp-kpi-clickable" data-drilldown="attack_vector">
+                <div class="dp-kpi-emoji">⚔️</div>
+                <div class="dp-kpi-content">
+                    <div class="dp-kpi-value" id="kpiTopAV">-</div>
+                    <div class="dp-kpi-label" id="kpiTopAVLabel">Top Attack Vector
+                        <span class="dp-info-icon" tabindex="0">ⓘ
+                            <span class="dp-info-tooltip">Top attack vector by alert share. Click to see all vectors and what else is causing impact.</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cross-filter bar (shown when a chart/row is clicked) -->
+        <div id="dpFilterBar" class="dp-filter-bar" style="display:none;">
+            <div class="dp-filter-bar-content">
+                <span class="dp-filter-bar-label" id="dpFilterLabel"></span>
+                <span class="dp-filter-bar-count" id="dpFilterCount"></span>
+                <a class="dp-filter-mm-link" id="dpFilterMMLink" href="#" target="_blank" rel="noopener" style="display:none;">View in Meaningful Metrics &rarr;</a>
+                <button class="dp-filter-clear" id="dpFilterClear">&times; Clear filter</button>
+            </div>
+        </div>
+
+        <!-- KPI drill-down panel (populated by JS on card click) -->
+        <div id="dpKpiDrilldown" class="dp-drilldown-panel" style="display:none;">
+            <div class="dp-drilldown-header">
+                <span id="dpDrilldownTitle" class="dp-drilldown-title"></span>
+                <button id="dpDrilldownClose" class="dp-drilldown-close">&times;</button>
+            </div>
+            <div id="dpDrilldownBody" class="dp-drilldown-body"></div>
+        </div>
+
+        <!-- Story Toggle -->
+        <div class="dp-story-toggle-bar">
+            <button class="story-toggle-btn" id="dpStoryToggleBtn" title="Toggle Data Story narrative mode">📖 Story</button>
+        </div>
+
+        <!-- Stepper Story Section -->
+        <div class="story-section" id="dpStorySection" style="display: none;">
+            <div class="story-header" id="dpStoryHeader">
+                <div class="story-header-left">
+                    <span class="story-header-icon">📖</span>
+                    <span class="story-header-title">Data Story</span>
+                    <span class="story-header-subtitle">A guided narrative through your defense posture</span>
+                </div>
+                <div class="story-header-right">
+                    <span class="story-step-label" id="dpStepLabel">Step 1 of 5</span>
+                    <span class="story-chevron" id="dpStoryChevron">▾</span>
+                </div>
+            </div>
+            <div class="story-viewport" id="dpStoryViewport">
+                <div class="story-progress-bar">
+                    <div class="story-progress-fill" id="dpProgressFill" style="width: 20%"></div>
+                </div>
+                <div class="story-slides" id="dpStorySlides">
+                    <!-- Step 1: The Landscape -->
+                    <div class="story-slide active" data-step="0">
+                        <div class="story-text">
+                            <h3 class="story-step-title">📊 The Landscape</h3>
+                            <p class="story-step-desc" id="dpDescLandscape">Your detection sources and their blocked vs escalated ratio.</p>
+                        </div>
+                        <div class="story-chart-area" id="dpChartLandscape"><canvas id="dpStoryCanvas0"></canvas></div>
+                    </div>
+                    <!-- Step 2: The Shield -->
+                    <div class="story-slide" data-step="1">
+                        <div class="story-text">
+                            <h3 class="story-step-title">🛡️ The Shield</h3>
+                            <p class="story-step-desc" id="dpDescShield">How effectively your automated controls are performing.</p>
+                        </div>
+                        <div class="story-kpi-row" id="dpStoryKpiShield"></div>
+                    </div>
+                    <!-- Step 3: The Threats -->
+                    <div class="story-slide" data-step="2">
+                        <div class="story-text">
+                            <h3 class="story-step-title">🎯 The Threats</h3>
+                            <p class="story-step-desc" id="dpDescThreats">Where incidents are concentrated by category.</p>
+                        </div>
+                        <div class="story-chart-area" id="dpChartThreats"><canvas id="dpStoryCanvas2"></canvas></div>
+                    </div>
+                    <!-- Step 4: The Patterns -->
+                    <div class="story-slide" data-step="3">
+                        <div class="story-text">
+                            <h3 class="story-step-title">📈 The Patterns</h3>
+                            <p class="story-step-desc" id="dpDescPatterns">Awareness-related incident trends over time.</p>
+                        </div>
+                        <div class="story-chart-area" id="dpChartPatterns"><canvas id="dpStoryCanvas3"></canvas></div>
+                    </div>
+                    <!-- Step 5: The Cost -->
+                    <div class="story-slide" data-step="4">
+                        <div class="story-text">
+                            <h3 class="story-step-title">💰 The Cost</h3>
+                            <p class="story-step-desc" id="dpDescCost">The human and financial impact of escalated incidents.</p>
+                        </div>
+                        <div class="story-kpi-row" id="dpStoryKpiCost"></div>
+                    </div>
+                </div>
+                <div class="story-nav">
+                    <button class="story-nav-btn story-nav-back" id="dpStoryBack" disabled>← Back</button>
+                    <button class="story-audio-toggle" id="dpAudioToggle" title="Toggle story audio">🔇</button>
+                    <button class="story-narration-toggle" id="dpNarrationToggle" title="Enable narration (text-to-speech)">🔕</button>
+                    <button class="story-effect-btn" id="dpSpotlightToggle" title="Spotlight mode (S)">🔦</button>
+                    <button class="story-effect-btn" id="dpExportSlide" title="Export slide as PNG (P)">📷</button>
+                    <button class="story-effect-btn" id="dpShortcutsBtn" title="Keyboard shortcuts (?)">⌨️</button>
+                    <div class="story-dots" id="dpStoryDots">
+                        <span class="story-dot active" data-dot="0"></span>
+                        <span class="story-dot" data-dot="1"></span>
+                        <span class="story-dot" data-dot="2"></span>
+                        <span class="story-dot" data-dot="3"></span>
+                        <span class="story-dot" data-dot="4"></span>
+                    </div>
+                    <button class="story-nav-btn story-nav-next" id="dpStoryNext">Next →</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Executive BLUF + Failure Modes -->
+        <div class="dp-section-card dp-insights">
+            <div class="dp-section-header" id="dpInsightsHeader">🔍 Control Health &amp; Failure Modes
+                <span class="dp-info-icon" tabindex="0">ⓘ
+                    <span class="dp-info-tooltip" id="dpInsightsInfo">Executive control-health statement plus named failure mechanisms (mechanism, not category) with supporting CIRs and confidence.</span>
+                </span>
+            </div>
+            <div class="dp-prompt-panel" id="dpInsightsPrompt" style="display:none;"></div>
+            <div id="dpInsights" class="dp-section-body dp-structured"></div>
+        </div>
+
+        <!-- FPI-Ranked Fix Candidates -->
+        <div class="dp-section-card dp-actions">
+            <div class="dp-section-header" id="dpActionsHeader">⚡ Fix Candidates (FPI-ranked)
+                <span class="dp-info-icon" tabindex="0">ⓘ
+                    <span class="dp-info-tooltip" id="dpActionsInfo">Fixes scored on Recurrence, Impact, Time penalty, Human cost, and External alignment. FPI = 2R + 2I + 1.5T + 1.5H + 0.5E.</span>
+                </span>
+            </div>
+            <div class="dp-prompt-panel" id="dpActionsPrompt" style="display:none;"></div>
+            <div id="dpActions" class="dp-section-body dp-structured"></div>
+        </div>
+
+        <!-- Human Compensation Signals + Data Gaps + Quality Checks -->
+        <div class="dp-section-card dp-remediation">
+            <div class="dp-section-header" id="dpRemediationHeader">🛡️ Signals, Data Gaps &amp; Quality Checks
+                <span class="dp-info-icon" tabindex="0">ⓘ
+                    <span class="dp-info-tooltip" id="dpRemediationInfo">Human-compensation signals (process debt), fields the analysis couldn't compute, and self-validation of the run's audit guardrails.</span>
+                </span>
+            </div>
+            <div class="dp-prompt-panel" id="dpRemediationPrompt" style="display:none;"></div>
+            <div id="dpRemediation" class="dp-section-body dp-structured"></div>
+        </div>
+
+        <!-- Charts (interactive Chart.js + static PNG fallback) -->
+        <div class="dp-charts-grid">
+            <div class="dp-chart-card">
+                <div class="dp-chart-title">
+                    <span>📋 control-efficacy analytics Dashboard</span>
+                    <span class="dp-info-icon" tabindex="0">ⓘ
+                        <span class="dp-info-tooltip">Blocked vs. Escalated ratio per detection source. Click a bar for source details.</span>
+                    </span>
+                    <div class="dp-view-toggle">
+                        <button class="dp-view-btn active" data-mode="interactive">Interactive</button>
+                        <button class="dp-view-btn" data-mode="static">Static</button>
+                    </div>
+                </div>
+                <div class="dp-interactive-chart" id="chartDashboardInteractive">
+                    <canvas id="chartDashboardCanvas"></canvas>
+                </div>
+                <img id="chartDashboard" class="dp-chart-img" alt="control-efficacy analytics Dashboard" style="display:none;">
+            </div>
+            <div class="dp-chart-card">
+                <div class="dp-chart-title">
+                    <span>🔥 Category vs Impact Heatmap</span>
+                    <span class="dp-info-icon" tabindex="0">ⓘ
+                        <span class="dp-info-tooltip">Security category vs. impact type. Click a row for category detail. Use "Exclude #1" to reveal the long tail beyond the top category.</span>
+                    </span>
+                    <div class="dp-view-toggle">
+                        <button class="dp-view-btn active" data-mode="interactive">Interactive</button>
+                        <button class="dp-view-btn" data-mode="static">Static</button>
+                        <button class="dp-exclude-top-btn" data-chart="heatmap">Exclude #1</button>
+                    </div>
+                </div>
+                <div class="dp-interactive-chart dp-interactive-heatmap" id="chartHeatmapInteractive">
+                    <div id="heatmapTable"></div>
+                </div>
+                <img id="chartHeatmap" class="dp-chart-img" alt="Category Impact Heatmap" style="display:none;">
+            </div>
+            <div class="dp-chart-card">
+                <div class="dp-chart-title">
+                    <span>🔬 Root Cause vs Detection Source</span>
+                    <span class="dp-info-icon" tabindex="0">ⓘ
+                        <span class="dp-info-tooltip">Stacked bars showing which detection sources contribute to each root cause. Use "Exclude #1" to see what other causes are driving volume.</span>
+                    </span>
+                    <div class="dp-view-toggle">
+                        <button class="dp-view-btn active" data-mode="interactive">Interactive</button>
+                        <button class="dp-view-btn" data-mode="static">Static</button>
+                        <button class="dp-exclude-top-btn" data-chart="rootCause">Exclude #1</button>
+                    </div>
+                </div>
+                <div class="dp-interactive-chart" id="chartRootCauseInteractive">
+                    <canvas id="chartRootCauseCanvas"></canvas>
+                </div>
+                <img id="chartRootCause" class="dp-chart-img" alt="Root Cause Detection Source" style="display:none;">
+            </div>
+            <div class="dp-chart-card">
+                <div class="dp-chart-title">
+                    <span>📈 Awareness-Related Incident Trends</span>
+                    <span class="dp-info-icon" tabindex="0">ⓘ
+                        <span class="dp-info-tooltip">Weekly trend of Human Error and Social Engineering incidents. Hover for details. Spike weeks (>1.5x trailing avg) are flagged in tooltips.</span>
+                    </span>
+                    <div class="dp-view-toggle">
+                        <button class="dp-view-btn active" data-mode="interactive">Interactive</button>
+                        <button class="dp-view-btn" data-mode="static">Static</button>
+                    </div>
+                </div>
+                <div class="dp-interactive-chart" id="chartAwarenessInteractive">
+                    <canvas id="chartAwarenessCanvas"></canvas>
+                </div>
+                <img id="chartAwareness" class="dp-chart-img" alt="Awareness Trends" style="display:none;">
+            </div>
+        </div>
+
+        <!-- Cost Analysis Section -->
+        <div class="dp-section-card dp-cost-section">
+            <div class="dp-section-header">💰 Cost Analysis
+                <span class="dp-info-icon" tabindex="0">ⓘ
+                    <span class="dp-info-tooltip">Estimated analyst cost for human-escalated incidents based on average resolution time and configured hourly rate.</span>
+                </span>
+            </div>
+            <div class="dp-section-body">
+                <div class="dp-cost-grid" id="dpCostGrid">
+                    <div class="dp-cost-card dp-cost-total">
+                        <div class="dp-cost-value" id="costTotal">-</div>
+                        <div class="dp-cost-label">Total Human Cost</div>
+                    </div>
+                    <div class="dp-cost-card">
+                        <div class="dp-cost-value" id="costPerIncident">-</div>
+                        <div class="dp-cost-label">Per Escalated Incident</div>
+                    </div>
+                    <div class="dp-cost-card">
+                        <div class="dp-cost-value" id="costAvgHours">-</div>
+                        <div class="dp-cost-label">Est. Analyst Hours</div>
+                    </div>
+                    <div class="dp-cost-card">
+                        <div class="dp-cost-value" id="costEscalated">-</div>
+                        <div class="dp-cost-label">Escalated w/ Resolution</div>
+                    </div>
+                </div>
+                <div class="dp-cost-footnote" id="costFootnote"></div>
+            </div>
+        </div>
+
+        <!-- Attack Vector Grid -->
+        <div class="dp-section-card dp-av-section">
+            <div class="dp-section-header">🎯 Attack Vector Breakdown
+                <span class="dp-info-icon" tabindex="0">ⓘ
+                    <span class="dp-info-tooltip">Detection sources grouped into attack vector categories. Shows which attack surfaces generate the most incidents.</span>
+                </span>
+            </div>
+            <div class="dp-section-body">
+                <div class="dp-av-grid" id="dpAvGrid"></div>
+            </div>
+        </div>
+
+        <!-- Identity & Access Section -->
+        <div class="dp-section-card dp-identity-section">
+            <div class="dp-section-header">🔐 Identity & Access Security
+                <span class="dp-info-icon" tabindex="0">ⓘ
+                    <span class="dp-info-tooltip">Identity-specific incident metrics: leaked credentials, credential compromise, brute force, and access violations.</span>
+                </span>
+            </div>
+            <div class="dp-section-body">
+                <div class="dp-identity-header" id="dpIdentityHeader"></div>
+                <div class="dp-identity-bars" id="dpIdentityBars"></div>
+                <div class="dp-identity-footer" id="dpIdentityFooter"></div>
+            </div>
+        </div>
+
+        <!-- Repeat Offenders Section -->
+        <div class="dp-section-card dp-ro-section">
+            <div class="dp-section-header">🔄 Repeat Offender Analysis
+                <span class="dp-info-icon" tabindex="0">ⓘ
+                    <span class="dp-info-tooltip">Pareto analysis showing that a small percentage of users/hosts generate a disproportionate share of incidents.</span>
+                </span>
+            </div>
+            <div class="dp-section-body">
+                <div class="dp-ro-callout" id="dpRoCallout"></div>
+                <div class="dp-chart-card" style="margin:0 0 1rem;">
+                    <img id="chartRepeatOffenders" class="dp-chart-img" alt="Repeat Offender Pareto Chart">
+                </div>
+                <div class="dp-ro-tables">
+                    <div class="dp-ro-table-wrap">
+                        <h4 class="dp-ro-table-title">Top 10 Users</h4>
+                        <table class="dp-ro-table" id="dpRoUsersTable">
+                            <thead><tr><th>#</th><th>User</th><th>Incidents</th><th>Sources</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div class="dp-ro-table-wrap">
+                        <h4 class="dp-ro-table-title">Top 10 Hosts</h4>
+                        <table class="dp-ro-table" id="dpRoHostsTable">
+                            <thead><tr><th>#</th><th>Host</th><th>Incidents</th><th>Sources</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Full Strategic Report (expandable) -->
+        <div class="dp-report-card">
+            <div class="dp-report-header">
+                <span class="dp-report-title">📄 Full Strategic Report</span>
+                <div style="display:flex;gap:0.5rem;">
+                    <button id="dpExportPdf" class="dp-export-btn" title="Export as PDF">Export PDF</button>
+                    <button id="dpToggleReport" class="dp-toggle-btn">Expand</button>
+                </div>
+            </div>
+            <div id="dpReportBody" class="dp-report-body dp-collapsed">
+                <div id="dpReportContent" class="dp-markdown"></div>
+            </div>
+        </div>
+
+        <!-- Refresh info footer -->
+        <div class="dp-refresh-footer" id="dpRefreshFooter"></div>
+
+    </div>
+</div>
+
+<!-- How Does This Work? Modal -->
+<div class="dp-info-backdrop" id="dpInfoModal" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+    <div class="dp-info-modal" onclick="event.stopPropagation()">
+        <div class="dp-info-header">
+            <h3>How Does control-efficacy analytics Work?</h3>
+            <button class="dp-info-close" onclick="document.getElementById('dpInfoModal').style.display='none'">&times;</button>
+        </div>
+        <div class="dp-info-body">
+            <div class="dp-info-video-wrap">
+                <video class="dp-info-video" controls preload="metadata" poster="{{ url_for('static', filename='videos/defense_pulse_demo_poster.jpg') }}">
+                    <source src="{{ url_for('static', filename='videos/defense_pulse_demo.mp4') }}" type="video/mp4">
+                    Your browser doesn't support embedded video.
+                </video>
+                <div class="dp-info-video-caption">Quick walkthrough — 90 days of incidents, the three answers leadership wants, in 2 minutes.</div>
+            </div>
+
+            <div class="dp-info-section">
+                <div class="dp-info-icon">📥</div>
+                <div>
+                    <h4>1. Ingest</h4>
+                    <p>Every four hours, tickets are pulled from XSOAR across <strong>17 active detection sources</strong> (CrowdStrike, QRadar, Splunk, Vectra, Tanium, and more) and cached locally. Each ticket is enriched with derived fields: security category, root cause, attack vector, disposition, and the owning technology team.</p>
+                </div>
+            </div>
+
+            <div class="dp-info-section">
+                <div class="dp-info-icon">📊</div>
+                <div>
+                    <h4>2. Aggregate (90-day rolling window)</h4>
+                    <p>On a biweekly cadence (Mondays at 6 AM ET), the scheduler rolls up the last 90 days of enriched tickets into four headline KPIs:</p>
+                    <ul>
+                        <li><strong>Total Incidents</strong> — volume across every source</li>
+                        <li><strong>Control Effectiveness</strong> — % blocked automatically vs. escalated to a human</li>
+                        <li><strong>Malicious True Positives</strong> — confirmed real attacks after human review</li>
+                        <li><strong>Top Attack Vector</strong> — the #1 vector by alert share</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="dp-info-section">
+                <div class="dp-info-icon">📈</div>
+                <div>
+                    <h4>3. Visualise</h4>
+                    <p>Five interactive charts tell the story the KPIs summarise:</p>
+                    <ul>
+                        <li><strong>Category Impact Heatmap</strong> — security category × impact type</li>
+                        <li><strong>Control Effectiveness Dashboard</strong> — blocked vs. escalated per source, plus a donut of the overall split</li>
+                        <li><strong>Root Cause × Detection Source</strong> — stacked bars showing which sources surface which root causes</li>
+                        <li><strong>Awareness Trends</strong> — weekly line chart of awareness-related incidents, with spike weeks called out</li>
+                        <li><strong>Repeat Offenders (Pareto)</strong> — which users and hosts generate the long tail of noise</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="dp-info-section">
+                <div class="dp-info-icon">🤖</div>
+                <div>
+                    <h4>4. Control-Efficacy Analysis</h4>
+                    <p>The analysis layer answers three questions: <strong>are our controls holding?</strong>, <strong>where are we getting hit?</strong>, and <strong>what should we fix next?</strong> It is <em>not</em> an incident summarizer.</p>
+                    <ul>
+                        <li><strong>Control Interaction Records (CIRs)</strong> — every ticket is deterministically tagged with an expected control and an outcome: <code>BLOCKED</code>, <code>ALERTED</code>, <code>MISSED</code>, <code>BYPASSED</code>, <code>NOT_APPLICABLE</code>, or <code>UNKNOWN</code>, with a confidence level and machine-readable evidence.</li>
+                        <li><strong>Failure Modes</strong> — the LLM clusters non-BLOCKED CIRs into named failure <em>mechanisms</em> (e.g. "MFA bypass via helpdesk reset") rather than category labels. Each has supporting incident IDs, hypothesized root causes, and confirmation steps.</li>
+                        <li><strong>Fix Candidates (FPI-ranked)</strong> — each fix maps to at least one failure mode and is scored on five axes: Recurrence, Impact, Time penalty, Human cost, and External intel alignment. <code>FPI = 2R + 2I + 1.5T + 1.5H + 0.5E</code>. Every fix ships with success metrics and a validation plan.</li>
+                        <li><strong>Human Compensation Signals</strong> — process-debt indicators (repeat triage, duplicates, long containment cycles) that point at missing telemetry or tooling, never at individuals.</li>
+                        <li><strong>Data Gaps</strong> — fields the analysis wanted but could not compute (e.g. per-incident dwell time). Audit-defensible by design.</li>
+                    </ul>
+                    <p>Operating rules enforced on every run: no people-performance evaluation, no fabricated counts or dates, FACT vs INFERENCE vs UNKNOWN labeling, and external intel can only <em>weight</em> an internally observed failure mode — never serve as proof of exposure.</p>
+                </div>
+            </div>
+
+            <div class="dp-info-section">
+                <div class="dp-info-icon">📖</div>
+                <div>
+                    <h4>5. Data Story Mode</h4>
+                    <p>A guided five-step narrative (Landscape → Shield → Threats → Patterns → Cost) walks a board-level audience through the posture end-to-end, with optional audio narration and spotlight mode. Built so leadership can self-serve the story without a briefing deck.</p>
+                </div>
+            </div>
+
+            <div class="dp-info-divider"></div>
+
+            <div class="dp-info-section">
+                <div class="dp-info-icon">⚙️</div>
+                <div>
+                    <h4>Configuration</h4>
+                    <p><strong>Refresh cadence:</strong> Biweekly, Mondays at 6 AM ET (scheduled via <code>ir-scheduler</code>)<br>
+                    <strong>Rolling window:</strong> 90 days<br>
+                    <strong>Detection sources:</strong> 17 active (XSOAR-integrated)<br>
+                    <strong>Analysis split:</strong> CIRs and run metadata are computed deterministically in Python; the LLM only produces judgment-heavy sections (failure modes, fixes, signals, gaps, quality checks).<br>
+                    <strong>AI model:</strong> GPT-4.1 via the internal LLM gateway, structured output (Pydantic-validated) with explicit enumerations and confidence ratings.<br>
+                    <strong>Storage:</strong> Full control-efficacy JSON (<code>ai_analysis</code>) plus derived markdown, written alongside KPIs under <code>web/static/charts/</code>.<br>
+                    <strong>Fallback:</strong> If the LLM is unreachable, the previous run's analysis is carried forward so leadership always sees current-state evidence.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include '_chat_widget.html' %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/story_audio.js') }}"></script>
+<script src="{{ url_for('static', filename='js/story_effects.js') }}"></script>
+<script src="{{ url_for('static', filename='js/defense_pulse_charts.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chat_widget.js') }}"></script>
+<script>
+(function() {
+    const API = '/api/defense-pulse/data';
+    var _reportMarkdown = '';  // stored for chat widget context
+
+    function extractSection(md, heading) {
+        const lines = md.split('\n');
+        let capturing = false;
+        const result = [];
+        for (const line of lines) {
+            if (line.trim() === '## ' + heading) { capturing = true; continue; }
+            if (capturing && line.startsWith('## ')) break;
+            if (capturing) result.push(line);
+        }
+        return result.join('\n').trim();
+    }
+
+    function formatNum(n) {
+        return typeof n === 'number' ? n.toLocaleString() : '-';
+    }
+
+    // ------------------------------------------------------------------------
+    // DOM builder helpers for the structured Control-Efficacy renderers below.
+    // h('div', {class: 'foo'}, child1, child2, ...) — children can be strings,
+    // Nodes, null, or arrays. Avoids innerHTML string concatenation for safety.
+    // ------------------------------------------------------------------------
+    function h(tag, attrs, ...children) {
+        var el = document.createElement(tag);
+        if (attrs) {
+            Object.keys(attrs).forEach(function(k) {
+                var v = attrs[k];
+                if (v == null) return;
+                if (k === 'class') el.className = v;
+                else if (k === 'onclick') el.addEventListener('click', v);
+                else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
+                else el.setAttribute(k, v);
+            });
+        }
+        children.forEach(function appendChild(c) {
+            if (c == null || c === false) return;
+            if (Array.isArray(c)) c.forEach(appendChild);
+            else if (c instanceof Node) el.appendChild(c);
+            else el.appendChild(document.createTextNode(String(c)));
+        });
+        return el;
+    }
+
+    function textAndBadge(label, badgeText) {
+        return [document.createTextNode(label + ' '), h('span', {class: 'dp-ai-badge'}, badgeText)];
+    }
+
+    function infoIconEl(tooltipText, revealPanelId) {
+        var icon = h('span', {class: 'dp-info-icon', tabindex: '0', style: {marginLeft: '8px'}}, 'ⓘ',
+            h('span', {class: 'dp-info-tooltip'}, tooltipText)
+        );
+        if (revealPanelId) {
+            icon.style.cursor = 'pointer';
+            icon.addEventListener('click', function() {
+                var p = document.getElementById(revealPanelId);
+                if (!p) return;
+                p.style.display = (p.style.display === 'block') ? 'none' : 'block';
+            });
+        }
+        return icon;
+    }
+
+    function confBadge(conf) {
+        if (!conf) return null;
+        var cls = 'dp-conf dp-conf-' + String(conf).toLowerCase();
+        return h('span', {class: cls}, conf);
+    }
+
+    function outcomeBadge(outcome) {
+        if (!outcome) return null;
+        var cls = 'dp-outcome dp-outcome-' + String(outcome).toLowerCase();
+        return h('span', {class: cls}, outcome);
+    }
+
+    function chip(label) { return h('span', {class: 'dp-chip'}, label); }
+
+    // ---- Renderer 1: Executive BLUF + Failure Modes -------------------------
+    function renderControlHealth(container, analysis) {
+        container.replaceChildren();
+        var bluf = analysis.executive_bluf || {};
+        var failureModes = analysis.failure_modes || [];
+
+        var blufCard = h('div', {class: 'dp-bluf'},
+            h('div', {class: 'dp-bluf-row'},
+                h('div', {class: 'dp-bluf-label'}, 'Control Health'),
+                confBadge(bluf.confidence)
+            ),
+            h('p', {class: 'dp-bluf-statement'}, bluf.control_health_statement || '')
+        );
+        if ((bluf.top_failure_modes || []).length) {
+            blufCard.appendChild(h('div', {class: 'dp-bluf-sub'},
+                h('strong', {}, 'Top failure modes: '),
+                (bluf.top_failure_modes || []).join(' · ')
+            ));
+        }
+        if ((bluf.top_fix_now || []).length) {
+            blufCard.appendChild(h('div', {class: 'dp-bluf-sub'},
+                h('strong', {}, 'Fix now: '),
+                (bluf.top_fix_now || []).join(' · ')
+            ));
+        }
+        container.appendChild(blufCard);
+
+        if (!failureModes.length) {
+            container.appendChild(h('div', {class: 'dp-empty'}, 'No failure modes identified in this run.'));
+            return;
+        }
+
+        var list = h('div', {class: 'dp-fm-list'});
+        failureModes.forEach(function(fm) {
+            var header = h('div', {class: 'dp-fm-header'},
+                h('span', {class: 'dp-fm-id'}, fm.failure_mode_id || ''),
+                h('span', {class: 'dp-fm-name'}, fm.name || ''),
+                confBadge(fm.confidence)
+            );
+            var body = h('div', {class: 'dp-fm-body'},
+                h('p', {class: 'dp-fm-desc'}, fm.description || ''),
+                (fm.associated_controls || []).length ? h('div', {class: 'dp-fm-row'},
+                    h('span', {class: 'dp-fm-label'}, 'Controls:'),
+                    h('span', {class: 'dp-chips'}, (fm.associated_controls || []).map(chip))
+                ) : null,
+                (fm.mapped_techniques || []).length ? h('div', {class: 'dp-fm-row'},
+                    h('span', {class: 'dp-fm-label'}, 'MITRE:'),
+                    h('span', {class: 'dp-chips'}, (fm.mapped_techniques || []).map(chip))
+                ) : null,
+                fm.evidence_summary ? h('div', {class: 'dp-fm-row'},
+                    h('span', {class: 'dp-fm-label'}, 'Evidence:'),
+                    h('span', {}, fm.evidence_summary)
+                ) : null,
+                (fm.supporting_cirs || []).length ? h('div', {class: 'dp-fm-row'},
+                    h('span', {class: 'dp-fm-label'}, 'Supporting CIRs:'),
+                    h('span', {class: 'dp-chips'}, (fm.supporting_cirs || []).slice(0, 8).map(function(s) {
+                        return h('span', {class: 'dp-chip dp-chip-cir', title: s.control_name + ' — ' + s.outcome},
+                            '#' + (s.incident_id || '?'), ' ', outcomeBadge(s.outcome)
+                        );
+                    }))
+                ) : null,
+                (fm.hypothesized_root_causes || []).length ? h('div', {class: 'dp-fm-row'},
+                    h('span', {class: 'dp-fm-label'}, 'Hypothesized root causes:'),
+                    h('ul', {class: 'dp-fm-ul'}, (fm.hypothesized_root_causes || []).map(function(c) {
+                        return h('li', {}, c);
+                    }))
+                ) : null,
+                (fm.what_to_measure_next || []).length ? h('div', {class: 'dp-fm-row'},
+                    h('span', {class: 'dp-fm-label'}, 'What to measure next:'),
+                    h('ul', {class: 'dp-fm-ul'}, (fm.what_to_measure_next || []).map(function(c) {
+                        return h('li', {}, c);
+                    }))
+                ) : null
+            );
+            list.appendChild(h('div', {class: 'dp-fm-card'}, header, body));
+        });
+        container.appendChild(list);
+    }
+
+    // ---- Renderer 2: FPI-ranked Fix Candidates ------------------------------
+    function renderFixCandidates(container, analysis) {
+        container.replaceChildren();
+        var fixes = (analysis.fix_candidates || []).slice().sort(function(a, b) {
+            var ra = a.rank || 999, rb = b.rank || 999;
+            return ra - rb;
+        });
+
+        if (!fixes.length) {
+            container.appendChild(h('div', {class: 'dp-empty'}, 'No fix candidates proposed — see Data Gaps for why.'));
+            return;
+        }
+
+        var list = h('div', {class: 'dp-fix-list'});
+        fixes.forEach(function(fx) {
+            var fpi = fx.fpi_scoring || {};
+            var header = h('div', {class: 'dp-fix-header'},
+                fx.rank ? h('span', {class: 'dp-fix-rank'}, '#' + fx.rank) : null,
+                h('span', {class: 'dp-fix-title'}, fx.title || ''),
+                h('span', {class: 'dp-fix-type'}, fx.fix_type || ''),
+                h('span', {class: 'dp-fix-fpi'}, 'FPI ' + (typeof fpi.fpi_total === 'number' ? fpi.fpi_total.toFixed(1) : 'n/a')),
+                confBadge(fx.confidence)
+            );
+
+            var scoreCells = [
+                ['R', fpi.R_recurrence, 'Recurrence'],
+                ['I', fpi.I_impact, 'Impact'],
+                ['T', fpi.T_time_penalty, 'Time penalty'],
+                ['H', fpi.H_human_cost, 'Human cost'],
+                ['E', fpi.E_external_alignment, 'External alignment'],
+            ].map(function(row) {
+                var v = (row[1] == null) ? '—' : row[1];
+                return h('div', {class: 'dp-fpi-cell', title: row[2]},
+                    h('span', {class: 'dp-fpi-letter'}, row[0]),
+                    h('span', {class: 'dp-fpi-val'}, v)
+                );
+            });
+
+            var body = h('div', {class: 'dp-fix-body'},
+                fx.what_changes ? h('p', {class: 'dp-fix-what'}, fx.what_changes) : null,
+                fx.why_now ? h('div', {class: 'dp-fix-row'},
+                    h('span', {class: 'dp-fm-label'}, 'Why now:'),
+                    h('span', {}, fx.why_now)
+                ) : null,
+                (fx.failure_modes_addressed || []).length ? h('div', {class: 'dp-fix-row'},
+                    h('span', {class: 'dp-fm-label'}, 'Addresses:'),
+                    h('span', {class: 'dp-chips'}, (fx.failure_modes_addressed || []).map(chip))
+                ) : null,
+                (fx.where_it_applies || []).length ? h('div', {class: 'dp-fix-row'},
+                    h('span', {class: 'dp-fm-label'}, 'Where:'),
+                    h('span', {class: 'dp-chips'}, (fx.where_it_applies || []).map(chip))
+                ) : null,
+                h('div', {class: 'dp-fpi-grid'}, scoreCells),
+                (fx.success_metrics || []).length ? h('div', {class: 'dp-fix-row'},
+                    h('span', {class: 'dp-fm-label'}, 'Success metrics:'),
+                    h('ul', {class: 'dp-fm-ul'}, (fx.success_metrics || []).map(function(m) {
+                        var arrow = m.desired_direction === 'UP' ? '↑' : (m.desired_direction === 'DOWN' ? '↓' : '·');
+                        return h('li', {}, arrow + ' ' + (m.metric || '') + (m.how_measured ? ' — ' + m.how_measured : ''));
+                    }))
+                ) : null,
+                (fx.dependencies || []).length ? h('div', {class: 'dp-fix-row'},
+                    h('span', {class: 'dp-fm-label'}, 'Dependencies:'),
+                    h('span', {class: 'dp-chips'}, (fx.dependencies || []).map(chip))
+                ) : null,
+                (fx.validation_plan || []).length ? h('div', {class: 'dp-fix-row'},
+                    h('span', {class: 'dp-fm-label'}, 'Validation plan:'),
+                    h('ul', {class: 'dp-fm-ul'}, (fx.validation_plan || []).map(function(s) {
+                        return h('li', {}, s);
+                    }))
+                ) : null,
+                fx.risk_reduction_mechanism ? h('div', {class: 'dp-fix-row dp-fix-risk'},
+                    h('span', {class: 'dp-fm-label'}, 'Risk reduction:'),
+                    h('span', {}, fx.risk_reduction_mechanism)
+                ) : null
+            );
+            list.appendChild(h('div', {class: 'dp-fix-card'}, header, body));
+        });
+        container.appendChild(list);
+    }
+
+    // ---- Renderer 3: Human Compensation Signals + Data Gaps + Quality -------
+    function renderSignalsAndGaps(container, analysis) {
+        container.replaceChildren();
+        var signals = analysis.human_compensation_signals || [];
+        var gaps = analysis.data_gaps || [];
+        var quality = analysis.quality_checks || {};
+
+        // Signals
+        container.appendChild(h('div', {class: 'dp-subhead'}, 'Human Compensation Signals',
+            h('span', {class: 'dp-subhead-hint'}, ' — process debt, not individual performance')));
+        if (!signals.length) {
+            container.appendChild(h('div', {class: 'dp-empty'}, 'No process-debt signals detected this run.'));
+        } else {
+            var sl = h('div', {class: 'dp-signal-list'});
+            signals.forEach(function(s) {
+                sl.appendChild(h('div', {class: 'dp-signal-card'},
+                    h('div', {class: 'dp-signal-header'},
+                        h('span', {class: 'dp-fm-id'}, s.signal_id || ''),
+                        h('span', {class: 'dp-fm-name'}, s.pattern || ''),
+                        confBadge(s.confidence)
+                    ),
+                    s.why_it_matters ? h('p', {class: 'dp-signal-why'}, s.why_it_matters) : null,
+                    (s.likely_underlying_failure_modes || []).length ? h('div', {class: 'dp-fix-row'},
+                        h('span', {class: 'dp-fm-label'}, 'Likely ties to:'),
+                        h('span', {class: 'dp-chips'}, (s.likely_underlying_failure_modes || []).map(chip))
+                    ) : null,
+                    (s.where_observed || []).length ? h('div', {class: 'dp-fix-row'},
+                        h('span', {class: 'dp-fm-label'}, 'Observed in:'),
+                        h('span', {class: 'dp-chips'}, (s.where_observed || []).slice(0, 8).map(function(w) {
+                            return h('span', {class: 'dp-chip dp-chip-cir', title: w.evidence || ''}, '#' + (w.incident_id || '?'));
+                        }))
+                    ) : null
+                ));
+            });
+            container.appendChild(sl);
+        }
+
+        // Data Gaps
+        container.appendChild(h('div', {class: 'dp-subhead'}, 'Data Gaps'));
+        if (!gaps.length) {
+            container.appendChild(h('div', {class: 'dp-empty'}, 'No data gaps flagged.'));
+        } else {
+            var gl = h('div', {class: 'dp-gap-list'});
+            gaps.forEach(function(g) {
+                gl.appendChild(h('div', {class: 'dp-gap-card'},
+                    h('div', {class: 'dp-gap-header'},
+                        h('span', {class: 'dp-fm-id'}, g.gap_id || ''),
+                        h('span', {class: 'dp-priority-badge dp-priority-' + String(g.priority || '').toLowerCase()}, g.priority || ''),
+                        h('span', {class: 'dp-fm-name'}, g.missing_data || '')
+                    ),
+                    g.impact_on_analysis ? h('p', {class: 'dp-signal-why'}, g.impact_on_analysis) : null,
+                    (g.how_to_collect || []).length ? h('ul', {class: 'dp-fm-ul'}, (g.how_to_collect || []).map(function(s) {
+                        return h('li', {}, s);
+                    })) : null
+                ));
+            });
+            container.appendChild(gl);
+        }
+
+        // Quality checks
+        container.appendChild(h('div', {class: 'dp-subhead'}, 'Quality Checks'));
+        var checks = [
+            ['No people performance evaluation', quality.no_people_performance_evaluation],
+            ['No fabricated counts or dates', quality.no_fabricated_counts_or_dates],
+            ['All fixes tied to failure modes', quality.all_fixes_tied_to_failure_modes],
+            ['External intel not used as proof', quality.external_intel_not_used_as_proof],
+            ['JSON schema valid', quality.json_schema_valid],
+        ];
+        var qc = h('ul', {class: 'dp-qc-list'});
+        checks.forEach(function(row) {
+            var cls = row[1] === true ? 'dp-qc-pass' : (row[1] === false ? 'dp-qc-fail' : 'dp-qc-unset');
+            var glyph = row[1] === true ? '✓' : (row[1] === false ? '✗' : '·');
+            qc.appendChild(h('li', {class: cls}, h('span', {class: 'dp-qc-glyph'}, glyph), ' ', row[0]));
+        });
+        container.appendChild(qc);
+    }
+
+    function postProcessTables(containerEl) {
+        containerEl.querySelectorAll('table').forEach(function(table) {
+            const headers = Array.from(table.querySelectorAll('th'));
+            const headerTexts = headers.map(function(h) { return h.textContent.trim(); });
+
+            // Merge repeated Week cells (rowspan like Excel)
+            var weekIdx = headerTexts.indexOf('Week');
+            if (weekIdx !== -1) {
+                var rows = Array.from(table.querySelectorAll('tbody tr'));
+                var i = 0;
+                while (i < rows.length) {
+                    var cell = rows[i].querySelectorAll('td')[weekIdx];
+                    if (!cell) { i++; continue; }
+                    var val = cell.textContent.trim();
+                    var span = 1;
+                    for (var j = i + 1; j < rows.length; j++) {
+                        var next = rows[j].querySelectorAll('td')[weekIdx];
+                        if (!next || next.textContent.trim() !== val) break;
+                        span++;
+                    }
+                    if (span > 1) {
+                        cell.rowSpan = span;
+                        cell.style.verticalAlign = 'middle';
+                        for (var k = i + 1; k < i + span; k++) {
+                            var dup = rows[k].querySelectorAll('td')[weekIdx];
+                            if (dup) dup.remove();
+                        }
+                    }
+                    i += span;
+                }
+            }
+
+            const priIdx = headerTexts.indexOf('Priority');
+            if (priIdx !== -1) {
+                table.querySelectorAll('tbody tr').forEach(function(row) {
+                    const cells = row.querySelectorAll('td');
+                    if (cells[priIdx]) {
+                        const level = cells[priIdx].textContent.trim();
+                        cells[priIdx].innerHTML = '<span class="dp-priority-badge dp-priority-' + level.toLowerCase() + '">' + level + '</span>';
+                    }
+                });
+            }
+            const ratioIdx = headerTexts.indexOf('Signal Ratio');
+            const sourceIdx = headerTexts.indexOf('Detection Source');
+            if (ratioIdx !== -1) {
+                var ratios = [];
+                table.querySelectorAll('tbody tr').forEach(function(row) {
+                    var cell = row.querySelectorAll('td')[ratioIdx];
+                    if (cell) { var val = parseFloat(cell.textContent); if (!isNaN(val)) ratios.push(val); }
+                });
+                ratios.sort(function(a, b) { return a - b; });
+                var q1 = ratios.length >= 4 ? ratios[Math.floor(ratios.length * 0.25)] : (ratios[0] || 0);
+                table.querySelectorAll('tbody tr').forEach(function(row) {
+                    var cells = row.querySelectorAll('td');
+                    if (cells[ratioIdx]) {
+                        var val = parseFloat(cells[ratioIdx].textContent);
+                        if (!isNaN(val) && val <= q1) {
+                            cells[ratioIdx].innerHTML = '<span class="dp-signal-low">' + cells[ratioIdx].textContent.trim() + '</span>';
+                            if (sourceIdx !== -1 && cells[sourceIdx]) cells[sourceIdx].classList.add('dp-signal-low-source');
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    function trendArrow(deltaPct, lowerIsGood) {
+        if (deltaPct == null) return '';
+        const isUp = deltaPct > 0;
+        const isGood = lowerIsGood ? !isUp : isUp;
+        const arrow = isUp ? '▲' : '▼';
+        const cls = isGood ? 'dp-trend-good' : 'dp-trend-bad';
+        return ` <span class="dp-trend ${cls}">${arrow} ${Math.abs(deltaPct).toFixed(1)}%</span>`;
+    }
+
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+    }
+
+    /**
+     * Build info-icon HTML. If promptPanelId is given, clicking the icon
+     * toggles that panel instead of just showing a hover tooltip.
+     */
+    function infoIcon(description, promptPanelId) {
+        var cls = promptPanelId ? ' dp-info-clickable' : '';
+        var dataAttr = promptPanelId ? ' data-panel="' + promptPanelId + '"' : '';
+        return ' <span class="dp-info-icon' + cls + '" tabindex="0"' + dataAttr + '>ⓘ' +
+               '<span class="dp-info-tooltip">' + description + '</span></span>';
+    }
+
+    async function load() {
+        try {
+            const resp = await fetch(API);
+            const json = await resp.json();
+            if (!json.success) throw new Error(json.error || 'Unknown error');
+
+            const d = json.data;
+            const md = d.report_markdown || '';
+            _reportMarkdown = md;
+            const k = d.kpis || {};
+
+            // Refresh footer
+            const parts = [];
+            if (d.last_refreshed) parts.push(`Last refreshed: ${d.last_refreshed}`);
+            if (d.next_refresh) parts.push(`Schedule: ${d.next_refresh}`);
+            document.getElementById('dpRefreshFooter').textContent = parts.join('  \u2022  ');
+
+            // KPI cards
+            document.getElementById('kpiTotal').innerHTML = formatNum(k.total_incidents) + trendArrow(k.delta_total_pct, true);
+            document.getElementById('kpiBlocked').innerHTML = (k.blocked_pct != null ? k.blocked_pct + '%' : '-') + trendArrow(k.delta_blocked_pct, false);
+            document.getElementById('kpiBlockedSubtitle').innerHTML = formatNum(k.blocked_count) + ' blocked · ' + formatNum(k.escalated_count) + ' escalated';
+            // Dynamic color: green >= 60%, amber 30-59%, red < 30%
+            var ceCard = document.getElementById('kpiBlockedCard');
+            var bp = k.blocked_pct;
+            ceCard.classList.add(bp >= 60 ? 'dp-kpi-green' : bp >= 30 ? 'dp-kpi-amber' : 'dp-kpi-red');
+            document.getElementById('kpiMTP').innerHTML = formatNum(k.mtp_count) + trendArrow(k.delta_mtp_pct, true);
+            document.getElementById('kpiTopAV').innerHTML = ((k.top_attack_vector_pct || '-') + '%') + trendArrow(k.delta_top_av_pct, true);
+            document.getElementById('kpiTopAVLabel').innerHTML = (k.top_attack_vector || 'Top Attack Vector') +
+                infoIcon('The attack vector generating the most alerts as a share of total incidents. Helps prioritize which attack surfaces need the most attention.');
+
+            // Populate prompt panels if ai_prompt available (shown via info-icon toggle)
+            if (k.ai_prompt) {
+                document.getElementById('dpInsightsPrompt').replaceChildren(h('pre', {}, k.ai_prompt));
+                document.getElementById('dpActionsPrompt').replaceChildren(h('pre', {}, k.ai_prompt));
+                document.getElementById('dpRemediationPrompt').replaceChildren(h('pre', {}, k.ai_prompt));
+            }
+
+            // Render the new control-efficacy structured output when available;
+            // fall back to legacy markdown (for carry-forward KPIs from old runs) or
+            // raw-report slices (when the LLM is offline and there's no prior run).
+            const dpInsightsEl = document.getElementById('dpInsights');
+            const dpInsightsHeader = document.getElementById('dpInsightsHeader');
+            const dpActionsEl = document.getElementById('dpActions');
+            const dpActionsHeader = document.getElementById('dpActionsHeader');
+            const dpRemediationEl = document.getElementById('dpRemediation');
+            const dpRemediationHeader = document.getElementById('dpRemediationHeader');
+
+            if (k.ai_analysis) {
+                renderControlHealth(dpInsightsEl, k.ai_analysis);
+                dpInsightsHeader.replaceChildren(
+                    ...textAndBadge('🔍 Control Health & Failure Modes', 'Control-Efficacy'),
+                    infoIconEl('Executive control-health statement plus named failure modes with supporting incident IDs and confidence. Click to view the model prompt.', 'dpInsightsPrompt')
+                );
+
+                renderFixCandidates(dpActionsEl, k.ai_analysis);
+                dpActionsHeader.replaceChildren(
+                    ...textAndBadge('⚡ Fix Candidates (FPI-ranked)', 'Control-Efficacy'),
+                    infoIconEl('Fixes ranked by Fix Priority Index: FPI = 2R + 2I + 1.5T + 1.5H + 0.5E. Click to view the model prompt.', 'dpActionsPrompt')
+                );
+
+                renderSignalsAndGaps(dpRemediationEl, k.ai_analysis);
+                dpRemediationHeader.replaceChildren(
+                    ...textAndBadge('🛡️ Signals, Data Gaps & Quality Checks', 'Control-Efficacy'),
+                    infoIconEl('Human-compensation signals (process debt), fields the analysis could not compute, and self-validation of the run\'s audit guardrails. Click to view the model prompt.', 'dpRemediationPrompt')
+                );
+            } else if (k.ai_insights_md || k.ai_actions_md || k.ai_remediation_md) {
+                // Carry-forward from an older run — render whatever markdown we have.
+                if (k.ai_insights_md) dpInsightsEl.innerHTML = marked.parse(k.ai_insights_md);
+                if (k.ai_actions_md) dpActionsEl.innerHTML = marked.parse(k.ai_actions_md);
+                if (k.ai_remediation_md) dpRemediationEl.innerHTML = marked.parse(k.ai_remediation_md);
+                postProcessTables(dpInsightsEl);
+                postProcessTables(dpActionsEl);
+                postProcessTables(dpRemediationEl);
+            } else {
+                // LLM offline AND no prior run — show raw-report slices as a safety net.
+                var insightsMd = [
+                    extractSection(md, 'Executive Summary'),
+                    extractSection(md, 'Period Comparison'),
+                    extractSection(md, 'Controls Effectiveness'),
+                    extractSection(md, 'Detection Efficiency Analysis')
+                ].filter(Boolean).join('\n\n---\n\n');
+                dpInsightsEl.innerHTML = '<div class="dp-ai-unavailable">Control-efficacy analysis is unavailable — showing raw report data instead. Re-run control-efficacy analytics when the inference engine is online.</div>' +
+                    '<details class="dp-fallback-details"><summary>View raw data tables</summary><div class="dp-fallback-content">' + marked.parse(insightsMd) + '</div></details>';
+                var actionsMd = [
+                    extractSection(md, 'Remediation Matrix'),
+                    extractSection(md, 'Awareness Campaign Triggers')
+                ].filter(Boolean).join('\n\n---\n\n');
+                dpActionsEl.innerHTML = '<div class="dp-ai-unavailable">Fix candidates are unavailable — showing raw report data instead.</div>' +
+                    '<details class="dp-fallback-details"><summary>View raw data tables</summary><div class="dp-fallback-content">' + marked.parse(actionsMd) + '</div></details>';
+                var remediationMd = extractSection(md, 'Remediation Matrix') || '';
+                dpRemediationEl.innerHTML = '<div class="dp-ai-unavailable">Signals and data gaps are unavailable — showing raw remediation matrix instead.</div>' +
+                    '<details class="dp-fallback-details"><summary>View raw data tables</summary><div class="dp-fallback-content">' + marked.parse(remediationMd) + '</div></details>';
+                postProcessTables(dpInsightsEl);
+                postProcessTables(dpActionsEl);
+                postProcessTables(dpRemediationEl);
+            }
+
+            // Charts
+            const base = `/static/charts/${d.chart_date}/`;
+            document.getElementById('chartDashboard').src = base + d.charts.dashboard;
+            document.getElementById('chartHeatmap').src = base + d.charts.heatmap;
+            document.getElementById('chartRootCause').src = base + d.charts.root_cause;
+            document.getElementById('chartAwareness').src = base + d.charts.awareness;
+            if (d.charts.repeat_offenders) {
+                document.getElementById('chartRepeatOffenders').src = base + d.charts.repeat_offenders;
+            }
+
+            // Interactive Charts (Chart.js)
+            var cd = k.chart_data || {};
+            if (typeof DPCharts !== 'undefined' && cd) {
+                if (cd.dashboard) DPCharts.renderDashboard('chartDashboardCanvas', cd.dashboard);
+                if (cd.heatmap) DPCharts.renderHeatmap('heatmapTable', cd.heatmap);
+                if (cd.root_cause) DPCharts.renderRootCause('chartRootCauseCanvas', cd.root_cause);
+                if (cd.awareness && cd.awareness.weeks && cd.awareness.weeks.length) DPCharts.renderAwareness('chartAwarenessCanvas', cd.awareness);
+                DPCharts.initDrilldowns(cd, k);
+            }
+
+            // Expose section re-renderer for cross-filtering
+            window._dpRenderSections = function (fk) {
+                // KPI cards
+                document.getElementById('kpiTotal').innerHTML = formatNum(fk.total_incidents) + trendArrow(fk.delta_total_pct, true);
+                document.getElementById('kpiBlocked').innerHTML = (fk.blocked_pct != null ? fk.blocked_pct + '%' : '-') + trendArrow(fk.delta_blocked_pct, false);
+                document.getElementById('kpiBlockedSubtitle').innerHTML = formatNum(fk.blocked_count) + ' blocked \u00b7 ' + formatNum(fk.escalated_count) + ' escalated';
+                var cCard = document.getElementById('kpiBlockedCard');
+                cCard.classList.remove('dp-kpi-green', 'dp-kpi-amber', 'dp-kpi-red');
+                var fbp = fk.blocked_pct;
+                cCard.classList.add(fbp >= 60 ? 'dp-kpi-green' : fbp >= 30 ? 'dp-kpi-amber' : 'dp-kpi-red');
+                document.getElementById('kpiMTP').innerHTML = formatNum(fk.mtp_count) + trendArrow(fk.delta_mtp_pct, true);
+                document.getElementById('kpiTopAV').innerHTML = ((fk.top_attack_vector_pct || '-') + '%') + trendArrow(fk.delta_top_av_pct, true);
+                document.getElementById('kpiTopAVLabel').innerHTML = (fk.top_attack_vector || 'Top Attack Vector') +
+                    infoIcon('The attack vector generating the most alerts as a share of total incidents.');
+
+                // Cost Analysis
+                var fc = fk.cost || {};
+                if (fc.total_human_cost != null) {
+                    document.getElementById('costTotal').textContent = '$' + Math.round(fc.total_human_cost).toLocaleString();
+                    document.getElementById('costPerIncident').textContent = '$' + Math.round(fc.cost_per_incident).toLocaleString();
+                    document.getElementById('costAvgHours').textContent = (fc.avg_analyst_hours || 0).toFixed(1) + ' hrs';
+                    document.getElementById('costEscalated').textContent = formatNum(fc.escalated_with_resolution);
+                    document.getElementById('costFootnote').textContent = 'Based on $' + fc.analyst_hourly_cost + '/hr \u00d7 ~' + (fc.avg_analyst_hours || 0).toFixed(1) + ' analyst hrs/incident (median ' + (fc.median_resolution_days || 0).toFixed(1) + ' day resolution)';
+                }
+
+                // Attack Vector Grid
+                var fvecs = fk.attack_vectors || [];
+                var fAvGrid = document.getElementById('dpAvGrid');
+                fAvGrid.innerHTML = '';
+                fvecs.forEach(function(v) {
+                    var icon = avIcons[v.vector] || '\ud83d\udee1\ufe0f';
+                    var bClass = v.blocked_pct >= 70 ? 'dp-av-blocked-high' : v.blocked_pct >= 40 ? 'dp-av-blocked-med' : 'dp-av-blocked-low';
+                    var card = document.createElement('div');
+                    card.className = 'dp-av-card';
+                    card.style.cursor = 'pointer';
+                    card.innerHTML = '<div class="dp-av-icon">' + icon + '</div>' +
+                        '<div class="dp-av-name">' + v.vector + '</div>' +
+                        '<div class="dp-av-count">' + v.count.toLocaleString() + ' <span class="dp-av-pct">(' + v.pct.toFixed(1) + '%)</span></div>' +
+                        '<div class="dp-av-blocked ' + bClass + '">' + v.blocked_pct.toFixed(0) + '% blocked</div>' +
+                        (v.mtp > 0 ? '<div class="dp-av-mtp">' + v.mtp + ' MTP</div>' : '');
+                    card.addEventListener('click', function() { if (typeof DPCharts !== 'undefined') DPCharts.setFilter('vector', v.vector); });
+                    fAvGrid.appendChild(card);
+                });
+
+                // Identity & Access
+                var fid = fk.identity || {};
+                if (fid.total != null) {
+                    document.getElementById('dpIdentityHeader').innerHTML =
+                        '<span class="dp-id-total">' + formatNum(fid.total) + '</span> identity incidents ' +
+                        '<span class="dp-id-pct">(' + fid.pct_of_total.toFixed(1) + '% of all)</span>';
+                    var fbars = document.getElementById('dpIdentityBars');
+                    var fSubTypes = [
+                        {label:'Leaked Credentials', value:fid.leaked_credentials, color:'#b71c1c'},
+                        {label:'Credential Compromise', value:fid.credential_compromise, color:'#e65100'},
+                        {label:'Brute Force', value:fid.brute_force, color:'#f57f17'},
+                        {label:'Access Violations', value:fid.access_violations, color:'#1565c0'}
+                    ];
+                    var fMaxVal = Math.max.apply(null, fSubTypes.map(function(s){return s.value;})) || 1;
+                    fbars.innerHTML = '';
+                    fSubTypes.forEach(function(s) {
+                        var pct = s.value / fMaxVal * 100;
+                        fbars.innerHTML += '<div class="dp-id-bar-row">' +
+                            '<span class="dp-id-bar-label">' + s.label + '</span>' +
+                            '<div class="dp-id-bar-track"><div class="dp-id-bar-fill" style="width:' + pct + '%;background:' + s.color + '"></div></div>' +
+                            '<span class="dp-id-bar-value">' + s.value.toLocaleString() + '</span></div>';
+                    });
+                    var fTrendIcon = fid.weekly_trend === 'increasing' ? '\u2191' : fid.weekly_trend === 'decreasing' ? '\u2193' : '\u2192';
+                    var fTrendClass = fid.weekly_trend === 'increasing' ? 'dp-trend-bad' : fid.weekly_trend === 'decreasing' ? 'dp-trend-good' : '';
+                    document.getElementById('dpIdentityFooter').innerHTML =
+                        'Trend: <span class="dp-trend ' + fTrendClass + '">' + fTrendIcon + ' ' + fid.weekly_trend + '</span>' +
+                        ' \u00b7 Identity controls blocked: <strong>' + fid.blocked_pct.toFixed(0) + '%</strong>';
+                }
+
+                // Repeat Offenders
+                var fro = fk.repeat_offenders || {};
+                if (fro.users || fro.hosts) {
+                    var fCallout = document.getElementById('dpRoCallout');
+                    var froParts = [];
+                    if (fro.users && fro.users.pct_for_80 > 0) froParts.push('Top <strong>' + fro.users.pct_for_80.toFixed(0) + '%</strong> of users generate 80% of incidents');
+                    if (fro.hosts && fro.hosts.pct_for_80 > 0) froParts.push('Top <strong>' + fro.hosts.pct_for_80.toFixed(0) + '%</strong> of hosts generate 80% of incidents');
+                    fCallout.innerHTML = froParts.join(' &nbsp;\u2022&nbsp; ');
+
+                    function fillFroTable(tableId, data) {
+                        var tbody = document.querySelector('#' + tableId + ' tbody');
+                        tbody.innerHTML = '';
+                        (data.top10 || []).forEach(function(item, i) {
+                            var tr = document.createElement('tr');
+                            tr.innerHTML = '<td>' + (i+1) + '</td><td>' + item.entity + '</td><td>' + item.count.toLocaleString() + '</td><td>' + (item.types.join(', ') || '-') + '</td>';
+                            tbody.appendChild(tr);
+                        });
+                    }
+                    fillFroTable('dpRoUsersTable', fro.users || {});
+                    fillFroTable('dpRoHostsTable', fro.hosts || {});
+                }
+            };
+
+            // Cost Analysis
+            var cost = k.cost || {};
+            if (cost.total_human_cost != null) {
+                document.getElementById('costTotal').textContent = '$' + Math.round(cost.total_human_cost).toLocaleString();
+                document.getElementById('costPerIncident').textContent = '$' + Math.round(cost.cost_per_incident).toLocaleString();
+                document.getElementById('costAvgHours').textContent = (cost.avg_analyst_hours || 0).toFixed(1) + ' hrs';
+                document.getElementById('costEscalated').textContent = formatNum(cost.escalated_with_resolution);
+                document.getElementById('costFootnote').textContent = 'Based on $' + cost.analyst_hourly_cost + '/hr \u00d7 ~' + (cost.avg_analyst_hours || 0).toFixed(1) + ' analyst hrs/incident (median ' + (cost.median_resolution_days || 0).toFixed(1) + ' day resolution)';
+            }
+
+            // Attack Vector Grid
+            var avGrid = document.getElementById('dpAvGrid');
+            var avIcons = {Email:'\u2709\ufe0f',Network:'\ud83c\udf10',Endpoint:'\ud83d\udda5\ufe0f','Cloud / SaaS':'\u2601\ufe0f',Identity:'\ud83d\udd10',Data:'\ud83d\udcc1','Threat Intel':'\ud83d\udce1','Third Party':'\ud83e\udd1d',Physical:'\ud83c\udfe2',Other:'\u2699\ufe0f'};
+            var vectors = k.attack_vectors || [];
+            avGrid.innerHTML = '';
+            vectors.forEach(function(v) {
+                var icon = avIcons[v.vector] || '\ud83d\udee1\ufe0f';
+                var bClass = v.blocked_pct >= 70 ? 'dp-av-blocked-high' : v.blocked_pct >= 40 ? 'dp-av-blocked-med' : 'dp-av-blocked-low';
+                var card = document.createElement('div');
+                card.className = 'dp-av-card';
+                card.innerHTML = '<div class="dp-av-icon">' + icon + '</div>' +
+                    '<div class="dp-av-name">' + v.vector + '</div>' +
+                    '<div class="dp-av-count">' + v.count.toLocaleString() + ' <span class="dp-av-pct">(' + v.pct.toFixed(1) + '%)</span></div>' +
+                    '<div class="dp-av-blocked ' + bClass + '">' + v.blocked_pct.toFixed(0) + '% blocked</div>' +
+                    (v.mtp > 0 ? '<div class="dp-av-mtp">' + v.mtp + ' MTP</div>' : '');
+                avGrid.appendChild(card);
+            });
+
+            // Identity & Access
+            var id = k.identity || {};
+            if (id.total != null) {
+                document.getElementById('dpIdentityHeader').innerHTML =
+                    '<span class="dp-id-total">' + formatNum(id.total) + '</span> identity incidents ' +
+                    '<span class="dp-id-pct">(' + id.pct_of_total.toFixed(1) + '% of all)</span>';
+
+                var bars = document.getElementById('dpIdentityBars');
+                var subTypes = [
+                    {label:'Leaked Credentials', value:id.leaked_credentials, color:'#b71c1c'},
+                    {label:'Credential Compromise', value:id.credential_compromise, color:'#e65100'},
+                    {label:'Brute Force', value:id.brute_force, color:'#f57f17'},
+                    {label:'Access Violations', value:id.access_violations, color:'#1565c0'}
+                ];
+                var maxVal = Math.max.apply(null, subTypes.map(function(s){return s.value;})) || 1;
+                bars.innerHTML = '';
+                subTypes.forEach(function(s) {
+                    var pct = s.value / maxVal * 100;
+                    bars.innerHTML += '<div class="dp-id-bar-row">' +
+                        '<span class="dp-id-bar-label">' + s.label + '</span>' +
+                        '<div class="dp-id-bar-track"><div class="dp-id-bar-fill" style="width:' + pct + '%;background:' + s.color + '"></div></div>' +
+                        '<span class="dp-id-bar-value">' + s.value.toLocaleString() + '</span></div>';
+                });
+
+                var trendIcon = id.weekly_trend === 'increasing' ? '\u2191' : id.weekly_trend === 'decreasing' ? '\u2193' : '\u2192';
+                var trendClass = id.weekly_trend === 'increasing' ? 'dp-trend-bad' : id.weekly_trend === 'decreasing' ? 'dp-trend-good' : '';
+                document.getElementById('dpIdentityFooter').innerHTML =
+                    'Trend: <span class="dp-trend ' + trendClass + '">' + trendIcon + ' ' + id.weekly_trend + '</span>' +
+                    ' \u00b7 Identity controls blocked: <strong>' + id.blocked_pct.toFixed(0) + '%</strong>';
+            }
+
+            // Repeat Offenders
+            var ro = k.repeat_offenders || {};
+            if (ro.users || ro.hosts) {
+                var callout = document.getElementById('dpRoCallout');
+                var roParts = [];
+                if (ro.users && ro.users.pct_for_80 > 0) {
+                    roParts.push('Top <strong>' + ro.users.pct_for_80.toFixed(0) + '%</strong> of users generate 80% of incidents');
+                }
+                if (ro.hosts && ro.hosts.pct_for_80 > 0) {
+                    roParts.push('Top <strong>' + ro.hosts.pct_for_80.toFixed(0) + '%</strong> of hosts generate 80% of incidents');
+                }
+                callout.innerHTML = roParts.join(' &nbsp;\u2022&nbsp; ');
+
+                function fillRoTable(tableId, data) {
+                    var tbody = document.querySelector('#' + tableId + ' tbody');
+                    tbody.innerHTML = '';
+                    (data.top10 || []).forEach(function(item, i) {
+                        var tr = document.createElement('tr');
+                        tr.innerHTML = '<td>' + (i+1) + '</td><td>' + item.entity + '</td>' +
+                            '<td>' + item.count.toLocaleString() + '</td>' +
+                            '<td>' + (item.types.join(', ') || '-') + '</td>';
+                        tbody.appendChild(tr);
+                    });
+                }
+                fillRoTable('dpRoUsersTable', ro.users || {});
+                fillRoTable('dpRoHostsTable', ro.hosts || {});
+            }
+
+            // Full report
+            const dpReportEl = document.getElementById('dpReportContent');
+            dpReportEl.innerHTML = marked.parse(md);
+            postProcessTables(dpReportEl);
+
+            document.getElementById('dpLoading').style.display = 'none';
+            document.getElementById('dpContent').style.display = 'block';
+
+            // Initialize and render story mode
+            dpInitStepper();
+            if (dpStoryOn) dpRenderStorySlides(k);
+
+            // Wire up clickable info icons to toggle their prompt panels
+            document.querySelectorAll('.dp-info-clickable').forEach(function(icon) {
+                icon.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    var panelId = this.getAttribute('data-panel');
+                    if (!panelId) return;
+                    var panel = document.getElementById(panelId);
+                    if (!panel) return;
+                    var isVisible = panel.style.display !== 'none';
+                    panel.style.display = isVisible ? 'none' : '';
+                    this.classList.toggle('active', !isVisible);
+                });
+            });
+        } catch (err) {
+            document.getElementById('dpLoading').style.display = 'none';
+            var el = document.getElementById('dpError');
+            el.textContent = 'Failed to load control-efficacy analytics data: ' + err.message;
+            el.style.display = 'block';
+        }
+    }
+
+    // PDF Export
+    document.getElementById('dpExportPdf').addEventListener('click', function() {
+        var body = document.getElementById('dpReportBody');
+        var toggleBtn = document.getElementById('dpToggleReport');
+        var wasCollapsed = body.classList.contains('dp-collapsed');
+        if (wasCollapsed) { body.classList.remove('dp-collapsed'); toggleBtn.textContent = 'Collapse'; }
+        setTimeout(function() {
+            window.print();
+            if (wasCollapsed) { body.classList.add('dp-collapsed'); toggleBtn.textContent = 'Expand'; }
+        }, 300);
+    });
+
+    // Toggle report
+    document.getElementById('dpToggleReport').addEventListener('click', function() {
+        var body = document.getElementById('dpReportBody');
+        var isCollapsed = body.classList.toggle('dp-collapsed');
+        this.textContent = isCollapsed ? 'Expand' : 'Collapse';
+    });
+
+    // ===== Stepper Story Mode =====
+    var dpStoryStep = 0;
+    var dpStoryCollapsed = localStorage.getItem('dp-story-collapsed') === 'true';
+    var dpStoryOn = localStorage.getItem('dp-story-enabled') === 'true';
+    var dpStoryData = null;
+    var dpStoryCharts = {};  // Chart.js instances for cleanup
+    var dpConfettiFired = false;
+    var dpTypewriterCancel = null;
+
+    function dpSetToggleBtn(btn, on) {
+        if (!btn) return;
+        btn.classList.toggle('active', on);
+        btn.title = on ? 'Hide Data Story' : 'Show Data Story narrative mode';
+    }
+
+    function dpToggleStory() {
+        var sec = document.getElementById('dpStorySection');
+        var btn = document.getElementById('dpStoryToggleBtn');
+        dpStoryOn = !dpStoryOn;
+        localStorage.setItem('dp-story-enabled', dpStoryOn);
+        if (sec) sec.style.display = dpStoryOn ? '' : 'none';
+        dpSetToggleBtn(btn, dpStoryOn);
+        if (dpStoryOn && dpStoryData) dpRenderStorySlides(dpStoryData);
+    }
+
+    function dpInitStepper() {
+        var sec = document.getElementById('dpStorySection');
+        var hdr = document.getElementById('dpStoryHeader');
+        var toggleBtn = document.getElementById('dpStoryToggleBtn');
+
+        if (sec) sec.style.display = dpStoryOn ? '' : 'none';
+        dpSetToggleBtn(toggleBtn, dpStoryOn);
+        if (toggleBtn) toggleBtn.addEventListener('click', dpToggleStory);
+
+        if (!sec || !hdr) return;
+
+        if (dpStoryCollapsed) sec.classList.add('collapsed');
+
+        hdr.addEventListener('click', function () {
+            dpStoryCollapsed = !dpStoryCollapsed;
+            sec.classList.toggle('collapsed', dpStoryCollapsed);
+            localStorage.setItem('dp-story-collapsed', dpStoryCollapsed);
+            if (!dpStoryCollapsed && dpStoryData) {
+                setTimeout(function () { dpRenderStoryStep(dpStoryStep, dpStoryData); }, 50);
+            }
+        });
+
+        document.getElementById('dpStoryBack').addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (dpStoryStep > 0) dpGoToStep(dpStoryStep - 1);
+        });
+        document.getElementById('dpStoryNext').addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (dpStoryStep < 4) dpGoToStep(dpStoryStep + 1);
+        });
+
+        document.querySelectorAll('#dpStoryDots .story-dot').forEach(function (dot) {
+            dot.addEventListener('click', function (e) {
+                e.stopPropagation();
+                dpGoToStep(parseInt(dot.dataset.dot));
+            });
+        });
+
+        sec.addEventListener('mouseenter', function () { sec.dataset.hover = 'true'; });
+        sec.addEventListener('mouseleave', function () { sec.dataset.hover = 'false'; });
+        document.addEventListener('keydown', function (e) {
+            if (sec.dataset.hover !== 'true' || dpStoryCollapsed) return;
+            if (e.key === 'ArrowRight' && dpStoryStep < 4) { e.preventDefault(); dpGoToStep(dpStoryStep + 1); }
+            else if (e.key === 'ArrowLeft' && dpStoryStep > 0) { e.preventDefault(); dpGoToStep(dpStoryStep - 1); }
+            else if ((e.key === 's' || e.key === 'S') && window.StoryEffects) {
+                e.preventDefault();
+                if (window.StoryEffects.isSpotlightActive()) window.StoryEffects.spotlightOff();
+                else window.StoryEffects.spotlightOn(sec);
+            }
+            else if ((e.key === 'p' || e.key === 'P') && window.StoryEffects) {
+                e.preventDefault();
+                var activeSlide = sec.querySelector('.story-slide.active');
+                window.StoryEffects.exportSlide(activeSlide, 'defense-pulse-step-' + (dpStoryStep + 1) + '.png');
+            }
+            else if (e.key === '?' && window.StoryEffects) { e.preventDefault(); window.StoryEffects.showShortcuts(); }
+            else if ((e.key === 'n' || e.key === 'N') && window.StoryAudio) { e.preventDefault(); window.StoryAudio.toggleNarration(); }
+            else if ((e.key === 'a' || e.key === 'A') && window.StoryAudio) { e.preventDefault(); window.StoryAudio.toggleAudio(); }
+        });
+
+        // Global Escape for overlays
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && window.StoryEffects) {
+                if (window.StoryEffects.isShortcutsVisible()) window.StoryEffects.hideShortcuts();
+                else if (window.StoryEffects.isSpotlightActive()) window.StoryEffects.spotlightOff();
+            }
+        });
+
+        if (window.StoryAudio) {
+            window.StoryAudio.wireToggleButton('dpAudioToggle');
+            window.StoryAudio.wireNarrationButton('dpNarrationToggle');
+        }
+
+        // Wire effect buttons
+        var spotBtn = document.getElementById('dpSpotlightToggle');
+        if (spotBtn && window.StoryEffects) {
+            spotBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                if (window.StoryEffects.isSpotlightActive()) window.StoryEffects.spotlightOff();
+                else window.StoryEffects.spotlightOn(sec);
+            });
+        }
+        var expBtn = document.getElementById('dpExportSlide');
+        if (expBtn && window.StoryEffects) {
+            expBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var activeSlide = sec.querySelector('.story-slide.active');
+                window.StoryEffects.exportSlide(activeSlide, 'defense-pulse-step-' + (dpStoryStep + 1) + '.png');
+            });
+        }
+        var scBtn = document.getElementById('dpShortcutsBtn');
+        if (scBtn && window.StoryEffects) {
+            scBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                window.StoryEffects.showShortcuts();
+            });
+        }
+    }
+
+    function dpGoToStep(n) {
+        if (n < 0 || n > 4) return;
+
+        // Cancel in-progress typewriter
+        if (dpTypewriterCancel) { dpTypewriterCancel(); dpTypewriterCancel = null; }
+
+        var slides = document.querySelectorAll('#dpStorySlides .story-slide');
+        var dots = document.querySelectorAll('#dpStoryDots .story-dot');
+        slides[dpStoryStep].classList.remove('active');
+        dots[dpStoryStep].classList.remove('active');
+        dpStoryStep = n;
+        slides[n].classList.add('active');
+        dots[n].classList.add('active');
+        document.getElementById('dpProgressFill').style.width = ((n + 1) / 5 * 100) + '%';
+        document.getElementById('dpStepLabel').textContent = 'Step ' + (n + 1) + ' of 5';
+        document.getElementById('dpStoryBack').disabled = (n === 0);
+        document.getElementById('dpStoryNext').disabled = (n === 4);
+
+        if (window.StoryAudio) {
+            if (n === 4) window.StoryAudio.playComplete();
+            else window.StoryAudio.playStep(n, 5);
+        }
+
+        // Confetti on final step (once per data load)
+        if (n === 4 && !dpConfettiFired && window.StoryEffects) {
+            dpConfettiFired = true;
+            window.StoryEffects.confetti();
+        }
+
+        // Replay entrance animation
+        slides[n].classList.remove('active');
+        void slides[n].offsetWidth;
+        slides[n].classList.add('active');
+
+        if (dpStoryData) setTimeout(function () { dpRenderStoryStep(n, dpStoryData); }, 50);
+
+        // Typewriter + narrate step description
+        setTimeout(function () {
+            var descIds = ['dpDescLandscape', 'dpDescShield', 'dpDescThreats', 'dpDescPatterns', 'dpDescCost'];
+            var el = document.getElementById(descIds[n]);
+            if (el && window.StoryEffects) {
+                dpTypewriterCancel = window.StoryEffects.typewriter(el, el.textContent, 30);
+            }
+            if (el && window.StoryAudio) window.StoryAudio.speak(el.textContent);
+        }, 200);
+    }
+
+    function dpRenderStorySlides(kpis) {
+        dpStoryData = kpis;
+        var cd = kpis.chart_data || {};
+
+        // Reset per-session effect state on data change
+        dpConfettiFired = false;
+        if (dpTypewriterCancel) { dpTypewriterCancel(); dpTypewriterCancel = null; }
+        if (window.StoryEffects) window.StoryEffects.resetTypewriterVisited();
+
+        // Step 1 text
+        var sources = (cd.dashboard && cd.dashboard.sources) ? cd.dashboard.sources.length : 0;
+        document.getElementById('dpDescLandscape').textContent =
+            formatNum(kpis.total_incidents) + ' incidents processed across ' + sources + ' detection sources over 90 days.';
+
+        // Step 2 text
+        document.getElementById('dpDescShield').textContent =
+            (kpis.blocked_pct || 0) + '% of threats blocked automatically. ' +
+            formatNum(kpis.mtp_count) + ' confirmed malicious true positives required human review.';
+
+        // Step 3 text
+        var cats = (kpis.chart_data && kpis.chart_data.category_breakdown) ? kpis.chart_data.category_breakdown.length : 0;
+        document.getElementById('dpDescThreats').textContent =
+            'Incidents span ' + cats + ' categories. ' + (kpis.top_category || 'Unknown') +
+            ' leads at ' + (kpis.top_category_pct || 0).toFixed(1) + '%.';
+
+        // Step 4 text — with sparkline of human error weekly data
+        var weeks = (cd.awareness && cd.awareness.weeks) ? cd.awareness.weeks.length : 0;
+        var patternsEl = document.getElementById('dpDescPatterns');
+        var patternsText = 'Human error and social engineering trends across ' + weeks + ' weeks. ';
+        if (window.StoryEffects && cd.awareness && cd.awareness.human_error && cd.awareness.human_error.length >= 2) {
+            patternsEl.innerHTML = patternsText + window.StoryEffects.sparklineSVG(cd.awareness.human_error, {color: '#f59e0b'});
+        } else {
+            patternsEl.textContent = patternsText;
+        }
+
+        // Step 5 text
+        var cost = kpis.cost || {};
+        document.getElementById('dpDescCost').textContent =
+            'Estimated total human cost: $' + Math.round(cost.total_human_cost || 0).toLocaleString() +
+            '. Average ' + (cost.avg_analyst_hours || 0).toFixed(1) + ' analyst hours per escalated incident.';
+
+        dpRenderShieldKpis(kpis);
+        dpRenderCostKpis(kpis);
+        dpRenderStoryStep(dpStoryStep, kpis);
+    }
+
+    function dpAddAnnotation(canvasId, text) {
+        var canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+        var parent = canvas.parentElement;
+        parent.querySelectorAll('.story-annotation').forEach(function (a) { a.remove(); });
+        var ann = document.createElement('div');
+        ann.className = 'story-annotation';
+        ann.textContent = text;
+        parent.style.position = 'relative';
+        ann.style.top = '8px';
+        ann.style.right = '12px';
+        parent.appendChild(ann);
+    }
+
+    function dpAnimateKpis(container) {
+        if (!window.StoryAudio) return;
+        container.querySelectorAll('[data-countup]').forEach(function (el) {
+            window.StoryAudio.countUp(el, el.dataset.countup, 1200);
+        });
+    }
+
+    function dpRenderStoryStep(n, kpis) {
+        if (!kpis) return;
+        var cd = kpis.chart_data || {};
+        var isDark = document.body.classList.contains('dark-mode');
+        var textColor = isDark ? '#e2e8f0' : '#333';
+        var gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
+
+        switch (n) {
+            case 0: dpRenderLandscapeChart(cd.dashboard, textColor, gridColor); break;
+            case 2: dpRenderThreatsChart(cd.category_breakdown, textColor, gridColor); break;
+            case 3: dpRenderPatternsChart(cd.awareness, textColor, gridColor); break;
+            // Steps 1 and 4 are KPI cards, no canvas chart
+        }
+    }
+
+    function dpDestroyChart(key) {
+        if (dpStoryCharts[key]) { dpStoryCharts[key].destroy(); dpStoryCharts[key] = null; }
+    }
+
+    function dpRenderLandscapeChart(data, textColor, gridColor) {
+        if (!data || !data.sources) return;
+        dpDestroyChart('landscape');
+        var ctx = document.getElementById('dpStoryCanvas0');
+        if (!ctx) return;
+        dpStoryCharts['landscape'] = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: data.sources,
+                datasets: [
+                    { label: 'Blocked', data: data.blocked, backgroundColor: '#2e7d32' },
+                    { label: 'Escalated', data: data.escalated, backgroundColor: '#b71c1c' }
+                ]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { labels: { color: textColor } } },
+                scales: {
+                    x: { stacked: true, grid: { color: gridColor }, ticks: { color: textColor } },
+                    y: { stacked: true, grid: { display: false }, ticks: { color: textColor, font: { size: 11 } } }
+                }
+            }
+        });
+        // Annotation: top source by total volume
+        if (data.sources && data.sources.length) {
+            var totals = data.sources.map(function (_, i) { return (data.blocked[i] || 0) + (data.escalated[i] || 0); });
+            var maxIdx = totals.indexOf(Math.max.apply(null, totals));
+            dpAddAnnotation('dpStoryCanvas0', 'Top: ' + data.sources[maxIdx] + ' (' + totals[maxIdx].toLocaleString() + ')');
+        }
+    }
+
+    function dpRenderThreatsChart(breakdown, textColor, gridColor) {
+        if (!breakdown || !breakdown.length) return;
+        dpDestroyChart('threats');
+        var ctx = document.getElementById('dpStoryCanvas2');
+        if (!ctx) return;
+        var sorted = breakdown.slice().sort(function (a, b) { return b.count - a.count; }).slice(0, 8);
+        var palette = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f'];
+        dpStoryCharts['threats'] = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: sorted.map(function (c) { return c.category; }),
+                datasets: [{
+                    label: 'Incidents',
+                    data: sorted.map(function (c) { return c.count; }),
+                    backgroundColor: palette.slice(0, sorted.length)
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { color: gridColor }, ticks: { color: textColor } },
+                    y: { grid: { display: false }, ticks: { color: textColor, font: { size: 11 } } }
+                }
+            }
+        });
+        // Annotation: top category
+        if (sorted.length) {
+            dpAddAnnotation('dpStoryCanvas2', '#1: ' + sorted[0].category + ' (' + sorted[0].count + ')');
+        }
+    }
+
+    function dpRenderPatternsChart(awareness, textColor, gridColor) {
+        if (!awareness || !awareness.weeks || !awareness.weeks.length) return;
+        dpDestroyChart('patterns');
+        var ctx = document.getElementById('dpStoryCanvas3');
+        if (!ctx) return;
+        dpStoryCharts['patterns'] = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: awareness.weeks,
+                datasets: [
+                    { label: 'Human Error', data: awareness.human_error, borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.3 },
+                    { label: 'Social Engineering', data: awareness.social_engineering, borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.1)', fill: true, tension: 0.3 }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { labels: { color: textColor } } },
+                scales: {
+                    x: { grid: { color: gridColor }, ticks: { color: textColor, maxRotation: 45 } },
+                    y: { grid: { color: gridColor }, ticks: { color: textColor }, beginAtZero: true }
+                }
+            }
+        });
+        // Annotation: latest week trend
+        if (awareness.weeks.length > 1) {
+            var he = awareness.human_error || [];
+            var lastHE = he[he.length - 1] || 0;
+            var prevHE = he[he.length - 2] || 0;
+            var trend = lastHE > prevHE ? '↑' : lastHE < prevHE ? '↓' : '→';
+            dpAddAnnotation('dpStoryCanvas3', 'Latest: ' + lastHE + ' human errors ' + trend);
+        }
+    }
+
+    function dpRenderShieldKpis(kpis) {
+        var el = document.getElementById('dpStoryKpiShield');
+        if (!el) return;
+        var bp = (kpis.blocked_pct || 0) + '%';
+        var mtp = formatNum(kpis.mtp_count);
+        var ds = formatNum(kpis.detection_sources);
+
+        // Trend badges from API delta fields
+        var bpBadge = '', mtpBadge = '';
+        if (window.StoryEffects) {
+            if (kpis.delta_blocked_pct != null) bpBadge = window.StoryEffects.trendBadge(kpis.delta_blocked_pct);
+            if (kpis.delta_mtp_pct != null) mtpBadge = window.StoryEffects.trendBadge(kpis.delta_mtp_pct, true);
+        }
+
+        el.innerHTML =
+            '<div class="story-kpi-card"><div class="story-kpi-icon">🛡️</div><div class="story-kpi-value" data-countup="' + bp + '">' + bp + ' ' + bpBadge + '</div><div class="story-kpi-label">Control Effectiveness</div></div>' +
+            '<div class="story-kpi-card"><div class="story-kpi-icon">🎯</div><div class="story-kpi-value" data-countup="' + mtp + '">' + mtp + ' ' + mtpBadge + '</div><div class="story-kpi-label">True Positives (MTP)</div></div>' +
+            '<div class="story-kpi-card"><div class="story-kpi-icon">📡</div><div class="story-kpi-value" data-countup="' + ds + '">' + ds + '</div><div class="story-kpi-label">Detection Sources</div></div>';
+        dpAnimateKpis(el);
+    }
+
+    function dpRenderCostKpis(kpis) {
+        var el = document.getElementById('dpStoryKpiCost');
+        if (!el) return;
+        var cost = kpis.cost || {};
+        var thc = '$' + Math.round(cost.total_human_cost || 0).toLocaleString();
+        var cpi = '$' + Math.round(cost.cost_per_incident || 0).toLocaleString();
+        var aah = (cost.avg_analyst_hours || 0).toFixed(1) + 'h';
+        el.innerHTML =
+            '<div class="story-kpi-card"><div class="story-kpi-icon">💰</div><div class="story-kpi-value" data-countup="' + thc + '">' + thc + '</div><div class="story-kpi-label">Total Human Cost</div></div>' +
+            '<div class="story-kpi-card"><div class="story-kpi-icon">📋</div><div class="story-kpi-value" data-countup="' + cpi + '">' + cpi + '</div><div class="story-kpi-label">Per Escalated Incident</div></div>' +
+            '<div class="story-kpi-card"><div class="story-kpi-icon">⏱️</div><div class="story-kpi-value" data-countup="' + aah + '">' + aah + '</div><div class="story-kpi-label">Avg Analyst Hours</div></div>';
+        dpAnimateKpis(el);
+    }
+    // End Story Mode
+
+    load();
+    if (typeof initTheme === 'function') initTheme();
+
+    // ── Chat Widget ──────────────────────────────────────────────────────
+    initChatWidget({
+        title: 'Ask about this report',
+        greeting: 'Hi! Ask me anything about the control-efficacy analytics report on this page.',
+        loadingMessages: [
+            'Reviewing report findings\u2026',
+            'Analyzing trend data\u2026',
+            'Checking control effectiveness\u2026',
+            'Identifying top offenders\u2026',
+            'Summarizing category spikes\u2026'
+        ],
+        chips: [
+            {label: 'Key findings', q: 'What are the key findings?'},
+            {label: 'Biggest spikes', q: 'Which categories had the biggest spikes?'},
+            {label: 'Control effectiveness', q: "What's the control effectiveness rate?"},
+            {label: 'Repeat offenders', q: 'Who are the top repeat offenders?'}
+        ],
+        getContext: function() { return _reportMarkdown; }
+    });
+
+})();
+</script>
+{% endblock %}

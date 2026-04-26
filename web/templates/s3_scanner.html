@@ -1,0 +1,183 @@
+{% extends 'base_layout.html' %}
+
+{% block page_title_plain %}S3 Public Bucket Scanner{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/s3_scanner.css') }}">
+{% endblock %}
+
+{% block body_classes %}s3-scanner-page{% endblock %}
+
+{% set page_title_text = 'S3 Public Bucket Scanner' %}
+{% set page_title_left_icon = '🪣' %}
+{% set page_title_right_icon = '🔓' %}
+
+{% block content %}
+<div class="s3-container">
+
+    <!-- ─── Hero banner ─────────────────────────────────────────── -->
+    <div class="s3-hero">
+        <div class="s3-hero-content">
+            <div class="s3-hero-icon">🔍</div>
+            <div>
+                <h2>S3 Public Bucket Scanner</h2>
+                <p>Detect publicly accessible S3 buckets, enumerate exposed objects, and scan for sensitive data.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── Target management ───────────────────────────────────── -->
+    <div class="s3-card s3-targets-card">
+        <div class="s3-card-header">
+            <h3><span class="s3-icon">🎯</span> Scan Targets</h3>
+            <div class="s3-targets-actions">
+                <label class="s3-select-all-label">
+                    <input type="checkbox" id="s3SelectAll">
+                    <span>Select All</span>
+                </label>
+                <button id="s3AddTargetBtn" class="s3-btn s3-btn-outline" title="Add new target">+ Add Target</button>
+            </div>
+        </div>
+        <div class="s3-card-body">
+            <div id="s3TargetsList" class="s3-targets-list">
+                <!-- Populated by JS -->
+            </div>
+            <div id="s3NoTargets" class="s3-empty-state" style="display:none;">
+                <span class="s3-empty-icon">📭</span>
+                <p>No scan targets configured. Add an S3 bucket target group to get started.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── Add target modal ────────────────────────────────────── -->
+    <div id="s3AddModal" class="s3-modal-backdrop" style="display:none;">
+        <div class="s3-modal">
+            <div class="s3-modal-header">
+                <h3>Add Scan Target</h3>
+                <button class="s3-modal-close" id="s3ModalClose">&times;</button>
+            </div>
+            <div class="s3-modal-body">
+                <div class="s3-form-group">
+                    <label for="s3NewKey">Target Key <span class="s3-hint">(short identifier, e.g. "prod-data")</span></label>
+                    <input type="text" id="s3NewKey" class="s3-input" placeholder="e.g. prod-data, marketing, logs">
+                </div>
+                <div class="s3-form-group">
+                    <label for="s3NewLabel">Display Name</label>
+                    <input type="text" id="s3NewLabel" class="s3-input" placeholder="e.g. Production Data Buckets">
+                </div>
+                <div class="s3-form-group">
+                    <label for="s3NewBuckets">Bucket Names <span class="s3-hint">(one per line)</span></label>
+                    <textarea id="s3NewBuckets" class="s3-input s3-textarea" rows="4" wrap="off" placeholder="my-company-public-assets&#10;my-company-backup-2024&#10;my-company-uploads"></textarea>
+                </div>
+                <div class="s3-form-group">
+                    <label for="s3NewMaxFiles">Max Sample Files <span class="s3-hint">(per bucket)</span></label>
+                    <input type="number" id="s3NewMaxFiles" class="s3-input" value="5" min="1" max="100" placeholder="5">
+                </div>
+            </div>
+            <div class="s3-modal-footer">
+                <button id="s3ModalCancel" class="s3-btn s3-btn-ghost">Cancel</button>
+                <button id="s3ModalSave" class="s3-btn s3-btn-primary">Add Target</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── Scan controls ───────────────────────────────────────── -->
+    <div class="s3-scan-controls">
+        <button id="s3ScanBtn" class="s3-btn s3-btn-scan">
+            <span class="s3-scan-icon">▶</span>
+            <span class="s3-scan-text">Run Scan</span>
+        </button>
+        <div id="s3LastScan" class="s3-last-scan"></div>
+    </div>
+
+    <!-- ─── Progress ────────────────────────────────────────────── -->
+    <div id="s3Progress" class="s3-progress-section" style="display:none;">
+        <div class="s3-progress-bar-track">
+            <div id="s3ProgressBar" class="s3-progress-bar-fill"></div>
+        </div>
+        <div id="s3ProgressText" class="s3-progress-text">Initializing scan...</div>
+        <div id="s3ProgressDetail" class="s3-progress-detail"></div>
+    </div>
+
+    <!-- ─── Executive summary (hidden until scan complete) ──────── -->
+    <div id="s3ExecSummary" class="s3-exec-summary" style="display:none;">
+        <div class="s3-exec-header">
+            <h3><span class="s3-icon">📊</span> Executive Summary</h3>
+            <span id="s3ExecTimestamp" class="s3-exec-ts"></span>
+        </div>
+        <div id="s3ExecCards" class="s3-exec-cards">
+            <!-- Populated by JS -->
+        </div>
+        <div id="s3ExecVerdict" class="s3-exec-verdict"></div>
+    </div>
+
+    <!-- ─── Change detection (diff vs previous scan) ──────────────── -->
+    <div id="s3DiffSummary" class="s3-exec-summary" style="display:none;"></div>
+
+    <!-- ─── Scan History (collapsible, loaded on page init) ──────── -->
+    <div id="s3ScanHistory" class="s3-card s3-history-card" style="display:none;">
+        <div class="s3-card-header s3-history-header" onclick="toggleS3HistoryPanel()">
+            <h3><span class="s3-icon">📜</span> Scan History</h3>
+            <span class="s3-history-toggle" id="s3HistoryToggle">▶</span>
+        </div>
+        <div id="s3HistoryBody" class="s3-card-body" style="display:none;">
+            <div class="s3-history-controls">
+                <button id="s3CompareBtn" class="s3-btn s3-btn-outline s3-btn-sm" disabled onclick="compareS3SelectedScans()">Compare Selected</button>
+                <span id="s3CompareHint" class="s3-text-muted" style="font-size:0.75rem;">Select 2 scans to compare</span>
+            </div>
+            <table class="s3-table s3-history-table">
+                <thead><tr>
+                    <th class="s3-th-compare"></th>
+                    <th>Date</th>
+                    <th>Scanned By</th>
+                    <th>Targets</th>
+                    <th>Pass</th>
+                    <th>Fail</th>
+                    <th>Error</th>
+                    <th>Actions</th>
+                </tr></thead>
+                <tbody id="s3HistoryTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ─── Results table (hidden until scan complete) ──────────── -->
+    <div id="s3Results" class="s3-card s3-results-card" style="display:none;">
+        <div class="s3-card-header">
+            <h3><span class="s3-icon">📋</span> Detailed Results</h3>
+            <div class="s3-results-controls">
+                <select id="s3FilterStatus" class="s3-select">
+                    <option value="all">All Checks</option>
+                    <option value="FAIL">Failures Only</option>
+                    <option value="PASS">Passes Only</option>
+                    <option value="INFO">Info Only</option>
+                    <option value="ERROR">Errors Only</option>
+                </select>
+                <button id="s3ExportBtn" class="s3-btn s3-btn-outline s3-btn-sm" title="Export JSON">Export JSON</button>
+                <button id="s3ExportCsvBtn" class="s3-btn s3-btn-outline s3-btn-sm" title="Export CSV">Export CSV</button>
+            </div>
+        </div>
+        <div class="s3-card-body s3-results-body">
+            <table class="s3-table">
+                <thead>
+                    <tr>
+                        <th class="s3-th-status">Status</th>
+                        <th class="s3-th-target">Target</th>
+                        <th class="s3-th-bucket">Bucket</th>
+                        <th class="s3-th-check">Check</th>
+                        <th class="s3-th-detail">Detail</th>
+                        <th class="s3-th-evidence">Evidence</th>
+                    </tr>
+                </thead>
+                <tbody id="s3ResultsBody">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/s3_scanner.js') }}"></script>
+{% endblock %}

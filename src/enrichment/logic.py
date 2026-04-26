@@ -17,10 +17,10 @@ def guess_country_from_hostname(computer) -> tuple[str, str]:
     """Guess country based on hostname patterns."""
     computer_name = computer.name
     computer_name_lower = computer_name.lower()
-    if 'pmli' in computer_name_lower:
-        return 'India PMLI', "Country guessed from 'pmli' in hostname"
+    if 'pmli' in computer_name_lower or computer_name_lower.startswith(('inblr', 'inmum')):
+        return 'India PMLI', "Country guessed from PMLI/INBLR/INMUM pattern in hostname"
     if computer_name_lower.startswith('vmvdi') or (hasattr(CONFIG, 'team_name') and computer_name_lower.startswith(CONFIG.team_name.lower())):
-        return 'United States', f"Country guessed from VDI/{CONFIG.team_name if hasattr(CONFIG, 'team_name') else ''} in hostname"
+        return 'United States', f"Country guessed from VMVDI/{CONFIG.team_name if hasattr(CONFIG, 'team_name') else ''} in hostname"
     country_code = computer_name[:2].upper()
     country_name = COUNTRY_NAMES_BY_ABBREVIATION.get(country_code, '')
     if country_name:
@@ -42,7 +42,7 @@ def get_region_from_country(country: str) -> str:
         return 'US'
     if not hasattr(get_region_from_country, 'regions_by_country'):
         try:
-            with open(DATA_DIR / "regions_by_country.json", 'r') as f:
+            with open(DATA_DIR / "regions_by_country_tanium.json", 'r') as f:
                 get_region_from_country.regions_by_country = json.load(f)
         except Exception:
             get_region_from_country.regions_by_country = {}

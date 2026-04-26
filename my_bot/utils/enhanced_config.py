@@ -23,8 +23,11 @@ _main_config = my_config.get_config()
 @dataclass
 class ModelConfig:
     """Configuration for AI models"""
-    llm_model_name: str = _main_config.ollama_llm_model
-    embedding_model_name: str = _main_config.ollama_embedding_model
+    llm_model_name: str = _main_config.llm_model
+    router_model_name: str = _main_config.router_model or _main_config.llm_model
+    embedding_model_name: str = _main_config.embedding_model
+    m1_analysis_base_url: str = _main_config.m1_analysis_base_url
+    m1_router_base_url: str = _main_config.m1_router_base_url
     temperature: float = 0.1
     max_iterations: int = 3  # Keep it tight - forces smarter tool usage
     chunk_size: int = 1500
@@ -150,10 +153,19 @@ class ConfigManager:
         env_config = {}
 
         # Model configuration
-        if os.getenv('OLLAMA_LLM_MODEL'):
-            env_config.setdefault('model', {})['llm_model_name'] = os.getenv('OLLAMA_LLM_MODEL')
-        if os.getenv('OLLAMA_EMBEDDING_MODEL'):
-            env_config.setdefault('model', {})['embedding_model_name'] = os.getenv('OLLAMA_EMBEDDING_MODEL')
+        if os.getenv('LLM_MODEL'):
+            env_config.setdefault('model', {})['llm_model_name'] = os.getenv('LLM_MODEL')
+        if os.getenv('ROUTER_MODEL'):
+            env_config.setdefault('model', {})['router_model_name'] = os.getenv('ROUTER_MODEL')
+        if os.getenv('EMBEDDING_MODEL'):
+            env_config.setdefault('model', {})['embedding_model_name'] = os.getenv('EMBEDDING_MODEL')
+        # M1 Mac fleet endpoints
+        if os.getenv('M1_ANALYSIS_BASE_URL'):
+            env_config.setdefault('model', {})['m1_analysis_base_url'] = os.getenv('M1_ANALYSIS_BASE_URL')
+        if os.getenv('M1_ROUTER_BASE_URL'):
+            env_config.setdefault('model', {})['m1_router_base_url'] = os.getenv('M1_ROUTER_BASE_URL')
+        if os.getenv('M3_EMBEDS_BASE_URL'):
+            env_config.setdefault('model', {})['m3_embeds_base_url'] = os.getenv('M3_EMBEDS_BASE_URL')
         if os.getenv('MODEL_TEMPERATURE'):
             env_config.setdefault('model', {})['temperature'] = float(os.getenv('MODEL_TEMPERATURE'))
 
@@ -268,6 +280,7 @@ class ConfigManager:
             config_dict = {
                 'model': {
                     'llm_model_name': config.model.llm_model_name,
+                    'router_model_name': config.model.router_model_name,
                     'embedding_model_name': config.model.embedding_model_name,
                     'temperature': config.model.temperature,
                     'max_iterations': config.model.max_iterations,
@@ -330,6 +343,7 @@ class ConfigManager:
         return {
             'model': {
                 'llm_model': self._config.model.llm_model_name,
+                'router_model': self._config.model.router_model_name,
                 'embedding_model': self._config.model.embedding_model_name,
                 'temperature': self._config.model.temperature
             },

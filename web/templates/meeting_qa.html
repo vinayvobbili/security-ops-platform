@@ -1,0 +1,107 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'Meeting Minutes QA' %}
+{% set page_title_left_icon = '📝' %}
+{% set page_title_right_icon = '✅' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/meeting_qa.css') }}?v=3">
+{% endblock %}
+
+{% block content %}
+<div class="mq-container">
+
+    <!-- Input Section -->
+    <div class="mq-input-section">
+        <div class="mq-panel mq-panel--human">
+            <div class="mq-panel-header">
+                <span class="mq-panel-icon">🧑‍💼</span>
+                <h2>Human Notes</h2>
+            </div>
+            <textarea id="humanNotes" class="mq-textarea" placeholder="Paste the manually captured meeting notes here..."></textarea>
+            <div class="mq-word-count" id="humanWordCount">0 words</div>
+        </div>
+        <div class="mq-panel mq-panel--copilot">
+            <div class="mq-panel-header">
+                <span class="mq-panel-icon">🤖</span>
+                <h2>Copilot Notes</h2>
+            </div>
+            <textarea id="copilotNotes" class="mq-textarea" placeholder="Paste the Copilot-generated meeting notes here..."></textarea>
+            <div class="mq-word-count" id="copilotWordCount">0 words</div>
+        </div>
+    </div>
+
+    <!-- Action Bar -->
+    <div class="mq-action-bar">
+        <button id="sampleBtn" class="mq-btn mq-btn--secondary" onclick="MeetingQA.loadSample()">🎲 Generate Sample Texts</button>
+        <button id="analyzeBtn" class="mq-btn mq-btn--primary" onclick="MeetingQA.analyze()">
+            <span class="mq-btn-text">Analyze & Consolidate <span class="mq-kbd-hint">(⌘↵)</span></span>
+            <span class="mq-btn-spinner" style="display:none;"></span>
+        </button>
+        <button id="clearBtn" class="mq-btn mq-btn--secondary" onclick="MeetingQA.clear()">Clear</button>
+        <button id="exportBtn" class="mq-btn mq-btn--secondary" onclick="MeetingQA.exportPdf()" style="display:none;">Export PDF</button>
+        <span id="statusText" class="mq-status"></span>
+    </div>
+
+    <!-- Tracker + Scores row (side-by-side after completion) -->
+    <div id="mqSummaryRow" class="mq-summary-row">
+        <!-- Progress Tracker (shown during analysis) -->
+        <div id="mqTracker" class="mq-tracker" style="display:none;">
+            <div class="mq-tracker-steps">
+                <div class="mq-tracker-step" id="mq-step-1">
+                    <div class="mq-tracker-icon"><span class="mq-tracker-num">1</span></div>
+                    <div class="mq-tracker-label">Preparing Notes</div>
+                </div>
+                <div class="mq-tracker-line" id="mq-line-1"></div>
+                <div class="mq-tracker-step" id="mq-step-2">
+                    <div class="mq-tracker-icon"><span class="mq-tracker-num">2</span></div>
+                    <div class="mq-tracker-label">Connecting to AI</div>
+                </div>
+                <div class="mq-tracker-line" id="mq-line-2"></div>
+                <div class="mq-tracker-step" id="mq-step-3">
+                    <div class="mq-tracker-icon"><span class="mq-tracker-num">3</span></div>
+                    <div class="mq-tracker-label">Analyzing & Comparing</div>
+                </div>
+                <div class="mq-tracker-line" id="mq-line-3"></div>
+                <div class="mq-tracker-step" id="mq-step-4">
+                    <div class="mq-tracker-icon"><span class="mq-tracker-num">4</span></div>
+                    <div class="mq-tracker-label">Building Report</div>
+                </div>
+            </div>
+            <div id="mqTrackerStatus" class="mq-tracker-status">Starting analysis...</div>
+            <div id="mqTrackerJoke" class="mq-tracker-joke"></div>
+        </div>
+
+        <!-- Score Cards (shown after completion, beside tracker) -->
+        <div id="scoreCards" class="mq-scores" style="display:none;"></div>
+    </div>
+
+    <!-- Results Section -->
+    <div id="resultsSection" class="mq-results" style="display:none;">
+
+        <!-- Comparison Analysis -->
+        <div id="comparisonSection" class="mq-result-block">
+            <h2 class="mq-result-title">Comparison Analysis</h2>
+            <div id="comparisonContent" class="mq-result-body"></div>
+        </div>
+
+        <!-- Consolidated Minutes -->
+        <div id="minutesSection" class="mq-result-block">
+            <h2 class="mq-result-title">Consolidated Meeting Minutes</h2>
+            <div id="minutesContent" class="mq-result-body"></div>
+        </div>
+
+        <!-- Quality Scores Detail -->
+        <div id="scoresDetailSection" class="mq-result-block">
+            <h2 class="mq-result-title">Quality Assessment</h2>
+            <div id="scoresDetailContent" class="mq-result-body"></div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="{{ url_for('static', filename='js/dashboard_export.js') }}"></script>
+<script src="{{ url_for('static', filename='js/meeting_qa.js') }}?v=9"></script>
+{% endblock %}

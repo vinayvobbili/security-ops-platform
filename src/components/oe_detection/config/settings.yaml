@@ -1,0 +1,183 @@
+# =============================================================================
+# OE Detection Framework - Configuration
+# =============================================================================
+# Tune thresholds, weights, and alert targets here.
+# =============================================================================
+
+# --- Scoring ---
+scoring:
+  window_days: 30              # Rolling window for signal collection
+  baseline_days: 90            # Historical baseline for anomaly detection
+  decay_floor: 0.3             # Minimum decay multiplier (0.0 - 1.0)
+  max_score: 100               # Score cap after normalization
+
+  # Cross-domain correlation multiplier
+  correlation:
+    domain_threshold_3: 1.25   # 25% boost at 3 domains
+    domain_threshold_4: 1.15   # Additional 15% at 4+ domains
+
+# --- Risk Thresholds ---
+thresholds:
+  low:      0
+  medium:   30
+  high:     55
+  critical: 80
+
+# --- Detection Rules ---
+rules:
+  OE-NET-001:
+    enabled: true
+    weight: 20
+    description: "Shared IP with non-corporate VPN"
+    min_recurrence_days: 5
+
+  OE-NET-002:
+    enabled: true
+    weight: 15
+    description: "Idle/Active cycling pattern"
+    std_dev_threshold: 2.0
+    cycle_min_minutes: 20
+    cycle_max_minutes: 40
+
+  OE-NET-003:
+    enabled: true
+    weight: 10
+    description: "Unauthorized remote access tools"
+    flagged_tools:
+      - "Mouse Without Borders"
+      - "Synergy"
+      - "Barrier"
+      - "ShareMouse"
+      - "Input Director"
+      - "AnyDesk"
+      - "TeamViewer"
+      - "Parsec"
+
+  OE-IDN-001:
+    enabled: true
+    weight: 15
+    description: "Authentication cadence shift"
+    login_shift_hours: 1.0
+    session_duration_drop_pct: 30
+
+  OE-IDN-002:
+    enabled: true
+    weight: 10
+    description: "SaaS engagement drop"
+    app_drop_pct: 40
+
+  OE-BEH-001:
+    enabled: true
+    weight: 10
+    description: "Meeting avoidance pattern"
+    decline_rate_threshold: 40
+    decline_rate_baseline: 15
+    camera_off_threshold: 80
+    camera_on_baseline: 50
+    cancellation_weekly_max: 3
+
+  OE-BEH-002:
+    enabled: true
+    weight: 10
+    description: "Communication responsiveness degradation"
+    response_time_increase_pct: 200
+    away_hours_threshold: 4
+
+  OE-BEH-003:
+    enabled: true
+    weight: 10
+    description: "Output velocity floor"
+    consecutive_sprints: 4
+    cv_threshold: 0.10
+
+  OE-CMP-001:
+    enabled: true
+    weight: 25
+    description: "FINRA OBA inconsistency"
+
+  OE-CMP-002:
+    enabled: true
+    weight: 20
+    description: "Data exfiltration pattern"
+    scope_deviation_pct: 200
+
+  OE-CMP-003:
+    enabled: true
+    weight: 5
+    description: "Benefits enrollment anomaly"
+
+# --- MCP Server Endpoints ---
+# All services served by a single unified IR MCP server
+mcp_servers:
+  crowdstrike:
+    url: "http://localhost:8200/mcp"
+    name: "ir-security-ops"
+    timeout_seconds: 60
+
+  tanium:
+    url: "http://localhost:8200/mcp"
+    name: "ir-security-ops"
+    timeout_seconds: 60
+
+  varonis:
+    url: "http://localhost:8200/mcp"
+    name: "ir-security-ops"
+    timeout_seconds: 60
+
+  identity:
+    url: "http://localhost:8200/mcp"
+    name: "ir-security-ops"
+    timeout_seconds: 60
+
+  collaboration:
+    url: "http://localhost:8200/mcp"
+    name: "ir-security-ops"
+    timeout_seconds: 60
+
+  hris:
+    url: "http://localhost:8200/mcp"
+    name: "ir-security-ops"
+    timeout_seconds: 60
+
+# --- Alert Destinations ---
+alerts:
+  webex:
+    enabled: true
+    webhook_url: "${WEBEX_WEBHOOK_URL}"
+    room_id: "${WEBEX_ROOM_ID_DEV_TEST_SPACE}"
+    bot_token: "${WEBEX_BOT_ACCESS_TOKEN_POKEDEX}"
+    min_level: "high"
+
+  email:
+    enabled: false
+    smtp_host: ""
+    smtp_port: 587
+    from_addr: ""
+    recipients:
+      high: []
+      critical: []
+
+  siem:
+    enabled: false
+    webhook_url: "${SIEM_HEC_URL}"
+    auth_token: "${SIEM_HEC_TOKEN}"
+    source_type: "oe_detection"
+    min_level: "low"
+
+  llm_narrative:
+    enabled: true
+    ollama_url: "http://localhost:11434"
+    model: "qwen2.5:32b"
+    min_level: "medium"
+
+# --- Scheduler ---
+scheduler:
+  interval_hours: 6
+  batch_size: 50
+  batch_delay: 5
+
+# --- Data Retention ---
+retention:
+  signals_days: 365
+  scores_days: 365
+  purge_enabled: true

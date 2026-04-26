@@ -1,0 +1,148 @@
+{% extends 'base_layout.html' %}
+
+{% block page_title_plain %}OE Detection{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/oe_detection.css') }}">
+{% endblock %}
+
+{% block body_classes %}oe-detection-page{% endblock %}
+
+{% set page_title_text = 'OE Detection' %}
+{% set page_title_left_icon = '🔍' %}
+{% set page_title_right_icon = '🛡️' %}
+
+{% block content %}
+<div class="oe-container">
+
+    {# ── Summary Cards ──────────────────────────────── #}
+    <div class="oe-cards-row" id="oeSummaryCards">
+        <div class="oe-card">
+            <div class="oe-card-label">Employees Scanned</div>
+            <div class="oe-card-value" id="oeCardTotal">--</div>
+        </div>
+        <div class="oe-card oe-card--critical">
+            <div class="oe-card-label">Critical</div>
+            <div class="oe-card-value" id="oeCardCritical">0</div>
+        </div>
+        <div class="oe-card oe-card--high">
+            <div class="oe-card-label">High</div>
+            <div class="oe-card-value" id="oeCardHigh">0</div>
+        </div>
+        <div class="oe-card oe-card--medium">
+            <div class="oe-card-label">Medium</div>
+            <div class="oe-card-value" id="oeCardMedium">0</div>
+        </div>
+        <div class="oe-card oe-card--low">
+            <div class="oe-card-label">Low</div>
+            <div class="oe-card-value" id="oeCardLow">0</div>
+        </div>
+        <div class="oe-card">
+            <div class="oe-card-label">Last Scan</div>
+            <div class="oe-card-value oe-card-value--small" id="oeCardLastScan">--</div>
+        </div>
+        <div class="oe-card">
+            <div class="oe-card-label">Active Rules</div>
+            <div class="oe-card-value" id="oeCardRules">--</div>
+        </div>
+    </div>
+
+    {# ── Controls Row ───────────────────────────────── #}
+    <div class="oe-controls-row">
+        <div class="oe-date-filters">
+            <button class="oe-date-btn oe-date-btn--active" data-days="30">30d</button>
+            <button class="oe-date-btn" data-days="90">90d</button>
+            <button class="oe-date-btn" data-days="180">6mo</button>
+            <button class="oe-date-btn" data-days="">All</button>
+        </div>
+        <div class="oe-actions">
+            <button class="oe-btn oe-btn--secondary" id="oeBtnExport" title="Export to Excel">Export</button>
+            <button class="oe-btn oe-btn--primary" id="oeBtnScan" title="Trigger manual scan">Run Scan</button>
+        </div>
+    </div>
+
+    {# ── Empty State ────────────────────────────────── #}
+    <div class="oe-empty-state" id="oeEmptyState" style="display:none;">
+        <div class="oe-empty-icon">🔍</div>
+        <div class="oe-empty-title">No scan results yet</div>
+        <div class="oe-empty-desc">
+            Click <strong>Run Scan</strong> to trigger a detection scan, or wait for the next scheduled run.
+            <br>MCP servers must be running for detection rules to produce signals.
+        </div>
+    </div>
+
+    {# ── Scores Table ───────────────────────────────── #}
+    <div class="oe-table-section" id="oeTableSection" style="display:none;">
+        <div class="oe-table-header">
+            <h2 class="oe-section-title">Risk Scores</h2>
+            <div class="oe-table-count" id="oeTableCount"></div>
+        </div>
+        <div class="oe-table-wrap">
+            <table class="oe-table" id="oeScoresTable">
+                <thead>
+                    <tr>
+                        <th class="oe-sortable" data-col="employee_name">Employee</th>
+                        <th class="oe-sortable" data-col="normalized_score">Score</th>
+                        <th class="oe-sortable" data-col="risk_level">Risk Level</th>
+                        <th>Domains</th>
+                        <th class="oe-sortable" data-col="signal_count">Signals</th>
+                        <th class="oe-sortable" data-col="calculated_at">Last Scanned</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="oeScoresBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    {# ── Scan History (Collapsible) ─────────────────── #}
+    <div class="oe-scan-history" id="oeScanHistory" style="display:none;">
+        <button class="oe-collapse-toggle" id="oeScanHistoryToggle">
+            <span class="oe-collapse-arrow">&#9654;</span> Scan History
+        </button>
+        <div class="oe-collapse-body" id="oeScanHistoryBody" style="display:none;">
+            <table class="oe-table oe-table--compact">
+                <thead>
+                    <tr>
+                        <th>Scan ID</th>
+                        <th>Started</th>
+                        <th>Completed</th>
+                        <th>Employees</th>
+                        <th>Mode</th>
+                    </tr>
+                </thead>
+                <tbody id="oeScanHistoryRows"></tbody>
+            </table>
+        </div>
+    </div>
+
+    {# ── Employee Detail Panel (hidden, shown on click) #}
+    <div class="oe-detail-overlay" id="oeDetailOverlay" style="display:none;">
+        <div class="oe-detail-panel">
+            <div class="oe-detail-header">
+                <h2 id="oeDetailTitle">Employee Detail</h2>
+                <button class="oe-detail-close" id="oeDetailClose">&times;</button>
+            </div>
+            <div class="oe-detail-content" id="oeDetailContent">
+                <div class="oe-detail-section">
+                    <h3>Score Trend</h3>
+                    <div class="oe-sparkline-wrap" id="oeDetailSparkline"></div>
+                </div>
+                <div class="oe-detail-section">
+                    <h3>Detection Signals</h3>
+                    <div id="oeDetailSignals"></div>
+                </div>
+                <div class="oe-detail-section" id="oeDetailNarrativeSection" style="display:none;">
+                    <h3>Analyst Narrative</h3>
+                    <div class="oe-narrative" id="oeDetailNarrative"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/oe_detection.js') }}"></script>
+{% endblock %}

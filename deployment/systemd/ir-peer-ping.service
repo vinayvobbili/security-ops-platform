@@ -1,20 +1,13 @@
 [Unit]
-Description=IR the peer-status service - Keep bot NAT paths active
+Description=IR the peer-status service Keepalive
 After=network.target
 
 [Service]
 Type=oneshot
-User=user
-Group=user
-WorkingDirectory=/home/user/pub/IR
-Environment="PYTHONPATH=/home/user/pub/IR"
-ExecStart=/home/user/pub/IR/.venv/bin/python /home/user/pub/IR/src/peer_ping_keepalive.py
-StandardOutput=append:/home/user/pub/IR/logs/peer_ping.log
-StandardError=append:/home/user/pub/IR/logs/peer_ping.log
-
-# Resource limits
-MemoryMax=100M
-CPUQuota=10%
+WorkingDirectory=/home/vinay/security-ops-platform
+ExecStart=/home/vinay/security-ops-platform/.venv/bin/python3 src/peer_ping_keepalive.py
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/home/vinay/security-ops-platform
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target

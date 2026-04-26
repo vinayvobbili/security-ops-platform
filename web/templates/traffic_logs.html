@@ -1,0 +1,256 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'Traffic Logs' %}
+{% set page_title_left_icon = '' %}
+{% set page_title_right_icon = '' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/traffic_logs.css') }}">
+{% endblock %}
+
+{% block content %}
+<!-- Auth overlay -->
+<div class="tl-auth-overlay" id="tlAuthOverlay">
+    <div class="tl-auth-box">
+        <h2>Traffic Logs</h2>
+        <p>Enter admin credentials to view logs</p>
+        <input type="text" id="tlUsername" placeholder="Username" autofocus
+               onkeydown="if(event.key==='Enter')document.getElementById('tlPassword').focus()" style="margin-bottom:10px;">
+        <input type="password" id="tlPassword" placeholder="Password" autocomplete="current-password"
+               onkeydown="if(event.key==='Enter')tlAuth()">
+        <div class="tl-auth-err" id="tlAuthErr"></div>
+        <button onclick="tlAuth()">Unlock</button>
+    </div>
+</div>
+
+<!-- Main content (hidden until auth) -->
+<div class="tl-container" id="tlMain" style="display:none;">
+
+    <!-- Stats -->
+    <div class="tl-stats" id="tlStats">
+        <div class="tl-stat-card"><div class="tl-stat-val" id="statTotal">-</div><div class="tl-stat-lbl">Total Requests</div></div>
+        <div class="tl-stat-card"><div class="tl-stat-val" id="statToday">-</div><div class="tl-stat-lbl">Today</div></div>
+        <div class="tl-stat-card"><div class="tl-stat-val" id="statPages">-</div><div class="tl-stat-lbl">Unique Pages</div></div>
+        <div class="tl-stat-card"><div class="tl-stat-val" id="statIPs">-</div><div class="tl-stat-lbl">Unique IPs</div></div>
+        <div class="tl-stat-card tl-exclude-card" id="tlExcludeCard">
+            <button id="tlExcludeBtn" class="tl-exclude-btn" onclick="tlToggleExclude()"></button>
+            <div class="tl-stat-lbl" id="tlExcludeLbl"></div>
+        </div>
+    </div>
+
+    <!-- Top pages / IPs -->
+    <div class="tl-top-grid" id="tlTopGrid"></div>
+
+    <!-- Tabs -->
+    <div class="tl-tabs">
+        <button class="tl-tab active" data-tab="web" onclick="switchTab('web')">Web Traffic</button>
+        <button class="tl-tab" data-tab="bot" onclick="switchTab('bot')">Bot Activity</button>
+        <button class="tl-tab" data-tab="conv" onclick="switchTab('conv')">Conversations</button>
+    </div>
+
+    <!-- Web traffic tab -->
+    <div class="tl-tab-content" id="tab-web">
+        <div class="tl-toolbar">
+            <input type="text" id="pathFilter" placeholder="Filter by path (e.g. /meeting-qa)" onkeydown="if(event.key==='Enter')loadWebActivity(0)">
+            <button onclick="loadWebActivity(0)">Search</button>
+            <button class="tl-btn-outline" onclick="document.getElementById('pathFilter').value='';loadWebActivity(0)">Clear</button>
+        </div>
+        <div class="tl-table-wrap"><table class="tl-table" id="webTable">
+            <thead><tr><th>ID</th><th>Time</th><th>Method</th><th>Path</th><th>IP</th></tr></thead>
+            <tbody id="webBody"><tr><td colspan="5" class="tl-loading">Loading...</td></tr></tbody>
+        </table></div>
+        <div class="tl-pagination" id="webPagination"></div>
+    </div>
+
+    <!-- Bot activity tab -->
+    <div class="tl-tab-content" id="tab-bot" style="display:none;">
+        <div class="tl-table-wrap"><table class="tl-table" id="botTable">
+            <thead><tr><th>ID</th><th>Time</th><th>Bot</th><th>Actor</th><th>Command</th><th>Room</th></tr></thead>
+            <tbody id="botBody"><tr><td colspan="6" class="tl-loading">Loading...</td></tr></tbody>
+        </table></div>
+        <div class="tl-pagination" id="botPagination"></div>
+    </div>
+
+    <!-- Conversations tab -->
+    <div class="tl-tab-content" id="tab-conv" style="display:none;">
+        <div class="tl-table-wrap"><table class="tl-table" id="convTable">
+            <thead><tr><th>ID</th><th>Time</th><th>Bot</th><th>Person</th><th>Room</th><th>Prompt</th><th>Response</th><th>Time(s)</th></tr></thead>
+            <tbody id="convBody"><tr><td colspan="8" class="tl-loading">Loading...</td></tr></tbody>
+        </table></div>
+        <div class="tl-pagination" id="convPagination"></div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    let _user = '', _pw = '';
+    const PER_PAGE = 200;
+    let _offsets = { web: 0, bot: 0, conv: 0 };
+    let _activeTab = 'web';
+
+    function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+    window.tlAuth = function() {
+        _user = document.getElementById('tlUsername').value;
+        _pw = document.getElementById('tlPassword').value;
+        fetch('/api/traffic-logs/auth', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: _user, password: _pw })
+        }).then(r => {
+            if (!r.ok) { document.getElementById('tlAuthErr').textContent = 'Invalid credentials'; return; }
+            document.getElementById('tlAuthOverlay').style.display = 'none';
+            document.getElementById('tlMain').style.display = 'block';
+            loadStats();
+            loadWebActivity(0);
+        }).catch(() => { document.getElementById('tlAuthErr').textContent = 'Connection error'; });
+    };
+
+    function authParam() { return 'username=' + encodeURIComponent(_user) + '&password=' + encodeURIComponent(_pw); }
+
+    function loadStats() {
+        fetch('/api/traffic-logs/stats?' + authParam())
+            .then(r => r.json()).then(d => {
+                if (!d.success) return;
+                document.getElementById('statTotal').textContent = d.total.toLocaleString();
+                document.getElementById('statToday').textContent = d.today.toLocaleString();
+                document.getElementById('statPages').textContent = d.top_pages.length;
+                document.getElementById('statIPs').textContent = d.top_ips.length;
+
+                let html = '';
+                if (d.top_pages.length) {
+                    html += '<div class="tl-top-card"><h4>Top Pages</h4>';
+                    d.top_pages.forEach(p => { html += `<div class="tl-top-row"><span>${esc(p.path)}</span><span>${p.count.toLocaleString()}</span></div>`; });
+                    html += '</div>';
+                }
+                if (d.top_ips.length) {
+                    html += '<div class="tl-top-card"><h4>Top IPs</h4>';
+                    d.top_ips.forEach(p => { html += `<div class="tl-top-row"><span>${esc(p.ip)}</span><span>${p.count.toLocaleString()}</span></div>`; });
+                    html += '</div>';
+                }
+                document.getElementById('tlTopGrid').innerHTML = html;
+            });
+    }
+
+    window.loadWebActivity = function(offset) {
+        _offsets.web = offset;
+        const pathFilter = document.getElementById('pathFilter').value.trim();
+        let url = `/api/traffic-logs/web-activity?${authParam()}&limit=${PER_PAGE}&offset=${offset}`;
+        if (pathFilter) url += '&path=' + encodeURIComponent(pathFilter);
+        fetch(url).then(r => r.json()).then(d => {
+            if (!d.success) return;
+            const tbody = document.getElementById('webBody');
+            if (!d.rows.length) { tbody.innerHTML = '<tr><td colspan="5" class="tl-loading">No results</td></tr>'; return; }
+            tbody.innerHTML = d.rows.map(r => `<tr>
+                <td>${r.id}</td>
+                <td>${esc(r.timestamp_eastern)}</td>
+                <td><span class="tl-method tl-method-${r.method}">${r.method}</span></td>
+                <td>${esc(r.path)}</td>
+                <td>${esc(r.remote_addr)}</td>
+            </tr>`).join('');
+            renderPagination('webPagination', 'web', d.rows.length);
+        });
+    };
+
+    window.loadBotActivity = function(offset) {
+        _offsets.bot = offset;
+        fetch(`/api/traffic-logs/bot-activity?${authParam()}&limit=${PER_PAGE}&offset=${offset}`)
+            .then(r => r.json()).then(d => {
+                if (!d.success) return;
+                const tbody = document.getElementById('botBody');
+                if (!d.rows.length) { tbody.innerHTML = '<tr><td colspan="6" class="tl-loading">No results</td></tr>'; return; }
+                tbody.innerHTML = d.rows.map(r => `<tr>
+                    <td>${r.id}</td>
+                    <td>${esc(r.timestamp_eastern)}</td>
+                    <td>${esc(r.bot)}</td>
+                    <td>${esc(r.actor)}</td>
+                    <td>${esc(r.command_keyword)}</td>
+                    <td>${esc(r.room_name)}</td>
+                </tr>`).join('');
+                renderPagination('botPagination', 'bot', d.rows.length);
+            });
+    };
+
+    window.loadConversations = function(offset) {
+        _offsets.conv = offset;
+        fetch(`/api/traffic-logs/conversations?${authParam()}&limit=${PER_PAGE}&offset=${offset}`)
+            .then(r => r.json()).then(d => {
+                if (!d.success) return;
+                const tbody = document.getElementById('convBody');
+                if (!d.rows.length) { tbody.innerHTML = '<tr><td colspan="8" class="tl-loading">No results</td></tr>'; return; }
+                tbody.innerHTML = d.rows.map(r => `<tr>
+                    <td>${r.id}</td>
+                    <td>${esc(r.message_time)}</td>
+                    <td>${esc(r.bot)}</td>
+                    <td>${esc(r.person)}</td>
+                    <td>${esc(r.room_name)}</td>
+                    <td title="${esc(r.user_prompt)}">${esc((r.user_prompt||'').substring(0,100))}</td>
+                    <td title="${esc(r.bot_response)}">${esc((r.bot_response||'').substring(0,100))}</td>
+                    <td>${r.response_time_s != null ? r.response_time_s.toFixed(1) : ''}</td>
+                </tr>`).join('');
+                renderPagination('convPagination', 'conv', d.rows.length);
+            });
+    };
+
+    function renderPagination(elId, tab, rowCount) {
+        const offset = _offsets[tab];
+        const loadFn = tab === 'web' ? 'loadWebActivity' : tab === 'bot' ? 'loadBotActivity' : 'loadConversations';
+        let html = '';
+        if (offset > 0) html += `<button onclick="${loadFn}(${Math.max(0, offset - PER_PAGE)})">Previous</button>`;
+        html += `<span>Showing ${offset + 1} - ${offset + rowCount}</span>`;
+        if (rowCount === PER_PAGE) html += `<button onclick="${loadFn}(${offset + PER_PAGE})">Next</button>`;
+        document.getElementById(elId).innerHTML = html;
+    }
+
+    window.switchTab = function(tab) {
+        _activeTab = tab;
+        document.querySelectorAll('.tl-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+        document.querySelectorAll('.tl-tab-content').forEach(c => c.style.display = 'none');
+        document.getElementById('tab-' + tab).style.display = '';
+
+        // Load data on first visit
+        if (tab === 'bot' && document.getElementById('botBody').querySelector('.tl-loading')) loadBotActivity(0);
+        if (tab === 'conv' && document.getElementById('convBody').querySelector('.tl-loading')) loadConversations(0);
+    };
+
+    function updateExcludeBtn() {
+        const btn = document.getElementById('tlExcludeBtn');
+        const lbl = document.getElementById('tlExcludeLbl');
+        const excluded = document.cookie.split(';').some(c => c.trim().startsWith('traffic_log_exclude=true'));
+        if (excluded) {
+            btn.textContent = 'Excluded';
+            btn.className = 'tl-exclude-btn excluded';
+            lbl.textContent = 'Your traffic is hidden';
+        } else {
+            btn.textContent = 'Exclude Me';
+            btn.className = 'tl-exclude-btn tracking';
+            lbl.textContent = 'You are being tracked';
+        }
+    }
+
+    window.tlToggleExclude = function() {
+        const excluded = document.cookie.split(';').some(c => c.trim().startsWith('traffic_log_exclude=true'));
+        if (excluded) {
+            document.cookie = 'traffic_log_exclude=; max-age=0; path=/; samesite=Lax';
+            updateExcludeBtn();
+        } else {
+            fetch('/api/traffic-logs/exclude-me', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: _user, password: _pw })
+            }).then(r => r.json()).then(d => {
+                if (d.success) updateExcludeBtn();
+            });
+        }
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof initTheme === 'function') initTheme();
+        updateExcludeBtn();
+        document.getElementById('tlUsername').focus();
+    });
+})();
+</script>
+{% endblock %}

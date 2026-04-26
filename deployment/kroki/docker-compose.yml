@@ -1,0 +1,20 @@
+services:
+  core:
+    image: yuzutech/kroki:latest
+    container_name: kroki
+    restart: unless-stopped
+    environment:
+      - KROKI_MERMAID_HOST=mermaid
+    ports:
+      - "8025:8000"
+    depends_on:
+      - mermaid
+  mermaid:
+    build:
+      context: .
+      dockerfile: Dockerfile.mermaid
+    image: kroki-mermaid-emoji:latest
+    container_name: kroki-mermaid
+    restart: unless-stopped
+    expose:
+      - "8002"

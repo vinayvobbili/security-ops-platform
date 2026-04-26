@@ -1,0 +1,622 @@
+{% extends 'base_layout.html' %}
+
+{% block page_title_plain %}Database Configuration{% endblock %}
+
+{% set page_title_text = 'Database Configuration' %}
+{% set page_title_left_icon = '⚙️' %}
+{% set page_title_right_icon = '🛢️' %}
+
+{% block extra_css %}
+<style>
+    .dbcfg-container {
+        max-width: 1400px;
+        margin: calc(var(--nav-height) + 20px) auto 40px;
+        padding: 0 20px;
+        color: #1e293b;
+        font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    .dbcfg-seed-banner {
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        border-left: 4px solid #b45309;
+        padding: 12px 18px; border-radius: 6px; margin-bottom: 20px;
+        font-size: 13px; color: #78350f;
+    }
+    .dbcfg-seed-banner strong { color: #7c2d12; }
+    .dbcfg-seed-banner a { color: #7c2d12; text-decoration: underline; font-weight: 600; }
+
+    .dbcfg-kpis {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px; margin-bottom: 22px;
+    }
+    .dbcfg-kpi {
+        background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+        padding: 18px 20px; position: relative; overflow: hidden;
+    }
+    .dbcfg-kpi::before {
+        content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 4px;
+        background: var(--kpi-accent, #002F6C);
+    }
+    .dbcfg-kpi .value { font-size: 26px; font-weight: 800; color: #0f172a; letter-spacing: -.5px; }
+    .dbcfg-kpi .label { font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: #64748b; margin-top: 4px; }
+    .dbcfg-kpi .sub { font-size: 11.5px; color: #94a3b8; margin-top: 2px; }
+    .kpi-blue   { --kpi-accent: #1d4ed8; }
+    .kpi-green  { --kpi-accent: #0d7a2e; }
+    .kpi-amber  { --kpi-accent: #b45309; }
+    .kpi-red    { --kpi-accent: #991b1b; }
+    .kpi-purple { --kpi-accent: #6d28d9; }
+
+    .dbcfg-section {
+        background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
+        padding: 20px 22px; margin-bottom: 20px;
+    }
+    .dbcfg-section h3 {
+        font-size: 13px; text-transform: uppercase; letter-spacing: .7px;
+        color: #002F6C; margin: 0 0 14px;
+        display: flex; align-items: center; gap: 8px;
+    }
+    .dbcfg-section h3 .chip {
+        background: #e6f0ff; color: #002F6C;
+        font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+        text-transform: none; letter-spacing: normal;
+    }
+
+    .dbcfg-db-row {
+        display: grid; grid-template-columns: 1.2fr 1fr auto;
+        gap: 14px; padding: 12px 0; border-top: 1px solid #f1f5f9;
+        align-items: center;
+    }
+    .dbcfg-db-row:first-child { border-top: 0; padding-top: 0; }
+    .dbcfg-db-name { font-weight: 700; color: #0f172a; font-size: 14px; }
+    .dbcfg-db-meta { font-size: 12px; color: #64748b; margin-top: 2px; }
+    .dbcfg-db-bench { font-family: ui-monospace, monospace; font-size: 11px; color: #475569; background: #f8fafc; padding: 2px 8px; border-radius: 4px; display: inline-block; margin-top: 4px; }
+
+    .compliance-bar {
+        position: relative; height: 8px; background: #e2e8f0;
+        border-radius: 4px; overflow: hidden; margin-bottom: 6px;
+    }
+    .compliance-bar > div { height: 100%; border-radius: 4px; }
+    .compliance-segs {
+        display: flex; gap: 10px; font-size: 11.5px; color: #64748b;
+        font-family: ui-monospace, monospace;
+    }
+    .compliance-segs .p { color: #0d7a2e; font-weight: 700; }
+    .compliance-segs .w { color: #b45309; font-weight: 700; }
+    .compliance-segs .f { color: #991b1b; font-weight: 700; }
+
+    .compliance-pct { font-size: 22px; font-weight: 800; font-family: ui-monospace, monospace; }
+
+    .dbcfg-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .dbcfg-table th {
+        text-align: left; padding: 10px 12px; color: #475569;
+        font-size: 11px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .6px; background: #f8fafc; border-bottom: 1px solid #e2e8f0;
+        position: sticky; top: 0;
+    }
+    .dbcfg-table td { padding: 11px 12px; border-bottom: 1px solid #f1f5f9; color: #334155; }
+    .dbcfg-table tr:hover td { background: #f8fafc; }
+    .dbcfg-table .name { font-weight: 700; color: #0f172a; }
+    .dbcfg-table code {
+        font-family: ui-monospace, monospace; font-size: 12px;
+        background: #f1f5f9; padding: 2px 6px; border-radius: 4px;
+        color: #475569;
+    }
+    .dbcfg-table .check { font-weight: 600; color: #0f172a; }
+    .dbcfg-table .remediation {
+        font-family: ui-monospace, monospace; font-size: 11.5px;
+        color: #475569; white-space: pre-wrap;
+        max-width: 320px;
+    }
+
+    .dbcfg-sev {
+        font-size: 10.5px; text-transform: uppercase; font-weight: 800;
+        letter-spacing: .7px; padding: 3px 10px; border-radius: 999px;
+        white-space: nowrap;
+    }
+    .sev-critical { background: #fee2e2; color: #991b1b; }
+    .sev-high     { background: #ffedd5; color: #9a3412; }
+    .sev-medium   { background: #fef3c7; color: #854d0e; }
+    .sev-low      { background: #dbeafe; color: #1e40af; }
+
+    .dbcfg-state {
+        font-size: 10.5px; text-transform: uppercase; font-weight: 800;
+        letter-spacing: .7px; padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+    }
+    .state-fail { background: #fee2e2; color: #991b1b; }
+    .state-warn { background: #fef3c7; color: #854d0e; }
+    .state-pass { background: #dcfce7; color: #14532d; }
+
+    .drift-row {
+        display: grid; grid-template-columns: 130px 1fr auto;
+        gap: 14px; padding: 12px 0; border-top: 1px solid #f1f5f9;
+        align-items: start;
+    }
+    .drift-row:first-child { border-top: 0; padding-top: 0; }
+    .drift-ts { font-size: 12px; color: #94a3b8; font-family: ui-monospace, monospace; }
+    .drift-body { font-size: 13px; line-height: 1.5; color: #334155; }
+    .drift-body .db { font-weight: 700; color: #1d4ed8; }
+    .drift-body .setting { font-family: ui-monospace, monospace; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 12px; color: #0f172a; }
+    .drift-body .change { color: #64748b; }
+    .drift-body .before { color: #991b1b; font-family: ui-monospace, monospace; font-weight: 600; }
+    .drift-body .after  { color: #0d7a2e; font-family: ui-monospace, monospace; font-weight: 600; }
+    .drift-body .actor { color: #6d28d9; font-weight: 600; }
+    .drift-risk {
+        font-size: 10.5px; text-transform: uppercase; font-weight: 800;
+        letter-spacing: .7px; padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+    }
+    .risk-critical { background: #fee2e2; color: #991b1b; }
+    .risk-high     { background: #ffedd5; color: #9a3412; }
+    .risk-medium   { background: #fef3c7; color: #854d0e; }
+    .risk-none     { background: #f1f5f9; color: #475569; }
+
+    .dbcfg-grid-2 {
+        display: grid; gap: 20px; grid-template-columns: 1fr;
+    }
+    @media (min-width: 1100px) {
+        .dbcfg-grid-2 { grid-template-columns: 1.2fr 1fr; }
+    }
+
+    .dbcfg-version-badge {
+        position: fixed; bottom: 12px; right: 12px; z-index: 50;
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 6px 10px; background: rgba(15, 23, 42, 0.85); color: #e2e8f0;
+        font: 600 11px/1.3 ui-monospace, "SF Mono", Monaco, monospace;
+        text-decoration: none; border-radius: 999px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18); backdrop-filter: blur(6px);
+        transition: background .15s, color .15s, transform .15s;
+    }
+    .dbcfg-version-badge:hover { background: rgba(0, 47, 108, 0.95); color: #fff; transform: translateY(-1px); }
+    .dbcfg-version-badge .dot { width: 7px; height: 7px; border-radius: 50%; background: #78BE20; box-shadow: 0 0 6px rgba(120, 190, 32, 0.7); }
+    .dbcfg-version-badge.loading .dot { background: #94a3b8; box-shadow: none; }
+    .dbcfg-version-badge.unknown .dot { background: #f59e0b; box-shadow: none; }
+    .dbcfg-version-badge .vid { letter-spacing: .3px; }
+    .dbcfg-version-badge .sub { color: #94a3b8; font-weight: 500; }
+
+    .app-info-btn {
+        position: fixed; bottom: 12px; left: 12px; z-index: 50;
+        display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px;
+        background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%);
+        color: #fff; font: 600 12px/1.3 -apple-system, "Segoe UI", Roboto, sans-serif;
+        letter-spacing: .2px; border: 0; border-radius: 999px;
+        box-shadow: 0 6px 16px rgba(29, 78, 216, 0.35); cursor: pointer;
+        transition: transform .15s, box-shadow .15s;
+    }
+    .app-info-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 22px rgba(29, 78, 216, 0.5); }
+    .app-info-btn .pulse {
+        width: 7px; height: 7px; border-radius: 50%; background: #fff;
+        box-shadow: 0 0 8px rgba(255,255,255,.9);
+        animation: dbcfgPulse 2s infinite;
+    }
+    @keyframes dbcfgPulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .6; transform: scale(1.25); } }
+
+    .app-info-modal[hidden] { display: none; }
+    .app-info-modal {
+        position: fixed; inset: 0; background: rgba(8, 20, 40, 0.6);
+        z-index: 9000; display: flex; align-items: center; justify-content: center;
+        padding: 24px; backdrop-filter: blur(4px); animation: dbcfgFadeIn .2s ease-out;
+    }
+    @keyframes dbcfgFadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .app-info-card {
+        position: relative; background: #fff; color: #1e293b; border-radius: 16px;
+        max-width: 680px; width: 100%; max-height: 85vh; overflow: hidden;
+        display: flex; flex-direction: column; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+        font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+        animation: dbcfgSlideUp .25s cubic-bezier(.2, .9, .3, 1);
+    }
+    @keyframes dbcfgSlideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .app-info-hero {
+        position: relative; flex: 0 0 auto; padding: 30px 34px 26px;
+        background:
+            radial-gradient(120% 100% at 0% 0%, #3b82f6 0%, transparent 55%),
+            radial-gradient(120% 100% at 100% 0%, #60a5fa 0%, transparent 60%),
+            linear-gradient(135deg, #0c1e3a 0%, #1e3a8a 100%);
+        color: #fff; overflow: hidden;
+    }
+    .app-info-hero::after {
+        content: ''; position: absolute; right: -30px; top: -30px;
+        width: 220px; height: 220px;
+        background: radial-gradient(circle, rgba(96,165,250,.22), transparent 65%);
+        pointer-events: none;
+    }
+    .app-info-hero .eyebrow {
+        display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
+        border-radius: 999px; background: rgba(96, 165, 250, 0.18);
+        border: 1px solid rgba(96, 165, 250, 0.4); color: #dbeafe;
+        font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+    }
+    .app-info-hero h2 { margin: 10px 0 6px; font-size: 26px; font-weight: 800; letter-spacing: -.4px; display: flex; align-items: center; gap: 10px; }
+    .app-info-hero .sub { margin: 0; font-size: 14px; color: #bfdbfe; line-height: 1.5; max-width: 58ch; }
+    .app-info-hero .hero-icon { font-size: 30px; filter: drop-shadow(0 2px 6px rgba(0,0,0,.3)); }
+    .app-info-body {
+        padding: 24px 28px 28px 34px; flex: 1 1 auto; min-height: 0; overflow-y: scroll;
+        scrollbar-width: thin; scrollbar-color: rgba(29, 78, 216, 0.55) #f1f5f9; scrollbar-gutter: stable;
+    }
+    .app-info-body::-webkit-scrollbar { width: 10px; }
+    .app-info-body::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 6px; margin: 8px 0; }
+    .app-info-body::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #2563eb, #1d4ed8); border-radius: 6px; }
+    .app-info-body .section-title {
+        margin: 22px 0 12px; font-size: 11px; font-weight: 800; text-transform: uppercase;
+        letter-spacing: 1.2px; color: #1d4ed8; display: flex; align-items: center; gap: 8px;
+    }
+    .app-info-body .section-title:first-child { margin-top: 0; }
+    .app-info-body .section-title .bar {
+        width: 24px; height: 2px;
+        background: linear-gradient(90deg, #3b82f6, #1d4ed8); border-radius: 2px;
+    }
+    .app-info-body .lead { margin: 0; font-size: 14.5px; line-height: 1.65; color: #334155; }
+
+    .engine-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .engine-chip {
+        display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px;
+        border-radius: 999px; font-size: 12.5px; font-weight: 600; border: 1px solid;
+    }
+    .chip-sql     { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+    .chip-pg      { background: #ecfeff; color: #0e7490; border-color: #a5f3fc; }
+    .chip-mongo   { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+    .chip-mysql   { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
+    .chip-oracle  { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+
+    .flow-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .flow-step {
+        background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;
+        padding: 14px 12px 12px; position: relative;
+    }
+    .flow-step .num {
+        position: absolute; top: -10px; left: 12px; width: 24px; height: 24px;
+        display: inline-flex; align-items: center; justify-content: center;
+        border-radius: 50%; background: linear-gradient(135deg, #1d4ed8, #2563eb);
+        color: #fff; font-size: 12px; font-weight: 800;
+        box-shadow: 0 3px 8px rgba(29,78,216,.35);
+    }
+    .flow-step .step-icon { font-size: 18px; display: block; margin-bottom: 4px; margin-top: 2px; }
+    .flow-step .step-label { font-size: 12.5px; font-weight: 700; color: #0f172a; line-height: 1.35; }
+    .flow-step .step-sub   { font-size: 11.5px; color: #64748b; line-height: 1.4; margin-top: 2px; }
+
+    .when-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .when-card {
+        background: linear-gradient(135deg, #eff6ff 0%, #ecfeff 100%);
+        border: 1px solid #bfdbfe; border-radius: 10px; padding: 12px 14px;
+    }
+    .when-card .when-ico { font-size: 20px; }
+    .when-card .when-ttl { font-size: 13px; font-weight: 700; color: #0f172a; margin: 4px 0 2px; }
+    .when-card .when-sub { font-size: 11.5px; color: #475569; line-height: 1.4; }
+
+    .app-info-close {
+        position: absolute; top: 14px; right: 16px; width: 32px; height: 32px;
+        background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.25);
+        border-radius: 8px; font-size: 18px; color: #fff; cursor: pointer; line-height: 1;
+        display: inline-flex; align-items: center; justify-content: center;
+        transition: background .15s, transform .15s; z-index: 2;
+    }
+    .app-info-close:hover { background: rgba(255,255,255,.22); transform: rotate(90deg); }
+    @media (max-width: 600px) {
+        .flow-steps, .when-grid { grid-template-columns: 1fr 1fr; }
+        .app-info-hero { padding: 22px 20px 20px; }
+        .app-info-body { padding: 18px 20px 22px; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dbcfg-container">
+
+    <div class="dbcfg-seed-banner">
+        <strong>Seed data.</strong> Vendor sidecar not active yet — this view is built from synthetic sample data so stakeholders can see the intended UX. Ship real data via the <a href="/db-config/deploy">deploy portal</a>.
+    </div>
+
+    <div class="dbcfg-kpis" id="kpiRow">
+        <div class="dbcfg-kpi kpi-blue">
+            <div class="value" id="kpiTotal">–</div>
+            <div class="label">Databases</div>
+            <div class="sub" id="kpiChecks">–</div>
+        </div>
+        <div class="dbcfg-kpi kpi-green">
+            <div class="value" id="kpiCompliantPct">–%</div>
+            <div class="label">Compliant DBs</div>
+            <div class="sub" id="kpiCompliantNum">– at ≥90%</div>
+        </div>
+        <div class="dbcfg-kpi kpi-purple">
+            <div class="value" id="kpiAvg">–</div>
+            <div class="label">Avg Compliance</div>
+            <div class="sub">Across fleet</div>
+        </div>
+        <div class="dbcfg-kpi kpi-amber">
+            <div class="value" id="kpiWarn">–</div>
+            <div class="label">Warnings</div>
+            <div class="sub">Needs review</div>
+        </div>
+        <div class="dbcfg-kpi kpi-red">
+            <div class="value" id="kpiFail">–</div>
+            <div class="label">Failing Checks</div>
+            <div class="sub">Across all DBs</div>
+        </div>
+    </div>
+
+    <div class="dbcfg-grid-2">
+        <div class="dbcfg-section">
+            <h3>📐 Benchmark compliance <span class="chip" id="dbCount">0</span></h3>
+            <div id="dbList"></div>
+        </div>
+        <div class="dbcfg-section">
+            <h3>🔀 Recent configuration drift</h3>
+            <div id="driftList"></div>
+        </div>
+    </div>
+
+    <div class="dbcfg-section" style="padding: 0; overflow: hidden;">
+        <div style="padding: 18px 22px 12px;">
+            <h3 style="margin: 0;">⚠️ Top failing checks <span class="chip" id="findingsCount">0</span></h3>
+        </div>
+        <div style="overflow: auto; max-height: 520px;">
+            <table class="dbcfg-table">
+                <thead>
+                    <tr>
+                        <th>Database</th>
+                        <th>Check</th>
+                        <th>Benchmark</th>
+                        <th>Severity</th>
+                        <th>State</th>
+                        <th>Remediation</th>
+                    </tr>
+                </thead>
+                <tbody id="findingsBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<a id="dbcfg-version-badge" class="dbcfg-version-badge loading"
+   href="/db-config/deploy" title="Go to deploy portal">
+    <span class="dot"></span>
+    <span class="vid">loading…</span>
+</a>
+
+<button id="appInfoBtn" class="app-info-btn" type="button" aria-label="How does this work?">
+    <span class="pulse"></span>
+    <span>How does this work?</span>
+</button>
+
+<div id="appInfoModal" class="app-info-modal" hidden role="dialog" aria-modal="true" aria-labelledby="appInfoTitle">
+    <div class="app-info-card" role="document">
+        <button id="appInfoClose" class="app-info-close" type="button" aria-label="Close">×</button>
+
+        <div class="app-info-hero">
+            <span class="eyebrow">🛢️ Database hardening</span>
+            <h2 id="appInfoTitle"><span class="hero-icon">⚙️</span> Database Configuration</h2>
+            <p class="sub">Continuously audits database engines against CIS benchmarks, flags drift in security-relevant settings, and ships remediation SQL the DBA can paste in.</p>
+        </div>
+
+        <div class="app-info-body">
+            <div class="section-title"><span class="bar"></span>Engines covered</div>
+            <div class="engine-chips">
+                <span class="engine-chip chip-sql">🟦 SQL Server <code>CIS 2.0</code></span>
+                <span class="engine-chip chip-pg">🐘 PostgreSQL <code>CIS 1.2</code></span>
+                <span class="engine-chip chip-mongo">🍃 MongoDB <code>CIS 1.1</code></span>
+                <span class="engine-chip chip-mysql">🐬 MySQL <code>CIS 1.1</code></span>
+                <span class="engine-chip chip-oracle">🟥 Oracle <code>CIS 3.0</code></span>
+            </div>
+
+            <div class="section-title"><span class="bar"></span>How the audit runs</div>
+            <div class="flow-steps">
+                <div class="flow-step">
+                    <span class="num">1</span>
+                    <span class="step-icon">🔌</span>
+                    <div class="step-label">Connect</div>
+                    <div class="step-sub">Read-only creds per DB</div>
+                </div>
+                <div class="flow-step">
+                    <span class="num">2</span>
+                    <span class="step-icon">📐</span>
+                    <div class="step-label">Run CIS checks</div>
+                    <div class="step-sub">Pass / warn / fail</div>
+                </div>
+                <div class="flow-step">
+                    <span class="num">3</span>
+                    <span class="step-icon">🔀</span>
+                    <div class="step-label">Detect drift</div>
+                    <div class="step-sub">Diff vs. last snapshot</div>
+                </div>
+                <div class="flow-step">
+                    <span class="num">4</span>
+                    <span class="step-icon">🛠️</span>
+                    <div class="step-label">Remediate</div>
+                    <div class="step-sub">Paste-ready SQL</div>
+                </div>
+            </div>
+
+            <div class="section-title"><span class="bar"></span>When to use it</div>
+            <div class="when-grid">
+                <div class="when-card">
+                    <div class="when-ico">🌙</div>
+                    <div class="when-ttl">Nightly audit</div>
+                    <div class="when-sub">Scheduled sweep across the fleet.</div>
+                </div>
+                <div class="when-card">
+                    <div class="when-ico">🚀</div>
+                    <div class="when-ttl">Pre-deploy gate</div>
+                    <div class="when-sub">Block promotion on failing critical checks.</div>
+                </div>
+                <div class="when-card">
+                    <div class="when-ico">🚨</div>
+                    <div class="when-ttl">Post-incident</div>
+                    <div class="when-sub">Verify hardening after a breach or misconfig.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const $ = (id) => document.getElementById(id);
+
+    function complianceColor(pct) {
+        if (pct >= 90) return '#0d7a2e';
+        if (pct >= 70) return '#b45309';
+        return '#991b1b';
+    }
+
+    fetch('/api/db-config/overview')
+        .then(r => r.json())
+        .then(render)
+        .catch(err => console.error(err));
+
+    function render(data) {
+        const k = data.kpis || {};
+        $('kpiTotal').textContent = k.total_dbs ?? '–';
+        $('kpiChecks').textContent = (k.total_checks || 0) + ' checks run';
+        $('kpiCompliantPct').textContent = (k.compliant_pct ?? 0) + '%';
+        $('kpiCompliantNum').textContent = (k.compliant || 0) + ' DBs at ≥90%';
+        $('kpiAvg').textContent = (k.avg_compliance ?? '–');
+        $('kpiWarn').textContent = k.warn ?? '–';
+        $('kpiFail').textContent = k.fail ?? '–';
+
+        // DB list
+        const dbList = $('dbList');
+        dbList.replaceChildren();
+        const dbs = data.databases || [];
+        $('dbCount').textContent = dbs.length;
+        for (const d of dbs) {
+            const row = document.createElement('div');
+            row.className = 'dbcfg-db-row';
+
+            const left = document.createElement('div');
+            const name = document.createElement('div'); name.className = 'dbcfg-db-name'; name.textContent = d.name;
+            const meta = document.createElement('div'); meta.className = 'dbcfg-db-meta';
+            meta.textContent = `${d.engine} · ${d.env}`;
+            const bench = document.createElement('div'); bench.className = 'dbcfg-db-bench'; bench.textContent = d.benchmark;
+            left.append(name, meta, bench);
+
+            const mid = document.createElement('div');
+            const bar = document.createElement('div'); bar.className = 'compliance-bar';
+            const fill = document.createElement('div');
+            fill.style.width = d.compliance + '%';
+            fill.style.background = complianceColor(d.compliance);
+            bar.appendChild(fill);
+            const segs = document.createElement('div'); segs.className = 'compliance-segs';
+            segs.innerHTML = `<span class="p">✔ ${d.pass}</span><span class="w">△ ${d.warn}</span><span class="f">✘ ${d.fail}</span>`;
+            mid.append(bar, segs);
+
+            const pct = document.createElement('div');
+            pct.className = 'compliance-pct';
+            pct.style.color = complianceColor(d.compliance);
+            pct.textContent = d.compliance + '%';
+
+            row.append(left, mid, pct);
+            dbList.appendChild(row);
+        }
+
+        // drift
+        const drift = $('driftList');
+        drift.replaceChildren();
+        for (const e of (data.drift_events || [])) {
+            const row = document.createElement('div'); row.className = 'drift-row';
+            const ts = document.createElement('div'); ts.className = 'drift-ts'; ts.textContent = e.ts;
+            const body = document.createElement('div'); body.className = 'drift-body';
+            body.innerHTML =
+                `<span class="db">${e.db}</span> · <span class="setting">${e.setting}</span><br>` +
+                `<span class="change"><span class="before">${e.before}</span> → <span class="after">${e.after}</span></span> ` +
+                `by <span class="actor">${e.actor}</span>`;
+            const risk = document.createElement('span');
+            risk.className = 'drift-risk risk-' + (e.risk || 'none');
+            risk.textContent = e.risk;
+            row.append(ts, body, risk);
+            drift.appendChild(row);
+        }
+
+        // findings table
+        const findings = data.findings || [];
+        $('findingsCount').textContent = findings.length;
+        const body = $('findingsBody');
+        body.replaceChildren();
+        for (const f of findings) {
+            const tr = document.createElement('tr');
+
+            const dbCell = document.createElement('td');
+            const n = document.createElement('div'); n.className = 'name'; n.textContent = f.db;
+            dbCell.appendChild(n);
+            tr.appendChild(dbCell);
+
+            const chk = document.createElement('td'); chk.className = 'check'; chk.textContent = f.check;
+            tr.appendChild(chk);
+
+            const bench = document.createElement('td');
+            const c = document.createElement('code'); c.textContent = f.benchmark;
+            bench.appendChild(c);
+            tr.appendChild(bench);
+
+            const sev = document.createElement('td');
+            const sp = document.createElement('span'); sp.className = 'dbcfg-sev sev-' + f.severity;
+            sp.textContent = f.severity;
+            sev.appendChild(sp);
+            tr.appendChild(sev);
+
+            const state = document.createElement('td');
+            const st = document.createElement('span'); st.className = 'dbcfg-state state-' + (f.state || 'fail').toLowerCase();
+            st.textContent = f.state;
+            state.appendChild(st);
+            tr.appendChild(state);
+
+            const rem = document.createElement('td'); rem.className = 'remediation'; rem.textContent = f.remediation;
+            tr.appendChild(rem);
+
+            body.appendChild(tr);
+        }
+    }
+})();
+
+(function () {
+    const badge = document.getElementById('dbcfg-version-badge');
+    if (badge) {
+        const vid = badge.querySelector('.vid');
+        const fmtRel = (iso) => {
+            const t = iso ? new Date(iso).getTime() : 0;
+            if (!t) return '';
+            const d = Math.max(0, (Date.now() - t) / 1000);
+            if (d < 90) return 'just now';
+            if (d < 3600) return Math.floor(d / 60) + 'm ago';
+            if (d < 86400) return Math.floor(d / 3600) + 'h ago';
+            return Math.floor(d / 86400) + 'd ago';
+        };
+        fetch('/api/db-config/active-version')
+            .then(r => r.ok ? r.json() : Promise.reject(r.status))
+            .then(data => {
+                badge.classList.remove('loading');
+                if (!data.version_id) {
+                    badge.classList.add('unknown');
+                    vid.textContent = 'no sidecar yet';
+                    badge.title = 'No vendor build activated. Click to open deploy portal.';
+                    return;
+                }
+                const rel = fmtRel(data.activated_at);
+                vid.innerHTML = data.version_id + (rel ? ' <span class="sub">· ' + rel + '</span>' : '');
+                badge.title = [
+                    'Version: ' + data.version_id,
+                    data.sha256_short ? 'SHA: ' + data.sha256_short : '',
+                    data.activated_at ? 'Activated: ' + new Date(data.activated_at).toLocaleString() : '',
+                    '', 'Click to open the deploy portal.',
+                ].filter(Boolean).join('\n');
+            })
+            .catch(() => {
+                badge.classList.remove('loading');
+                badge.classList.add('unknown');
+                vid.textContent = 'version unavailable';
+            });
+    }
+
+    const modal = document.getElementById('appInfoModal');
+    const openBtn = document.getElementById('appInfoBtn');
+    const closeBtn = document.getElementById('appInfoClose');
+    if (modal && openBtn && closeBtn) {
+        const open = () => { modal.hidden = false; };
+        const close = () => { modal.hidden = true; };
+        openBtn.addEventListener('click', open);
+        closeBtn.addEventListener('click', close);
+        modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.hidden) close(); });
+    }
+})();
+</script>
+{% endblock %}

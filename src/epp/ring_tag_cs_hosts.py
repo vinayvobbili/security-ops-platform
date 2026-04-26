@@ -77,7 +77,7 @@ PROFILE_OUTPUT_DIR = ROOT_DIRECTORY / "profiles"
 ROOT_DIRECTORY = Path(__file__).parent.parent.parent
 DATA_DIR = ROOT_DIRECTORY / "data"
 TRANSIENT_DIR = DATA_DIR / "transient"
-REGIONS_FILE = DATA_DIR / "regions_by_country.json"
+REGIONS_FILE = DATA_DIR / "regions_by_country_crowdstrike.json"
 COUNTRIES_FILE = DATA_DIR / "countries_by_code.json"
 
 # Type variable for decorator
@@ -270,10 +270,10 @@ class Host:
             self.life_cycle_status = snow_host_details.get('lifecycleStatus', '')
 
             name_lower = self.name.lower()
-            if not self.country and (name_lower.startswith('metlap') or name_lower.startswith('pmdesk') or 'pmli' in name_lower):
+            if not self.country and (name_lower.startswith(('metlap', 'pmdesk', 'inblr', 'inmum')) or 'pmli' in name_lower):
                 self.country = 'India PMLI'
                 self.was_country_guessed = True
-                self.status_message += f" Country guessed from METLAP/PMDESK/PMLI pattern in hostname: {self.country}."
+                self.status_message += f" Country guessed from METLAP/PMDESK/PMLI/INBLR/INMUM pattern in hostname: {self.country}."
 
             if not self.country and name_lower.startswith('iaz'):
                 self.country = 'US'
@@ -283,7 +283,7 @@ class Host:
             if not self.country and (name_lower.startswith('vmvdi') or name_lower.startswith(config.team_name.lower())):
                 self.country = 'United States'
                 self.was_country_guessed = True
-                self.status_message += f" Country guessed from VDI/{config.team_name} in the hostname: {self.country}."
+                self.status_message += f" Country guessed from VMVDI/{config.team_name} in the hostname: {self.country}."
 
         except Exception as e:
             self.status_message += f" Error retrieving ServiceNow data: {str(e)}."

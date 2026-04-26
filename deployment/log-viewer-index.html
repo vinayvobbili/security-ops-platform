@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IR Log Viewer</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🔍</text></svg>">
+    <title>DnR Mission Control</title>
+    <link rel="icon" type="image/png" href="/icons/mission-control-192.png">
+    <link rel="apple-touch-icon" href="/icons/mission-control-192.png">
+    <link rel="manifest" href="/manifest-mission-control.json">
     <style>
         * {
             margin: 0;
@@ -12,9 +14,43 @@
             box-sizing: border-box;
         }
 
+        :root {
+            --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --container-bg: #ffffff;
+            --container-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            --text-primary: #2d3748;
+            --text-secondary: #4a5568;
+            --text-muted: #718096;
+            --text-footer: #a0aec0;
+            --card-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --card-down-gradient: linear-gradient(135deg, #fc5c7d 0%, #6a82fb 100%);
+            --card-degraded-gradient: linear-gradient(135deg, #f6ad55 0%, #dd6b20 100%);
+            --section-bg: #f7fafc;
+            --toast-bg: #ffffff;
+            --toast-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            --title-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+        }
+
+        body.dark-mode {
+            --bg-gradient: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            --container-bg: #1e1e2e;
+            --container-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+            --text-primary: #e2e8f0;
+            --text-secondary: #a0aec0;
+            --text-muted: #718096;
+            --text-footer: #4a5568;
+            --card-gradient: linear-gradient(135deg, #4a54a0 0%, #5a3a7a 100%);
+            --card-down-gradient: linear-gradient(135deg, #c44a6a 0%, #4a5eb0 100%);
+            --card-degraded-gradient: linear-gradient(135deg, #b7791f 0%, #975a16 100%);
+            --section-bg: #252540;
+            --toast-bg: #2d3748;
+            --toast-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            --title-gradient: linear-gradient(135deg, #8b9cf7 0%, #a67dd8 50%, #f5b0f0 100%);
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--bg-gradient);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -23,29 +59,56 @@
         }
 
         .container {
-            background: white;
+            background: var(--container-bg);
             border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            box-shadow: var(--container-shadow);
             max-width: 1600px;
             width: 100%;
             padding: 40px 50px;
         }
 
         h1 {
-            color: #2d3748;
             margin-bottom: 8px;
-            font-size: 1.9em;
+            font-size: 2.2em;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            text-align: center;
+        }
+
+        h1 .gradient-text {
+            background: var(--title-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        h1 .title-icon {
+            -webkit-text-fill-color: initial;
+            margin-right: 4px;
         }
 
         .subtitle {
-            color: #718096;
+            color: var(--text-muted);
             margin-bottom: 16px;
             font-size: 1.05em;
+            letter-spacing: 0.5px;
+            text-align: center;
+        }
+
+        .subtitle .dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background: #48bb78;
+            border-radius: 50%;
+            margin: 0 8px;
+            vertical-align: middle;
+            animation: pulse 2s infinite;
         }
 
         /* Status Bar */
         .status-bar {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--card-gradient);
             border-radius: 12px;
             padding: 16px 20px;
             margin-bottom: 20px;
@@ -202,7 +265,7 @@
         }
 
         .log-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--card-gradient);
             border-radius: 12px;
             padding: 24px;
             padding-bottom: 165px;
@@ -230,7 +293,11 @@
         }
 
         .log-card.status-down {
-            background: linear-gradient(135deg, #fc5c7d 0%, #6a82fb 100%);
+            background: var(--card-down-gradient);
+        }
+
+        .log-card.status-degraded {
+            background: var(--card-degraded-gradient);
         }
 
         .card-header {
@@ -275,6 +342,11 @@
             animation: blink 1s infinite;
         }
 
+        .status-dot.degraded {
+            background: #ed8936;
+            animation: pulse 1.2s infinite;
+        }
+
         @keyframes pulse {
             0%, 100% {
                 opacity: 1;
@@ -310,6 +382,31 @@
             padding: 16px 20px;
             opacity: 1;
             border-top: 1px solid rgba(255, 255, 255, 0.1);
+            min-height: 165px;
+            box-sizing: border-box;
+        }
+
+        .log-card.llm-card {
+            min-height: 290px;
+            padding-bottom: 215px;
+        }
+        .log-card.llm-card .card-overlay {
+            min-height: 215px;
+        }
+
+        .log-card.mac-card {
+            min-height: auto;
+            padding: 14px 24px 175px;
+        }
+        .log-card.mac-card .card-overlay {
+            min-height: 175px;
+            padding: 10px 16px;
+        }
+        .log-card.mac-card .card-overlay-content {
+            margin-bottom: 0;
+        }
+        .log-card.mac-card .metric-row {
+            margin-bottom: 2px;
         }
 
         .card-overlay-content {
@@ -326,21 +423,22 @@
 
         .card-overlay-content .metric-row {
             display: flex;
-            align-items: center;
-            gap: 8px;
+            align-items: flex-start;
+            gap: 4px;
             margin-bottom: 6px;
-            line-height: 1;
+            line-height: 1.4;
         }
 
         .card-overlay-content .metric-label {
-            width: 60px;
+            white-space: nowrap;
+            width: 56px;
             flex-shrink: 0;
             text-align: left;
         }
 
         .card-overlay-content .metric-value {
-            width: 110px;
-            flex-shrink: 0;
+            white-space: nowrap;
+            flex: 1;
             text-align: right;
         }
 
@@ -406,9 +504,9 @@
             position: fixed;
             top: 20px;
             right: 20px;
-            background: white;
+            background: var(--toast-bg);
             border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            box-shadow: var(--toast-shadow);
             padding: 16px 20px;
             max-width: 350px;
             opacity: 0;
@@ -437,30 +535,30 @@
         .toast-title {
             font-weight: 600;
             margin-bottom: 4px;
-            color: #2d3748;
+            color: var(--text-primary);
         }
 
         .toast-message {
             font-size: 0.9em;
-            color: #4a5568;
+            color: var(--text-secondary);
         }
 
         /* Features */
         .features {
-            background: #f7fafc;
+            background: var(--section-bg);
             border-radius: 12px;
             padding: 20px 30px;
             margin-top: 20px;
         }
 
         .features h3 {
-            color: #2d3748;
+            color: var(--text-primary);
             margin-bottom: 12px;
         }
 
         .features ul {
             list-style: none;
-            color: #4a5568;
+            color: var(--text-secondary);
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 8px 20px;
@@ -483,7 +581,7 @@
         .footer {
             text-align: center;
             margin-top: 16px;
-            color: #a0aec0;
+            color: var(--text-footer);
             font-size: 0.9em;
         }
 
@@ -602,7 +700,7 @@
 
         /* Quick Actions Toolbar */
         .quick-actions {
-            background: #f7fafc;
+            background: var(--section-bg);
             border-radius: 12px;
             padding: 16px 20px;
             margin-bottom: 20px;
@@ -614,7 +712,7 @@
         }
 
         .quick-actions-title {
-            color: #2d3748;
+            color: var(--text-primary);
             font-weight: 600;
             font-size: 1em;
         }
@@ -683,12 +781,116 @@
         .trend-stable {
             color: #cbd5e0;
         }
+
+        /* Theme Toggle */
+        #themeToggleBtn {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            z-index: 2000;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+        }
+
+        #themeToggleBtn:hover {
+            background: rgba(255, 255, 255, 0.35);
+            transform: scale(1.1);
+        }
+
+        /* Auth Modal */
+        .auth-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+            z-index: 3000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .auth-modal {
+            background: var(--container-bg);
+            border-radius: 12px;
+            padding: 28px 32px;
+            width: 340px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+        }
+
+        .auth-modal h3 {
+            color: var(--text-primary);
+            margin-bottom: 16px;
+            font-size: 1.2em;
+        }
+
+        .auth-modal input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid rgba(128, 128, 128, 0.3);
+            border-radius: 8px;
+            margin-bottom: 12px;
+            font-size: 0.95em;
+            background: var(--section-bg);
+            color: var(--text-primary);
+            outline: none;
+            box-sizing: border-box;
+        }
+
+        .auth-modal input:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+        }
+
+        .auth-modal-buttons {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+            margin-top: 4px;
+        }
+
+        .auth-modal-buttons button {
+            padding: 8px 20px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            cursor: pointer;
+            border: none;
+            font-weight: 500;
+        }
+
+        .auth-btn-cancel {
+            background: var(--section-bg);
+            color: var(--text-secondary);
+        }
+
+        .auth-btn-cancel:hover {
+            background: rgba(128, 128, 128, 0.2);
+        }
+
+        .auth-btn-submit {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .auth-btn-submit:hover {
+            opacity: 0.9;
+        }
     </style>
 </head>
 <body>
+<button id="themeToggleBtn" title="Toggle theme" onclick="toggleTheme()">🌙</button>
 <div class="container">
-    <h1>🔍 IR Log Viewer</h1>
-    <p class="subtitle">Real-time log monitoring for all IR services</p>
+    <h1><span class="title-icon">🛡️</span><span class="gradient-text">DnR Mission Control</span></h1>
+    <p class="subtitle">Real-time monitoring for all DnR services</p>
 
     <!-- Status Bar -->
     <div class="status-bar" id="statusBar">
@@ -731,9 +933,6 @@
             <button class="btn-action" onclick="restartSelf()" id="restartSelfBtn">
                 🔧 Restart This Service
             </button>
-            <button class="btn-action" onclick="showSystemStatus()" id="systemStatusBtn">
-                📊 System Status
-            </button>
             <button class="btn-action" onclick="gitPull()" id="gitPullBtn">
                 📥
             </button>
@@ -742,7 +941,343 @@
 
     <!-- Log Cards Grid -->
     <div class="log-grid" id="logGrid">
+        <!-- System Status Card -->
+        <div class="log-card mac-card" id="card-system">
+            <div class="card-header">
+                <h3>🐧 Lab VM 1</h3>
+                <div class="card-status">
+                    <span class="status-dot running" id="dot-system"></span>
+                    <span id="status-system">Loading...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-system">
+                <div class="card-overlay-content" id="info-system">
+                    <div class="metric-row">
+                        <span class="metric-label">Uptime:</span>
+                        <span class="metric-value" id="sys-uptime">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">CPU:</span>
+                        <span class="metric-value" id="sys-cpu">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="sys-cpu-bar" style="width: 0%"></div></div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Load:</span>
+                        <span class="metric-value" id="sys-load">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Mem:</span>
+                        <span class="metric-value" id="sys-mem">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="sys-mem-bar" style="width: 0%"></div></div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Disk:</span>
+                        <span class="metric-value" id="sys-disk">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="sys-disk-bar" style="width: 0%"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="log-card mac-card" id="card-lab-vm2">
+            <div class="card-header">
+                <h3>🐧 Lab VM 2</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-lab-vm2"></span>
+                    <span id="status-lab-vm2">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-lab-vm2">
+                <div class="card-overlay-content" id="info-lab-vm2">
+                    <div class="metric-row">
+                        <span class="metric-label">Uptime:</span>
+                        <span class="metric-value" id="vm2-uptime">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">CPU:</span>
+                        <span class="metric-value" id="vm2-cpu">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="vm2-cpu-bar" style="width: 0%"></div></div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Load:</span>
+                        <span class="metric-value" id="vm2-load">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Mem:</span>
+                        <span class="metric-value" id="vm2-mem">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="vm2-mem-bar" style="width: 0%"></div></div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Disk:</span>
+                        <span class="metric-value" id="vm2-disk">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="vm2-disk-bar" style="width: 0%"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="log-card mac-card" id="card-mac-m1">
+            <div class="card-header">
+                <h3>🖥️ Mac M1</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-mac-m1"></span>
+                    <span id="status-mac-m1">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-mac-m1">
+                <div class="card-overlay-content">
+                    <div class="metric-row">
+                        <span class="metric-label">Chip:</span>
+                        <span class="metric-value" id="mac-m1-chip">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Cores:</span>
+                        <span class="metric-value" id="mac-m1-cores">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">macOS:</span>
+                        <span class="metric-value" id="mac-m1-macos">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Uptime:</span>
+                        <span class="metric-value" id="mac-m1-uptime">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">CPU:</span>
+                        <span class="metric-value" id="mac-m1-cpu">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="mac-m1-cpu-bar" style="width: 0%"></div></div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Mem:</span>
+                        <span class="metric-value" id="mac-m1-mem">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="mac-m1-mem-bar" style="width: 0%"></div></div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Load:</span>
+                        <span class="metric-value" id="mac-m1-load">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Disk:</span>
+                        <span class="metric-value" id="mac-m1-disk">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="mac-m1-disk-bar" style="width: 0%"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="log-card mac-card" id="card-mac-m3">
+            <div class="card-header">
+                <h3>🖥️ Mac M3</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-mac-m3"></span>
+                    <span id="status-mac-m3">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-mac-m3">
+                <div class="card-overlay-content">
+                    <div class="metric-row">
+                        <span class="metric-label">Chip:</span>
+                        <span class="metric-value" id="mac-m3-chip">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Cores:</span>
+                        <span class="metric-value" id="mac-m3-cores">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">macOS:</span>
+                        <span class="metric-value" id="mac-m3-macos">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Uptime:</span>
+                        <span class="metric-value" id="mac-m3-uptime">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">CPU:</span>
+                        <span class="metric-value" id="mac-m3-cpu">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="mac-m3-cpu-bar" style="width: 0%"></div></div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Mem:</span>
+                        <span class="metric-value" id="mac-m3-mem">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="mac-m3-mem-bar" style="width: 0%"></div></div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Load:</span>
+                        <span class="metric-value" id="mac-m3-load">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Disk:</span>
+                        <span class="metric-value" id="mac-m3-disk">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="mac-m3-disk-bar" style="width: 0%"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div style="grid-column: 1 / -1; padding: 12px 4px 0; color: var(--text-muted); font-size: 0.8em; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Bots</div>
         <!-- Bot cards will be populated by JavaScript -->
+        <div data-section="services" style="grid-column: 1 / -1; padding: 12px 4px 0; color: var(--text-muted); font-size: 0.8em; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Services</div>
+        <!-- Service cards will be populated by JavaScript -->
+        <!-- Inference Server Health Cards -->
+        <div data-section="inference" style="grid-column: 1 / -1; padding: 12px 4px 0; color: var(--text-muted); font-size: 0.8em; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Inference Servers</div>
+        <div style="grid-column: 1 / -1; display: grid; grid-template-columns: repeat(5, 1fr); gap: 18px;">
+        <div class="log-card llm-card" id="card-llm-m1-analysis">
+            <div class="card-header">
+                <h3>🧠 M1 Analysis</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-llm-m1-analysis"></span>
+                    <span id="status-llm-m1-analysis">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-llm-m1-analysis">
+                <div class="card-overlay-content">
+                    <div class="metric-row"><span class="metric-label">Port:</span><span class="metric-value">8015 → 8000</span></div>
+                    <div class="metric-row"><span class="metric-label">Latency:</span><span class="metric-value" id="latency-llm-m1-analysis">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Model:</span><span class="metric-value" id="model-llm-m1-analysis">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Size:</span><span class="metric-value" id="size-llm-m1-analysis">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Uptime:</span><span class="metric-value" id="uptime-llm-m1-analysis">--</span></div>
+                    <div class="metric-row"><span class="metric-label">SSH:</span><span class="metric-value" id="tunnel-llm-m1-analysis">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">the security assistant bot</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="log-card llm-card" id="card-llm-m1-router">
+            <div class="card-header">
+                <h3>🔀 M1 Router</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-llm-m1-router"></span>
+                    <span id="status-llm-m1-router">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-llm-m1-router">
+                <div class="card-overlay-content">
+                    <div class="metric-row"><span class="metric-label">Port:</span><span class="metric-value">8016 → 8001</span></div>
+                    <div class="metric-row"><span class="metric-label">Latency:</span><span class="metric-value" id="latency-llm-m1-router">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Model:</span><span class="metric-value" id="model-llm-m1-router">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Size:</span><span class="metric-value" id="size-llm-m1-router">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Uptime:</span><span class="metric-value" id="uptime-llm-m1-router">--</span></div>
+                    <div class="metric-row"><span class="metric-label">SSH:</span><span class="metric-value" id="tunnel-llm-m1-router">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">the security assistant bot, PBI Pruner</span></div>
+                </div>
+            </div>
+        </div>
+        <!-- M1 Embeds card hidden: dropped to free memory for GLM-4.7-Flash-8bit
+        <div class="log-card" id="card-llm-m1-embed">
+            <div class="card-header">
+                <h3>🔢 M1 Embeds</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-llm-m1-embed"></span>
+                    <span id="status-llm-m1-embed">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-llm-m1-embed">
+                <div class="card-overlay-content">
+                    <div class="metric-row"><span class="metric-label">Port:</span><span class="metric-value">8017 → 8002</span></div>
+                    <div class="metric-row"><span class="metric-label">Latency:</span><span class="metric-value" id="latency-llm-m1-embed">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Model:</span><span class="metric-value" id="model-llm-m1-embed">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">the security assistant bot</span></div>
+                </div>
+            </div>
+        </div>
+        -->
+        <div class="log-card llm-card" id="card-llm-metiq-shim">
+            <div class="card-header">
+                <h3>☁️ the internal LLM gateway Shim</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-llm-metiq-shim"></span>
+                    <span id="status-llm-metiq-shim">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-llm-metiq-shim">
+                <div class="card-overlay-content">
+                    <div class="metric-row"><span class="metric-label">Port:</span><span class="metric-value">8011 (local svc)</span></div>
+                    <div class="metric-row"><span class="metric-label">Latency:</span><span class="metric-value" id="latency-llm-metiq-shim">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Model:</span><span class="metric-value" id="model-llm-metiq-shim">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Size:</span><span class="metric-value" id="size-llm-metiq-shim">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Uptime:</span><span class="metric-value" id="uptime-llm-metiq-shim">--</span></div>
+                    <div class="metric-row"><span class="metric-label">SSH:</span><span class="metric-value" id="tunnel-llm-metiq-shim">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">Web App, Scheduler</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="log-card llm-card" id="card-llm-m3-reranker">
+            <div class="card-header">
+                <h3>🎯 M3 Reranker</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-llm-m3-reranker"></span>
+                    <span id="status-llm-m3-reranker">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-llm-m3-reranker">
+                <div class="card-overlay-content">
+                    <div class="metric-row"><span class="metric-label">Port:</span><span class="metric-value">8020 → 8020</span></div>
+                    <div class="metric-row"><span class="metric-label">Latency:</span><span class="metric-value" id="latency-llm-m3-reranker">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Model:</span><span class="metric-value" id="model-llm-m3-reranker">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Size:</span><span class="metric-value" id="size-llm-m3-reranker">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Uptime:</span><span class="metric-value" id="uptime-llm-m3-reranker">--</span></div>
+                    <div class="metric-row"><span class="metric-label">SSH:</span><span class="metric-value" id="tunnel-llm-m3-reranker">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">Customer Assurance, RAG</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="log-card llm-card" id="card-llm-m3-embed">
+            <div class="card-header">
+                <h3>🔢 M3 Embeds</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-llm-m3-embed"></span>
+                    <span id="status-llm-m3-embed">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-llm-m3-embed">
+                <div class="card-overlay-content">
+                    <div class="metric-row"><span class="metric-label">Port:</span><span class="metric-value">8019 → 8002</span></div>
+                    <div class="metric-row"><span class="metric-label">Latency:</span><span class="metric-value" id="latency-llm-m3-embed">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Model:</span><span class="metric-value" id="model-llm-m3-embed">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Size:</span><span class="metric-value" id="size-llm-m3-embed">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Uptime:</span><span class="metric-value" id="uptime-llm-m3-embed">--</span></div>
+                    <div class="metric-row"><span class="metric-label">SSH:</span><span class="metric-value" id="tunnel-llm-m3-embed">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">Web App, Scheduler</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="log-card llm-card" id="card-llm-m3-transcription">
+            <div class="card-header">
+                <h3>🎙️ M3 Transcription</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-llm-m3-transcription"></span>
+                    <span id="status-llm-m3-transcription">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-llm-m3-transcription">
+                <div class="card-overlay-content">
+                    <div class="metric-row"><span class="metric-label">Port:</span><span class="metric-value">11437 → 11437</span></div>
+                    <div class="metric-row"><span class="metric-label">Latency:</span><span class="metric-value" id="latency-llm-m3-transcription">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Model:</span><span class="metric-value" id="model-llm-m3-transcription">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Size:</span><span class="metric-value" id="size-llm-m3-transcription">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Uptime:</span><span class="metric-value" id="uptime-llm-m3-transcription">--</span></div>
+                    <div class="metric-row"><span class="metric-label">SSH:</span><span class="metric-value" id="tunnel-llm-m3-transcription">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">Meeting Recap</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="log-card llm-card" id="card-llm-m3-tts">
+            <div class="card-header">
+                <h3>🔊 M3 TTS</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-llm-m3-tts"></span>
+                    <span id="status-llm-m3-tts">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-llm-m3-tts">
+                <div class="card-overlay-content">
+                    <div class="metric-row"><span class="metric-label">Port:</span><span class="metric-value">8021 → 8021</span></div>
+                    <div class="metric-row"><span class="metric-label">Latency:</span><span class="metric-value" id="latency-llm-m3-tts">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Model:</span><span class="metric-value" id="model-llm-m3-tts">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Size:</span><span class="metric-value" id="size-llm-m3-tts">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Uptime:</span><span class="metric-value" id="uptime-llm-m3-tts">--</span></div>
+                    <div class="metric-row"><span class="metric-label">SSH:</span><span class="metric-value" id="tunnel-llm-m3-tts">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">Demo videos</span></div>
+                </div>
+            </div>
+        </div>
+        </div>
     </div>
 
     <div class="features">
@@ -770,6 +1305,7 @@
 </div>
 
 <script>
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
     const API_BASE = `http://${window.location.hostname}:8040/api`;
 
     // Cached auth credentials (only needed for control actions)
@@ -777,12 +1313,56 @@
 
     function getAuthHeader() {
         if (cachedAuth) return cachedAuth;
-        const username = prompt('Username:');
-        if (!username) return null;
-        const password = prompt('Password:');
-        if (!password) return null;
-        cachedAuth = 'Basic ' + btoa(username + ':' + password);
-        return cachedAuth;
+        // Synchronous callers should use requestAuth() instead
+        return null;
+    }
+
+    function requestAuth() {
+        return new Promise((resolve) => {
+            if (cachedAuth) { resolve(cachedAuth); return; }
+
+            const overlay = document.createElement('div');
+            overlay.className = 'auth-overlay';
+            overlay.innerHTML = `
+                <div class="auth-modal">
+                    <h3>Authentication Required</h3>
+                    <input type="text" id="authUser" placeholder="Username" autocomplete="username">
+                    <input type="password" id="authPass" placeholder="Password" autocomplete="current-password">
+                    <div class="auth-modal-buttons">
+                        <button class="auth-btn-cancel" id="authCancel">Cancel</button>
+                        <button class="auth-btn-submit" id="authSubmit">Sign In</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+
+            const userInput = overlay.querySelector('#authUser');
+            const passInput = overlay.querySelector('#authPass');
+            const submitBtn = overlay.querySelector('#authSubmit');
+            const cancelBtn = overlay.querySelector('#authCancel');
+
+            userInput.focus();
+
+            function submit() {
+                const u = userInput.value.trim();
+                const p = passInput.value;
+                overlay.remove();
+                if (!u || !p) { resolve(null); return; }
+                cachedAuth = 'Basic ' + btoa(u + ':' + p);
+                resolve(cachedAuth);
+            }
+
+            function cancel() {
+                overlay.remove();
+                resolve(null);
+            }
+
+            submitBtn.addEventListener('click', submit);
+            cancelBtn.addEventListener('click', cancel);
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) cancel(); });
+            passInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+            userInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') passInput.focus(); });
+        });
     }
 
     let lastStatusData = null;
@@ -793,32 +1373,43 @@
 
     // Bot configuration
     const BOTS = [
-        { key: 'pokedex', name: 'the security assistant bot', emoji: '🔮', port: 8042 },
-        { key: 'toodles', name: 'the notification service', emoji: '🎯', port: 8032 },
-        { key: 'msoar', name: 'the case orchestrator', emoji: '🤖', port: 8033 },
-        { key: 'moneyball', name: 'MoneyBall', emoji: '💰', port: 8034 },
-        { key: 'jarvis', name: 'the orchestration service', emoji: '🛡️', port: 8035 },
-        { key: 'barnacles', name: 'the alert triage service', emoji: '⚓', port: 8036 },
-        { key: 'tars', name: 'the threat-intel service', emoji: '☁️', port: 8038 },
-        { key: 'case', name: 'CASE', emoji: '🏢', port: 8041 },
-        { key: 'jobs', name: 'All Jobs', emoji: '⏰', port: 8037 },
-        { key: 'webserver', name: 'Web Server', emoji: '🌐', port: 8039 }
+        { key: 'pokedex',   name: 'the security assistant bot',       emoji: '🔮', port: 8042, group: 'bots' },
+        { key: 'toodles',   name: 'the notification service',        emoji: '🎯', port: 8032, group: 'bots' },
+        { key: 'msoar',     name: 'the case orchestrator',          emoji: '🤖', port: 8033, group: 'bots' },
+        { key: 'moneyball', name: 'MoneyBall',       emoji: '💰', port: 8034, group: 'bots' },
+        { key: 'jarvis',    name: 'the orchestration service',          emoji: '🛡️', port: 8035, group: 'bots' },
+        { key: 'barnacles', name: 'the alert triage service',       emoji: '⚓', port: 8036, group: 'bots' },
+        { key: 'tars',      name: 'the threat-intel service',            emoji: '☁️', port: 8038, group: 'bots' },
+        { key: 'case',      name: 'CASE',            emoji: '🏢', port: 8041, group: 'bots' },
+        { key: 'winai',     name: 'the Windows triage agent',          emoji: '📚', port: 8043, group: 'bots' },
+        { key: 'jobs',      name: 'IR Scheduler',    emoji: '⏰', port: 8037, group: 'services' },
+        { key: 'epp',       name: 'EPP Scheduler',   emoji: '🛡️', port: 8044, group: 'services' },
+        { key: 'ai',        name: 'AI Scheduler',    emoji: '🧠', port: 8045, group: 'services' },
+        { key: 'de',        name: 'DE Scheduler',    emoji: '🔍', port: 8046, group: 'services' },
+        { key: 'webserver', name: 'Web App',         emoji: '🌐', port: 8039, group: 'services' },
     ];
 
     // Initialize
     document.addEventListener('DOMContentLoaded', () => {
         initializeBotCards();
         fetchStatus();
+        fetchSystemStatus();
+        fetchLabVm2Status();
+        fetchLlmHealth();
+        fetchMacHealth();
+
         startAutoRefresh();
     });
 
     function initializeBotCards() {
         const logGrid = document.getElementById('logGrid');
-        const featuredCard = logGrid.querySelector('.featured');
+        const servicesSection = logGrid.querySelector('[data-section="services"]');
+        const inferenceSection = logGrid.querySelector('[data-section="inference"]');
 
         BOTS.forEach(bot => {
             const card = createBotCard(bot);
-            logGrid.appendChild(card);
+            const anchor = bot.group === 'services' ? inferenceSection : servicesSection;
+            logGrid.insertBefore(card, anchor);
         });
     }
 
@@ -915,22 +1506,23 @@
         }
 
         const timeParts = timeStr.split(':');
+        const hours = timeParts.length === 3 ? parseInt(timeParts[0]) : 0;
+        const minutes = timeParts.length === 3 ? parseInt(timeParts[1]) : parseInt(timeParts[0]) || 0;
 
-        if (days > 0) {
-            const hours = parseInt(timeParts[0]);
-            return `${days}d ${hours}h`;
-        } else if (timeParts.length === 3) {
-            const hours = parseInt(timeParts[0]);
-            const minutes = parseInt(timeParts[1]);
-            if (hours > 0) {
-                return `${hours}h ${minutes}m`;
-            } else {
-                return `${minutes}m`;
-            }
-        } else {
-            const minutes = parseInt(timeParts[0]);
-            return `${minutes}m`;
-        }
+        // Build human-readable string: 5m 4w 3d 2h
+        const months = Math.floor(days / 30);
+        days = days % 30;
+        const weeks = Math.floor(days / 7);
+        days = days % 7;
+
+        const segments = [];
+        if (months > 0) segments.push(`${months}mo`);
+        if (weeks > 0)  segments.push(`${weeks}w`);
+        if (days > 0)   segments.push(`${days}d`);
+        if (hours > 0)  segments.push(`${hours}h`);
+        if (minutes > 0 && months === 0) segments.push(`${minutes}m`);
+
+        return segments.length > 0 ? segments.join(' ') : '0m';
     }
 
     function getProgressBarClass(value) {
@@ -1184,7 +1776,7 @@
     }
 
     async function controlBot(botKey, action) {
-        const auth = getAuthHeader();
+        const auth = await requestAuth();
         if (!auth) return;
 
         const actionText = action.charAt(0).toUpperCase() + action.slice(1);
@@ -1250,7 +1842,7 @@
     }
 
     async function restartLogViewers() {
-        const auth = getAuthHeader();
+        const auth = await requestAuth();
         if (!auth) return;
 
         const btn = document.getElementById('restartLogViewersBtn');
@@ -1297,7 +1889,7 @@
     }
 
     async function restartSelf() {
-        const auth = getAuthHeader();
+        const auth = await requestAuth();
         if (!auth) return;
 
         const btn = document.getElementById('restartSelfBtn');
@@ -1341,7 +1933,7 @@
     }
 
     async function gitPull() {
-        const auth = getAuthHeader();
+        const auth = await requestAuth();
         if (!auth) return;
 
         const btn = document.getElementById('gitPullBtn');
@@ -1377,42 +1969,244 @@
         }
     }
 
-    async function showSystemStatus() {
-        const btn = document.getElementById('systemStatusBtn');
-        const originalText = btn.innerHTML;
+    function renderLinuxStats(prefix, statusId, dotId, data) {
+        // Uptime - parse "up X weeks, Y days, Z hours, N minutes" into bot-style format
+        const raw = (data.uptime || '').replace('up ', '');
+        const wMatch = raw.match(/(\d+)\s*week/);
+        const dMatch = raw.match(/(\d+)\s*day/);
+        const hMatch = raw.match(/(\d+)\s*hour/);
+        const mMatch = raw.match(/(\d+)\s*minute/);
+        const d = (wMatch ? parseInt(wMatch[1]) * 7 : 0) + (dMatch ? parseInt(dMatch[1]) : 0);
+        const h = hMatch ? parseInt(hMatch[1]) : 0;
+        const m = mMatch ? parseInt(mMatch[1]) : 0;
+        const normalised = d > 0
+            ? `${d}-${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00`
+            : `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00`;
+        document.getElementById(`${prefix}-uptime`).textContent = formatUptime(normalised);
+        const statusEl = document.getElementById(statusId);
+        const dotEl = document.getElementById(dotId);
+        if (statusEl) statusEl.textContent = 'Live';
+        if (dotEl) dotEl.className = 'status-dot running';
 
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner"></span> Loading...';
+        // Real-time CPU utilization
+        const cpuPct = data.cpu_percent;
+        if (cpuPct !== null && cpuPct !== undefined) {
+            document.getElementById(`${prefix}-cpu`).textContent = `${cpuPct}%`;
+            document.getElementById(`${prefix}-cpu-bar`).style.width = Math.min(cpuPct, 100) + '%';
+            document.getElementById(`${prefix}-cpu-bar`).className = 'progress-fill ' + getProgressBarClass(cpuPct);
+        } else {
+            document.getElementById(`${prefix}-cpu`).textContent = '--';
+            document.getElementById(`${prefix}-cpu-bar`).style.width = '0%';
+        }
 
+        // Load average (use server-side cpu_count, fallback to browser)
+        const cpuCores = data.cpu_count || navigator.hardwareConcurrency || 4;
+        const load1 = parseFloat(data.load['1min']) || 0;
+        const loadPct = Math.min(Math.round((load1 / cpuCores) * 100), 100);
+        document.getElementById(`${prefix}-load`).textContent = `${loadPct}%`;
+
+        // Memory
+        const memUsed = data.memory.used;
+        const memTotal = data.memory.total;
+        const parseMemGB = (s) => parseFloat(s) || 0;
+        const memUsedGB = parseMemGB(memUsed);
+        const memTotalGB = parseMemGB(memTotal);
+        const memPct = memTotalGB > 0 ? (memUsedGB / memTotalGB) * 100 : 0;
+
+        document.getElementById(`${prefix}-mem`).textContent = `${memUsed} / ${memTotal}`;
+        document.getElementById(`${prefix}-mem-bar`).style.width = memPct + '%';
+        document.getElementById(`${prefix}-mem-bar`).className = 'progress-fill ' + getProgressBarClass(memPct);
+
+        // Disk
+        const diskPctStr = data.disk.percent || '0%';
+        const diskPct = parseInt(diskPctStr) || 0;
+
+        document.getElementById(`${prefix}-disk`).textContent = `${data.disk.used} / ${data.disk.size}`;
+        document.getElementById(`${prefix}-disk-bar`).style.width = diskPct + '%';
+        document.getElementById(`${prefix}-disk-bar`).className = 'progress-fill ' + getProgressBarClass(diskPct);
+    }
+
+    async function fetchSystemStatus() {
         try {
             const response = await fetch(`${API_BASE}/system-status`);
-
             const data = await response.json();
-
-            if (data.success) {
-                const msg = `
-📦 Disk: ${data.disk.used}/${data.disk.size} (${data.disk.percent})
-💾 Memory: ${data.memory.used}/${data.memory.total} (avail: ${data.memory.available})
-⚡ Load: ${data.load['1min']} / ${data.load['5min']} / ${data.load['15min']}
-⏱️ ${data.uptime}
-                `.trim();
-
-                alert(msg);
-            } else {
-                showToast('Error', 'Failed to get system status', 'error');
-            }
-
+            if (!data.success) return;
+            renderLinuxStats('sys', 'status-system', 'dot-system', data);
         } catch (error) {
-            console.error('Error getting system status:', error);
-            showToast('Error', 'Failed to get system status', 'error');
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = originalText;
+            console.error('Error fetching system status:', error);
+        }
+    }
+
+    async function fetchLabVm2Status() {
+        const statusEl = document.getElementById('status-lab-vm2');
+        const dotEl = document.getElementById('dot-lab-vm2');
+        try {
+            const response = await fetch(`${API_BASE}/lab-vm2-status`);
+            const data = await response.json();
+            if (data.success) {
+                renderLinuxStats('vm2', 'status-lab-vm2', 'dot-lab-vm2', data);
+            } else {
+                if (statusEl) statusEl.textContent = 'Down';
+                if (dotEl) dotEl.className = 'status-dot stopped';
+            }
+        } catch (error) {
+            console.error('Error fetching lab-vm2 status:', error);
+            if (statusEl) statusEl.textContent = 'Down';
+            if (dotEl) dotEl.className = 'status-dot stopped';
+        }
+    }
+
+    async function fetchMacHealth() {
+        try {
+            const response = await fetch(`${API_BASE}/mac-health`);
+            if (!response.ok) return;
+            const data = await response.json();
+            for (const [key, mac] of Object.entries(data.hosts)) {
+                const dot = document.getElementById(`dot-${key}`);
+                const statusEl = document.getElementById(`status-${key}`);
+                if (!dot || !statusEl) continue;
+
+                if (mac.status === 'up') {
+                    dot.className = 'status-dot running';
+                    statusEl.textContent = 'Up';
+
+                    const chipEl = document.getElementById(`${key}-chip`);
+                    const coresEl = document.getElementById(`${key}-cores`);
+                    const macosEl = document.getElementById(`${key}-macos`);
+                    const uptimeEl = document.getElementById(`${key}-uptime`);
+                    const cpuEl = document.getElementById(`${key}-cpu`);
+                    const cpuBar = document.getElementById(`${key}-cpu-bar`);
+                    const memEl = document.getElementById(`${key}-mem`);
+                    const memBar = document.getElementById(`${key}-mem-bar`);
+                    const loadEl = document.getElementById(`${key}-load`);
+
+                    if (chipEl && mac.chip) chipEl.textContent = mac.chip.replace('Apple ', '');
+                    if (coresEl && mac.ncpu) {
+                        let coreStr = `${mac.ncpu} total`;
+                        if (mac.pcores && mac.ecores) coreStr += ` (${mac.pcores}P + ${mac.ecores}E)`;
+                        coresEl.textContent = coreStr;
+                    }
+                    if (macosEl && mac.macos) macosEl.textContent = mac.macos;
+                    if (uptimeEl && mac.uptime) uptimeEl.textContent = mac.uptime;
+                    if (cpuEl && mac.cpu_pct != null) {
+                        cpuEl.textContent = `${mac.cpu_pct}%`;
+                        if (cpuBar) {
+                            cpuBar.style.width = Math.min(mac.cpu_pct, 100) + '%';
+                            cpuBar.className = 'progress-fill ' + getProgressBarClass(mac.cpu_pct);
+                        }
+                    }
+                    if (memEl && mac.mem_used_gb != null) {
+                        memEl.textContent = `${mac.mem_used_gb}G / ${mac.mem_total_gb}G`;
+                        if (memBar && mac.mem_pct != null) {
+                            memBar.style.width = mac.mem_pct + '%';
+                            memBar.className = 'progress-fill ' + getProgressBarClass(mac.mem_pct);
+                        }
+                    }
+                    if (loadEl && mac.load_1m != null) {
+                        const cores = mac.ncpu || 1;
+                        loadEl.textContent = `${Math.round(mac.load_1m / cores * 100)}%`;
+                    }
+                    const diskEl = document.getElementById(`${key}-disk`);
+                    const diskBar = document.getElementById(`${key}-disk-bar`);
+                    if (diskEl && mac.disk_used_gb != null && mac.disk_size_gb != null) {
+                        diskEl.textContent = `${mac.disk_used_gb}G / ${mac.disk_size_gb}G`;
+                        if (diskBar && mac.disk_pct != null) {
+                            diskBar.style.width = Math.min(mac.disk_pct, 100) + '%';
+                            diskBar.className = 'progress-fill ' + getProgressBarClass(mac.disk_pct);
+                        }
+                    }
+                } else {
+                    dot.className = 'status-dot stopped';
+                    statusEl.textContent = 'Down';
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching Mac health:', error);
+        }
+    }
+
+    function formatLlmUptime(seconds) {
+        const d = Math.floor(seconds / 86400);
+        const h = Math.floor((seconds % 86400) / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        if (d > 0) return `${d}d ${h}h`;
+        if (h > 0) return `${h}h ${m}m`;
+        return `${m}m`;
+    }
+
+    async function fetchLlmHealth() {
+        try {
+            const response = await fetch(`${API_BASE}/llm-health`);
+            if (!response.ok) return;
+            const data = await response.json();
+            for (const [key, ep] of Object.entries(data.endpoints)) {
+                const card = document.getElementById(`card-llm-${key}`);
+                const dot = document.getElementById(`dot-llm-${key}`);
+                const statusEl = document.getElementById(`status-llm-${key}`);
+                const descEl = document.getElementById(`desc-llm-${key}`);
+                const modelEl = document.getElementById(`model-llm-${key}`);
+                const latencyEl = document.getElementById(`latency-llm-${key}`);
+                const uptimeEl = document.getElementById(`uptime-llm-${key}`);
+                const sizeEl = document.getElementById(`size-llm-${key}`);
+                const tunnelEl = document.getElementById(`tunnel-llm-${key}`);
+                if (!card) continue;
+                if (ep.status === 'up') {
+                    card.classList.remove('status-down');
+                    card.classList.remove('status-degraded');
+                    dot.className = 'status-dot running';
+                    statusEl.textContent = 'Up';
+                    if (ep.models && ep.models.length > 0) {
+                        if (modelEl) modelEl.textContent = ep.models[0];
+                    }
+                    if (latencyEl) latencyEl.textContent = ep.latency_ms ? `${ep.latency_ms}ms` : '--';
+                    if (uptimeEl) uptimeEl.textContent = ep.uptime_s != null ? formatLlmUptime(ep.uptime_s) : '--';
+                    if (sizeEl) sizeEl.textContent = ep.model_size || '--';
+                } else if (ep.status === 'degraded') {
+                    card.classList.remove('status-down');
+                    card.classList.add('status-degraded');
+                    dot.className = 'status-dot degraded';
+                    const note = ep.upstream_error ? ` (${ep.upstream_error})` : '';
+                    statusEl.textContent = `Degraded${note}`;
+                    if (ep.models && ep.models.length > 0) {
+                        if (modelEl) modelEl.textContent = `${ep.models[0]} (fallback)`;
+                    }
+                    if (latencyEl) latencyEl.textContent = ep.latency_ms ? `${ep.latency_ms}ms` : '--';
+                    if (uptimeEl) uptimeEl.textContent = ep.uptime_s != null ? formatLlmUptime(ep.uptime_s) : '--';
+                    if (sizeEl) sizeEl.textContent = ep.model_size || '--';
+                } else if (ep.status === 'unknown') {
+                    card.classList.remove('status-down');
+                    card.classList.remove('status-degraded');
+                    dot.className = 'status-dot stopped';
+                    statusEl.textContent = 'TBD';
+                    if (modelEl) modelEl.textContent = '--';
+                    if (latencyEl) latencyEl.textContent = '--';
+                    if (uptimeEl) uptimeEl.textContent = '--';
+                } else {
+                    card.classList.add('status-down');
+                    card.classList.remove('status-degraded');
+                    dot.className = 'status-dot stopped';
+                    statusEl.textContent = 'Down';
+                    if (descEl) descEl.textContent = ep.error || 'Unreachable';
+                    if (modelEl) modelEl.textContent = '--';
+                    if (latencyEl) latencyEl.textContent = '--';
+                    if (uptimeEl) uptimeEl.textContent = '--';
+                }
+                // Tunnel status
+                if (tunnelEl) {
+                    if (ep.tunnel === 'up') {
+                        tunnelEl.innerHTML = '<span style="color: #4ade80;">&#x25CF;</span> Up' + (ep.remote ? ` (${ep.remote})` : '');
+                    } else {
+                        tunnelEl.innerHTML = '<span style="color: #f87171;">&#x25CF;</span> Down' + (ep.remote ? ` (${ep.remote})` : '');
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching LLM health:', error);
         }
     }
 
     async function controlAllBots(action) {
-        const auth = getAuthHeader();
+        const auth = await requestAuth();
         if (!auth) return;
         if (!lastStatusData) return;
 
@@ -1516,7 +2310,7 @@
         reloadBtn.classList.add('loading');
 
         try {
-            await fetchStatus();
+            await Promise.all([fetchStatus(), fetchSystemStatus(), fetchLabVm2Status(), fetchLlmHealth(), fetchMacHealth()]);
         } finally {
             // Remove loading state after a minimum of 300ms for visual feedback
             setTimeout(() => {
@@ -1530,6 +2324,10 @@
             refreshInterval = setInterval(() => {
                 if (!isPaused) {
                     fetchStatus();
+                    fetchSystemStatus();
+                    fetchLabVm2Status();
+                    fetchLlmHealth();
+                    fetchMacHealth();
                 }
             }, 60000); // Refresh every 60 seconds
         }
@@ -1568,6 +2366,10 @@
 
             // Fetch status immediately
             fetchStatus();
+            fetchSystemStatus();
+            fetchLabVm2Status();
+            fetchLlmHealth();
+            fetchMacHealth();
 
             showToast('Auto-refresh Resumed', 'Updates will continue every 60 seconds', 'success');
         }
@@ -1587,6 +2389,34 @@
             toast.classList.remove('show');
         }, 4000);
     }
+
+    // Theme Management
+    function detectOSTheme() {
+        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+
+    function applyTheme(mode) {
+        document.body.classList.toggle('dark-mode', mode === 'dark');
+        const btn = document.getElementById('themeToggleBtn');
+        if (btn) btn.textContent = mode === 'dark' ? '☀️' : '🌙';
+    }
+
+    function toggleTheme() {
+        const isDark = document.body.classList.contains('dark-mode');
+        const newMode = isDark ? 'light' : 'dark';
+        localStorage.setItem('mc-theme', newMode);
+        applyTheme(newMode);
+    }
+
+    (function initTheme() {
+        const saved = localStorage.getItem('mc-theme');
+        applyTheme(saved || detectOSTheme());
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+            if (!localStorage.getItem('mc-theme')) {
+                applyTheme(e.matches ? 'dark' : 'light');
+            }
+        });
+    })();
 
     // Update "last updated" text every second
     setInterval(() => {

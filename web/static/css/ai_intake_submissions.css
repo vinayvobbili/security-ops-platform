@@ -1,0 +1,96 @@
+/* ---------- page background ---------- */
+body {
+    background: linear-gradient(135deg, #0046AD 0%, #4A8BC2 40%, #00A651 100%) !important;
+    min-height: 100vh;
+}
+
+/* ---------- layout ---------- */
+.ais-container { max-width: 1400px; margin: 24px auto; padding: 0 20px 40px; }
+
+.ais-count {
+    color: rgba(255,255,255,0.8); font-size: 0.95rem; margin-bottom: 16px; font-weight: 500;
+}
+
+.ais-new-btn {
+    display: inline-block; margin-bottom: 16px; padding: 8px 20px;
+    background: linear-gradient(135deg, #ffffff, #e0f5e8);
+    color: #0046AD; border-radius: 8px; text-decoration: none;
+    font-weight: 700; font-size: 0.9rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+.ais-new-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+}
+
+/* ---------- table ---------- */
+.ais-table-wrap {
+    overflow-x: auto; border-radius: 14px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+    background: linear-gradient(160deg, #ffffff 0%, #eef4fb 50%, #e8f5ee 100%);
+}
+.ais-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+.ais-table thead { background: linear-gradient(135deg, #0046AD 0%, #003875 40%, #00A651 100%); }
+.ais-table th {
+    color: #fff; padding: 14px 14px; text-align: left;
+    font-weight: 700; white-space: nowrap; font-size: 0.84rem;
+    letter-spacing: 0.02em;
+}
+.ais-table td {
+    padding: 12px 14px; border-bottom: 1px solid rgba(0,70,173,0.08);
+    vertical-align: top; color: #1e293b;
+}
+.ais-table tbody tr {
+    transition: background 0.15s;
+}
+.ais-table tbody tr:hover {
+    background: linear-gradient(90deg, rgba(0,70,173,0.06), rgba(0,166,81,0.06));
+    cursor: pointer;
+}
+.ais-table tbody tr:nth-child(even) {
+    background: rgba(0,70,173,0.02);
+}
+.ais-table tbody tr:nth-child(even):hover {
+    background: linear-gradient(90deg, rgba(0,70,173,0.06), rgba(0,166,81,0.06));
+}
+.ais-table .truncate { max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ais-table .truncate:hover { white-space: normal; overflow: visible; }
+
+/* ---------- priority badges ---------- */
+.ais-priority { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.82rem; font-weight: 700; }
+.ais-priority-high { background: linear-gradient(135deg, #fee2e2, #fecaca); color: #b91c1c; }
+.ais-priority-medium { background: linear-gradient(135deg, #fef3c7, #fde68a); color: #92400e; }
+.ais-priority-low { background: linear-gradient(135deg, #dcfce7, #bbf7d0); color: #166534; }
+
+.ais-empty {
+    text-align: center; padding: 60px 20px;
+    color: rgba(255,255,255,0.7); font-size: 1.1rem;
+}
+
+/* ---------- dark mode ---------- */
+body.dark-mode {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%) !important;
+}
+body.dark-mode .ais-count { color: #94a3b8; }
+body.dark-mode .ais-new-btn {
+    background: linear-gradient(135deg, #1e3a5f, #1a3a2e);
+    color: #60a5fa;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+body.dark-mode .ais-new-btn:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+body.dark-mode .ais-table-wrap {
+    background: linear-gradient(160deg, #1e293b 0%, #172744 50%, #142e24 100%);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+body.dark-mode .ais-table thead {
+    background: linear-gradient(135deg, #0f2444 0%, #0a1e3a 40%, #0a2e1a 100%);
+}
+body.dark-mode .ais-table td { border-bottom-color: #334155; color: #e2e8f0; }
+body.dark-mode .ais-table tbody tr:hover { background: linear-gradient(90deg, rgba(59,130,246,0.08), rgba(52,211,153,0.08)); }
+body.dark-mode .ais-table tbody tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+body.dark-mode .ais-table tbody tr:nth-child(even):hover { background: linear-gradient(90deg, rgba(59,130,246,0.08), rgba(52,211,153,0.08)); }
+body.dark-mode .ais-priority-high { background: linear-gradient(135deg, #450a0a, #7f1d1d); color: #fca5a5; }
+body.dark-mode .ais-priority-medium { background: linear-gradient(135deg, #451a03, #78350f); color: #fcd34d; }
+body.dark-mode .ais-priority-low { background: linear-gradient(135deg, #052e16, #14532d); color: #86efac; }
+body.dark-mode .ais-empty { color: #64748b; }

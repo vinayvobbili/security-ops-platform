@@ -9,11 +9,6 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/epp_tagging_metrics.css') }}">
 {% endblock %}
 {% block content %}
-    <!-- Dark Mode Toggle -->
-    <div class="theme-toggle" id="themeToggleWrapper">
-        <button id="themeToggleBtn" aria-label="Toggle dark mode" title="Toggle dark mode">🌙</button>
-    </div>
-
     <div class="dashboard-container">
         <!-- Loading Overlay -->
         <div id="loadingOverlay" class="loading-overlay">
@@ -89,9 +84,97 @@
                         <span class="filter-tag">All Data</span>
                     </span>
                 </div>
+                <button class="story-toggle-btn" id="storyToggleBtn" title="Toggle Data Story narrative mode">📖 Story</button>
+                <button class="compare-toggle-btn" id="eppCompareBtn" title="Compare periods">⚖️ Compare</button>
+                <button class="pdf-export-btn" id="exportPdfBtn" title="Export dashboard as PDF">📄 PDF</button>
+                <button class="share-link-btn" id="shareLinkBtn" title="Copy shareable link">🔗 Share</button>
+                <button class="goal-settings-btn" id="goalSettingsBtn" title="Configure targets">⚙️</button>
                 <button class="reset-btn" id="clearFilters">Reset</button>
             </div>
         </div>
+
+        <!-- Stepper Story Section -->
+        <!-- Comparison Config Bar -->
+        <div id="eppComparisonBar" style="display: none;"></div>
+
+        <div class="story-section" id="storySection" style="display: none;">
+            <div class="story-header" id="storyHeader">
+                <div class="story-header-left">
+                    <span class="story-header-icon">📖</span>
+                    <span class="story-header-title">Data Story</span>
+                    <span class="story-header-subtitle">A guided narrative through your tagging metrics</span>
+                </div>
+                <div class="story-header-right">
+                    <span class="story-step-label" id="storyStepLabel">Step 1 of 5</span>
+                    <span class="story-chevron" id="storyChevron">▾</span>
+                </div>
+            </div>
+            <div class="story-viewport" id="storyViewport">
+                <div class="story-progress-bar">
+                    <div class="story-progress-fill" id="storyProgressFill" style="width: 20%"></div>
+                </div>
+                <div class="story-slides" id="storySlides">
+                    <!-- Step 1: The Fleet -->
+                    <div class="story-slide active" data-step="0">
+                        <div class="story-text">
+                            <h3 class="story-step-title">🛡️ The Fleet</h3>
+                            <p class="story-step-desc" id="storyDescFleet">We manage endpoints across CrowdStrike and Tanium platforms.</p>
+                        </div>
+                        <div class="story-chart-area" id="storyChartFleet"></div>
+                    </div>
+                    <!-- Step 2: The Growth -->
+                    <div class="story-slide" data-step="1">
+                        <div class="story-text">
+                            <h3 class="story-step-title">📈 The Growth</h3>
+                            <p class="story-step-desc" id="storyDescGrowth">Tagging coverage has grown steadily month over month.</p>
+                        </div>
+                        <div class="story-chart-area" id="storyChartGrowth"></div>
+                    </div>
+                    <!-- Step 3: The Coverage -->
+                    <div class="story-slide" data-step="2">
+                        <div class="story-text">
+                            <h3 class="story-step-title">🌍 The Coverage</h3>
+                            <p class="story-step-desc" id="storyDescCoverage">Tagging spans regions and countries worldwide.</p>
+                        </div>
+                        <div class="story-chart-area" id="storyChartCoverage"></div>
+                    </div>
+                    <!-- Step 4: The Rings -->
+                    <div class="story-slide" data-step="3">
+                        <div class="story-text">
+                            <h3 class="story-step-title">🔔 The Rings</h3>
+                            <p class="story-step-desc" id="storyDescRings">Every host is assigned to one of four deployment rings.</p>
+                        </div>
+                        <div class="story-chart-area" id="storyChartRings"></div>
+                    </div>
+                    <!-- Step 5: The Impact -->
+                    <div class="story-slide" data-step="4">
+                        <div class="story-text">
+                            <h3 class="story-step-title">⚡ The Impact</h3>
+                            <p class="story-step-desc" id="storyDescKpis">Automation drives measurable efficiency gains.</p>
+                        </div>
+                        <div class="story-kpi-row" id="storyKpiRow"></div>
+                    </div>
+                </div>
+                <div class="story-nav">
+                    <button class="story-nav-btn story-nav-back" id="storyBack" disabled>← Back</button>
+                    <button class="story-audio-toggle" id="eppAudioToggle" title="Toggle story audio">🔇</button>
+                    <button class="story-narration-toggle" id="eppNarrationToggle" title="Enable narration (text-to-speech)">🔕</button>
+                    <button class="story-effect-btn" id="eppSpotlightToggle" title="Spotlight mode (S)">🔦</button>
+                    <button class="story-effect-btn" id="eppExportSlide" title="Export slide as PNG (P)">📷</button>
+                    <button class="story-effect-btn" id="eppShortcutsBtn" title="Keyboard shortcuts (?)">⌨️</button>
+                    <div class="story-dots" id="storyDots">
+                        <span class="story-dot active" data-dot="0"></span>
+                        <span class="story-dot" data-dot="1"></span>
+                        <span class="story-dot" data-dot="2"></span>
+                        <span class="story-dot" data-dot="3"></span>
+                        <span class="story-dot" data-dot="4"></span>
+                    </div>
+                    <button class="story-nav-btn story-nav-next" id="storyNext">Next →</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="executiveSummary" style="display: none;"></div>
 
         <!-- Summary Cards -->
         <div class="summary-section">
@@ -201,6 +284,7 @@
                 </div>
             </div>
 
+
             <!-- Row 6: Daily Timeline -->
             <div class="chart-row">
                 <div class="chart-card full">
@@ -239,27 +323,27 @@
             <span class="separator">|</span>
             <span>Powered by EPP Tagging Automation</span>
         </div>
+        <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
     </div>
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/story_audio.js') }}"></script>
+<script src="{{ url_for('static', filename='js/story_effects.js') }}"></script>
+<script src="{{ url_for('static', filename='js/comparison_mode.js') }}"></script>
+<script src="{{ url_for('static', filename='js/dashboard_export.js') }}"></script>
+<script src="{{ url_for('static', filename='js/goal_targets.js') }}"></script>
+<script src="{{ url_for('static', filename='js/drilldown_drawer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/exec_summary.js') }}"></script>
 <script>
-// Theme management
-const themeBtn = document.getElementById('themeToggleBtn');
-const savedTheme = localStorage.getItem('epp-metrics-theme');
-
-if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-    document.body.classList.add('dark-mode');
-    themeBtn.textContent = '☀️';
-}
-
-themeBtn.addEventListener('click', () => {
-    document.body.classList.toggle('dark-mode');
-    const isDark = document.body.classList.contains('dark-mode');
-    themeBtn.textContent = isDark ? '☀️' : '🌙';
-    localStorage.setItem('epp-metrics-theme', isDark ? 'dark' : 'light');
-    // Re-render charts with new theme
-    if (window.dashboardData) renderCharts(window.dashboardData);
+// Theme management — hooks into the global slider from common.js
+// Re-render charts when theme changes (dispatched by applyTheme)
+window.addEventListener('themechange', () => {
+    const themeData = lastFilteredData || window.dashboardData;
+    if (themeData) {
+        renderCharts(themeData);
+        renderStorySlides(themeData);
+    }
 });
 
 // Chart colors based on theme
@@ -505,6 +589,11 @@ function applyFilters() {
     renderCharts(filtered);
     renderRecentRunsTable(filtered);
     updateActiveFiltersDisplay();
+
+    lastFilteredData = filtered;
+    renderStorySlides(filtered);
+    updateEppExecSummary(filtered);
+    updateEppGoalBadges(filtered);
 }
 
 function filterData(data) {
@@ -689,6 +778,50 @@ function updateActiveFiltersDisplay() {
     }
 }
 
+// ═══ Executive Summary ═══
+function updateEppExecSummary(data) {
+    if (!window.ExecSummary) return;
+    document.getElementById('executiveSummary').style.display = '';
+    window.ExecSummary.render('executiveSummary', function (d) {
+        var total = d.formatted_summary.total_devices;
+        var rate = d.formatted_summary.success_rate;
+        var platforms = d.summary.by_platform ? Object.keys(d.summary.by_platform).length : 0;
+        var countries = d.by_country ? d.by_country.length : 0;
+        var topCountry = '';
+        if (d.by_country && d.by_country.length > 0) {
+            var sorted = [...d.by_country].sort((a, b) => b.successfully_tagged - a.successfully_tagged);
+            topCountry = sorted[0].country;
+        }
+        var monthly = d.monthly || [];
+        var trend = 'stable';
+        if (monthly.length >= 2) {
+            var last = monthly.reduce((s, m) => m.month === monthly[monthly.length - 1].month ? s + m.successfully_tagged : s, 0);
+            var prev = monthly.reduce((s, m) => m.month === monthly[monthly.length - 2]?.month ? s + m.successfully_tagged : s, 0);
+            trend = last > prev ? 'up' : last < prev ? 'down' : 'stable';
+        }
+        var parts = [];
+        parts.push('Over the selected period, <strong>' + total + '</strong> devices were tagged across <strong>' + platforms + '</strong> platforms with a <strong>' + rate + '</strong> success rate.');
+        if (topCountry) parts.push('<strong>' + topCountry + '</strong> led with the most devices.');
+        parts.push('Monthly volume is trending <strong>' + trend + '</strong>.');
+        return parts.join(' ');
+    }, data, { dashboardKey: 'epp' });
+}
+
+
+// ═══ Goal Target Badges ═══
+function updateEppGoalBadges(data) {
+    if (!window.GoalTargets) return;
+    var targets = window.GoalTargets.getTargets();
+    var rateEl = document.getElementById('successRate');
+    if (rateEl && targets.success_rate) {
+        var old = rateEl.parentElement.querySelector('.goal-target-badge');
+        if (old) old.remove();
+        var rateNum = parseFloat(data.formatted_summary.success_rate);
+        var badge = window.GoalTargets.kpiTargetBadge(rateNum, targets.success_rate, { lowerIsBetter: false, unit: '%' });
+        if (badge) rateEl.insertAdjacentHTML('afterend', badge);
+    }
+}
+
 // Fetch data and render
 async function loadDashboard() {
     try {
@@ -711,6 +844,12 @@ async function loadDashboard() {
         renderCharts(data);
         renderRecentRunsTable(data);
 
+        lastFilteredData = data;
+        initStepper();
+        renderStorySlides(data);
+        updateEppExecSummary(data);
+        updateEppGoalBadges(data);
+
         document.getElementById('loadingOverlay').style.display = 'none';
         document.getElementById('lastUpdated').textContent = new Date().toLocaleString();
 
@@ -730,6 +869,32 @@ function updateSummaryCards(data) {
     document.getElementById('taniumCloudDevices').textContent = summary.tanium_cloud_devices || '0';
     document.getElementById('taniumOnpremDevices').textContent = summary.tanium_onprem_devices || '0';
     document.getElementById('totalRuns').textContent = summary.total_runs;
+
+    // Comparison overlay on KPI cards
+    if (eppComparisonData && window.ComparisonMode) {
+        const bSum = eppComparisonData.formatted_summary;
+        const CM = window.ComparisonMode;
+        const pairs = [
+            ['totalDevices', summary.total_devices, bSum.total_devices],
+            ['successRate', summary.success_rate, bSum.success_rate],
+            ['crowdstrikeDevices', summary.crowdstrike_devices, bSum.crowdstrike_devices],
+            ['taniumCloudDevices', summary.tanium_cloud_devices || '0', bSum.tanium_cloud_devices || '0'],
+            ['taniumOnpremDevices', summary.tanium_onprem_devices || '0', bSum.tanium_onprem_devices || '0'],
+            ['totalRuns', summary.total_runs, bSum.total_runs]
+        ];
+        pairs.forEach(([id, aVal, bVal]) => {
+            const el = document.getElementById(id);
+            if (el) {
+                // Remove old comparison line
+                const old = el.parentElement.querySelector('.kpi-comparison-line');
+                if (old) old.remove();
+                el.parentElement.insertAdjacentHTML('beforeend', CM.kpiComparisonHtml(aVal, bVal, {}));
+            }
+        });
+    } else {
+        // Clean up any leftover comparison lines
+        document.querySelectorAll('.summary-card .kpi-comparison-line').forEach(el => el.remove());
+    }
 }
 
 function renderCharts(data) {
@@ -837,9 +1002,21 @@ function renderCharts(data) {
         monthlyTraces.push({ x: months, y: tnLegacyMonthly, name: 'Tanium (Legacy)', type: 'bar', marker: { color: colors.tanium } });
     }
 
+    // Period B overlay on monthly chart
+    if (eppComparisonData) {
+        const bMonthly = eppComparisonData.monthly || [];
+        const bMonths = [...new Set(bMonthly.map(m => m.month))].sort();
+        const bCsMonthly = bMonths.map(m => { const f = bMonthly.find(x => x.month === m && x.platform === 'CrowdStrike'); return f ? f.successfully_tagged : 0; });
+        monthlyTraces.push({ x: bMonths, y: bCsMonthly, name: 'CrowdStrike (B)', type: 'bar', marker: { color: colors.crowdstrike }, opacity: 0.4 });
+        const bTnCloud = bMonths.map(m => { const f = bMonthly.find(x => x.month === m && x.platform === 'Tanium Cloud'); return f ? f.successfully_tagged : 0; });
+        if (bTnCloud.some(v => v > 0)) monthlyTraces.push({ x: bMonths, y: bTnCloud, name: 'Tanium Cloud (B)', type: 'bar', marker: { color: colors.taniumCloud }, opacity: 0.4 });
+        const bTnOnprem = bMonths.map(m => { const f = bMonthly.find(x => x.month === m && x.platform === 'Tanium On-Prem'); return f ? f.successfully_tagged : 0; });
+        if (bTnOnprem.some(v => v > 0)) monthlyTraces.push({ x: bMonths, y: bTnOnprem, name: 'Tanium On-Prem (B)', type: 'bar', marker: { color: colors.taniumOnprem }, opacity: 0.4 });
+    }
+
     Plotly.react('monthlyChart', monthlyTraces, {
         ...getBaseLayout(),
-        barmode: 'stack',
+        barmode: eppComparisonData ? 'group' : 'stack',
         xaxis: { ...getBaseLayout().xaxis, tickangle: -45 },
         yaxis: { ...getBaseLayout().yaxis, title: 'Devices Tagged' }
     }, plotlyConfig);
@@ -895,11 +1072,12 @@ function renderCharts(data) {
 
     // Country Bar Chart (Top 10)
     const countries = data.by_country.slice(0, 10);
-    Plotly.react('countryChart', [{
+    const countryTrace = {
         type: 'bar',
         x: countries.map(c => c.successfully_tagged),
         y: countries.map(c => c.country),
         orientation: 'h',
+        name: 'Period A',
         marker: {
             color: countries.map((_, i) => {
                 const gradient = i / countries.length;
@@ -909,13 +1087,63 @@ function renderCharts(data) {
         text: countries.map(c => c.successfully_tagged.toLocaleString()),
         textposition: 'outside',
         hovertemplate: '<b>%{y}</b><br>Devices: %{x:,}<extra></extra>'
-    }], {
+    };
+    const countryTraces = [countryTrace];
+
+    // Period B overlay
+    if (eppComparisonData) {
+        const bCountries = eppComparisonData.by_country || [];
+        const bCountryMap = {};
+        bCountries.forEach(c => { bCountryMap[c.country] = c.successfully_tagged; });
+        countryTraces.push({
+            type: 'bar', orientation: 'h', name: 'Period B', opacity: 0.45,
+            x: countries.map(c => bCountryMap[c.country] || 0),
+            y: countries.map(c => c.country),
+            text: countries.map(c => (bCountryMap[c.country] || 0).toLocaleString()),
+            textposition: 'outside',
+            marker: { color: '#a78bfa' },
+            hovertemplate: '<b>%{y}</b><br>Period B: %{x:,}<extra></extra>'
+        });
+    }
+
+    Plotly.react('countryChart', countryTraces, {
         ...getBaseLayout(),
-        showlegend: false,
+        showlegend: !!eppComparisonData,
+        barmode: eppComparisonData ? 'group' : undefined,
         margin: { t: 20, r: 60, b: 40, l: 100 },
         xaxis: { ...getBaseLayout().xaxis, title: 'Devices Tagged' },
         yaxis: { ...getBaseLayout().yaxis, autorange: 'reversed' }
     }, plotlyConfig);
+
+    // Drill-down drawer on country chart
+    if (window.DrilldownDrawer) {
+        var countryEl = document.getElementById('countryChart');
+        if (countryEl) {
+            countryEl.removeAllListeners?.('plotly_click');
+            countryEl.on('plotly_click', function (evtData) {
+                if (!evtData.points || !evtData.points.length) return;
+                var country = evtData.points[0].y;
+                if (!country) return;
+                var rows = (data.recent_runs || []).filter(function (r) {
+                    // Match by looking at by_country data — show recent runs for the time period
+                    return true; // Show all runs (country is aggregated, not per-run)
+                }).slice(0, 50);
+                var countryEntry = data.by_country.find(function (c) { return c.country === country; });
+                var countryTotal = countryEntry ? countryEntry.successfully_tagged : 0;
+                window.DrilldownDrawer.open(
+                    'Country: ' + country + ' (' + countryTotal.toLocaleString() + ' devices)',
+                    rows,
+                    [
+                        {key: 'run_date', label: 'Date'},
+                        {key: 'platform', label: 'Platform'},
+                        {key: 'total_devices', label: 'Devices'},
+                        {key: 'successfully_tagged', label: 'Success'},
+                        {key: 'failed', label: 'Failed'}
+                    ]
+                );
+            });
+        }
+    }
 
     // Ring Tag Distribution
     const ringGroups = { Ring1: 0, Ring2: 0, Ring3: 0, Ring4: 0, Other: 0 };
@@ -1179,7 +1407,591 @@ function renderRecentRunsTable(data) {
     }).join('');
 }
 
+// ===== Stepper Story Mode =====
+let storyCurrentStep = 0;
+let storyCollapsed = localStorage.getItem('epp-story-collapsed') === 'true';
+let storyEnabled = localStorage.getItem('epp-story-enabled') === 'true';
+let lastFilteredData = null;
+let stepperInitialized = false;
+let eppConfettiFired = false;
+let eppTypewriterCancel = null;
+let eppComparisonData = null;
+
+function setStoryToggleBtnState(btn, on) {
+    if (!btn) return;
+    btn.classList.toggle('active', on);
+    btn.title = on ? 'Hide Data Story' : 'Show Data Story narrative mode';
+}
+
+function toggleStoryMode() {
+    const section = document.getElementById('storySection');
+    const btn = document.getElementById('storyToggleBtn');
+    storyEnabled = !storyEnabled;
+    localStorage.setItem('epp-story-enabled', storyEnabled);
+    if (section) section.style.display = storyEnabled ? '' : 'none';
+    setStoryToggleBtnState(btn, storyEnabled);
+    if (storyEnabled && lastFilteredData) {
+        renderStorySlides(lastFilteredData);
+    }
+}
+
+function initStepper() {
+    if (stepperInitialized) return;
+    stepperInitialized = true;
+
+    const section = document.getElementById('storySection');
+    const header = document.getElementById('storyHeader');
+    const backBtn = document.getElementById('storyBack');
+    const nextBtn = document.getElementById('storyNext');
+    const dots = document.querySelectorAll('.story-dot');
+    const toggleBtn = document.getElementById('storyToggleBtn');
+
+    // Restore enabled state
+    if (section) section.style.display = storyEnabled ? '' : 'none';
+    setStoryToggleBtnState(toggleBtn, storyEnabled);
+    if (toggleBtn) toggleBtn.addEventListener('click', toggleStoryMode);
+
+    // Restore collapse state
+    if (storyCollapsed) {
+        section.classList.add('collapsed');
+    }
+
+    // Header click toggles collapse
+    header.addEventListener('click', () => {
+        storyCollapsed = !storyCollapsed;
+        section.classList.toggle('collapsed', storyCollapsed);
+        localStorage.setItem('epp-story-collapsed', storyCollapsed);
+        // Render active chart when expanding (Plotly needs visible container)
+        if (!storyCollapsed && lastFilteredData) {
+            setTimeout(() => renderStoryStep(storyCurrentStep, lastFilteredData), 50);
+        }
+    });
+
+    // Nav buttons
+    backBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (storyCurrentStep > 0) goToStep(storyCurrentStep - 1);
+    });
+    nextBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (storyCurrentStep < 4) goToStep(storyCurrentStep + 1);
+    });
+
+    // Dot clicks
+    dots.forEach(dot => {
+        dot.addEventListener('click', (e) => {
+            e.stopPropagation();
+            goToStep(parseInt(dot.dataset.dot));
+        });
+    });
+
+    // Arrow key navigation when hovering over story section
+    section.addEventListener('mouseenter', () => section.dataset.hover = 'true');
+    section.addEventListener('mouseleave', () => section.dataset.hover = 'false');
+    document.addEventListener('keydown', (e) => {
+        if (section.dataset.hover !== 'true' || storyCollapsed) return;
+        if (e.key === 'ArrowRight' && storyCurrentStep < 4) {
+            e.preventDefault();
+            goToStep(storyCurrentStep + 1);
+        } else if (e.key === 'ArrowLeft' && storyCurrentStep > 0) {
+            e.preventDefault();
+            goToStep(storyCurrentStep - 1);
+        } else if ((e.key === 's' || e.key === 'S') && window.StoryEffects) {
+            if (window.StoryEffects.isSpotlightActive()) window.StoryEffects.spotlightOff();
+            else window.StoryEffects.spotlightOn(section);
+        } else if ((e.key === 'p' || e.key === 'P') && window.StoryEffects) {
+            const slide = document.querySelector('#storySlides .story-slide.active');
+            if (slide) window.StoryEffects.exportSlide(slide, `epp-tagging-step-${storyCurrentStep + 1}.png`);
+        } else if (e.key === '?' && window.StoryEffects) {
+            window.StoryEffects.showShortcuts();
+        } else if ((e.key === 'n' || e.key === 'N') && window.StoryAudio) {
+            window.StoryAudio.toggleNarration();
+            const nb = document.getElementById('eppNarrationToggle');
+            if (nb) { nb.textContent = window.StoryAudio.isNarrationEnabled() ? '🗣️' : '🔕'; }
+        } else if ((e.key === 'a' || e.key === 'A') && window.StoryAudio) {
+            window.StoryAudio.toggle();
+            const ab = document.getElementById('eppAudioToggle');
+            if (ab) { ab.textContent = window.StoryAudio.isEnabled() ? '🔊' : '🔇'; }
+        }
+    });
+    // Global escape for overlays
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && window.StoryEffects) {
+            if (window.StoryEffects.isShortcutsVisible()) window.StoryEffects.hideShortcuts();
+            else if (window.StoryEffects.isSpotlightActive()) window.StoryEffects.spotlightOff();
+        }
+    });
+
+    // Sonification + narration toggles
+    if (window.StoryAudio) {
+        window.StoryAudio.wireToggleButton('eppAudioToggle');
+        window.StoryAudio.wireNarrationButton('eppNarrationToggle');
+    }
+
+    // Effect buttons
+    if (window.StoryEffects) {
+        const spotBtn = document.getElementById('eppSpotlightToggle');
+        if (spotBtn) spotBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (window.StoryEffects.isSpotlightActive()) window.StoryEffects.spotlightOff();
+            else window.StoryEffects.spotlightOn(section);
+        });
+        const expBtn = document.getElementById('eppExportSlide');
+        if (expBtn) expBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const slide = document.querySelector('#storySlides .story-slide.active');
+            if (slide) window.StoryEffects.exportSlide(slide, `epp-tagging-step-${storyCurrentStep + 1}.png`);
+        });
+        const kbdBtn = document.getElementById('eppShortcutsBtn');
+        if (kbdBtn) kbdBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            window.StoryEffects.showShortcuts();
+        });
+    }
+}
+
+function goToStep(n) {
+    if (n < 0 || n > 4) return;
+
+    // Cancel in-progress typewriter
+    if (eppTypewriterCancel) { eppTypewriterCancel(); eppTypewriterCancel = null; }
+
+    const slides = document.querySelectorAll('.story-slide');
+    const dots = document.querySelectorAll('.story-dot');
+
+    // Deactivate current
+    slides[storyCurrentStep].classList.remove('active');
+    dots[storyCurrentStep].classList.remove('active');
+
+    storyCurrentStep = n;
+
+    // Activate new
+    slides[n].classList.add('active');
+    dots[n].classList.add('active');
+
+    // Update progress bar
+    document.getElementById('storyProgressFill').style.width = `${((n + 1) / 5) * 100}%`;
+
+    // Update step label
+    document.getElementById('storyStepLabel').textContent = `Step ${n + 1} of 5`;
+
+    // Update button states
+    document.getElementById('storyBack').disabled = (n === 0);
+    document.getElementById('storyNext').disabled = (n === 4);
+
+    // Sonification
+    if (window.StoryAudio) {
+        if (n === 4) window.StoryAudio.playComplete();
+        else window.StoryAudio.playStep(n, 5);
+    }
+
+    // Confetti on final step (once per data load)
+    if (n === 4 && !eppConfettiFired && window.StoryEffects) {
+        eppConfettiFired = true;
+        window.StoryEffects.confetti();
+    }
+
+    // Replay entrance animation
+    slides[n].classList.remove('active');
+    void slides[n].offsetWidth;
+    slides[n].classList.add('active');
+
+    // Render chart for this step (must be after slide is visible)
+    if (lastFilteredData) {
+        setTimeout(() => renderStoryStep(n, lastFilteredData), 50);
+    }
+
+    // Typewriter + narrate step description
+    setTimeout(() => {
+        const descIds = ['storyDescFleet', 'storyDescGrowth', 'storyDescCoverage', 'storyDescRings', 'storyDescKpis'];
+        const el = document.getElementById(descIds[n]);
+        if (el && window.StoryEffects) {
+            eppTypewriterCancel = window.StoryEffects.typewriter(el, el.textContent, 30);
+        }
+        if (el && window.StoryAudio) window.StoryAudio.speak(el.textContent);
+    }, 200);
+}
+
+function renderStorySlides(data) {
+    // Reset per-session effect state on data change
+    eppConfettiFired = false;
+    if (eppTypewriterCancel) { eppTypewriterCancel(); eppTypewriterCancel = null; }
+    if (window.StoryEffects) window.StoryEffects.resetTypewriterVisited();
+
+    // Update dynamic text
+    const totalDevices = data.summary?.total_devices || 0;
+    const platforms = Object.keys(data.summary?.by_platform || {});
+    document.getElementById('storyDescFleet').textContent =
+        `We manage ${totalDevices.toLocaleString()} endpoints across ${platforms.join(' and ')}.`;
+
+    const months = [...new Set((data.monthly || []).map(m => m.month))].sort();
+    const growthEl = document.getElementById('storyDescGrowth');
+    const growthText = `Tagging coverage has grown steadily over ${months.length} months of data. `;
+    // Sparkline: monthly tagged totals
+    if (window.StoryEffects && months.length >= 2) {
+        const monthlyTotals = months.map(m => (data.monthly || []).filter(r => r.month === m).reduce((s, r) => s + (r.successfully_tagged || 0), 0));
+        growthEl.innerHTML = growthText + window.StoryEffects.sparklineSVG(monthlyTotals, {color: '#8b5cf6'});
+    } else {
+        growthEl.textContent = growthText;
+    }
+
+    const regions = data.by_region || [];
+    const countries = data.by_country || [];
+    document.getElementById('storyDescCoverage').textContent =
+        `Tagging spans ${regions.length} regions and ${countries.length} countries worldwide.`;
+
+    const ringGroups = { Ring1: 0, Ring2: 0, Ring3: 0, Ring4: 0 };
+    (data.by_ring_tag || []).forEach(tag => {
+        for (const ring of ['Ring1', 'Ring2', 'Ring3', 'Ring4']) {
+            if ((tag.ring_tag || '').includes(ring)) { ringGroups[ring] += tag.successfully_tagged; break; }
+        }
+    });
+    const activeRings = Object.keys(ringGroups).filter(k => ringGroups[k] > 0).length;
+    document.getElementById('storyDescRings').textContent =
+        `Every host is assigned to one of ${activeRings || 4} deployment rings for staged rollouts.`;
+
+    // Render KPIs (step 5)
+    renderStoryKpis(data);
+
+    // Render chart for current step
+    renderStoryStep(storyCurrentStep, data);
+}
+
+function eppAddAnnotation(chartId, text) {
+    const chart = document.getElementById(chartId);
+    if (!chart) return;
+    chart.parentElement.querySelectorAll('.story-annotation').forEach(a => a.remove());
+    const ann = document.createElement('div');
+    ann.className = 'story-annotation';
+    ann.textContent = text;
+    chart.parentElement.style.position = 'relative';
+    ann.style.top = '8px';
+    ann.style.right = '12px';
+    chart.parentElement.appendChild(ann);
+}
+
+function eppAnimateKpis(container) {
+    if (!window.StoryAudio) return;
+    container.querySelectorAll('[data-countup]').forEach(el => {
+        window.StoryAudio.countUp(el, el.dataset.countup, 1200);
+    });
+}
+
+function renderStoryStep(stepIndex, data) {
+    if (!data) return;
+    const colors = getChartColors();
+    const layout = {
+        paper_bgcolor: 'transparent',
+        plot_bgcolor: 'transparent',
+        font: { color: colors.text, family: 'system-ui, -apple-system, sans-serif' },
+        margin: { t: 10, r: 20, b: 30, l: 40 },
+        showlegend: true,
+        legend: { orientation: 'h', y: -0.15, font: { size: 11 } }
+    };
+
+    switch (stepIndex) {
+        case 0: renderStoryFleet(data, colors, layout); break;
+        case 1: renderStoryGrowth(data, colors, layout); break;
+        case 2: renderStoryCoverage(data, colors, layout); break;
+        case 3: renderStoryRings(data, colors, layout); break;
+        // Step 4 is KPI cards, no Plotly chart
+    }
+}
+
+function renderStoryFleet(data, colors, layout) {
+    const platformData = data.summary?.by_platform || {};
+    const labels = Object.keys(platformData);
+    const values = Object.values(platformData).map(p => p.tagged || p.devices || 0);
+    const colorMap = {
+        'CrowdStrike': colors.crowdstrike,
+        'Tanium Cloud': colors.taniumCloud,
+        'Tanium On-Prem': colors.taniumOnprem,
+        'Tanium': colors.tanium,
+        'Tanium (Legacy)': colors.tanium
+    };
+
+    Plotly.react('storyChartFleet', [{
+        type: 'pie',
+        labels: labels,
+        values: values,
+        marker: { colors: labels.map(l => colorMap[l] || colors.secondary) },
+        textinfo: 'label+percent',
+        textposition: 'outside',
+        hole: 0.45,
+        hovertemplate: '<b>%{label}</b><br>Devices: %{value:,}<br>%{percent}<extra></extra>'
+    }], {
+        ...layout,
+        showlegend: false,
+        margin: { t: 10, r: 30, b: 10, l: 30 }
+    }, { responsive: true, displayModeBar: false });
+    // Annotation: largest platform
+    if (labels.length) {
+        const maxIdx = values.indexOf(Math.max(...values));
+        eppAddAnnotation('storyChartFleet', `Largest: ${labels[maxIdx]} (${values[maxIdx].toLocaleString()})`);
+    }
+}
+
+function renderStoryGrowth(data, colors, layout) {
+    const monthly = data.monthly || [];
+    const months = [...new Set(monthly.map(m => m.month))].sort();
+    const traces = [];
+
+    const platformGroups = {
+        'CrowdStrike': colors.crowdstrike,
+        'Tanium Cloud': colors.taniumCloud,
+        'Tanium On-Prem': colors.taniumOnprem,
+        'Tanium': colors.tanium
+    };
+
+    for (const [platform, color] of Object.entries(platformGroups)) {
+        const vals = months.map(m => {
+            const found = monthly.find(x => x.month === m && x.platform === platform);
+            return found ? found.successfully_tagged : 0;
+        });
+        if (vals.some(v => v > 0)) {
+            traces.push({ x: months, y: vals, name: platform, type: 'bar', marker: { color } });
+        }
+    }
+
+    Plotly.react('storyChartGrowth', traces, {
+        ...layout,
+        barmode: 'stack',
+        xaxis: { gridcolor: colors.grid, tickangle: -45 },
+        yaxis: { gridcolor: colors.grid, title: { text: 'Devices', font: { size: 11 } } }
+    }, { responsive: true, displayModeBar: false });
+    // Annotation: latest month total
+    if (months.length) {
+        const lastMonth = months[months.length - 1];
+        const lastTotal = traces.reduce((s, t) => s + (t.y[t.y.length - 1] || 0), 0);
+        eppAddAnnotation('storyChartGrowth', `Latest: ${lastMonth} — ${lastTotal.toLocaleString()} devices`);
+    }
+}
+
+function renderStoryCoverage(data, colors, layout) {
+    const regionData = data.by_region || [];
+    if (regionData.length === 0) return;
+
+    const sorted = [...regionData].sort((a, b) => b.successfully_tagged - a.successfully_tagged);
+    const regionColors = {
+        'US': '#3b82f6', 'United States': '#3b82f6', 'EMEA': '#22c55e',
+        'APAC': '#f59e0b', 'LATAM': '#ef4444', 'JAPAN': '#8b5cf6',
+        'Japan': '#8b5cf6', 'JP': '#8b5cf6', 'CHINA': '#ec4899', 'Korea': '#06b6d4'
+    };
+
+    Plotly.react('storyChartCoverage', [{
+        type: 'pie',
+        labels: sorted.map(r => r.region),
+        values: sorted.map(r => r.successfully_tagged),
+        marker: { colors: sorted.map(r => regionColors[r.region] || '#6b7280') },
+        textinfo: 'label+percent',
+        textposition: 'inside',
+        hole: 0.35,
+        hovertemplate: '<b>%{label}</b><br>Devices: %{value:,}<br>%{percent}<extra></extra>'
+    }], {
+        ...layout,
+        showlegend: false,
+        margin: { t: 10, r: 30, b: 10, l: 30 }
+    }, { responsive: true, displayModeBar: false });
+    // Annotation: top region
+    if (sorted.length) {
+        eppAddAnnotation('storyChartCoverage', `Top: ${sorted[0].region} (${sorted[0].successfully_tagged.toLocaleString()})`);
+    }
+}
+
+function renderStoryRings(data, colors, layout) {
+    const ringGroups = { Ring1: 0, Ring2: 0, Ring3: 0, Ring4: 0, Other: 0 };
+    (data.by_ring_tag || []).forEach(tag => {
+        const ringTag = tag.ring_tag || '';
+        let matched = false;
+        for (const ring of ['Ring1', 'Ring2', 'Ring3', 'Ring4']) {
+            if (ringTag.includes(ring)) { ringGroups[ring] += tag.successfully_tagged; matched = true; break; }
+        }
+        if (!matched) ringGroups['Other'] += tag.successfully_tagged;
+    });
+
+    const labels = Object.keys(ringGroups).filter(k => ringGroups[k] > 0);
+    const values = labels.map(k => ringGroups[k]);
+    const ringColors = { Ring1: '#22c55e', Ring2: '#3b82f6', Ring3: '#f59e0b', Ring4: '#ef4444', Other: '#6b7280' };
+
+    Plotly.react('storyChartRings', [{
+        type: 'pie',
+        labels: labels,
+        values: values,
+        marker: { colors: labels.map(l => ringColors[l] || '#6b7280') },
+        textinfo: 'label+percent',
+        hole: 0.5,
+        hovertemplate: '<b>%{label}</b><br>Devices: %{value:,}<br>%{percent}<extra></extra>'
+    }], {
+        ...layout,
+        showlegend: false,
+        margin: { t: 10, r: 30, b: 10, l: 30 }
+    }, { responsive: true, displayModeBar: false });
+    // Annotation: largest ring
+    if (labels.length) {
+        const maxIdx = values.indexOf(Math.max(...values));
+        eppAddAnnotation('storyChartRings', `Largest: ${labels[maxIdx]} (${values[maxIdx].toLocaleString()})`);
+    }
+}
+
+function renderStoryKpis(data) {
+    const container = document.getElementById('storyKpiRow');
+    const totalDevices = data.summary?.total_devices || 0;
+    const totalTagged = data.summary?.total_tagged || 0;
+    const successRate = totalDevices > 0 ? ((totalTagged / totalDevices) * 100).toFixed(1) : '0';
+    const totalRuns = data.formatted_summary?.total_runs || 0;
+    const hoursSaved = (totalRuns * 0.5).toFixed(0);
+
+    // Compute trend badges from monthly data
+    let successBadge = '', runsBadge = '';
+    const monthly = data.monthly || [];
+    const uniqueMonths = [...new Set(monthly.map(m => m.month))].sort();
+    if (uniqueMonths.length >= 2 && window.StoryEffects) {
+        const latest = uniqueMonths[uniqueMonths.length - 1];
+        const prev = uniqueMonths[uniqueMonths.length - 2];
+        const latestRows = monthly.filter(m => m.month === latest);
+        const prevRows = monthly.filter(m => m.month === prev);
+        const latestTagged = latestRows.reduce((s, r) => s + (r.successfully_tagged || 0), 0);
+        const prevTagged = prevRows.reduce((s, r) => s + (r.successfully_tagged || 0), 0);
+        const latestRuns = latestRows.reduce((s, r) => s + (r.total_runs || 0), 0);
+        const prevRuns = prevRows.reduce((s, r) => s + (r.total_runs || 0), 0);
+        if (prevTagged > 0) successBadge = window.StoryEffects.trendBadge(((latestTagged - prevTagged) / prevTagged) * 100);
+        if (prevRuns > 0) runsBadge = window.StoryEffects.trendBadge(((latestRuns - prevRuns) / prevRuns) * 100);
+    }
+
+    container.innerHTML = `
+        <div class="story-kpi-card">
+            <div class="story-kpi-icon">✅</div>
+            <div class="story-kpi-value" data-countup="${successRate}%">${successRate}% ${successBadge}</div>
+            <div class="story-kpi-label">Success Rate</div>
+        </div>
+        <div class="story-kpi-card">
+            <div class="story-kpi-icon">🔄</div>
+            <div class="story-kpi-value" data-countup="${Number(totalRuns).toLocaleString()}">${Number(totalRuns).toLocaleString()} ${runsBadge}</div>
+            <div class="story-kpi-label">Automation Runs</div>
+        </div>
+        <div class="story-kpi-card">
+            <div class="story-kpi-icon">⏱️</div>
+            <div class="story-kpi-value" data-countup="${Number(hoursSaved).toLocaleString()}h">${Number(hoursSaved).toLocaleString()}h</div>
+            <div class="story-kpi-label">Hours Saved</div>
+        </div>
+    `;
+    eppAnimateKpis(container);
+}
+
 // Initialize
-document.addEventListener('DOMContentLoaded', loadDashboard);
+// Comparison mode
+async function loadEppComparisonData() {
+    if (!window.ComparisonMode || !window.ComparisonMode.isActive()) {
+        eppComparisonData = null;
+        return;
+    }
+    const pb = window.ComparisonMode.getPeriodB();
+    if (!pb.start || !pb.end) { eppComparisonData = null; return; }
+    try {
+        const resp = await fetch(`/api/epp-tagging/data?start_date=${pb.start}&end_date=${pb.end}`);
+        const result = await resp.json();
+        eppComparisonData = result.success ? result : null;
+    } catch (e) {
+        console.error('Comparison fetch failed:', e);
+        eppComparisonData = null;
+    }
+}
+
+async function onComparisonActivate() {
+    await loadEppComparisonData();
+    if (lastFilteredData) {
+        updateSummaryCards(lastFilteredData);
+        renderCharts(lastFilteredData);
+    }
+}
+
+function onComparisonDeactivate() {
+    eppComparisonData = null;
+    if (lastFilteredData) {
+        updateSummaryCards(lastFilteredData);
+        renderCharts(lastFilteredData);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    if (window.ComparisonMode) {
+        window.ComparisonMode.init({
+            btnId: 'eppCompareBtn',
+            barContainerId: 'eppComparisonBar',
+            onActivate: onComparisonActivate,
+            onDeactivate: onComparisonDeactivate
+        });
+    }
+
+    // Initialize goal targets
+    if (window.GoalTargets) {
+        window.GoalTargets.init('epp-sla-targets', { success_rate: 99, total_devices: 0 });
+    }
+
+    // PDF export button
+    var pdfBtn = document.getElementById('exportPdfBtn');
+    if (pdfBtn) {
+        pdfBtn.addEventListener('click', function () {
+            if (!window.DashboardExport) return;
+            var toast = document.getElementById('toast');
+            if (toast) { toast.textContent = 'Generating PDF...'; toast.classList.add('show'); }
+            window.DashboardExport.exportPdf(null, {
+                title: 'EPP Device Tagging Metrics',
+                subtitle: document.getElementById('filterTags')?.textContent?.trim() || '',
+                sections: ['.summary-section', '.charts-section']
+            }, function (step, total) {
+                if (toast) toast.textContent = 'Capturing section ' + step + ' of ' + total + '...';
+                if (step === total) setTimeout(function () { toast.classList.remove('show'); }, 2000);
+            });
+        });
+    }
+
+    // Share link button
+    var shareBtn = document.getElementById('shareLinkBtn');
+    if (shareBtn) {
+        shareBtn.addEventListener('click', function () {
+            var state = {
+                platform: filters.platform, category: filters.category,
+                rings: filters.rings, regions: filters.regions, countries: filters.countries,
+                startDate: filters.startDate, endDate: filters.endDate, runBy: filters.runBy
+            };
+            var encoded = btoa(JSON.stringify(state));
+            var url = window.location.origin + window.location.pathname + '#' + encoded;
+            navigator.clipboard.writeText(url).then(function () {
+                var toast = document.getElementById('toast');
+                if (toast) {
+                    toast.textContent = 'Link copied to clipboard!';
+                    toast.classList.add('show');
+                    setTimeout(function () { toast.classList.remove('show'); }, 2000);
+                }
+            });
+        });
+    }
+
+    // Goal settings button
+    var goalBtn = document.getElementById('goalSettingsBtn');
+    if (goalBtn && window.GoalTargets) {
+        goalBtn.addEventListener('click', function () {
+            window.GoalTargets.renderSettingsPopover(goalBtn, function () { applyFilters(); });
+        });
+    }
+
+    // Restore from shareable link hash
+    if (window.location.hash && window.location.hash.length > 1) {
+        try {
+            var decoded = JSON.parse(atob(window.location.hash.substring(1)));
+            if (decoded.platform) filters.platform = decoded.platform;
+            if (decoded.category) filters.category = decoded.category;
+            if (decoded.runBy) filters.runBy = decoded.runBy;
+            if (decoded.rings) filters.rings = decoded.rings;
+            if (decoded.regions) filters.regions = decoded.regions;
+            if (decoded.countries) filters.countries = decoded.countries;
+            if (decoded.startDate) { filters.startDate = decoded.startDate; var sd = document.getElementById('startDate'); if (sd) sd.value = decoded.startDate; }
+            if (decoded.endDate) { filters.endDate = decoded.endDate; var ed = document.getElementById('endDate'); if (ed) ed.value = decoded.endDate; }
+        } catch (e) { /* invalid hash, ignore */ }
+    }
+
+    loadDashboard();
+});
 </script>
 {% endblock %}

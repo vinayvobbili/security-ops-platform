@@ -1,0 +1,316 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'Power BI Explorer' %}
+{% set page_title_left_icon = '📊' %}
+{% set page_title_right_icon = '🤖' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/powerbi_chat.css') }}">
+<style>
+/* "How does this work?" pill + modal — scoped to Power BI page */
+.pbi-info-btn {
+    background: linear-gradient(135deg, rgba(14, 72, 173, 0.10), rgba(168, 85, 247, 0.12));
+    border: 1px solid rgba(14, 72, 173, 0.35);
+    border-radius: 10px;
+    padding: 8px 16px;
+    font-size: 0.84rem; font-weight: 600; font-family: 'Outfit', sans-serif;
+    color: #1a237e;
+    cursor: pointer; transition: all 0.25s ease;
+    display: inline-flex; align-items: center; gap: 6px;
+}
+.pbi-info-btn:hover {
+    background: linear-gradient(135deg, rgba(14, 72, 173, 0.20), rgba(168, 85, 247, 0.22));
+    border-color: #1a237e;
+    box-shadow: 0 0 16px rgba(14, 72, 173, 0.22), 0 0 32px rgba(168, 85, 247, 0.12);
+    transform: translateY(-1px);
+}
+.pbi-info-btn-icon { font-size: 0.95rem; }
+
+.pbi-info-header-strip {
+    display: flex; justify-content: flex-end; align-items: center;
+    padding: 10px 16px 0;
+}
+
+.pbi-info-backdrop {
+    position: fixed; inset: 0; z-index: 9500;
+    background: rgba(0, 0, 0, 0.55); backdrop-filter: blur(6px);
+    display: flex; align-items: center; justify-content: center;
+}
+.pbi-info-modal {
+    width: 960px; max-width: 94vw; max-height: 90vh;
+    background: #ffffff; border-radius: 16px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
+    display: flex; flex-direction: column; overflow: hidden;
+    font-family: 'Outfit', 'Segoe UI', sans-serif;
+}
+.pbi-info-header {
+    padding: 18px 26px;
+    background: linear-gradient(135deg, #1a237e 0%, #0046AD 60%, #8b5cf6 100%);
+    color: #fff;
+    display: flex; align-items: center; justify-content: space-between;
+}
+.pbi-info-header h3 { margin: 0; font-size: 1.15rem; font-weight: 700; letter-spacing: 0.2px; }
+.pbi-info-close {
+    color: rgba(255, 255, 255, 0.9); font-size: 1.4rem;
+    background: rgba(255, 255, 255, 0.18); border: none;
+    border-radius: 50%; width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: background 0.2s;
+}
+.pbi-info-close:hover { background: rgba(255, 255, 255, 0.30); }
+.pbi-info-body {
+    padding: 22px 26px;
+    overflow-y: auto; flex: 1;
+    display: flex; flex-direction: column; gap: 16px;
+    color: #1f2937;
+}
+.pbi-info-video-wrap {
+    flex-shrink: 0; border-radius: 12px; overflow: hidden;
+    border: 1px solid #e5e7eb; background: #000;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+.pbi-info-video { display: block; width: 100%; max-height: 56vh; background: #000; }
+.pbi-info-video-caption {
+    padding: 8px 14px; background: #f8fafc; font-size: 0.85rem;
+    color: #64748b; border-top: 1px solid #e5e7eb;
+}
+.pbi-info-section {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 10px 0;
+}
+.pbi-info-icon {
+    font-size: 1.6rem; flex-shrink: 0; width: 36px; text-align: center;
+}
+.pbi-info-section h4 {
+    margin: 0 0 4px; font-size: 0.98rem; font-weight: 700; color: #1a237e;
+}
+.pbi-info-section p {
+    margin: 0; font-size: 0.88rem; line-height: 1.55; color: #374151;
+}
+.pbi-info-section p strong { color: #1a237e; }
+.pbi-info-divider { height: 1px; background: #e5e7eb; margin: 6px 0; }
+.pbi-info-kpis {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+    margin: 4px 0 2px;
+}
+.pbi-info-kpi {
+    background: linear-gradient(135deg, #f5f7ff 0%, #ffffff 100%);
+    border: 1px solid #e0e7ff; border-radius: 12px;
+    padding: 14px 16px; text-align: center;
+}
+.pbi-info-kpi-value {
+    font-size: 1.45rem; font-weight: 800; color: #1a237e; line-height: 1.1;
+}
+.pbi-info-kpi-label {
+    font-size: 0.76rem; color: #64748b; text-transform: uppercase;
+    letter-spacing: 0.5px; font-weight: 600; margin-top: 4px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pbi-layout">
+
+    <!-- LEFT: Dataset Sidebar -->
+    <aside class="pbi-sidebar" id="pbiSidebar">
+        <div class="pbi-sidebar-title">Datasets</div>
+        <input type="text" id="pbiSearch" class="pbi-sidebar-search" placeholder="Filter..." autocomplete="off">
+        <div class="pbi-sidebar-section" id="pbiRecentSection" style="display:none;">
+            <div class="pbi-sidebar-label">Recent</div>
+            <div id="pbiRecentList"></div>
+        </div>
+        <div class="pbi-sidebar-label">All Datasets <span id="pbiDsCount" class="pbi-ds-count"></span></div>
+        <div class="pbi-dataset-list" id="pbiDatasetList">
+            {% for ds in datasets %}
+            <button class="pbi-dataset-item" data-id="{{ ds.id }}" data-name="{{ ds.name }}">{{ ds.name }}</button>
+            {% endfor %}
+        </div>
+    </aside>
+
+    <!-- RIGHT: Main Content -->
+    <main class="pbi-main">
+        <div class="pbi-info-header-strip">
+            <button class="pbi-info-btn" onclick="document.getElementById('pbiInfoModal').style.display='flex'" title="How does this work?">
+                <span class="pbi-info-btn-icon">✦</span> How does this work?
+            </button>
+        </div>
+        {% if demo_mode %}
+        <div class="pbi-notice pbi-notice-info">
+            Power BI API key not configured yet. Until then, enjoy this page with cooked up data.
+        </div>
+        {% endif %}
+        <!-- Loading overlay (centered spinner) -->
+        <div id="pbiLoadingOverlay" class="pbi-loading-overlay" style="display:none;">
+            <div class="pbi-loading-card">
+                <div class="pbi-loading-spinner-ring"></div>
+                <div class="pbi-loading-card-text" id="pbiLoadingText">Loading...</div>
+            </div>
+        </div>
+
+        <!-- Schema Preview (collapsible, full-width) -->
+        <details id="pbiSchemaDetails" class="pbi-schema-details" style="display:none;">
+            <summary class="pbi-schema-summary">Dataset Schema</summary>
+            <div id="pbiSchemaText" class="pbi-schema-text"></div>
+        </details>
+
+        <!-- Charts Section (collapsible) -->
+        <div class="pbi-charts-section" id="pbiChartsSection">
+            <div class="pbi-section-bar" id="pbiChartsBar">
+                <span>Dashboard</span>
+                <span style="margin-left:auto; display:flex; align-items:center; gap:6px;">
+                    <button id="pbiExportPptx" class="pbi-toggle-btn" title="Export dashboard to PowerPoint" style="display:none;">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;">
+                            <rect x="1" y="1" width="14" height="14" rx="2" fill="#D04423"/>
+                            <text x="8" y="11.5" text-anchor="middle" font-size="8" font-weight="bold" fill="white" font-family="Arial,sans-serif">P</text>
+                        </svg>
+                    </button>
+                    <button id="pbiChartsToggle" class="pbi-toggle-btn" title="Collapse/expand charts">&#9660;</button>
+                </span>
+            </div>
+            <div class="pbi-charts-panel" id="pbiChartsPanel">
+                <div class="pbi-charts-empty" id="pbiChartsEmpty">
+                    <div class="pbi-charts-empty-icon">📊</div>
+                    <p>Select a dataset from the sidebar to see visualizations</p>
+                </div>
+                <div class="pbi-charts-content" id="pbiChartsContent" style="display:none;">
+                    <div class="pbi-kpi-row" id="pbiKpiRow"></div>
+                    <div class="pbi-chart-grid" id="pbiChartGrid"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Panel -->
+        <div class="pbi-chat-panel">
+            <div class="pbi-chat-main">
+                <div class="pbi-chat-toolbar">
+                    <button id="pbiHistoryBtn" class="pbi-toolbar-btn" title="Query history">&#128340;</button>
+                    <div id="pbiHistoryDropdown" class="pbi-history-dropdown" style="display:none;"></div>
+                    <button id="pbiSavedBtn" class="pbi-toolbar-btn" title="Saved queries">&#11088;</button>
+                    <div id="pbiSavedDropdown" class="pbi-history-dropdown" style="display:none;"></div>
+                    <span id="pbiRefreshInfo" class="pbi-refresh-info" style="display:none;"></span>
+                </div>
+                <div id="pbiMessages" class="pbi-messages">
+                    <div class="pbi-welcome" id="pbiWelcome">
+                        <div class="pbi-welcome-icon">🤖</div>
+                        <h2 id="pbiGreeting">Ask About Your Data</h2>
+                        <p>Select a dataset from the sidebar, then ask questions in plain English. Click any chart to ask about it.</p>
+                        <p style="font-size:0.75rem; color:#94a3b8; margin-top:4px;">Tip: Press <kbd style="background:#e8eaf6; padding:1px 5px; border-radius:4px; font-size:0.72rem;">Ctrl+K</kbd> to search datasets</p>
+                    </div>
+                    <div class="pbi-welcome-examples" id="pbiChips"></div>
+                </div>
+                <div class="pbi-input-bar">
+                    <div class="pbi-input-row">
+                        <textarea id="pbiInput" class="pbi-input" placeholder="Ask a question about your Power BI data..." maxlength="2000" autocomplete="off" disabled rows="3"></textarea>
+                        <button id="pbiSend" class="pbi-send-btn" disabled title="Send message">Send &raquo;</button>
+                    </div>
+                    <div class="pbi-input-utils">
+                        <button id="pbiDownloadTranscript" class="pbi-util-btn" title="Download chat transcript" style="display:none;">&#128229; Download</button>
+                        <button id="pbiClearChat" class="pbi-util-btn pbi-clear-icon" title="Clear chat">&#128465; Clear</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- How Does This Work? Modal -->
+<div class="pbi-info-backdrop" id="pbiInfoModal" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+    <div class="pbi-info-modal" onclick="event.stopPropagation()">
+        <div class="pbi-info-header">
+            <h3>How Does Power BI Explorer Work?</h3>
+            <button class="pbi-info-close" onclick="document.getElementById('pbiInfoModal').style.display='none'">&times;</button>
+        </div>
+        <div class="pbi-info-body">
+            <div class="pbi-info-video-wrap">
+                <video class="pbi-info-video" controls preload="metadata" poster="{{ url_for('static', filename='videos/powerbi_demo_poster.jpg') }}">
+                    <source src="{{ url_for('static', filename='videos/powerbi_demo.mp4') }}" type="video/mp4">
+                    Your browser doesn't support embedded video.
+                </video>
+                <div class="pbi-info-video-caption">Two-and-a-half minute walkthrough — the requester's path from question to answer.</div>
+            </div>
+
+            <div class="pbi-info-kpis">
+                <div class="pbi-info-kpi">
+                    <div class="pbi-info-kpi-value">~30 sec</div>
+                    <div class="pbi-info-kpi-label">Per ad-hoc answer</div>
+                </div>
+                <div class="pbi-info-kpi">
+                    <div class="pbi-info-kpi-value">~7 hrs / wk</div>
+                    <div class="pbi-info-kpi-label">Engineering time reclaimed</div>
+                </div>
+                <div class="pbi-info-kpi">
+                    <div class="pbi-info-kpi-value">89</div>
+                    <div class="pbi-info-kpi-label">Datasets, English-queryable</div>
+                </div>
+            </div>
+
+            <div class="pbi-info-section">
+                <div class="pbi-info-icon">🎯</div>
+                <div>
+                    <h4>The problem it solves</h4>
+                    <p>Power BI datasets carry answers leadership asks for every week, but the queries require DAX — a language only a few PBI Engineers write fluently. Every ad-hoc question became a ticket, a handoff, and a ~30-minute wait. Power BI Explorer puts a natural-language front door in front of the same data, governed by the <strong>same authentication and dataset permissions</strong>. It removes a skill gate, not a security gate.</p>
+                </div>
+            </div>
+
+            <div class="pbi-info-section">
+                <div class="pbi-info-icon">🗂️</div>
+                <div>
+                    <h4>1. Pick a dataset</h4>
+                    <p>The sidebar lists all datasets in the CASM workspace (currently 89). Pick one and the explorer pulls the full schema — every table and every column — plus an auto-built dashboard, with no manual setup.</p>
+                </div>
+            </div>
+
+            <div class="pbi-info-section">
+                <div class="pbi-info-icon">📊</div>
+                <div>
+                    <h4>2. The auto-dashboard</h4>
+                    <p>Behind the scenes, the explorer inspects the dataset schema, picks the high-cardinality dimensions and numeric measures, and generates KPI cards plus 4–8 Chart.js visuals — distributions, trends, top-N, coverage gaps. Most routine questions are already answered before anyone types anything.</p>
+                </div>
+            </div>
+
+            <div class="pbi-info-section">
+                <div class="pbi-info-icon">💬</div>
+                <div>
+                    <h4>3. Ask in English</h4>
+                    <p>For the deeper questions, type in plain language. A local LLM reads the compact schema, identifies the relevant tables and columns, writes the DAX query, executes it against the live Power BI dataset via the XMLA endpoint, and then explains the result in a sentence or two with the underlying data table.</p>
+                </div>
+            </div>
+
+            <div class="pbi-info-section">
+                <div class="pbi-info-icon">📤</div>
+                <div>
+                    <h4>4. Export in one click</h4>
+                    <p>Any result table exports to a professionally formatted <strong>Excel</strong> with auto-sized columns. The full dashboard exports to <strong>PowerPoint</strong> using the company template — KPI cards, chart summaries, gold accent bar, navy title strip — ready to drop into a leadership deck.</p>
+                </div>
+            </div>
+
+            <div class="pbi-info-divider"></div>
+
+            <div class="pbi-info-section">
+                <div class="pbi-info-icon">⚙️</div>
+                <div>
+                    <h4>How the numbers are derived</h4>
+                    <p>
+                        <strong>~30 sec vs. ~30 min:</strong> The old path — locate the right engineer, context-switch, write DAX, run, screenshot, reply — averages ~30 min of wall-clock time. The explorer returns a live, cited answer in seconds.<br>
+                        <strong>~7 hrs / wk reclaimed:</strong> Conservative estimate of ~15 ad-hoc PBI requests per week × ~29 min saved each = ~7.25 hours / week of engineering time. At typical loaded rates, that's ~$35k / year in reclaimed capacity, plus the requesters get their answers on their own schedule.<br>
+                        <strong>Zero incremental license cost:</strong> Runs on our existing local LLM infrastructure — no per-seat NL-to-SQL vendor.
+                    </p>
+                </div>
+            </div>
+
+            <div class="pbi-info-section">
+                <div class="pbi-info-icon">🔒</div>
+                <div>
+                    <h4>Access & governance</h4>
+                    <p>Auth is the <strong>same SSO</strong> as the rest of the web app. The Power BI XMLA endpoint uses certificate-based authentication as the existing CASM service principal, so dataset-level Row-Level Security and workspace permissions remain in force. Every query is logged with the requester's identity via the standard web activity log.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/powerbi_chat.js') }}"></script>
+{% endblock %}

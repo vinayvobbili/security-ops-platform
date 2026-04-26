@@ -8,9 +8,10 @@ This module provides a page to view all detection rules from:
 
 import json
 import logging
+import math
 import os
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import Blueprint, render_template, jsonify, request, send_file
 
 import pandas as pd
@@ -100,17 +101,6 @@ def _get_all_rules() -> dict:
     for rule in cs_rules + qr_rules + tn_rules:
         sev = rule.get('severity', '').lower() or 'unspecified'
         severities[sev] = severities.get(sev, 0) + 1
-
-    # Get last updated times
-    def parse_timestamp(ts_str):
-        if not ts_str:
-            return None
-        try:
-            # Handle Z suffix and various formats
-            ts_str = ts_str.rstrip('Z').replace('+00:00', '')
-            return datetime.fromisoformat(ts_str)
-        except:
-            return None
 
     return {
         'platforms': {
@@ -249,3 +239,120 @@ def export_detection_rules():
     except Exception as e:
         logger.error(f"Error exporting detection rules: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@detection_rules_bp.route('/api/attack-reference')
+def api_attack_reference():
+    """ATT&CK technique reference data (names, tactics, parent/sub mapping)."""
+    try:
+        from services.mitre_attack_data import get_attack_techniques, TACTIC_ORDER, TACTIC_DISPLAY
+        techniques = get_attack_techniques()
+        tactics = [{'id': t, 'name': TACTIC_DISPLAY[t]} for t in TACTIC_ORDER]
+        return jsonify({'success': True, 'techniques': techniques, 'tactics': tactics})
+    except Exception as e:
+        logger.error(f"Error fetching ATT&CK reference data: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@detection_rules_bp.route('/api/detection-rules/navigator-layer', methods=['POST'])
+@log_web_activity
+def api_detection_rules_navigator_layer():
+    """Build Navigator layer from client-supplied per-platform technique counts."""
+    try:
+        from services.mitre_attack_data import get_attack_techniques
+
+        data = request.get_json()
+        technique_counts = data.get('technique_counts', {})
+        platform_counts = data.get('platform_counts', {})
+
+        all_techniques = get_attack_techniques()
+        max_count = max(technique_counts.values(), default=0)
+
+        nav_techniques = []
+        for tech in all_techniques:
+            count = technique_counts.get(tech['id'], 0)
+            score = 0
+            if count > 0 and max_count > 0:
+                score = math.log1p(count) / math.log1p(max_count) * 100
+
+            # Build per-platform comment
+            pc = platform_counts.get(tech['id'], {})
+            parts = []
+            if pc.get('crowdstrike', 0) > 0:
+                parts.append(f"CS: {pc['crowdstrike']}")
+            if pc.get('tanium', 0) > 0:
+                parts.append(f"Tanium: {pc['tanium']}")
+            if pc.get('qradar', 0) > 0:
+                parts.append(f"QRadar: {pc['qradar']}")
+            comment = f"{count} detection rules ({', '.join(parts)})" if parts else f"{count} detection rules"
+
+            entry = {
+                'techniqueID': tech['id'],
+                'score': round(score, 1),
+                'comment': comment,
+                'enabled': True,
+                'showSubtechniques': False,
+            }
+            if count > 0:
+                entry['color'] = _score_to_color(score)
+            nav_techniques.append(entry)
+
+        now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+        layer = {
+            'name': f'Detection Rules Coverage ({now})',
+            'versions': {
+                'attack': '16',
+                'navigator': '4.5',
+                'layer': '4.5',
+            },
+            'domain': 'enterprise-attack',
+            'description': 'Heatmap of MITRE ATT&CK technique coverage from detection rules (CrowdStrike, Tanium, QRadar)',
+            'sorting': 3,
+            'layout': {
+                'layout': 'side',
+                'showID': True,
+                'showName': True,
+            },
+            'gradient': {
+                'colors': ['#ffffff', '#c6dbef', '#6baed6', '#2171b5', '#08306b'],
+                'minValue': 0,
+                'maxValue': 100,
+            },
+            'techniques': nav_techniques,
+        }
+
+        timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+        tmp = tempfile.NamedTemporaryFile(suffix='.json', delete=False)
+        tmp.write(json.dumps(layer, indent=2).encode())
+        tmp.close()
+
+        return send_file(
+            tmp.name,
+            mimetype='application/json',
+            as_attachment=True,
+            download_name=f'detection_rules_navigator_{timestamp}.json',
+        )
+    except Exception as e:
+        logger.error(f"Error building detection rules Navigator layer: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _score_to_color(score: float) -> str:
+    """Map a 0-100 score to a blue gradient hex color."""
+    stops = [
+        (0, (255, 255, 255)),
+        (25, (198, 219, 239)),
+        (50, (107, 174, 214)),
+        (75, (33, 113, 181)),
+        (100, (8, 48, 107)),
+    ]
+    for i in range(len(stops) - 1):
+        s1, c1 = stops[i]
+        s2, c2 = stops[i + 1]
+        if score <= s2:
+            t = (score - s1) / (s2 - s1) if s2 != s1 else 0
+            r = int(c1[0] + (c2[0] - c1[0]) * t)
+            g = int(c1[1] + (c2[1] - c1[1]) * t)
+            b = int(c1[2] + (c2[2] - c1[2]) * t)
+            return f'#{r:02x}{g:02x}{b:02x}'
+    return '#08306b'

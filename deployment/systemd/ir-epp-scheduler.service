@@ -1,0 +1,17 @@
+[Unit]
+Description=EPP Scheduler (CrowdStrike + Tanium Ring Tagging)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/vinay/security-ops-platform
+ExecStart=/home/vinay/security-ops-platform/.venv/bin/python3 -u src/epp_scheduler.py
+Restart=on-failure
+KillMode=mixed
+TimeoutStopSec=10
+RestartSec=30
+Environment=PYTHONUNBUFFERED=1
+Environment=M1_ANALYSIS_BASE_URL=http://localhost:8015/v1
+
+[Install]
+WantedBy=default.target

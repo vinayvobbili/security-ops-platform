@@ -25,6 +25,7 @@ from services.domain_lookalike import enrich_with_recorded_future
 from .config import (
     EASTERN_TZ, RESULTS_DIR, WEB_BASE_URL, CONFIG_FILE,
     ALERT_ROOM_ID_TEST, ALERT_ROOM_ID_PROD,
+    ENABLE_DARK_WEB, ENABLE_INTELX,
     load_monitored_domains, load_watchlist, load_defensive_domains,
     get_webex_api, get_vt_client, set_active_room_id,
 )
@@ -63,11 +64,10 @@ def _save_results(results: Dict[str, Any]) -> str:
 def run_daily_monitoring(room_id: str | None = None) -> None:
     """Run daily monitoring for all configured domains.
 
-    Called by all_jobs.py scheduler at 8 AM ET.
+    Called by scheduler.py at 8 AM ET.
 
     Args:
-        room_id: Optional Webex room ID for alerts. Defaults to test space.
-                 Pass ALERT_ROOM_ID_PROD for production alerts.
+        room_id: Optional Webex room ID for alerts. Defaults to prod room.
 
     Monitors for:
         - New lookalike domain registrations
@@ -87,7 +87,7 @@ def run_daily_monitoring(room_id: str | None = None) -> None:
     if room_id:
         set_active_room_id(room_id)
     else:
-        set_active_room_id(ALERT_ROOM_ID_TEST)
+        set_active_room_id(ALERT_ROOM_ID_PROD)
 
     monitored_domains = load_monitored_domains()
     if not monitored_domains:
@@ -104,6 +104,7 @@ def run_daily_monitoring(room_id: str | None = None) -> None:
         "domains": {},
         "total_new_lookalikes": 0,
         "total_became_active": 0,
+        "total_reregistered": 0,
         "total_mx_changes": 0,
         "total_dark_web_findings": 0,
         "total_ct_findings": 0,
@@ -136,8 +137,11 @@ def run_daily_monitoring(room_id: str | None = None) -> None:
             became_active_count = lookalike_result.get("became_active_count", 0)
             mx_changes_count = lookalike_result.get("mx_changes_count", 0)
 
+            reregistered_count = lookalike_result.get("reregistered_count", 0)
+
             results["total_new_lookalikes"] += new_count
             results["total_became_active"] += became_active_count
+            results["total_reregistered"] += reregistered_count
             results["total_mx_changes"] += mx_changes_count
 
             for d in lookalike_result.get("new_domains", []):
@@ -146,6 +150,12 @@ def run_daily_monitoring(room_id: str | None = None) -> None:
                 active_lookalikes.append(d.get("domain"))
                 if d.get("domain") not in all_lookalikes:
                     all_lookalikes.append(d.get("domain"))
+            for d in lookalike_result.get("reregistered", []):
+                dn = d.get("domain")
+                if dn not in active_lookalikes:
+                    active_lookalikes.append(dn)
+                if dn not in all_lookalikes:
+                    all_lookalikes.append(dn)
 
             # Enrich domains with threat intel
             new_domains = lookalike_result.get("new_domains", [])
@@ -173,33 +183,33 @@ def run_daily_monitoring(room_id: str | None = None) -> None:
             pass
 
         # Dark web monitoring (public leaks)
-        dark_web_result = search_dark_web(domain)
-        results["domains"][domain]["dark_web"] = dark_web_result
+        if ENABLE_DARK_WEB:
+            dark_web_result = search_dark_web(domain)
+            results["domains"][domain]["dark_web"] = dark_web_result
 
-        if dark_web_result.get("success"):
-            findings = dark_web_result.get("total_findings", 0)
-            high_risk = len(dark_web_result.get("high_risk_findings", []))
-            results["total_dark_web_findings"] += findings
-            # Note: Individual dark web alerts disabled - info available on web dashboard
+            if dark_web_result.get("success"):
+                findings = dark_web_result.get("total_findings", 0)
+                high_risk = len(dark_web_result.get("high_risk_findings", []))
+                results["total_dark_web_findings"] += findings
 
         # IntelligenceX dark web search (actual Tor/I2P)
-        intelx_client = get_intelx_client()
-        if intelx_client and intelx_client.api_key:
-            logger.info(f"Searching IntelligenceX for {domain}")
-            try:
-                intelx_result = search_intelx(domain)
-                results["domains"][domain]["intelx"] = intelx_result
+        if ENABLE_INTELX:
+            intelx_client = get_intelx_client()
+            if intelx_client and intelx_client.api_key:
+                logger.info(f"Searching IntelligenceX for {domain}")
+                try:
+                    intelx_result = search_intelx(domain)
+                    results["domains"][domain]["intelx"] = intelx_result
 
-                if intelx_result.get("success"):
-                    intelx_findings = intelx_result.get("total_findings", 0)
-                    results["total_intelx_findings"] += intelx_findings
-                    # Note: Individual IntelX alerts disabled - info available on web dashboard
-            except Exception as e:
-                logger.error(f"IntelligenceX search failed for {domain}: {e}")
-                results["domains"][domain]["intelx"] = {"success": False, "error": str(e)}
-        else:
-            logger.info("IntelligenceX not configured, skipping dark web search")
-            results["domains"][domain]["intelx"] = {"success": False, "error": "API key not configured"}
+                    if intelx_result.get("success"):
+                        intelx_findings = intelx_result.get("total_findings", 0)
+                        results["total_intelx_findings"] += intelx_findings
+                except Exception as e:
+                    logger.error(f"IntelligenceX search failed for {domain}: {e}")
+                    results["domains"][domain]["intelx"] = {"success": False, "error": str(e)}
+            else:
+                logger.info("IntelligenceX not configured, skipping dark web search")
+                results["domains"][domain]["intelx"] = {"success": False, "error": "API key not configured"}
 
         # Certificate Transparency monitoring
         if all_lookalikes:
@@ -252,7 +262,7 @@ def run_daily_monitoring(room_id: str | None = None) -> None:
             brand_result = discover_brand_impersonation(
                 brand=brand_name,
                 legitimate_domains=legitimate_domains,
-                hours_back=48,  # Look back 48 hours for new certs
+                hours_back=168,  # Look back 7 days to catch certs issued between daily runs
             )
             results["domains"][domain]["brand_ct_search"] = brand_result
 
@@ -277,6 +287,10 @@ def run_daily_monitoring(room_id: str | None = None) -> None:
         except Exception as e:
             logger.error(f"Brand CT search failed for {domain}: {e}")
             results["domains"][domain]["brand_ct_search"] = {"success": False, "error": str(e)}
+
+        # S3 brand squatting scan is on-demand only — ~700 candidates throttled at
+        # 3s/request (single worker) takes ~70 min, which exceeds the 30-min job
+        # timeout. Run it from the web UI when needed.
 
         # WHOIS monitoring for active lookalikes
         if active_lookalikes:
@@ -360,6 +374,7 @@ def run_daily_monitoring(room_id: str | None = None) -> None:
     logger.info(
         f"Monitoring complete: {results['total_new_lookalikes']} new lookalikes, "
         f"{results['total_became_active']} became active, "
+        f"{results['total_reregistered']} re-registered, "
         f"{results['total_mx_changes']} MX changes, "
         f"{results['total_dark_web_findings']} data leak findings, "
         f"{results['total_intelx_findings']} IntelX dark web findings, "

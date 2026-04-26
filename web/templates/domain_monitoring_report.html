@@ -19,6 +19,58 @@
     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
     border-color: #60a5fa !important;
 }
+.priority-tab-bar {
+    display: flex;
+    gap: 10px;
+    padding: 8px;
+    background: var(--card-bg);
+    border-radius: 16px;
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--glass-border);
+    margin-bottom: 0;
+}
+.priority-tab-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 20px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 0.95em;
+    font-weight: 600;
+    color: var(--text-secondary);
+    transition: all 0.3s ease;
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+}
+.priority-tab-btn:hover {
+    color: var(--text-primary);
+    background: rgba(255,255,255,0.05);
+}
+.priority-tab-btn.active-critical {
+    color: #fff;
+    background: linear-gradient(135deg, #dc2626, #991b1b);
+    box-shadow: 0 4px 20px rgba(220,38,38,0.4);
+}
+.priority-tab-btn.active-warning {
+    color: #fff;
+    background: linear-gradient(135deg, #f59e0b, #b45309);
+    box-shadow: 0 4px 20px rgba(245,158,11,0.4);
+}
+.priority-tab-panel {
+    display: none;
+    padding: 20px;
+    animation: fadeSlideUp 0.4s ease-out;
+}
+.priority-tab-panel.active {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
 </style>
 <div class="monitoring-container">
     <div class="history-dropdown">
@@ -57,6 +109,7 @@
             <button class="tab" onclick="showTab('shodan')">Infrastructure</button>
             <button class="tab" onclick="showTab('abusech')">Malware/C2</button>
             <button class="tab" onclick="showTab('abuseipdb')">IP Reputation</button>
+            <button class="tab" onclick="showTab('s3brand')">S3 Brand Squatting</button>
         </div>
 
         <div id="lookalikes" class="tab-content active"></div>
@@ -68,6 +121,7 @@
         <div id="shodan" class="tab-content"></div>
         <div id="abusech" class="tab-content"></div>
         <div id="abuseipdb" class="tab-content"></div>
+        <div id="s3brand" class="tab-content"></div>
     </div>
 </div>
 
@@ -210,6 +264,7 @@ async function renderReport(results) {
     const shodanExposures = results.total_shodan_exposures || 0;
     const abusechMalicious = results.total_abusech_malicious || 0;
     const abuseipdbMalicious = results.total_abuseipdb_malicious || 0;
+    const s3BrandSquatting = results.total_s3_brand_squatting || 0;
     const ctFindings = outstandingThreatsCount;
 
     // High risk = became active + abuse.ch malicious + abuseIPDB malicious
@@ -261,6 +316,10 @@ async function renderReport(results) {
             <div class="value">${abuseipdbMalicious}</div>
             <div class="label">Malicious IPs</div>
         </div>
+        <div class="summary-card ${s3BrandSquatting > 0 ? 'alert' : 'success'}" onclick="showTab('s3brand', true)" style="${cardStyle}" title="View S3 Brand Squatting Buckets">
+            <div class="value">${s3BrandSquatting}</div>
+            <div class="label">S3 Buckets</div>
+        </div>
         <div class="summary-card" id="rfSummaryCard" style="display:none;${cardStyle}" onclick="showTab('lookalikes', true)" title="View RF High Risk">
             <div class="value" id="rfHighRiskValue">0</div>
             <div class="label">RF High Risk</div>
@@ -298,6 +357,9 @@ async function renderReport(results) {
 
     // AbuseIPDB tab
     renderAbuseIPDB(results.domains);
+
+    // S3 Brand Squatting tab
+    renderS3BrandSquatting(results.domains);
 }
 
 // Priority Summary - Aggregate critical findings with recommended actions
@@ -371,6 +433,22 @@ function renderPrioritySummary(results) {
                 actions: [
                     { label: 'Block Domain', icon: '🚫', action: `copyToClipboard('${m.domain || domain}')`, title: 'Copy to add to blocklist' },
                     { label: 'Check URLhaus', icon: '🔍', action: `window.open('https://urlhaus.abuse.ch/browse.php?search=${m.domain || domain}', '_blank')`, title: 'View on URLhaus' }
+                ]
+            });
+        });
+
+        // S3 public buckets - CRITICAL
+        const s3Found = data.s3_brand_squatting?.found_buckets || [];
+        s3Found.forEach(b => {
+            const isPublic = b.listable || b.status === 'exists_public';
+            critical.push({
+                type: 's3_bucket',
+                domain: domain,
+                bucket: b.bucket,
+                details: isPublic ? `Publicly listable (${b.key_count || 0} objects)` : 'Exists (private)',
+                actions: [
+                    { label: 'S3 Scanner', icon: '🔍', action: `window.open('/s3-scanner?bucket=${encodeURIComponent(b.bucket)}', '_blank')`, title: 'Deep scan for PII, ACLs, and downloadable content' },
+                    { label: 'Report to AWS', icon: '📝', action: `window.open('https://support.aws.amazon.com/#/contacts/report-abuse', '_blank')`, title: 'Report bucket to AWS Trust & Safety' }
                 ]
             });
         });
@@ -455,65 +533,47 @@ function renderPrioritySummary(results) {
         return;
     }
 
-    let html = '';
-
-    // Critical section
+    // Build tab bar
+    let tabBar = '';
     if (critical.length > 0) {
-        html += `
-        <div style="background:linear-gradient(135deg, rgba(220,38,38,0.2) 0%, rgba(185,28,28,0.15) 100%);border:1px solid rgba(220,38,38,0.4);border-radius:12px;padding:20px;margin-bottom:20px;">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:15px;">
-                <span style="font-size:1.5em;">🔴</span>
-                <span style="color:#fca5a5;font-size:1.1em;font-weight:600;">CRITICAL - Investigate Immediately (${critical.length})</span>
-            </div>
-            <div style="display:flex;flex-direction:column;gap:12px;">
-        `;
-
-        critical.forEach(item => {
-            html += renderPriorityItem(item, 'critical');
-        });
-
-        html += `</div></div>`;
+        tabBar += `<button class="priority-tab-btn" onclick="switchPriorityTab('critical', this)" data-panel="priorityCriticalPanel">
+            <span style="font-size:1.2em;">🔴</span> CRITICAL (${critical.length})
+        </button>`;
     }
-
-    // Warning section
     if (warnings.length > 0) {
-        html += `
-        <div style="background:linear-gradient(135deg, rgba(245,158,11,0.2) 0%, rgba(217,119,6,0.15) 100%);border:1px solid rgba(245,158,11,0.4);border-radius:12px;padding:20px;margin-bottom:20px;">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:15px;">
-                <span style="font-size:1.5em;">🟡</span>
-                <span style="color:#fcd34d;font-size:1.1em;font-weight:600;">WARNING - Review Today (${warnings.length})</span>
-            </div>
-            <div style="display:flex;flex-direction:column;gap:12px;">
-        `;
-
-        // Limit warnings shown (show first 10, collapse rest)
-        const showWarnings = warnings.slice(0, 10);
-        const hiddenWarnings = warnings.slice(10);
-
-        showWarnings.forEach(item => {
-            html += renderPriorityItem(item, 'warning');
-        });
-
-        if (hiddenWarnings.length > 0) {
-            html += `
-                <div style="text-align:center;padding:10px;">
-                    <button onclick="document.getElementById('hiddenWarnings').style.display='block';this.style.display='none';"
-                            style="background:rgba(245,158,11,0.3);border:1px solid rgba(245,158,11,0.5);color:#fcd34d;padding:8px 16px;border-radius:6px;cursor:pointer;">
-                        Show ${hiddenWarnings.length} more warnings
-                    </button>
-                </div>
-                <div id="hiddenWarnings" style="display:none;display:flex;flex-direction:column;gap:12px;">
-            `;
-            hiddenWarnings.forEach(item => {
-                html += renderPriorityItem(item, 'warning');
-            });
-            html += `</div>`;
-        }
-
-        html += `</div></div>`;
+        tabBar += `<button class="priority-tab-btn" onclick="switchPriorityTab('warning', this)" data-panel="priorityWarningPanel">
+            <span style="font-size:1.2em;">🟡</span> WARNING (${warnings.length})
+        </button>`;
     }
+
+    // Build panels
+    let criticalPanel = '';
+    critical.forEach(item => { criticalPanel += renderPriorityItem(item, 'critical'); });
+
+    let warningPanel = '';
+    warnings.forEach(item => { warningPanel += renderPriorityItem(item, 'warning'); });
+
+    let html = `<div class="priority-tab-bar">${tabBar}</div>
+        ${critical.length > 0 ? `<div id="priorityCriticalPanel" class="priority-tab-panel">${criticalPanel}</div>` : ''}
+        ${warnings.length > 0 ? `<div id="priorityWarningPanel" class="priority-tab-panel">${warningPanel}</div>` : ''}`;
 
     document.getElementById('prioritySummary').innerHTML = html;
+}
+
+function switchPriorityTab(type, btn) {
+    const wrap = document.getElementById('prioritySummary');
+    // If clicking the already-active tab, collapse it
+    if (btn.classList.contains('active-critical') || btn.classList.contains('active-warning')) {
+        btn.classList.remove('active-critical', 'active-warning');
+        wrap.querySelectorAll('.priority-tab-panel').forEach(p => p.classList.remove('active'));
+        return;
+    }
+    // Deactivate all tabs and panels
+    wrap.querySelectorAll('.priority-tab-btn').forEach(b => b.classList.remove('active-critical', 'active-warning'));
+    wrap.querySelectorAll('.priority-tab-panel').forEach(p => p.classList.remove('active'));
+    // Activate clicked tab and its panel
+    btn.classList.add(type === 'critical' ? 'active-critical' : 'active-warning');
+    document.getElementById(btn.dataset.panel).classList.add('active');
 }
 
 function renderPriorityItem(item, severity) {
@@ -546,6 +606,9 @@ function renderPriorityItem(item, severity) {
             break;
         case 'ssl_cert':
             icon = '🔐'; title = item.domain; subtitle = `SSL cert from ${item.issuer}`;
+            break;
+        case 's3_bucket':
+            icon = '🪣'; title = item.bucket; subtitle = `Brand-squatting bucket (${item.domain}) — ${item.details}`;
             break;
         default:
             icon = '❓'; title = 'Unknown'; subtitle = '';
@@ -1998,6 +2061,94 @@ function renderAbuseIPDB(domains) {
     });
 
     document.getElementById('abuseipdb').innerHTML = html || '<div class="no-data">No domains monitored.</div>';
+}
+
+function renderS3BrandSquatting(domains) {
+    let html = '';
+    const allBucketNames = [];
+
+    Object.entries(domains || {}).forEach(([domain, data]) => {
+        const s3Data = data.s3_brand_squatting || {};
+
+        html += `<div class="domain-section">
+            <div class="domain-title">🪣 ${domain}</div>`;
+
+        if (s3Data.error) {
+            html += `<div class="no-data">S3 brand squatting scan failed: ${s3Data.error}</div>`;
+        } else {
+            const totalFound = s3Data.total_found || 0;
+            const totalPublic = s3Data.total_public || 0;
+            const totalProbed = s3Data.total_probed || 0;
+            const totalCandidates = s3Data.total_candidates || 0;
+            const foundBuckets = s3Data.found_buckets || [];
+
+            html += `<p style="margin-bottom:15px;color:#666;">
+                Candidates generated: <strong>${totalCandidates.toLocaleString()}</strong> |
+                Probed: <strong>${totalProbed.toLocaleString()}</strong> |
+                Found: <strong style="color:${totalFound > 0 ? '#f59e0b' : 'inherit'};">${totalFound}</strong> |
+                Publicly listable: <strong style="color:${totalPublic > 0 ? '#dc2626' : 'inherit'};">${totalPublic}</strong>
+            </p>`;
+
+            if (foundBuckets.length > 0) {
+                html += `<div style="margin-bottom:12px;text-align:right;">
+                    <a href="/s3-scanner" target="_blank" class="btn-view" style="padding:8px 16px;font-size:0.9em;" title="Open S3 Scanner to deep scan buckets for PII, ACLs, and downloadable content">Open S3 Scanner</a>
+                </div>`;
+
+                html += `<table class="findings-table">
+                    <thead><tr><th>Bucket Name</th><th>Status</th><th>Region</th><th>Objects</th></tr></thead>
+                    <tbody>`;
+
+                foundBuckets.forEach(b => {
+                    allBucketNames.push(b.bucket);
+                    const isPublic = b.listable || b.status === 'exists_public';
+                    const statusBadge = isPublic
+                        ? '<span class="badge badge-danger">PUBLIC</span>'
+                        : '<span class="badge badge-warning">EXISTS (Private)</span>';
+                    const rowBg = isPublic ? 'background:rgba(220,38,38,0.15);' : '';
+                    const probeCount = b.key_count != null ? b.key_count.toLocaleString() : '-';
+
+                    html += `<tr style="${rowBg}">
+                        <td><code>${b.bucket}</code></td>
+                        <td>${statusBadge}</td>
+                        <td>${b.region || 'us-east-1'}</td>
+                        <td class="s3-obj-count" data-bucket="${b.bucket}">${probeCount}</td>
+                    </tr>`;
+                });
+
+                html += `</tbody></table>`;
+            } else if (totalProbed > 0) {
+                html += `<div class="no-data" style="padding:20px;background:rgba(34,197,94,0.15);border-color:#22c55e;">
+                    <span style="color:#22c55e;">✓</span> No brand-squatting S3 buckets found after probing ${totalProbed.toLocaleString()} candidates.
+                </div>`;
+            } else {
+                html += `<div class="no-data">No S3 brand squatting scan data available.</div>`;
+            }
+        }
+
+        html += `</div>`;
+    });
+
+    document.getElementById('s3brand').innerHTML = html || '<div class="no-data">No domains monitored.</div>';
+
+    // Enrich with deep-scan object counts
+    if (allBucketNames.length > 0) {
+        fetch('/api/s3-scanner/bucket-counts?buckets=' + encodeURIComponent(allBucketNames.join(',')))
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) return;
+                const counts = data.counts || {};
+                document.querySelectorAll('.s3-obj-count').forEach(cell => {
+                    const bucket = cell.dataset.bucket;
+                    const info = counts[bucket];
+                    if (info) {
+                        const cnt = info.object_count.toLocaleString();
+                        const size = info.total_size_human ? ` (${info.total_size_human})` : '';
+                        cell.innerHTML = `${cnt}${size} <span style="font-size:0.75em;color:#60a5fa;" title="From deep scan on ${info.timestamp}">✓ scanned</span>`;
+                    }
+                });
+            })
+            .catch(() => {});
+    }
 }
 
 function showTab(tabId, scrollToTabs = false) {

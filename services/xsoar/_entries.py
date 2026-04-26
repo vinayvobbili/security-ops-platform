@@ -44,7 +44,12 @@ def get_entries(client, incident_id: str) -> List[Dict[str, Any]]:
         raise
 
 
-def get_case_data_with_notes(client, incident_id: str, max_retries: int = 3) -> Dict[str, Any]:
+def get_case_data_with_notes(
+    client,
+    incident_id: str,
+    max_retries: int = 3,
+    filter_body: Dict[str, Any] = None,
+) -> Dict[str, Any]:
     """
     Fetch incident details along with notes.
 
@@ -52,6 +57,11 @@ def get_case_data_with_notes(client, incident_id: str, max_retries: int = 3) -> 
         client: XSOAR demisto-py client
         incident_id: The XSOAR incident ID
         max_retries: Maximum number of retry attempts for rate limiting/server errors
+        filter_body: Optional InvestigationFilter dict sent as the POST body. Use
+            e.g. ``{"categories": ["notes"]}`` to ask XSOAR to return only note
+            entries — full investigations can be many MB each (playbook runs,
+            integration dumps, war-room commands), so filtering matters when
+            looping over thousands of tickets.
 
     Returns:
         Dictionary containing incident investigation data with notes
@@ -60,13 +70,14 @@ def get_case_data_with_notes(client, incident_id: str, max_retries: int = 3) -> 
         ApiException: If API call fails after all retries
     """
     retry_count = 0
+    body = filter_body if filter_body is not None else {}
 
     while retry_count <= max_retries:
         try:
             response = client.generic_request(
                 path=f'/investigation/{incident_id}',
                 method='POST',
-                body={}
+                body=body
             )
             return _parse_generic_response(response)
         except ApiException as e:
@@ -120,7 +131,15 @@ def get_user_notes(client, incident_id: str, max_retries: int = 3) -> List[Dict[
         List of formatted notes with note_text, author, and created_at fields,
         sorted with latest note first
     """
-    case_data_with_notes = get_case_data_with_notes(client, incident_id, max_retries=max_retries)
+    # Ask XSOAR to filter server-side to the `notes` category — without this,
+    # every call returns the full investigation (playbook runs, integration
+    # outputs, war-room commands), which is many MB per ticket and blows up
+    # memory when parallelising across thousands of tickets.
+    case_data_with_notes = get_case_data_with_notes(
+        client, incident_id,
+        max_retries=max_retries,
+        filter_body={"categories": ["notes"]},
+    )
     entries = case_data_with_notes.get('entries', [])
     user_notes = [entry for entry in entries if entry.get('note')]
 
@@ -295,3 +314,108 @@ def execute_command_in_war_room(client, incident_id: str, command: str) -> Dict[
     result = create_entry(client, incident_id, command, '/xsoar/entry', markdown=False)
     log.debug(f"Successfully executed command '{command}' in ticket {incident_id}")
     return result
+
+
+def run_command_and_read_context(
+    client,
+    incident_id: str,
+    command: str,
+    args: Dict[str, str],
+    context_path: str,
+    wait_seconds: int = 10,
+    using: str = "",
+) -> Any:
+    """Fire an XSOAR integration command and return the context it writes.
+
+    Used by services that don't have direct API credentials (e.g. Varonis,
+    Active Directory) — XSOAR holds their credentials and connection, so the
+    service fires a war room command and reads the structured result back from
+    the incident context.
+
+    Flow:
+      1. POST /xsoar/entry  — fires the command asynchronously in the war room
+      2. sleep wait_seconds — gives the integration time to respond
+      3. GET /incident/load/{incident_id} — reads the full incident context
+      4. Walk context_path and return whatever the command wrote there
+
+    Args:
+        client:        XSOAR demisto-py client
+        incident_id:   XSOAR incident ID — command runs in this investigation
+        command:       XSOAR integration command, e.g. "!varonis-get-alert-evidence"
+        args:          Command arguments as plain strings {"username": "jsmith"}.
+                       Empty-string values are dropped.
+        context_path:  Dot-notation path where the command writes its output,
+                       e.g. "Varonis.Alert" or "ActiveDirectory.Users"
+        wait_seconds:  Seconds to wait before reading context (default 10).
+                       Increase for slow integrations.
+        using:         Integration instance name to target. Without this, XSOAR
+                       runs the command against ALL configured instances of that
+                       integration. Always supply the specific instance name.
+
+    Returns:
+        The value at context_path in the incident context (dict, list, or
+        primitive), or None if the path is absent or the command failed.
+        All exceptions are caught — callers receive None on any failure.
+    """
+    if not incident_id or not command:
+        return None
+
+    # Build XSOAR args format: {"argName": {"simple": "value"}}
+    xsoar_args = {k: {"simple": str(v)} for k, v in args.items() if v}
+    if using:
+        xsoar_args["using"] = {"simple": using}
+
+    # Step 1: Fire the command async
+    try:
+        payload = {
+            "id": "",
+            "version": 0,
+            "investigationId": incident_id,
+            "data": command,
+            "args": xsoar_args,
+            "markdown": False,
+        }
+        client.generic_request(path="/xsoar/entry", method="POST", body=payload)
+        log.debug(f"Fired command '{command}' in ticket {incident_id}")
+    except ApiException as e:
+        log.warning(
+            f"Failed to fire '{command}' in ticket {incident_id}: "
+            f"{e.status} {getattr(e, 'reason', '')}"
+        )
+        return None
+    except Exception as e:
+        log.warning(f"Failed to fire '{command}' in ticket {incident_id}: {e}")
+        return None
+
+    # Step 2: Wait for the integration to respond
+    time.sleep(wait_seconds)
+
+    # Step 3: Fetch the incident context
+    try:
+        response = client.generic_request(
+            path=f"/incident/load/{incident_id}",
+            method="GET",
+        )
+        from ._utils import _parse_generic_response
+        parsed = _parse_generic_response(response)
+        context = parsed.get("context", {}) or {}
+    except Exception as e:
+        log.warning(f"Failed to read incident context for ticket {incident_id}: {e}")
+        return None
+
+    # Step 4: Walk the context_path
+    current: Any = context
+    for part in context_path.split("."):
+        if isinstance(current, dict):
+            current = current.get(part)
+            if current is None:
+                log.debug(
+                    f"context_path '{context_path}' not found in ticket {incident_id} "
+                    f"(missing segment '{part}')"
+                )
+                return None
+        else:
+            return None
+
+    log.info(f"Command '{command}' → '{context_path}' returned data for ticket {incident_id}")
+    return current

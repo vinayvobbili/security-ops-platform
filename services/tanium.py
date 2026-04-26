@@ -62,6 +62,34 @@ query getEndpoints($first: Int, $after: Cursor) {
 }
 """
 
+INSTALLED_APPS_QUERY = """
+query getInstalledApps($first: Int, $after: Cursor) {
+  endpoints(first: $first, after: $after) {
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    edges {
+      node {
+        id
+        name
+        ipAddress
+        eidLastSeen
+        os {
+          platform
+        }
+        sensorReadings(sensors: [{name: "Installed Applications"}]) {
+          columns {
+            name
+            values
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
 ENDPOINT_BY_NAME_QUERY = """
 query getEndpointByName($name: String!) {
   endpoints(first: 1, filter: {path: "name", op: EQ, value: $name}) {
@@ -116,12 +144,60 @@ mutation createParamTaniumAction($comment: String, $distributeSeconds: Int, $exp
     input: {comment: $comment, name: $name, package: {id: $packageID, params: [$tag]}, targets: {endpoints: $endpoints, actionGroup: {id: 4}}, schedule: {distributeSeconds: $distributeSeconds, expireSeconds: $expireSeconds, startTime: $startTime}}
   ) {
     action {
+      id
       scheduledAction {
         id
       }
     }
     error {
       message
+    }
+  }
+}
+"""
+
+ACTION_LOOKUP_QUERY = """
+query getAction($ref: IdRefInput!) {
+  action(ref: $ref) {
+    id
+    name
+    status
+    creationTime
+    startTime
+    expirationTime
+    distributeSeconds
+    package { id name }
+    scheduledAction { id }
+  }
+}
+"""
+
+APPROVE_SCHEDULED_ACTION_MUTATION = """
+mutation approveScheduledAction($ref: IdRefInput!) {
+  scheduledActionApprove(ref: $ref) {
+    id
+    approved
+    error { message }
+  }
+}
+"""
+
+PACKAGE_SEARCH_QUERY = """
+query searchPackages($filter: FieldFilterInput) {
+  packages(filter: $filter) {
+    edges {
+      node {
+        id
+        name
+        parameterDefinitions {
+          parameterType
+          key
+          label
+          helpText
+          defaultValue
+          values
+        }
+      }
     }
   }
 }
@@ -172,6 +248,10 @@ class Computer:
         """Check if computer has an EPP Ring tag (case-insensitive)"""
         return any(str(tag).upper().startswith('EPP') and 'RING' in str(tag).upper() for tag in self.custom_tags)
 
+    def has_mgcc_ring_tag(self) -> bool:
+        """Check if computer has an MGCC-specific ring tag (EPP_ECMTag_MGCC_*)"""
+        return any('MGCC' in str(tag).upper() and 'RING' in str(tag).upper() for tag in self.custom_tags)
+
     def has_epp_power_mode_tag(self) -> bool:
         """Check if computer has an EPP Power Mode tag EPP_POWERMODE (case-insensitive)"""
         return any(str(tag).upper() == "EPP_POWERMODE" for tag in self.custom_tags)
@@ -182,38 +262,43 @@ class TaniumAPIError(Exception):
     pass
 
 
-def get_package_id_for_instance(source: str, os_platform: str) -> str:
-    """Get the appropriate Tanium package ID based on instance (source) and OS platform.
+def get_package_id_for_instance(source: str, os_platform: str, action: str) -> str:
+    """Get the appropriate Tanium package ID based on instance, OS platform, and action.
+
+    All package IDs are read from config (.env via my_config). Raises TaniumAPIError if
+    the required config value is missing or blank.
 
     Args:
         source: Instance name (e.g., "Cloud", "On-Prem")
         os_platform: Operating system platform (e.g., "Windows", "Linux")
+        action: "add" or "remove" — selects Add Tags vs Remove Tags package
 
     Returns:
         Package ID string
-
-    Cloud package IDs:
-        - 38355: Windows
-        - 38356: Non-Windows (Linux, Unix, Mac)
-
-    On-Prem package IDs:
-        - 1235: Both Windows and Non-Windows
     """
+    config = get_config()
     os_lower = os_platform.lower() if os_platform else ""
     is_cloud = "cloud" in source.lower() if source else False
+    is_remove = action.lower() == "remove"
 
     # Check for non-Windows platforms
     is_non_windows = any(platform in os_lower for platform in
                          ["linux", "unix", "mac", "darwin", "aix", "solaris", "freebsd"])
 
+    # Map (cloud, remove, non_windows) → config attribute name
     if is_cloud:
-        # Cloud instance package IDs
-        if is_non_windows:
-            return "38356"  # Custom Tagging - Add Tags (Non-Windows) - Cloud
-        return "38355"  # Custom Tagging - Add Tags (Windows) - Cloud
+        if is_remove:
+            attr = "tanium_cloud_remove_single_tag_nonwin_pkg_id" if is_non_windows else "tanium_cloud_remove_single_tag_win_pkg_id"
+        else:
+            attr = "tanium_cloud_add_tags_nonwin_pkg_id" if is_non_windows else "tanium_cloud_add_tags_win_pkg_id"
     else:
-        # On-Prem instance package ID (same for all platforms)
-        return "1235"  # Custom Tagging - Add Tags - On-Prem
+        attr = "tanium_onprem_remove_single_tag_pkg_id" if is_remove else "tanium_onprem_add_tags_pkg_id"
+
+    pkg_id = getattr(config, attr, None)
+    if not pkg_id:
+        env_var = attr.upper()
+        raise TaniumAPIError(f"{env_var} not set — configure it in .env")
+    return pkg_id
 
 
 class TaniumInstance:
@@ -239,7 +324,7 @@ class TaniumInstance:
             total=3,  # Total number of retries
             backoff_factor=1,  # Wait 1s, 2s, 4s between retries
             status_forcelist=[429, 500, 502, 503, 504],  # Retry on these HTTP status codes
-            allowed_methods=["POST"],  # Retry POST requests (GraphQL uses POST)
+            allowed_methods=["GET", "POST"],  # Retry GET (REST API) and POST (GraphQL)
             raise_on_status=False  # Don't raise exception on max retries, let us handle it
         )
 
@@ -258,22 +343,51 @@ class TaniumInstance:
 
         logger.info(f"Initialized Tanium instance: {self.name} (URL: {self.server_url}) with retry logic")
 
-    def get_package_id_for_device_type(self, device_type: str) -> str:
+    def search_packages(self, name_contains: str) -> List[dict]:
+        """Search for Tanium packages by name. Returns list of {id, name, parameterDefinitions}."""
+        variables = {
+            "filter": {"op": "CONTAINS", "field": "name", "value": name_contains}
+        }
+        result = self.query(PACKAGE_SEARCH_QUERY, variables)
+        edges = result.get("data", {}).get("packages", {}).get("edges", [])
+        return [edge["node"] for edge in edges if edge.get("node")]
+
+    def get_action(self, action_id: str) -> dict:
+        """Look up a Tanium action by ID. Returns the action dict or raises TaniumAPIError."""
+        result = self.query(ACTION_LOOKUP_QUERY, {"ref": {"id": str(action_id)}})
+        action = result.get("data", {}).get("action")
+        if action is None:
+            raise TaniumAPIError(f"Action {action_id} not found")
+        return action
+
+    def approve_scheduled_action(self, scheduled_action_id: str) -> bool:
+        """Approve a scheduled action. Returns True on success, logs warning on failure."""
+        result = self.query(APPROVE_SCHEDULED_ACTION_MUTATION, {"ref": {"id": scheduled_action_id}})
+        payload = result.get("data", {}).get("scheduledActionApprove", {})
+        if error := (payload.get("error") or {}).get("message"):
+            logger.warning(f"Failed to approve scheduledAction {scheduled_action_id}: {error}")
+            return False
+        logger.info(f"Approved scheduledAction {scheduled_action_id}: approved={payload.get('approved')}")
+        return True
+
+    def get_package_id_for_device_type(self, device_type: str, action: str) -> str:
         """Get the appropriate Tanium package ID for the given device type and instance.
 
         Uses the shared utility function to determine package ID.
         """
-        return get_package_id_for_instance(self.name, device_type)
+        return get_package_id_for_instance(self.name, device_type, action=action)
 
     @staticmethod
     def build_tag_update_variables(tanium_id: str, tags: List[str], package_id: str, action: str) -> dict:
         """Build GraphQL variables for tag update mutation."""
-        endpoint_id = int(tanium_id) if tanium_id.isdigit() else tanium_id
+        # Strip ".0" suffix from float-strings (Excel round-trip artifact)
+        clean_id = str(tanium_id).split('.')[0]
+        clean_pkg_id = str(package_id).split('.')[0]
         return {
-            "name": f"{action} Custom Tags to {tanium_id}",
+            "name": f"{action} Custom Tags to {clean_id}",
             "tag": " ".join(tags),
-            "packageID": package_id,
-            "endpoints": [endpoint_id],
+            "packageID": clean_pkg_id,
+            "endpoints": [clean_id],
             "distributeSeconds": 60,
             "expireSeconds": 3600,
             "startTime": datetime.now(timezone.utc).isoformat()
@@ -413,6 +527,71 @@ class TaniumInstance:
                 tags.extend([tag for tag in values if tag != self.NO_TAGS_PLACEHOLDER])
         return tags
 
+    # Installed Applications returns many rows per endpoint (~60 apps × multiple
+    # columns), so a 5000-host page exceeds Tanium's GraphQL response data limit.
+    # Empirically 500 stays well under the limit on both Cloud and On-Prem.
+    INSTALLED_APPS_PAGE_SIZE = 500
+
+    def iter_installed_software(
+        self,
+        endpoint_limit: Optional[int] = None,
+        match_fn=None,
+    ) -> Iterator[Dict[str, Any]]:
+        """Yield installed-software rows from the Installed Applications sensor.
+
+        Each row is {host, os, source, app, version}. Paginates endpoints; per
+        endpoint the sensor returns parallel Name/Version columns that we zip
+        into per-app rows. When match_fn is provided, only rows for which
+        match_fn(app_name_lower) returns True are yielded — this keeps memory
+        bounded when scanning the full fleet for a small set of CVE keywords.
+
+        Parameters:
+            endpoint_limit: stop after visiting this many endpoints (None = all).
+            match_fn: optional callable(app_name_lower: str) -> bool filter.
+        """
+        after_cursor = None
+        endpoints_seen = 0
+
+        while True:
+            variables = {'first': self.INSTALLED_APPS_PAGE_SIZE}
+            if after_cursor:
+                variables['after'] = after_cursor
+
+            data = self.query(INSTALLED_APPS_QUERY, variables)
+            endpoints = data['data']['endpoints']
+            edges = endpoints['edges']
+            page_info = endpoints['pageInfo']
+
+            if not edges:
+                break
+
+            for edge in edges:
+                if endpoint_limit and endpoints_seen >= endpoint_limit:
+                    return
+                node = edge['node']
+                host = node.get('name') or ''
+                os_platform = (node.get('os') or {}).get('platform') or ''
+                sr = node.get('sensorReadings') or {}
+                cols = {c.get('name'): c.get('values') or [] for c in sr.get('columns', [])}
+                names = cols.get('Name') or []
+                versions = cols.get('Version') or []
+                # Parallel arrays — pad with empty string if lengths mismatch
+                for i, app in enumerate(names):
+                    if match_fn is not None and not match_fn(app.lower()):
+                        continue
+                    yield {
+                        'host': host,
+                        'os': os_platform,
+                        'source': self.name,
+                        'app': app,
+                        'version': versions[i] if i < len(versions) else '',
+                    }
+                endpoints_seen += 1
+
+            if not page_info['hasNextPage']:
+                break
+            after_cursor = page_info['endCursor']
+
     def validate_token(self) -> bool:
         """Validate the API token"""
         try:
@@ -480,7 +659,7 @@ class TaniumInstance:
         # Use provided package_id or derive it from OS platform
         if package_id is None:
             device_type = computer.os_platform or "windows"
-            package_id = self.get_package_id_for_device_type(device_type)
+            package_id = self.get_package_id_for_device_type(device_type, action="add")
 
         variables = self.build_tag_update_variables(computer.id, updated_tags, package_id, action="Add")
         result = self.query(UPDATE_TAGS_MUTATION, variables)
@@ -496,15 +675,22 @@ class TaniumInstance:
         return action_create_result
 
     def remove_tag_by_name(self, computer_name: str, tag: str) -> dict:
-        """Remove a custom tag from a computer by name."""
+        """Remove a custom tag from a computer by name.
+
+        Uses the 'Custom Tagging - Remove Tags' package which takes the tag(s)
+        to remove as params (not the remaining tags).
+        """
         computer = self.find_computer_by_name(computer_name)
         if not computer:
             raise TaniumAPIError(f"Computer '{computer_name}' not found")
 
-        updated_tags = [t for t in computer.custom_tags if t != tag]
+        if tag not in computer.custom_tags:
+            raise TaniumAPIError(f"Tag '{tag}' not found on computer '{computer_name}'. Current tags: {computer.custom_tags}")
+
         device_type = computer.os_platform or "windows"
-        package_id = self.get_package_id_for_device_type(device_type)
-        variables = self.build_tag_update_variables(computer.id, updated_tags, package_id, action="Remove")
+        package_id = self.get_package_id_for_device_type(device_type, action="remove")
+        # Pass only the tag to remove — the Remove Tags package strips it from the endpoint
+        variables = self.build_tag_update_variables(computer.id, [tag], package_id, action="Remove")
         result = self.query(UPDATE_TAGS_MUTATION, variables)
 
         action_create_result = result.get('data', {}).get('actionCreate', {})
@@ -514,6 +700,11 @@ class TaniumInstance:
             raise TaniumAPIError(f"GraphQL error: {error.get('message', 'Unknown error')}. Full error: {error}")
         if not action_create_result.get('action'):
             raise TaniumAPIError(f"No action data returned from GraphQL response. Full response: {action_create_result}")
+
+        if get_config().tanium_auto_approve_remove_tags:
+            scheduled_action_id = action_create_result.get('action', {}).get('scheduledAction', {}).get('id')
+            if scheduled_action_id:
+                self.approve_scheduled_action(str(scheduled_action_id))
 
         return action_create_result
 
@@ -538,23 +729,19 @@ class TaniumInstance:
         if not hosts:
             raise TaniumAPIError("No hosts provided for bulk tagging")
 
-        # Convert tanium_ids to integers and collect all unique endpoint IDs
+        # Convert tanium_ids to integers — handles float-strings like "12345678.0"
+        # from Excel round-tripping (numeric cells read back as floats)
         endpoint_ids = []
         for host in hosts:
-            tanium_id = str(host['tanium_id'])
-            endpoint_id = int(tanium_id) if tanium_id.isdigit() else tanium_id
-            endpoint_ids.append(endpoint_id)
+            tanium_id = str(host['tanium_id']).split('.')[0]  # strip ".0" from float-strings
+            endpoint_ids.append(tanium_id)
 
-        # For bulk operations, we need to combine all existing tags from all hosts plus the new tag
-        # However, since each host may have different tags, we'll use a simplified approach:
-        # We just add the new tag to each host individually via the mutation
-        # Note: The mutation expects the FULL tag list for each endpoint
-        # For true bulk tagging, we need one tag string that applies to all
-        # So we'll just pass the new tag as the parameter
+        # Strip ".0" from package_id too (same Excel round-trip issue)
+        package_id = str(package_id).split('.')[0]
 
         variables = {
             "name": f"Bulk Add Custom Tag to {len(endpoint_ids)} endpoints",
-            "tag": tag,  # Just the new tag to add
+            "tag": tag,
             "packageID": package_id,
             "endpoints": endpoint_ids,
             "distributeSeconds": 60,
@@ -580,8 +767,97 @@ class TaniumInstance:
 
     # ==================== Detection Rules Catalog Methods ====================
 
+    def _fetch_signals_rest(self) -> Dict[str, Any]:
+        """Fetch signals via the Threat Response REST API.
+
+        Uses /plugin/products/threat-response/api/v1/signals with offset-based pagination.
+        """
+        signals = []
+        offset = 0
+        limit = 500
+
+        while True:
+            url = f"{self.server_url}/plugin/products/threat-response/api/v1/signals"
+            params = {"limit": limit, "offset": offset}
+
+            response = self.session.get(url, params=params, verify=self.verify_ssl, timeout=30)
+            if response.status_code == 403:
+                raise TaniumAPIError(
+                    f"RBAC insufficient privilege for Threat Response API on {self.name}. "
+                    "Token needs Threat Response Reader role."
+                )
+            response.raise_for_status()
+
+            data = response.json()
+
+            # REST API may return signals under "data" key or at top level
+            batch = data if isinstance(data, list) else data.get("data", data.get("signals", []))
+            if not isinstance(batch, list):
+                batch = []
+
+            if not batch:
+                break
+
+            # Normalize REST field names (snake_case) to match GraphQL (camelCase)
+            for signal in batch:
+                signals.append({
+                    "id": str(signal.get("id", "")),
+                    "name": signal.get("name", ""),
+                    "description": signal.get("description", "") or "",
+                    "severity": signal.get("severity", 3),
+                    "enabled": signal.get("enabled", True),
+                    "mitreTactics": signal.get("mitreTactics", signal.get("mitre_tactics")) or [],
+                    "mitreTechniques": signal.get("mitreTechniques", signal.get("mitre_techniques")) or [],
+                    "createdAt": signal.get("createdAt", signal.get("created_at", "")),
+                    "updatedAt": signal.get("updatedAt", signal.get("updated_at", "")),
+                })
+
+            offset += len(batch)
+            if len(batch) < limit:
+                break
+
+        return {"signals": signals, "count": len(signals)}
+
+    def list_signals(self) -> Dict[str, Any]:
+        """List Threat Response signals (detection rules) from this instance.
+
+        Tries the REST API first (/plugin/products/threat-response/api/v1/signals),
+        falls back to GraphQL for backwards compatibility.
+
+        Returns:
+            Dict with signals list or error
+        """
+        # Try REST API first (preferred — GraphQL field was removed from gateway schema)
+        try:
+            result = self._fetch_signals_rest()
+            logger.info(f"Fetched {result['count']} signals from {self.name} via REST API")
+            return result
+        except TaniumAPIError as e:
+            if "RBAC" in str(e):
+                logger.warning(f"{e}")
+            else:
+                logger.warning(f"REST API failed for {self.name}: {e}")
+        except Exception as e:
+            logger.warning(f"REST API unavailable for {self.name}: {e}")
+
+        # Fall back to GraphQL (may still work on older Tanium versions)
+        try:
+            result = self._fetch_signals_with_query(SIGNALS_QUERY)
+            logger.info(f"Fetched {result['count']} signals from {self.name} via GraphQL")
+            return result
+        except TaniumAPIError as e:
+            err = str(e)
+            if "GRAPHQL_VALIDATION_FAILED" in err or "Cannot query field" in err or "400 Client Error" in err:
+                logger.warning(f"Signals not available on {self.name} via REST or GraphQL — token may need Threat Response Reader role")
+                return {"signals": [], "count": 0}
+            logger.error(f"Error listing signals from {self.name}: {e}")
+            return {"error": err}
+        except Exception as e:
+            logger.error(f"Unexpected error listing signals from {self.name}: {e}")
+            return {"error": str(e)}
+
     def _fetch_signals_with_query(self, query: str) -> Dict[str, Any]:
-        """Fetch paginated signals using the given GraphQL query."""
+        """Fetch paginated signals using GraphQL (legacy fallback)."""
         signals = []
         cursor = None
         page_size = 100
@@ -607,21 +883,6 @@ class TaniumInstance:
                 break
 
         return {"signals": signals, "count": len(signals)}
-
-    def list_signals(self) -> Dict[str, Any]:
-        """List Threat Response signals (detection rules) from this instance.
-
-        Returns:
-            Dict with signals list or error
-        """
-        try:
-            return self._fetch_signals_with_query(SIGNALS_QUERY)
-        except TaniumAPIError as e:
-            logger.error(f"Error listing signals from {self.name}: {e}")
-            return {"error": str(e)}
-        except Exception as e:
-            logger.error(f"Unexpected error listing signals from {self.name}: {e}")
-            return {"error": str(e)}
 
 
 class TaniumClient:
@@ -741,6 +1002,15 @@ class TaniumClient:
                 max_length = max(len(str(cell.value)) for cell in column)
                 worksheet.column_dimensions[column[0].column_letter].width = min(max_length + 2, 50)
 
+        # Apply professional formatting (includes watermark)
+        from src.utils.excel_formatting import apply_professional_formatting
+        apply_professional_formatting(output_path)
+
+        # Add clickable Tanium ID hyperlinks
+        from src.utils.excel_formatting import add_tanium_hyperlinks
+        add_tanium_hyperlinks(output_path, tanium_id_column='ID', action_id_column=None,
+                              portal_urls_by_source=self.get_portal_urls_by_source())
+
         return str(output_path)
 
     def get_and_export_all_computers(self, filename: Optional[str] = None) -> Optional[str]:
@@ -771,6 +1041,42 @@ class TaniumClient:
         logger.info(f"Found {len(matches)} computers matching '{search_term}' in {instance_name}")
         return matches
 
+    def find_installed_software(
+        self,
+        keywords: List[str],
+        endpoint_limit: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """Scan all Tanium instances for installed apps matching any keyword.
+
+        Returns a list of {host, os, source, app, version} rows. Keyword match is
+        case-insensitive substring. The scan paginates the full fleet, so this is
+        intended for CVE-triggered lookups (handful of calls per tipper), not
+        interactive per-host queries.
+        """
+        if not keywords:
+            return []
+        lowered = [k.lower() for k in keywords if k]
+        if not lowered:
+            return []
+
+        def match(app_lower: str) -> bool:
+            return any(kw in app_lower for kw in lowered)
+
+        results: List[Dict[str, Any]] = []
+        for instance in self.instances:
+            try:
+                for row in instance.iter_installed_software(
+                    endpoint_limit=endpoint_limit, match_fn=match
+                ):
+                    results.append(row)
+            except Exception as e:
+                logger.error(f"Installed-software scan failed for {instance.name}: {e}")
+        logger.info(
+            f"find_installed_software: {len(results)} matches across {len(self.instances)} "
+            f"instance(s) for keywords={lowered}"
+        )
+        return results
+
     def get_instance_by_name(self, instance_name: str) -> Optional[TaniumInstance]:
         """Get a Tanium instance by name"""
         return next((i for i in self.instances if i.name.lower() == instance_name.lower()), None)
@@ -778,6 +1084,10 @@ class TaniumClient:
     def list_available_instances(self) -> List[str]:
         """Get list of available instance names"""
         return [instance.name for instance in self.instances]
+
+    def get_portal_urls_by_source(self) -> Dict[str, str]:
+        """Get a mapping of instance name (Source) to portal URL for use in reports."""
+        return {instance.name: instance.server_url for instance in self.instances}
 
     def list_all_signals(self) -> Dict[str, Any]:
         """List Threat Response signals from all available instances.

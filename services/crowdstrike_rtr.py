@@ -123,13 +123,18 @@ def execute_script(hostnames, cloud_script_name):
     print(f"RTR script execution response: {batch_active_responder_command_response}")
 
 
-def run_rtr_script(hostname: str, cloud_script_name: str, command_line: str = "") -> dict:
+def run_rtr_script(hostname: str, cloud_script_name: str, command_line: str = "",
+                    local_script_path: str = None) -> dict:
     """Execute an RTR script on a host and return the results.
 
     Args:
         hostname: Target hostname
         cloud_script_name: Name of the script uploaded to CrowdStrike
         command_line: Command line arguments to pass to the script
+        local_script_path: Optional path to local script file. If provided
+            and the CloudFile execution produces no useful output, the script
+            content is sent inline via -Raw as a fallback (handles sensor
+            CloudFile cache staleness).
 
     Returns:
         dict with 'success', 'output', and 'error' keys
@@ -188,7 +193,37 @@ def run_rtr_script(hostname: str, cloud_script_name: str, command_line: str = ""
         if errors:
             return {"success": False, "output": stdout, "error": str(errors)}
 
-        return {"success": True, "output": stdout or stderr, "error": ""}
+        output = stdout or stderr
+
+        # Fallback: if CloudFile produced no useful output (e.g. sensor has
+        # a stale cached version) and we have a local copy, retry inline.
+        if local_script_path and "STAGED_FILES_START" not in output:
+            import os
+            if os.path.isfile(local_script_path):
+                logger.info(f"CloudFile output missing expected markers, retrying inline from {local_script_path}")
+                try:
+                    with open(local_script_path, 'r') as f:
+                        script_content = f.read()
+                    # Strip shebang — RTR uses the platform's default shell
+                    lines = script_content.split('\n')
+                    if lines and lines[0].startswith('#!'):
+                        lines = lines[1:]
+                    inline = '\n'.join(lines)
+
+                    inline_payload = {
+                        "base_command": "runscript",
+                        "batch_id": batch_id,
+                        "command_string": f"runscript -Raw=```{inline}```"
+                    }
+                    resp2 = falcon_rtr_admin.batch_admin_command(body=inline_payload)
+                    res2 = resp2.get('body', {}).get('combined', {}).get('resources', {})
+                    if res2:
+                        k2 = list(res2.keys())[0]
+                        output = res2[k2].get('stdout', '') or res2[k2].get('stderr', '')
+                except Exception as e2:
+                    logger.warning(f"Inline fallback also failed: {e2}")
+
+        return {"success": True, "output": output, "error": ""}
 
     except Exception as e:
         logger.error(f"RTR script execution failed: {e}")
@@ -404,9 +439,9 @@ def main():
 
     # upload_script(f"{config.team_name}_RMM_Tool_Removal")
 
-    # update_script("RMM_Tool_Removal", '<script_id>')
+    # update_script("RMM_Tool_Removal", '7cc64c3cf9f911ef86e712648f985aff_25596f2a3c164ed28d8de6670a89b442')
 
-    hostname = 'YOURHOSTNAME'
+    hostname = 'USHNTDTQ3'
     device_id = cs_client.get_device_id(hostname)
     print(f"Device ID: {device_id}")
 

@@ -19,6 +19,11 @@ from . import (
     countdown_timer_handler,
     proxy_server,
     epp_tagging_handler,
+    threat_intel_dashboard_handler,
+    ai_intake_handler,
+    escalation_contacts_handler,
+    ruai_handler,
+    ticket_cannon_handler,
 )
 
 __all__ = [
@@ -40,4 +45,9 @@ __all__ = [
     'countdown_timer_handler',
     'proxy_server',
     'epp_tagging_handler',
+    'threat_intel_dashboard_handler',
+    'ai_intake_handler',
+    'escalation_contacts_handler',
+    'ruai_handler',
+    'ticket_cannon_handler',
 ]

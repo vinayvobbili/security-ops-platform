@@ -11,7 +11,8 @@ from typing import Dict, Any, List
 
 import pandas as pd
 import pytz
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
+from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 from openpyxl.styles import Font
 
 from services.xsoar import TicketHandler, XsoarEnvironment
@@ -19,6 +20,48 @@ from src.config import XsoarConfig
 from src.utils.excel_formatting import apply_professional_formatting
 
 logger = logging.getLogger(__name__)
+
+MAX_EXPORT_DATE_RANGE_DAYS = 366
+
+
+def _load_incidents(base_dir: str, eastern, filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Load incidents from cache or live XSOAR fetch depending on filters.
+
+    Uses cache for slider-based date ranges (last N days).
+    Uses live XSOAR fetch for custom date ranges (arbitrary start/end).
+    """
+    if filters.get('useCustomDate') and filters.get('customDateStart') and filters.get('customDateEnd'):
+        from src.components.ticket_cache import TicketCache
+        logger.info(f"Export: live XSOAR fetch for {filters['customDateStart']} to {filters['customDateEnd']}")
+        all_incidents = TicketCache.fetch_for_range(filters['customDateStart'], filters['customDateEnd'])
+    else:
+        today_date = datetime.now(eastern).strftime('%m-%d-%Y')
+        root_directory = Path(base_dir).parent
+        cache_file = root_directory / 'data' / 'transient' / 'secOps' / today_date / 'past_90_days_tickets.json'
+        if not cache_file.exists():
+            raise FileNotFoundError('Cache file not found')
+        with open(cache_file, 'r') as f:
+            cached_data = json.load(f)
+        all_incidents = cached_data['data'] if isinstance(cached_data, dict) and 'data' in cached_data else cached_data
+
+    return apply_filters_to_incidents(all_incidents, filters)
+
+
+def _validate_export_date_range(filters: Dict[str, Any]) -> None:
+    """Raise ValueError if custom date range exceeds the maximum allowed span."""
+    if filters.get('useCustomDate'):
+        start = filters.get('customDateStart', '')
+        end = filters.get('customDateEnd', '')
+        if start and end:
+            try:
+                span = (datetime.strptime(end, '%Y-%m-%d') - datetime.strptime(start, '%Y-%m-%d')).days
+                if span > MAX_EXPORT_DATE_RANGE_DAYS:
+                    raise ValueError(
+                        f'Custom date range cannot exceed {MAX_EXPORT_DATE_RANGE_DAYS} days (selected {span} days)'
+                    )
+            except ValueError as e:
+                if 'Custom date range' in str(e):
+                    raise
 
 
 def get_meaningful_metrics_data(base_dir: str, eastern: pytz.tzinfo.BaseTzInfo) -> Dict[str, Any]:
@@ -75,6 +118,20 @@ def apply_filters_to_incidents(incidents: List[Dict[str, Any]], filters: Dict[st
     logger.debug(f"Applying filters to {len(incidents)} incidents")
 
     date_range = filters.get('dateRange', 30)
+    use_custom_date = filters.get('useCustomDate', False)
+    custom_date_start = filters.get('customDateStart', '')
+    custom_date_end = filters.get('customDateEnd', '')
+
+    # Parse custom date boundaries once
+    custom_start_dt = None
+    custom_end_dt = None
+    if use_custom_date and custom_date_start and custom_date_end:
+        try:
+            custom_start_dt = datetime.strptime(custom_date_start, '%Y-%m-%d')
+            custom_end_dt = datetime.strptime(custom_date_end, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+        except ValueError:
+            use_custom_date = False
+
     mttr_filter = filters.get('mttrFilter', 0)
     mttc_filter = filters.get('mttcFilter', 0)
     age_filter = filters.get('ageFilter', 0)
@@ -85,12 +142,28 @@ def apply_filters_to_incidents(incidents: List[Dict[str, Any]], filters: Dict[st
     ticket_types = filters.get('ticketTypes', [])
     statuses = filters.get('statuses', [])
     automation_levels = filters.get('automationLevels', [])
+    assignment = filters.get('assignment', 'assigned')
+    if assignment not in ('assigned', 'unassigned', 'both'):
+        assignment = 'assigned'
 
     filtered_incidents = []
 
     for item in incidents:
         # Date filter
-        if item.get('created_days_ago') is not None and item.get('created_days_ago') > date_range:
+        if use_custom_date and custom_start_dt and custom_end_dt:
+            created_val = item.get('created')
+            if not created_val:
+                continue
+            try:
+                if isinstance(created_val, datetime):
+                    created_dt = created_val.replace(tzinfo=None)
+                else:
+                    created_dt = datetime.fromisoformat(created_val.replace('Z', '+00:00')).replace(tzinfo=None)
+            except (ValueError, AttributeError, TypeError):
+                continue
+            if created_dt < custom_start_dt or created_dt > custom_end_dt:
+                continue
+        elif item.get('created_days_ago') is not None and item.get('created_days_ago') > date_range:
             continue
 
         # Location filters
@@ -140,6 +213,15 @@ def apply_filters_to_incidents(incidents: List[Dict[str, Any]], filters: Dict[st
             should_show_with_level = any(l != 'No Level' and l == item.get('automation_level') for l in automation_levels)
 
             if not should_show_no_level and not should_show_with_level:
+                continue
+
+        # Assignment filter (analyst-worked vs unassigned)
+        if assignment in ('assigned', 'unassigned'):
+            owner_val = item.get('owner') or ''
+            is_assigned = bool(owner_val.strip()) if isinstance(owner_val, str) else bool(owner_val)
+            if assignment == 'assigned' and not is_assigned:
+                continue
+            if assignment == 'unassigned' and is_assigned:
                 continue
 
         # MTTR filter
@@ -214,26 +296,9 @@ def export_meaningful_metrics(
         ValueError: If no incidents to export
     """
     logger.info(f"Exporting meaningful metrics with filters: {filters}")
+    _validate_export_date_range(filters)
 
-    # Load data from cache
-    today_date = datetime.now(eastern).strftime('%m-%d-%Y')
-    root_directory = Path(base_dir).parent
-    cache_file = root_directory / 'data' / 'transient' / 'secOps' / today_date / 'past_90_days_tickets.json'
-
-    if not cache_file.exists():
-        raise FileNotFoundError('Cache file not found')
-
-    with open(cache_file, 'r') as f:
-        cached_data = json.load(f)
-
-    # Extract incidents data
-    if isinstance(cached_data, dict) and 'data' in cached_data:
-        all_incidents = cached_data['data']
-    else:
-        all_incidents = cached_data
-
-    # Apply filters
-    incidents = apply_filters_to_incidents(all_incidents, filters)
+    incidents = _load_incidents(base_dir, eastern, filters)
 
     if not incidents:
         raise ValueError('No incidents to export')
@@ -411,56 +476,85 @@ def _enrich_incidents_with_notes(incidents: List[Dict[str, Any]]) -> List[Dict[s
     return enriched_incidents
 
 
+_SEVERITY_MAP = {0: 'Unknown', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical'}
+_STATUS_MAP = {0: 'Pending', 1: 'Active', 2: 'Closed'}
+_COLUMN_PATH_MAP = {
+    'timetorespond': 'time_to_respond_secs',
+    'timetocontain': 'time_to_contain_secs',
+}
+
+
+def _prepare_single_export_row(
+        incident: Dict[str, Any],
+        visible_columns: List[str],
+        column_labels: Dict[str, str],
+        max_cell_length: int,
+        sanitize_stats: Dict[str, Any] = None,
+) -> List[Any]:
+    """Transform a single incident into a list of cell values ordered by visible_columns.
+
+    If `sanitize_stats` is provided, the number of cells that contained
+    Excel-illegal control characters is recorded there along with the ticket id,
+    so the caller can surface the issue instead of silently cleaning it.
+    """
+    row: List[Any] = []
+    ticket_stripped = False
+    for col_id in visible_columns:
+        data_field = _COLUMN_PATH_MAP.get(col_id, col_id)
+        value = incident.get(data_field)
+
+        if col_id == 'notes':
+            value = _format_notes(value, max_cell_length)
+        elif col_id == 'severity':
+            value = _SEVERITY_MAP.get(value, 'Unknown')
+        elif col_id == 'status':
+            value = _STATUS_MAP.get(value, 'Unknown')
+        elif col_id in ('timetorespond', 'timetocontain'):
+            value = _format_duration(value)
+        elif col_id in ('created', 'modified', 'closed', 'updated') and value:
+            value = _format_date(value)
+        elif isinstance(value, list):
+            value = ', '.join(str(v) for v in value)
+
+        if isinstance(value, str) and len(value) > max_cell_length:
+            truncation_msg = '\n\n[... Content truncated due to Excel cell size limit ...]'
+            value = value[:max_cell_length - len(truncation_msg)] + truncation_msg
+
+        if isinstance(value, str):
+            cleaned = ILLEGAL_CHARACTERS_RE.sub('', value)
+            if cleaned != value:
+                if sanitize_stats is not None:
+                    sanitize_stats['stripped_cells'] = sanitize_stats.get('stripped_cells', 0) + 1
+                    ticket_stripped = True
+                logger.warning(
+                    f"Stripped Excel-illegal chars from ticket "
+                    f"{incident.get('id')} column '{col_id}' "
+                    f"({len(value) - len(cleaned)} chars removed)"
+                )
+                value = cleaned
+
+        row.append(value if value is not None else '')
+
+    if ticket_stripped and sanitize_stats is not None:
+        ids = sanitize_stats.setdefault('ticket_ids', [])
+        tid = incident.get('id')
+        if tid and tid not in ids:
+            ids.append(tid)
+
+    return row
+
+
 def _prepare_export_rows(
         incidents: List[Dict[str, Any]],
         visible_columns: List[str],
         column_labels: Dict[str, str],
         max_cell_length: int
 ) -> List[Dict[str, Any]]:
-    """Prepare incident rows for Excel export."""
-    severity_map = {0: 'Unknown', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical'}
-    status_map = {0: 'Pending', 1: 'Active', 2: 'Closed'}
-
-    # Map column IDs to actual data field paths (matches JavaScript availableColumns)
-    column_path_map = {
-        'timetorespond': 'time_to_respond_secs',
-        'timetocontain': 'time_to_contain_secs',
-    }
-
+    """Prepare incident rows for Excel export (dict form, used by the sync DataFrame path)."""
     rows = []
-
     for incident in incidents:
-        row = {}
-        for col_id in visible_columns:
-            # Use path mapping if available, otherwise use col_id directly
-            data_field = column_path_map.get(col_id, col_id)
-            value = incident.get(data_field)
-            col_label = column_labels.get(col_id, col_id)
-
-            # Handle special formatting
-            if col_id == 'notes':
-                value = _format_notes(value, max_cell_length)
-            elif col_id == 'severity':
-                value = severity_map.get(value, 'Unknown')
-            elif col_id == 'status':
-                value = status_map.get(value, 'Unknown')
-            elif col_id in ['timetorespond', 'timetocontain']:
-                # Format duration in seconds as MM:SS
-                value = _format_duration(value)
-            elif col_id in ['created', 'modified', 'closed', 'updated'] and value:
-                value = _format_date(value)
-            elif isinstance(value, list):
-                value = ', '.join(str(v) for v in value)
-
-            # Truncate overly long text
-            if isinstance(value, str) and len(value) > max_cell_length:
-                truncation_msg = '\n\n[... Content truncated due to Excel cell size limit ...]'
-                value = value[:max_cell_length - len(truncation_msg)] + truncation_msg
-
-            row[col_label] = value if value is not None else ''
-
-        rows.append(row)
-
+        values = _prepare_single_export_row(incident, visible_columns, column_labels, max_cell_length)
+        rows.append({column_labels.get(c, c): v for c, v in zip(visible_columns, values)})
     return rows
 
 
@@ -592,7 +686,8 @@ def export_meaningful_metrics_async(
         visible_columns: List[str],
         column_labels: Dict[str, str],
         include_notes: bool = False,
-        progress_callback=None
+        progress_callback=None,
+        warning_callback=None,
 ) -> str:
     """Async version of export with progress tracking.
 
@@ -613,52 +708,63 @@ def export_meaningful_metrics_async(
         ValueError: If no incidents to export
     """
     logger.info(f"Async export started with filters: {filters}")
+    _validate_export_date_range(filters)
 
-    # Load data from cache
-    today_date = datetime.now(eastern).strftime('%m-%d-%Y')
-    root_directory = Path(base_dir).parent
-    cache_file = root_directory / 'data' / 'transient' / 'secOps' / today_date / 'past_90_days_tickets.json'
-
-    if not cache_file.exists():
-        raise FileNotFoundError('Cache file not found')
-
-    with open(cache_file, 'r') as f:
-        cached_data = json.load(f)
-
-    # Extract incidents data
-    if isinstance(cached_data, dict) and 'data' in cached_data:
-        all_incidents = cached_data['data']
-    else:
-        all_incidents = cached_data
-
-    # Apply filters
-    incidents = apply_filters_to_incidents(all_incidents, filters)
+    incidents = _load_incidents(base_dir, eastern, filters)
 
     if not incidents:
         raise ValueError('No incidents to export')
 
-    # Notify total count
+    total = len(incidents)
     if progress_callback:
-        progress_callback(0, len(incidents))
+        progress_callback(0, total)
 
-    # Enrich with notes if requested
-    if include_notes:
-        logger.info(f"Enriching {len(incidents)} filtered tickets with notes (async)...")
-        incidents = _enrich_incidents_with_notes_async(incidents, progress_callback)
-
-    # Prepare rows for export
+    # Stream rows directly to an openpyxl write-only workbook so we never hold
+    # the full enriched-incidents list or a pandas DataFrame in memory. This is
+    # the fix for year-sized exports with notes, where accumulating everything
+    # before writing was blowing past the VM's RAM and getting OOM-killed.
     max_cell_length = 32767
-    rows = _prepare_export_rows(incidents, visible_columns, column_labels, max_cell_length)
+    wb = Workbook(write_only=True)
+    ws = wb.create_sheet()
+    ws.append([column_labels.get(c, c) for c in visible_columns])
 
-    # Create DataFrame and export to Excel
-    df = pd.DataFrame(rows)
+    sanitize_stats: Dict[str, Any] = {'stripped_cells': 0, 'ticket_ids': []}
 
-    # Create temporary file
+    if include_notes:
+        logger.info(f"Enriching {total} filtered tickets with notes (async, streaming)...")
+        _enrich_and_stream_notes_to_ws(
+            incidents, ws, visible_columns, column_labels, max_cell_length,
+            progress_callback, warning_callback, sanitize_stats,
+        )
+    else:
+        for idx, incident in enumerate(incidents, start=1):
+            ws.append(_prepare_single_export_row(
+                incident, visible_columns, column_labels, max_cell_length, sanitize_stats,
+            ))
+            if progress_callback and (idx % 500 == 0 or idx == total):
+                progress_callback(idx, total)
+
+    if warning_callback and sanitize_stats['stripped_cells']:
+        sample = sanitize_stats['ticket_ids'][:5]
+        more = len(sanitize_stats['ticket_ids']) - len(sample)
+        warning_callback(
+            f"Stripped Excel-illegal control characters from "
+            f"{sanitize_stats['stripped_cells']} cell(s) across "
+            f"{len(sanitize_stats['ticket_ids'])} ticket(s). "
+            f"Sample ticket IDs: {sample}"
+            + (f" (+{more} more)" if more > 0 else "")
+        )
+
+    # Release the raw-incidents list before openpyxl materializes the file —
+    # _add_hyperlinks_and_formatting re-loads the xlsx, and we want as much
+    # headroom as possible for that step.
+    incidents = None
+
     with tempfile.NamedTemporaryFile(mode='wb', suffix='.xlsx', delete=False) as tmp:
         temp_path = tmp.name
-        df.to_excel(temp_path, index=False, engine='openpyxl')
+    wb.save(temp_path)
+    wb = None
 
-    # Add hyperlinks and formatting
     _add_hyperlinks_and_formatting(temp_path)
 
     logger.info(f"Async export complete: {temp_path}")
@@ -754,28 +860,46 @@ def _enrich_incidents_with_notes_async(incidents: List[Dict[str, Any]], progress
                         futures[new_future] = incident
 
             except TimeoutError:
-                # No futures completed in 60s - cancel all remaining and exit
-                logger.error(f"Export timeout: {len(futures)} active futures + {len(pending)} pending hung for 60+ seconds")
-                for future in list(futures.keys()):
-                    incident = futures.get(future)
-                    logger.error(f"Cancelling hung ticket: {incident.get('id') if incident else 'Unknown'}")
-                    future.cancel()
+                # The active batch hasn't completed in 60s. Don't kill the export —
+                # mark the stuck futures as failed for progress/accounting purposes,
+                # refill from pending, and keep going. The hung worker threads will
+                # drain naturally as urllib3's own retry/timeout fires (worst case
+                # ~120s), at which point the queued resubmissions start running.
+                stuck_count = len(futures)
+                logger.warning(
+                    f"Export stall: {stuck_count} active futures hung for 60+ seconds. "
+                    f"Marking them as failed and continuing with the remaining "
+                    f"{len(pending)} pending tickets."
+                )
+                for future, incident in list(futures.items()):
+                    incident_id = incident.get('id') if incident else 'Unknown'
+                    logger.warning(f"Abandoning hung ticket: {incident_id}")
                     if incident:
-                        incident['notes'] = [{'_fetch_error': True, 'error_message': 'Export timeout - ticket hung'}]
+                        incident['notes'] = [{
+                            '_fetch_error': True,
+                            'error_message': 'Notes fetch hung - abandoned after 60s of no progress'
+                        }]
                         enriched_incidents.append(incident)
                     failed_count += 1
                     completed += 1
-
-                # Mark all pending as failed too
-                for incident in pending:
-                    incident['notes'] = [{'_fetch_error': True, 'error_message': 'Export timeout - not processed'}]
-                    enriched_incidents.append(incident)
-                    failed_count += 1
-                    completed += 1
+                    del futures[future]
 
                 if progress_callback:
                     progress_callback(completed, len(incidents))
-                break
+
+                # Refill the in-flight set from pending so the loop has something to wait on.
+                # The new submissions queue inside the executor and start running once
+                # worker threads free up (as the abandoned hung calls eventually return).
+                refill = min(XsoarConfig.MAX_WORKERS, len(pending))
+                for _ in range(refill):
+                    incident = pending.popleft()
+                    new_future = executor.submit(fetch_notes_for_incident, incident)
+                    futures[new_future] = incident
+
+                # If nothing is left to wait on, exit the loop cleanly
+                if not futures:
+                    break
+                # Otherwise fall through and re-enter the wait on the new batch
 
     total_elapsed = time.time() - start_time
     overall_rate = len(enriched_incidents) / total_elapsed if total_elapsed > 0 else 0
@@ -791,3 +915,172 @@ def _enrich_incidents_with_notes_async(incidents: List[Dict[str, Any]], progress
     logger.info("=" * 60)
 
     return enriched_incidents
+
+
+def _enrich_and_stream_notes_to_ws(
+        incidents: List[Dict[str, Any]],
+        ws,
+        visible_columns: List[str],
+        column_labels: Dict[str, str],
+        max_cell_length: int,
+        progress_callback=None,
+        warning_callback=None,
+        sanitize_stats: Dict[str, Any] = None,
+) -> None:
+    """Enrich each incident with notes and append it to the worksheet immediately.
+
+    Peak memory stays O(MAX_WORKERS) instead of O(N): once a future completes
+    we transform it to a row, append to the write-only worksheet, and drop
+    every reference to it. Mirrors the stall-handling of
+    _enrich_incidents_with_notes_async so a 33-minute hung batch gets abandoned
+    instead of wedging the export.
+    """
+    from collections import deque
+
+    start_time = time.time()
+    processing_start = time.time()
+    ticket_handler = TicketHandler(XsoarEnvironment.PROD)
+    total = len(incidents)
+    failed_count = 0
+    success_count = 0
+    fetch_failed_tickets: List[str] = []  # Tickets whose notes fetch threw
+    stalled_tickets: List[str] = []  # Tickets abandoned after 60s no-progress
+
+    def fetch_notes_for_incident(incident):
+        incident_id = incident.get('id')
+        if not incident_id:
+            incident['notes'] = []
+            return incident
+        try:
+            notes = ticket_handler.get_user_notes(incident_id, max_retries=0)
+            incident['notes'] = notes if notes else []
+        except Exception as excep:
+            logger.warning(f"Failed to fetch notes for ticket {incident_id}: {excep}")
+            incident['notes'] = [{'_fetch_error': True, 'error_message': str(excep)}]
+        return incident
+
+    def _append_row(incident):
+        ws.append(_prepare_single_export_row(
+            incident, visible_columns, column_labels, max_cell_length, sanitize_stats,
+        ))
+
+    with ThreadPoolExecutor(max_workers=XsoarConfig.MAX_WORKERS) as executor:
+        pending = deque(incidents)
+        # Release the caller's reference so we're the only holder of the remaining tickets
+        incidents = None
+
+        futures = {}
+        for _ in range(min(XsoarConfig.MAX_WORKERS, len(pending))):
+            incident = pending.popleft()
+            future = executor.submit(fetch_notes_for_incident, incident)
+            futures[future] = incident
+
+        completed = 0
+
+        while futures:
+            try:
+                drained = 0
+                for future in as_completed(list(futures.keys()), timeout=60):
+                    result = future.result()
+
+                    notes = result.get('notes', [])
+                    is_error = (len(notes) == 1 and isinstance(notes[0], dict) and notes[0].get('_fetch_error'))
+                    if notes and not is_error:
+                        success_count += 1
+                    else:
+                        failed_count += 1
+                        if is_error:
+                            tid = result.get('id')
+                            if tid:
+                                fetch_failed_tickets.append(str(tid))
+
+                    _append_row(result)
+                    # Drop references so the enriched ticket can be GC'd — this is
+                    # the whole point of the streaming path.
+                    del futures[future]
+                    result = None
+                    drained += 1
+
+                    completed += 1
+                    if progress_callback:
+                        progress_callback(completed, total)
+
+                    if completed % ExportConfig.PROGRESS_LOG_INTERVAL == 0:
+                        elapsed = time.time() - processing_start
+                        rate = completed / elapsed if elapsed > 0 else 0
+                        logger.info(f"Progress: {completed}/{total} tickets "
+                                    f"({success_count} with notes, {failed_count} without) - "
+                                    f"Rate: {rate:.2f} tickets/sec")
+
+                # Refill in-flight set from pending, one per future drained this round
+                for _ in range(drained):
+                    if not pending:
+                        break
+                    incident = pending.popleft()
+                    new_future = executor.submit(fetch_notes_for_incident, incident)
+                    futures[new_future] = incident
+
+            except TimeoutError:
+                stuck_count = len(futures)
+                logger.warning(
+                    f"Export stall: {stuck_count} active futures hung for 60+ seconds. "
+                    f"Marking them as failed and continuing with the remaining "
+                    f"{len(pending)} pending tickets."
+                )
+                for future, incident in list(futures.items()):
+                    incident_id = incident.get('id') if incident else 'Unknown'
+                    logger.warning(f"Abandoning hung ticket: {incident_id}")
+                    if incident:
+                        incident['notes'] = [{
+                            '_fetch_error': True,
+                            'error_message': 'Notes fetch hung - abandoned after 60s of no progress'
+                        }]
+                        _append_row(incident)
+                        if incident_id and incident_id != 'Unknown':
+                            stalled_tickets.append(str(incident_id))
+                    failed_count += 1
+                    completed += 1
+                    del futures[future]
+
+                if progress_callback:
+                    progress_callback(completed, total)
+
+                refill = min(XsoarConfig.MAX_WORKERS, len(pending))
+                for _ in range(refill):
+                    incident = pending.popleft()
+                    new_future = executor.submit(fetch_notes_for_incident, incident)
+                    futures[new_future] = incident
+
+                if not futures:
+                    break
+
+    total_elapsed = time.time() - start_time
+    overall_rate = total / total_elapsed if total_elapsed > 0 else 0
+    logger.info("=" * 60)
+    logger.info("Note Enrichment (streaming) Complete")
+    logger.info("=" * 60)
+    logger.info(f"Total tickets: {total}")
+    if total > 0:
+        logger.info(f"Success (with notes): {success_count} ({success_count / total * 100:.1f}%)")
+        logger.info(f"Failed (no notes): {failed_count} ({failed_count / total * 100:.1f}%)")
+    logger.info(f"Total time: {total_elapsed:.1f}s")
+    logger.info(f"Overall rate: {overall_rate:.2f} tickets/sec")
+    logger.info("=" * 60)
+
+    if warning_callback:
+        if fetch_failed_tickets:
+            sample = fetch_failed_tickets[:5]
+            more = len(fetch_failed_tickets) - len(sample)
+            warning_callback(
+                f"Failed to fetch notes for {len(fetch_failed_tickets)} ticket(s); "
+                f"their rows show an error marker. Sample IDs: {sample}"
+                + (f" (+{more} more)" if more > 0 else "")
+            )
+        if stalled_tickets:
+            sample = stalled_tickets[:5]
+            more = len(stalled_tickets) - len(sample)
+            warning_callback(
+                f"Abandoned {len(stalled_tickets)} ticket(s) after 60s of no "
+                f"progress on notes fetch. Sample IDs: {sample}"
+                + (f" (+{more} more)" if more > 0 else "")
+            )

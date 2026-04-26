@@ -21,6 +21,7 @@ from langchain_core.tools import tool
 
 from services.hibp import HIBPClient
 from src.utils.tool_decorator import log_tool_call
+from src.utils.llm_decorators import validate_args, EMAIL_PATTERN, DOMAIN_PATTERN
 
 logger = logging.getLogger(__name__)
 
@@ -239,6 +240,7 @@ def _format_breach_info(data: dict) -> str:
 
 
 @tool
+@validate_args(email=EMAIL_PATTERN)
 @log_tool_call
 def check_email_hibp(email: str) -> str:
     """Check if an email address has been pwned or involved in known data breaches.
@@ -273,6 +275,7 @@ def check_email_hibp(email: str) -> str:
 
 
 @tool
+@validate_args(domain=DOMAIN_PATTERN)
 @log_tool_call
 def check_domain_hibp(domain: str) -> str:
     """Check common email addresses for a domain against known data breaches.

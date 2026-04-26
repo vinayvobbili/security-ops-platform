@@ -6,6 +6,7 @@ This module provides base classes that reduce boilerplate in the notification se
 """
 
 from webex_bot.models.command import Command
+from webex_bot.models.response import Response
 from src.utils.toodles_decorators import toodles_log_activity
 
 
@@ -78,4 +79,13 @@ class CardOnlyCommand(the notification serviceCommand):
 
     @toodles_log_activity
     def execute(self, message, attachment_actions, activity):
-        pass  # Card-only commands don't need execute logic
+        # When triggered via Action.Submit (callback_keyword), the library
+        # doesn't auto-send the card — we need to return it as a Response.
+        if self.card:
+            response = Response()
+            response.text = "Card"
+            response.attachments = {
+                "contentType": "application/vnd.microsoft.card.adaptive",
+                "content": self.card,
+            }
+            return response

@@ -19,6 +19,12 @@ Example programmatic usage:
     print(analyzer.format_analysis_for_display(analysis))
 """
 
+# Room where tipper analysis results are posted
+from my_config import get_config as _get_config
+_config = _get_config()
+TIPPER_ANALYSIS_ROOM_ID = _config.webex_room_id_threat_tipper_analysis
+IOC_HUNT_ROOM_ID = _config.webex_room_id_dev_test_space  # IOC hunt results go to dev test space
+
 # Re-export main classes and functions for backward compatibility
 from .models import NoveltyAnalysis, ToolHuntResult, IOCHuntResult
 from .analyzer import TipperAnalyzer
@@ -43,4 +49,7 @@ __all__ = [
     'format_analysis_for_display',
     'format_analysis_for_azdo',
     'format_hunt_results_for_azdo',
+    # Config
+    'TIPPER_ANALYSIS_ROOM_ID',
+    'IOC_HUNT_ROOM_ID',
 ]

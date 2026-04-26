@@ -6,6 +6,7 @@ offense management, and reference set operations.
 """
 
 import logging
+import re
 import time
 from typing import Optional, Dict, Any, List
 from urllib.parse import quote
@@ -18,6 +19,67 @@ logger = logging.getLogger(__name__)
 
 # Default API version
 QRADAR_API_VERSION = "19.0"
+
+
+def _escape_aql_value(value: str) -> str:
+    """Escape a value for safe interpolation into AQL query strings."""
+    return value.replace("'", "''")
+
+
+# Matches a trailing time-window unit so we can force it to plural.
+# AQL only accepts MINUTES / HOURS / DAYS — but LLMs frequently emit "LAST 1 DAY"
+# (grammatically natural English). Catch it before sending to QRadar.
+_AQL_TIME_UNIT_RE = re.compile(r"\b(LAST\s+\d+\s+)(MINUTE|HOUR|DAY)\b(?!S)", re.IGNORECASE)
+
+# Matches a complete LAST N <unit> clause for window-size capping.
+_AQL_TIME_CLAUSE_RE = re.compile(
+    r"\bLAST\s+(\d+)\s+(MINUTES|HOURS|DAYS)\b",
+    re.IGNORECASE,
+)
+
+
+def _normalize_aql_time_clause(aql: str) -> str:
+    """Force singular AQL time units to plural (LAST 1 DAY → LAST 1 DAYS).
+
+    Defensive post-processor — catches the most common AQL syntax slip from
+    LLM-generated queries regardless of which model produced them.
+    """
+    if not aql:
+        return aql
+    return _AQL_TIME_UNIT_RE.sub(lambda m: m.group(1) + m.group(2).upper() + "S", aql)
+
+
+def cap_aql_time_window(aql: str, max_hours: int = 4) -> str:
+    """Cap LAST N HOURS/DAYS clauses to a maximum window size.
+
+    LLM-generated AQL frequently picks 24+ hour windows that time out on QRadar,
+    especially for queries that ILIKE-match custom properties across email or
+    proxy log sources. Use this helper at LLM-facing call sites (the security assistant bot
+    nl_to_aql_query, run_qradar_aql_query, the /qradar-chat web handler).
+
+    DO NOT call this from backend/batch code — hunting queries, alert triage,
+    rule fetchers, and tipper_analyzer all legitimately need longer windows
+    and would silently break under a 4-hour cap.
+
+    Rules:
+      - LAST N MINUTES: never modified (always under 1 hour)
+      - LAST N HOURS where N <= max_hours: left alone
+      - LAST N HOURS where N > max_hours: rewritten to LAST {max_hours} HOURS
+      - LAST N DAYS: always rewritten to LAST {max_hours} HOURS
+    """
+    if not aql:
+        return aql
+
+    def _replace(match: re.Match) -> str:
+        n = int(match.group(1))
+        unit = match.group(2).upper()
+        if unit == "MINUTES":
+            return match.group(0)
+        if unit == "HOURS" and n <= max_hours:
+            return match.group(0)
+        return f"LAST {max_hours} HOURS"
+
+    return _AQL_TIME_CLAUSE_RE.sub(_replace, aql)
 
 
 class QRadarClient:
@@ -136,11 +198,15 @@ class QRadarClient:
         Returns:
             dict: Search object with search_id for status polling
         """
-        logger.debug(f"Creating AQL search: {aql_query[:100]}...")
+        normalized = _normalize_aql_time_clause(aql_query)
+        if normalized != aql_query:
+            logger.info("AQL time-clause normalized: %r → %r",
+                        aql_query[-40:], normalized[-40:])
+        logger.debug(f"Creating AQL search: {normalized[:100]}...")
         return self._make_request(
             "ariel/searches",
             method="POST",
-            params={"query_expression": aql_query}
+            params={"query_expression": normalized}
         )
 
     def get_search_status(self, search_id: str) -> Dict[str, Any]:
@@ -297,6 +363,67 @@ class QRadarClient:
             return {"notes": result, "count": len(result)}
         return result
 
+    def get_rule(self, rule_id: int) -> Dict[str, Any]:
+        """Get a specific analytics rule by ID.
+
+        Args:
+            rule_id: The rule ID
+
+        Returns:
+            dict: Rule details (id, name, type, notes/description, etc.) or error
+        """
+        return self._make_request(f"analytics/rules/{rule_id}")
+
+    def get_offense_events(
+        self, offense_id: int, limit: int = 5, timeout: int = 30
+    ) -> List[Dict[str, Any]]:
+        """Fetch sample events for an offense via AQL.
+
+        Uses a short poll interval (5s) suitable for small, fast queries.
+
+        Args:
+            offense_id: The offense ID
+            limit: Maximum events to return (default 5)
+            timeout: Maximum seconds to wait (default 30)
+
+        Returns:
+            list: Event dicts, or empty list on failure/timeout
+        """
+        aql = (
+            f"SELECT DATEFORMAT(starttime,'yyyy-MM-dd HH:mm:ss') as event_time,"
+            f" UTF8(payload) as payload, LOGSOURCENAME(logsourceid) as log_source,"
+            f" sourceip, destinationip, destinationport,"
+            f" CATEGORYNAME(category) as category, QIDNAME(qid) as event_name,"
+            f" username, magnitude"
+            f" FROM events WHERE INOFFENSE({offense_id})"
+            f" ORDER BY starttime DESC LIMIT {limit} LAST 7 DAYS"
+        )
+        try:
+            search_result = self.create_search(aql)
+            if "error" in search_result:
+                logger.warning(f"Offense events search creation failed: {search_result}")
+                return []
+
+            search_id = search_result.get("search_id") or search_result.get("cursor_id")
+            if not search_id:
+                return []
+
+            start = time.time()
+            while time.time() - start < timeout:
+                status = self.get_search_status(search_id)
+                if status.get("status") == "COMPLETED":
+                    results = self.get_search_results(search_id, limit=limit)
+                    return results.get("events", results.get("flows", []))
+                if status.get("status") in ("CANCELED", "ERROR"):
+                    return []
+                time.sleep(5)
+
+            logger.warning(f"Offense events search timed out after {timeout}s")
+            return []
+        except Exception as e:
+            logger.warning(f"Offense events fetch failed for {offense_id}: {e}")
+            return []
+
     # ==================== Reference Set Methods ====================
 
     def get_reference_sets(self, filter_query: Optional[str] = None) -> Dict[str, Any]:
@@ -449,7 +576,7 @@ class QRadarClient:
             SELECT sourceip, destinationip, qidname(qid) AS eventname,
                    logsourcename(logsourceid) AS logsource, magnitude, starttime
             FROM events
-            WHERE (sourceip = '{ip_address}' OR destinationip = '{ip_address}')
+            WHERE (sourceip = '{_escape_aql_value(ip_address)}' OR destinationip = '{_escape_aql_value(ip_address)}')
             LIMIT {max_results}
             LAST {hours} HOURS
         """
@@ -479,7 +606,7 @@ class QRadarClient:
                 logsourcetypename(devicetype) = 'Zscaler Nss'
                 OR logsourcetypename(devicetype) = 'Blue Coat Web Security Service'
             )
-            AND URL ILIKE '%{domain}%'
+            AND URL ILIKE '%{_escape_aql_value(domain)}%'
             LIMIT {max_results}
             LAST {hours} HOURS
         """
@@ -918,10 +1045,10 @@ class QRadarClient:
 
         if tsld:
             # Fast exact match on indexed TSLD field
-            domain_condition = f"\"TSLD\" = '{tsld}'"
+            domain_condition = f"\"TSLD\" = '{_escape_aql_value(tsld)}'"
         else:
             # Complex pattern (URL with path, protocol, etc.) - use ILIKE
-            domain_condition = f"URL ILIKE '%{domain}%'"
+            domain_condition = f"URL ILIKE '%{_escape_aql_value(domain)}%'"
 
         aql = f"""
             SELECT sourceip, destinationip, qidname(qid) AS eventName,
@@ -930,6 +1057,74 @@ class QRadarClient:
             WHERE logsourcetypename(devicetype) = 'Palo Alto PA Series'
             AND "PAN Log Type" = 'THREAT'
             AND {domain_condition}
+            LIMIT {max_results}
+            LAST {hours} HOURS
+        """
+        return self.run_aql_search(aql.strip(), max_results=max_results)
+
+    def search_events_by_hostname(
+        self,
+        hostname: str,
+        hours: int = 4,
+        max_results: int = 25
+    ) -> Dict[str, Any]:
+        """Search for events involving a hostname across all log sources.
+
+        Designed for broad entity activity enrichment during triage — returns
+        recent events across all log source types where the Computer Hostname
+        field matches. Useful for understanding what else was happening on a
+        host in the hours surrounding an alert.
+
+        Args:
+            hostname: The hostname to search for (partial match)
+            hours: Number of hours to look back (default 4)
+            max_results: Maximum events to return
+
+        Returns:
+            dict: Search results with events
+        """
+        aql = f"""
+            SELECT DATEFORMAT(starttime, 'yyyy-MM-dd HH:mm:ss') AS event_time,
+                   sourceip, destinationip, qidname(qid) AS event_name,
+                   logsourcetypename(devicetype) AS log_source, magnitude, username
+            FROM events
+            WHERE "Computer Hostname" ILIKE '%{_escape_aql_value(hostname)}%'
+              AND magnitude >= 3
+            ORDER BY starttime DESC
+            LIMIT {max_results}
+            LAST {hours} HOURS
+        """
+        return self.run_aql_search(aql.strip(), max_results=max_results)
+
+    def search_events_by_username(
+        self,
+        username: str,
+        hours: int = 4,
+        max_results: int = 25
+    ) -> Dict[str, Any]:
+        """Search for events involving a username across all log sources.
+
+        Designed for broad entity activity enrichment during triage — returns
+        recent events across all log source types where the username field
+        matches. Complements search_events_by_hostname for user-centric alerts.
+
+        Args:
+            username: The username to search for (partial match)
+            hours: Number of hours to look back (default 4)
+            max_results: Maximum events to return
+
+        Returns:
+            dict: Search results with events
+        """
+        aql = f"""
+            SELECT DATEFORMAT(starttime, 'yyyy-MM-dd HH:mm:ss') AS event_time,
+                   sourceip, destinationip, qidname(qid) AS event_name,
+                   logsourcetypename(devicetype) AS log_source, magnitude,
+                   "Computer Hostname"
+            FROM events
+            WHERE username ILIKE '%{_escape_aql_value(username)}%'
+              AND magnitude >= 3
+            ORDER BY starttime DESC
             LIMIT {max_results}
             LAST {hours} HOURS
         """
@@ -958,7 +1153,7 @@ class QRadarClient:
             return {"events": [], "count": 0}
 
         # Build OR conditions for domains
-        domain_conditions = " OR ".join([f"URL ILIKE '%{d}%'" for d in domains])
+        domain_conditions = " OR ".join([f"URL ILIKE '%{_escape_aql_value(d)}%'" for d in domains])
 
         aql = f"""
             SELECT sourceip, destinationip, "Computer Hostname", username,
@@ -993,7 +1188,7 @@ class QRadarClient:
         if not domains:
             return {"events": [], "count": 0}
 
-        domain_conditions = " OR ".join([f"sender ILIKE '%{d}%'" for d in domains])
+        domain_conditions = " OR ".join([f"sender ILIKE '%{_escape_aql_value(d)}%'" for d in domains])
 
         aql = f"""
             SELECT sourceip, destinationip, username, "Computer Hostname",
@@ -1029,7 +1224,7 @@ class QRadarClient:
             return {"events": [], "count": 0}
 
         domain_conditions = " OR ".join([
-            f"(URL ILIKE '%{d}%' OR \"Subject\" ILIKE '%{d}%')"
+            f"(URL ILIKE '%{_escape_aql_value(d)}%' OR \"Subject\" ILIKE '%{_escape_aql_value(d)}%')"
             for d in domains
         ])
 
@@ -1072,10 +1267,10 @@ class QRadarClient:
             tsld = self._extract_tsld(domain)
             if tsld:
                 # Fast exact match on indexed TSLD field
-                conditions.append(f"\"TSLD\" = '{tsld}'")
+                conditions.append(f"\"TSLD\" = '{_escape_aql_value(tsld)}'")
             else:
                 # Complex pattern - use ILIKE on URL
-                conditions.append(f"URL ILIKE '%{domain}%'")
+                conditions.append(f"URL ILIKE '%{_escape_aql_value(domain)}%'")
 
         domain_conditions = " OR ".join(conditions)
 
@@ -1118,7 +1313,7 @@ class QRadarClient:
 
         # Build domain matching conditions for all relevant fields
         domain_conditions = " OR ".join([
-            f"(URL ILIKE '%{d}%' OR sender ILIKE '%{d}%' OR \"Subject\" ILIKE '%{d}%' OR \"TSLD\" ILIKE '%{d}%')"
+            f"(URL ILIKE '%{_escape_aql_value(d)}%' OR sender ILIKE '%{_escape_aql_value(d)}%' OR \"Subject\" ILIKE '%{_escape_aql_value(d)}%' OR \"TSLD\" ILIKE '%{_escape_aql_value(d)}%')"
             for d in domains
         ])
 
@@ -1179,9 +1374,7 @@ class QRadarClient:
         for url in urls:
             # Remove protocol for matching
             path = url.replace('https://', '').replace('http://', '')
-            # Escape single quotes in path
-            path = path.replace("'", "''")
-            url_conditions.append(f"URL ILIKE '%{path}%'")
+            url_conditions.append(f"URL ILIKE '%{_escape_aql_value(path)}%'")
 
         conditions_str = " OR ".join(url_conditions)
 
@@ -1225,7 +1418,7 @@ class QRadarClient:
             return {"events": [], "count": 0}
 
         ip_conditions = " OR ".join([
-            f"(sourceip = '{ip}' OR destinationip = '{ip}')"
+            f"(sourceip = '{_escape_aql_value(ip)}' OR destinationip = '{_escape_aql_value(ip)}')"
             for ip in ips
         ])
 
@@ -1259,7 +1452,7 @@ class QRadarClient:
             return {"events": [], "count": 0}
 
         ip_conditions = " OR ".join([
-            f"(sourceip = '{ip}' OR destinationip = '{ip}')"
+            f"(sourceip = '{_escape_aql_value(ip)}' OR destinationip = '{_escape_aql_value(ip)}')"
             for ip in ips
         ])
 
@@ -1294,7 +1487,7 @@ class QRadarClient:
             return {"events": [], "count": 0}
 
         ip_conditions = " OR ".join([
-            f"(sourceip = '{ip}' OR destinationip = '{ip}')"
+            f"(sourceip = '{_escape_aql_value(ip)}' OR destinationip = '{_escape_aql_value(ip)}')"
             for ip in ips
         ])
 
@@ -1330,7 +1523,7 @@ class QRadarClient:
             return {"events": [], "count": 0}
 
         ip_conditions = " OR ".join([
-            f"(sourceip = '{ip}' OR destinationip = '{ip}')"
+            f"(sourceip = '{_escape_aql_value(ip)}' OR destinationip = '{_escape_aql_value(ip)}')"
             for ip in ips
         ])
 
@@ -1369,7 +1562,7 @@ class QRadarClient:
             return {"events": [], "count": 0}
 
         ip_conditions = " OR ".join([
-            f"(sourceip = '{ip}' OR destinationip = '{ip}')"
+            f"(sourceip = '{_escape_aql_value(ip)}' OR destinationip = '{_escape_aql_value(ip)}')"
             for ip in ips
         ])
 
@@ -1411,7 +1604,7 @@ class QRadarClient:
             return {"events": [], "count": 0}
 
         # Use IN clause for cleaner query
-        ip_list = ", ".join([f"'{ip}'" for ip in ips])
+        ip_list = ", ".join([f"'{_escape_aql_value(ip)}'" for ip in ips])
 
         aql = f"""
             SELECT sourceip, destinationip, starttime,
@@ -1461,7 +1654,7 @@ class QRadarClient:
             return {"events": [], "count": 0}
 
         hash_conditions = " OR ".join([
-            f"(\"MD5\" = '{h}' OR \"MD5 Hash\" = '{h}' OR \"SHA256 Hash\" = '{h}')"
+            f"(\"MD5\" = '{_escape_aql_value(h)}' OR \"MD5 Hash\" = '{_escape_aql_value(h)}' OR \"SHA256 Hash\" = '{_escape_aql_value(h)}')"
             for h in hashes
         ])
 
@@ -1532,6 +1725,14 @@ class QRadarClient:
         if not offense or "error" in offense:
             return "No offense data available"
 
+        from datetime import datetime, timezone
+
+        def _fmt_ts(epoch_ms):
+            try:
+                return datetime.fromtimestamp(int(epoch_ms) / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+            except (ValueError, OSError, TypeError):
+                return "Unknown"
+
         parts = [
             f"## QRadar Offense #{offense.get('id', 'Unknown')}",
             f"**Description:** {offense.get('description', 'N/A')}",
@@ -1553,6 +1754,17 @@ class QRadarClient:
         categories = offense.get("categories", [])
         if categories:
             parts.append(f"**Categories:** {', '.join(categories[:5])}")
+
+        # Add timestamps
+        start_time = offense.get("start_time")
+        if start_time:
+            parts.append(f"**Created:** {_fmt_ts(start_time)}")
+        last_updated = offense.get("last_updated_time")
+        if last_updated:
+            parts.append(f"**Last Updated:** {_fmt_ts(last_updated)}")
+
+        parts.append("")
+        parts.append("NOTE: Present only the data above. Do not add MITRE ATT&CK mappings, threat attributions, or analysis beyond what is shown here.")
 
         return "\n".join(parts)
 

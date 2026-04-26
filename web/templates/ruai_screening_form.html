@@ -1,0 +1,46 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'RUAI Screening' %}
+{% set page_title_left_icon = '🤖' %}
+{% set page_title_right_icon = '📋' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ruai.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="ruai-page-bg">
+    <div class="ruai-orb ruai-orb-1"></div>
+    <div class="ruai-orb ruai-orb-2"></div>
+    <div class="ruai-orb ruai-orb-3"></div>
+</div>
+<div class="ruai-container">
+    <div class="ruai-hero">
+        <div class="ruai-hero-icon">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                <path d="M2 17l10 5 10-5"/>
+                <path d="M2 12l10 5 10-5"/>
+            </svg>
+        </div>
+        <div>
+            <h1 class="ruai-hero-title">Responsible Use of AI Screening</h1>
+            <p class="ruai-hero-subtitle">Complete each section to submit your AI use case for risk assessment and review</p>
+        </div>
+    </div>
+    <div class="ruai-form-layout">
+        <nav id="ruai-progress" class="ruai-sidebar" aria-label="Form sections"></nav>
+        <div class="ruai-form-main">
+            <div id="ruai-form-body"></div>
+        </div>
+    </div>
+</div>
+
+<div id="ruai-modal" class="ruai-modal">
+    <div class="ruai-modal-content" id="ruai-modal-body"></div>
+</div>
+<div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/ruai_form.js') }}"></script>
+{% endblock %}

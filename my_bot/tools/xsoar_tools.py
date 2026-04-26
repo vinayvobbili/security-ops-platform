@@ -5,7 +5,7 @@ Tools for generating executive summaries and reports from XSOAR tickets.
 """
 
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Union
 from langchain_core.tools import tool
 
 # Import tool logging decorator
@@ -17,25 +17,53 @@ from my_config import get_config
 logger = logging.getLogger(__name__)
 
 
+# XSOAR enum mappings (severity/status codes → human text)
+_XSOAR_SEVERITY = {0: "Unknown", 1: "Low", 2: "Medium", 3: "High", 4: "Critical"}
+_XSOAR_STATUS = {0: "Pending", 1: "Active", 2: "Closed", 3: "Archived"}
+
+
+def _is_populated(value: Any) -> bool:
+    """True if a custom field value carries real content (not None/empty/placeholder)."""
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value.strip() not in ("", "null", "N/A")
+    if isinstance(value, (list, dict)):
+        return len(value) > 0
+    return True
+
+
+def _flatten(value: Any) -> str:
+    """Render a custom-field value for display, unwrapping single-element lists."""
+    if isinstance(value, list):
+        if len(value) == 1:
+            return str(value[0])
+        return ", ".join(str(v) for v in value)
+    return str(value)
+
+
 @tool
 @log_tool_call
-def get_xsoar_ticket(ticket_id: str, environment: str = "prod") -> str:
-    """Get basic details from an XSOAR ticket.
+def get_xsoar_ticket(ticket_id: Union[str, int], environment: str = "prod") -> str:
+    """Get details from an XSOAR ticket including verdicts, incident description, and recent analyst notes.
 
-    USE THIS TOOL when you need to look up information about an XSOAR ticket, such as
-    hostname, username, detection source, status, or other ticket fields. This returns
-    the raw ticket data without generating a summary.
+    USE THIS TOOL when you need to look up information about an XSOAR ticket. Works for
+    all ticket types (endpoint, email, identity, phishing, NUC, etc.) — endpoint-specific
+    fields are only shown when populated.
 
     Args:
         ticket_id: The XSOAR ticket/incident ID (e.g., '1059495')
         environment: XSOAR environment - 'prod' (default) or 'dev'
 
     Returns:
-        Formatted ticket details including hostname, username, status, etc.
+        Formatted ticket details: name, type, severity, status, phase, owner,
+        analyst verdicts (triage/final/impact), incident description, endpoint
+        context if applicable, and the most recent analyst notes.
     """
     try:
         # Normalize ticket ID
-        ticket_id = ticket_id.strip()
+        # Coerce to string — LLMs sometimes pass numeric ticket IDs as JSON ints
+        ticket_id = str(ticket_id).strip()
         if ticket_id.upper().startswith("X#"):
             ticket_id = ticket_id[2:]
 
@@ -54,26 +82,99 @@ def get_xsoar_ticket(ticket_id: str, environment: str = "prod") -> str:
         if not ticket_data:
             return f"Error: Could not fetch ticket {ticket_id}. Please verify the ticket ID exists."
 
-        # Extract key fields
-        custom_fields = ticket_data.get('CustomFields', {})
+        cf = ticket_data.get('CustomFields', {}) or {}
+
+        # Header: name, type, severity (text), status (text), phase, owner
+        sev_raw = ticket_data.get('severity')
+        status_raw = ticket_data.get('status')
+        sev_text = _XSOAR_SEVERITY.get(sev_raw, str(sev_raw)) if sev_raw is not None else "Unknown"
+        status_text = _XSOAR_STATUS.get(status_raw, str(status_raw)) if status_raw is not None else "Unknown"
+        ticket_type = ticket_data.get('type', '')
 
         result_lines = [
-            f"**XSOAR Ticket #{ticket_id}**",
-            f"**Name:** {ticket_data.get('name', 'Unknown')}",
-            f"**Status:** {ticket_data.get('status', 'Unknown')}",
-            f"**Phase:** {ticket_data.get('phase', 'Unknown')}",
-            f"**Owner:** {ticket_data.get('owner', 'Unassigned')}",
-            "",
-            "**Key Fields:**",
-            f"- Hostname: {custom_fields.get('hostname', 'N/A')}",
-            f"- Username: {custom_fields.get('username', 'N/A')}",
-            f"- Detection Source: {custom_fields.get('detectionsource', 'N/A')}",
-            f"- Security Category: {custom_fields.get('securitycategory', 'N/A')}",
-            f"- Device ID: {custom_fields.get('deviceid', 'N/A')}",
-            f"- Device Status: {custom_fields.get('devicestatus', 'N/A')}",
-            f"- Host Contained: {custom_fields.get('hostcontained', 'N/A')}",
-            f"- Source IP: {custom_fields.get('sourceip', 'N/A')}",
+            f"**XSOAR Ticket #{ticket_id}**" + (f" ({ticket_type})" if ticket_type else ""),
+            f"**Name:** {(ticket_data.get('name') or 'Unknown').strip()}",
+            f"**Severity:** {sev_text}",
+            f"**Status:** {status_text}",
+            f"**Phase:** {ticket_data.get('phase') or 'Unknown'}",
+            f"**Owner:** {ticket_data.get('owner') or 'Unassigned'}",
+            f"**Detection Source:** {cf.get('detectionsource') or 'N/A'}",
+            f"**Security Category:** {cf.get('securitycategory') or 'N/A'}",
         ]
+
+        sub_cat = cf.get('securitysubcategory')
+        if _is_populated(sub_cat):
+            result_lines.append(f"**Security Sub-Category:** {_flatten(sub_cat)}")
+
+        region = cf.get('affectedregion')
+        if _is_populated(region):
+            result_lines.append(f"**Affected Region:** {_flatten(region)}")
+
+        escalation = cf.get('escalationstate')
+        if _is_populated(escalation):
+            result_lines.append(f"**Escalation State:** {_flatten(escalation)}")
+
+        # Incident description (the most useful field for non-endpoint cases)
+        details = ticket_data.get('details') or ''
+        if details.strip():
+            result_lines.append("")
+            result_lines.append("**Incident Details:**")
+            result_lines.append(details.strip())
+
+        # Analyst verdicts — surface these so the LLM can reason about impact
+        # without re-doing analysis the analyst already did
+        verdict_fields = [
+            ('Triage Verdict', cf.get('triageverdict')),
+            ('Final Triage Verdict', cf.get('triagefinalverdict')),
+            ('Impact', cf.get('impact')),
+            ('Email Classification', cf.get('emailclassification')),
+            ('Root Cause', cf.get('rootcause')),
+            ('Close Reason', ticket_data.get('closeReason')),
+        ]
+        verdicts = [(label, val) for label, val in verdict_fields if _is_populated(val)]
+        if verdicts:
+            result_lines.append("")
+            result_lines.append("**Analyst Verdicts:**")
+            for label, val in verdicts:
+                result_lines.append(f"- {label}: {_flatten(val)}")
+
+        # Endpoint context — only show when this is actually an endpoint case
+        endpoint_fields = [
+            ('Hostname', cf.get('hostname')),
+            ('Username', cf.get('username')),
+            ('Device ID', cf.get('deviceid')),
+            ('Device OS', cf.get('deviceostype')),
+            ('Device Status', cf.get('devicestatus')),
+            ('Host Contained', cf.get('hostcontained') or cf.get('contained')),
+            ('Source IP', cf.get('sourceip')),
+        ]
+        populated_endpoint = [(label, val) for label, val in endpoint_fields if _is_populated(val)]
+        # Heuristic: only show the section if at least hostname OR deviceid is populated
+        if any(label in ('Hostname', 'Device ID') for label, _ in populated_endpoint):
+            result_lines.append("")
+            result_lines.append("**Endpoint Context:**")
+            for label, val in populated_endpoint:
+                result_lines.append(f"- {label}: {_flatten(val)}")
+
+        # Recent analyst notes (latest 5) — these often contain the actual investigation
+        try:
+            notes = ticket_handler.get_user_notes(ticket_id) or []
+        except Exception as e:
+            logger.warning(f"Could not fetch notes for ticket {ticket_id}: {e}")
+            notes = []
+
+        if notes:
+            result_lines.append("")
+            result_lines.append(f"**Recent Analyst Notes (latest {min(5, len(notes))} of {len(notes)}):**")
+            for note in notes[:5]:
+                author = note.get('author', 'Unknown')
+                created = note.get('created_at', '')
+                text = (note.get('note_text') or '').strip()
+                # Truncate long notes so the result stays readable
+                if len(text) > 600:
+                    text = text[:600] + '... [truncated]'
+                result_lines.append(f"\n[{created}] {author}:")
+                result_lines.append(text)
 
         return "\n".join(result_lines)
 
@@ -196,31 +297,26 @@ Generate a CONCISE executive summary following this EXACT format:
 
 🔍 **Incident Overview**
 [1-2 sentence summary of what happened - who, what, when, where]
-
 🎯 **Detection**
 [Single sentence on how it was detected]
-
 🔧 **Investigation & Remediation**
 1. [Key action 1]
 2. [Key action 2]
 3. [Key action 3]
 [Maximum 5 numbered steps - only the most important actions]
-
 ✅ **Outcome**
 [Single sentence on current status and resolution]
-
 ⚠️ **Next Steps & Risks**
 • [Risk/action 1]
 • [Risk/action 2]
 [Maximum 3 bullet points - only critical items]
-
 🛡️ **Proactive Measures**
 [Optional - Single sentence on preventive measures, or "None" if not applicable]
 
 CRITICAL FORMATTING RULES - NEVER DEVIATE:
 ✓ Section headings MUST have emoji prefix, then **bold text** (e.g., "🔍 **Incident Overview**")
 ✓ NO colon after heading, NO bullets before headings
-✓ Blank line BEFORE and AFTER each section for visual separation
+✓ Only ONE blank line before each section heading - never two or more
 ✓ Investigation: Numbered list (1., 2., 3.)
 ✓ Next Steps: Bullet points (•)
 ✓ Concise, executive-level language (non-technical)
@@ -241,17 +337,16 @@ Follow this structure exactly with emoji prefixes and proper bold markdown forma
         prompt_time = 0.0
         generation_time = 0.0
 
+        from my_bot.utils.llm_factory import extract_token_metrics
         if hasattr(response, 'usage_metadata') and response.usage_metadata:
             input_tokens = response.usage_metadata.get('input_tokens', 0)
             output_tokens = response.usage_metadata.get('output_tokens', 0)
         elif hasattr(response, 'response_metadata'):
-            metadata = response.response_metadata
-            input_tokens = metadata.get('prompt_eval_count', 0)
-            output_tokens = metadata.get('eval_count', 0)
-            if 'prompt_eval_duration' in metadata:
-                prompt_time = metadata['prompt_eval_duration'] / 1e9
-            if 'eval_duration' in metadata:
-                generation_time = metadata['eval_duration'] / 1e9
+            m = extract_token_metrics(response.response_metadata)
+            input_tokens = m['input_tokens']
+            output_tokens = m['output_tokens']
+            prompt_time = m['prompt_time']
+            generation_time = m['generation_time']
 
         # If timing not available from metadata, use wall clock
         if generation_time == 0:
@@ -302,7 +397,8 @@ def generate_executive_summary_with_metrics(ticket_id: str, environment: str = "
 
     try:
         # Normalize ticket ID - strip "X#" prefix if present
-        ticket_id = ticket_id.strip()
+        # Coerce to string — LLMs sometimes pass numeric ticket IDs as JSON ints
+        ticket_id = str(ticket_id).strip()
         if ticket_id.upper().startswith("X#"):
             ticket_id = ticket_id[2:]
 
@@ -349,7 +445,7 @@ def generate_executive_summary_with_metrics(ticket_id: str, environment: str = "
             header = f"📋 **Executive Summary for [Ticket #{ticket_id}]({ticket_url})**\n"
         else:
             header = f"📋 **Executive Summary for Ticket #{ticket_id}**\n"
-        header += f"*{ticket_name}*\n\n---\n\n"
+        header += f"*{ticket_name}*\n---\n"
 
         # Combine header with LLM content
         llm_result['content'] = header + llm_result['content']
@@ -365,7 +461,7 @@ def generate_executive_summary_with_metrics(ticket_id: str, environment: str = "
 
 @tool
 @log_tool_call
-def generate_executive_summary(ticket_id: str, environment: str = "prod") -> str:
+def generate_executive_summary(ticket_id: Union[str, int], environment: str = "prod") -> str:
     """
     Get details and generate an executive summary for an XSOAR case/ticket/incident.
 
@@ -381,7 +477,7 @@ def generate_executive_summary(ticket_id: str, environment: str = "prod") -> str
     DEFAULT FORMAT (use this structure unless user requests different formatting):
     - Section headings: Emoji prefix + **Bold text** (e.g., "🔍 **Incident Overview**")
     - NO colon after headings, NO bullets before headings
-    - Blank lines between sections for visual separation
+    - Single blank line before each section heading (compact layout)
     - Investigation steps: Numbered list (1., 2., 3.)
     - Next Steps: Bullet points (•) for list items
     - If user requests plain text, paragraph format, or no styling, honor that request instead
@@ -405,14 +501,17 @@ def generate_executive_summary(ticket_id: str, environment: str = "prod") -> str
         generate_executive_summary("929947")
         generate_executive_summary("123456", "dev")
     """
-    # Use the metrics version and return just the content
+    # Use the metrics version and return just the content.
+    # Prefix with FINAL_RESPONSE sentinel so the agentic loop returns this
+    # directly without an extra LLM call to "present" it.
+    from my_bot.core.state_manager import FINAL_RESPONSE_PREFIX
     result = generate_executive_summary_with_metrics(ticket_id, environment)
-    return result['content']
+    return FINAL_RESPONSE_PREFIX + result['content']
 
 
 @tool
 @log_tool_call
-def add_note_to_xsoar_ticket(ticket_id: str, note_text: str, environment: str = "prod") -> str:
+def add_note_to_xsoar_ticket(ticket_id: Union[str, int], note_text: str, environment: str = "prod") -> str:
     """
     Add a note to an existing XSOAR ticket/incident.
 
@@ -439,7 +538,8 @@ def add_note_to_xsoar_ticket(ticket_id: str, note_text: str, environment: str = 
     """
     try:
         # Normalize ticket ID - strip "X#" prefix if present
-        ticket_id = ticket_id.strip()
+        # Coerce to string — LLMs sometimes pass numeric ticket IDs as JSON ints
+        ticket_id = str(ticket_id).strip()
         if ticket_id.upper().startswith("X#"):
             ticket_id = ticket_id[2:]
 
@@ -485,7 +585,7 @@ def add_note_to_xsoar_ticket(ticket_id: str, note_text: str, environment: str = 
 
 @tool
 @log_tool_call
-def attach_file_to_xsoar_ticket(ticket_id: str, file_path: str, comment: str = "", environment: str = "prod") -> str:
+def attach_file_to_xsoar_ticket(ticket_id: Union[str, int], file_path: str, comment: str = "", environment: str = "prod") -> str:
     """
     Attach a file to an XSOAR ticket's attachments field.
 
@@ -510,7 +610,8 @@ def attach_file_to_xsoar_ticket(ticket_id: str, file_path: str, comment: str = "
 
     try:
         # Normalize ticket ID - strip "X#" prefix if present
-        ticket_id = ticket_id.strip()
+        # Coerce to string — LLMs sometimes pass numeric ticket IDs as JSON ints
+        ticket_id = str(ticket_id).strip()
         if ticket_id.upper().startswith("X#"):
             ticket_id = ticket_id[2:]
 
@@ -557,18 +658,134 @@ def attach_file_to_xsoar_ticket(ticket_id: str, file_path: str, comment: str = "
         return f"Error attaching file to ticket: {str(e)}"
 
 
-# =============================================================================
-# SAMPLE PROMPTS FOR LLM GUIDANCE
-# =============================================================================
-# Use these prompts to help users discover XSOAR summary capabilities:
-#
-# - "Summarize XSOAR ticket 123456"
-# - "Get details for XSOAR case 929947"
-# - "What's the status of XSOAR incident 456789?"
-# - "Generate executive summary for X#123456"
-# - "Tell me about XSOAR ticket 789012"
-# - "Add a note to XSOAR ticket 123456: Investigation complete, no threats found"
-# - "Write these findings to XSOAR case 929947"
-# - "Update XSOAR ticket 456789 with VT enrichment results"
-# - "Attach file /tmp/browser_history.xlsx to XSOAR ticket 123456"
-# =============================================================================
+@tool
+@log_tool_call
+def triage_xsoar_ticket(ticket_id: Union[str, int]) -> str:
+    """Run Sentinel Triage on an XSOAR ticket: enrich from source platform, AI verdict, similar tickets.
+
+    USE THIS TOOL when users ask to:
+    - Triage an XSOAR ticket (e.g., "triage 1059495", "triage XSOAR ticket 123456")
+    - Get an AI verdict on a security alert
+    - Analyze a ticket with enrichment from QRadar or CrowdStrike
+
+    This runs the full Sentinel Triage pipeline:
+    1. Fetches the XSOAR ticket
+    2. Enriches IOCs (VirusTotal, AbuseIPDB, Recorded Future)
+    3. Fetches source alert details (QRadar offense or CrowdStrike detection)
+    4. Runs LLM triage for AI verdict, risk/mitigating factors
+    5. Finds similar past tickets via semantic search
+    6. Returns a formatted triage report
+
+    Args:
+        ticket_id: The XSOAR ticket/incident ID (e.g., "1059495")
+
+    Returns:
+        Formatted triage report with AI verdict, enrichment, and similar tickets
+    """
+    from my_bot.core.state_manager import FINAL_RESPONSE_PREFIX
+
+    try:
+        # Coerce to string — LLMs sometimes pass numeric ticket IDs as JSON ints
+        ticket_id = str(ticket_id).strip()
+        if ticket_id.upper().startswith("X#"):
+            ticket_id = ticket_id[2:]
+
+        logger.info(f"On-demand triage requested for XSOAR ticket {ticket_id}")
+
+        # Fetch raw ticket data
+        ticket_handler = TicketHandler(environment=XsoarEnvironment.PROD)
+        ticket_data = ticket_handler.get_case_data(ticket_id)
+
+        if not ticket_data:
+            return FINAL_RESPONSE_PREFIX + f"Error: Could not fetch ticket {ticket_id}. Please verify the ticket ID exists."
+
+        from src.components.xsoar_alert_triage.xsoar_triage_pipeline import XsoarTriagePipeline
+
+        # No webex_api/room_id — on-demand triage should NOT send cards to
+        # the prod Sentinel Triage room.  The bot replies inline instead.
+        pipeline = XsoarTriagePipeline()
+        result = pipeline.triage_ticket(ticket_data)
+
+        if not result:
+            return FINAL_RESPONSE_PREFIX + f"Triage failed for ticket {ticket_id}. The LLM may be unavailable."
+
+        # Format result as markdown
+        from webex_bots.cards.sentinel_cards import build_xsoar_triage_markdown
+
+        markdown = build_xsoar_triage_markdown(result)
+
+        # Stash triage result for the bot to send an action card inline
+        import threading
+        _triage_results = getattr(triage_xsoar_ticket, '_triage_results', {})
+        _triage_results[threading.current_thread().ident] = result
+        triage_xsoar_ticket._triage_results = _triage_results
+
+        return FINAL_RESPONSE_PREFIX + markdown
+
+    except Exception as e:
+        logger.error(f"On-demand triage failed for ticket {ticket_id}: {e}", exc_info=True)
+        return FINAL_RESPONSE_PREFIX + f"Error triaging ticket {ticket_id}: {str(e)}"
+
+
+@tool
+@log_tool_call
+def qa_review_xsoar_ticket(ticket_id: Union[str, int]) -> str:
+    """QA review an XSOAR ticket: evaluate investigation quality, impact classification,
+    close notes, SLA compliance, and flag concerns.
+
+    USE THIS TOOL when users ask to:
+    - QA or quality-review an XSOAR ticket
+    - Check if a ticket was handled properly
+    - Review a closed ticket for completeness
+
+    Args:
+        ticket_id: The XSOAR ticket/incident ID (e.g., '1059495' or 'X#1059495')
+
+    Returns:
+        Formatted QA review with PASS/CONCERN/FAIL verdicts per criterion
+        and an overall GOOD/NEEDS REVIEW/POOR rating.
+    """
+    from my_bot.core.state_manager import FINAL_RESPONSE_PREFIX
+    from src.components.qa_tickets import (
+        _build_qa_prompt, _call_llm, _find_similar_well_handled,
+    )
+
+    try:
+        ticket_id = str(ticket_id).strip()
+        if ticket_id.upper().startswith("X#"):
+            ticket_id = ticket_id[2:]
+
+        ticket_handler = TicketHandler(environment=XsoarEnvironment.PROD)
+        ticket_data = ticket_handler.get_case_data(ticket_id)
+
+        if not ticket_data:
+            return FINAL_RESPONSE_PREFIX + f"Could not fetch ticket {ticket_id}."
+
+        try:
+            notes = ticket_handler.get_user_notes(ticket_id)
+        except Exception as e:
+            logger.warning(f"Failed to fetch notes for ticket {ticket_id}: {e}")
+            notes = []
+
+        prompt = _build_qa_prompt(ticket_data, notes)
+        llm_review = _call_llm(prompt)
+        similar_ref = _find_similar_well_handled(ticket_data)
+
+        config = get_config()
+        url = f"{config.xsoar_prod_ui_base_url}/Custom/caseinfoid/{ticket_id}"
+        name = (ticket_data.get('name', '') or '')[:80]
+        impact = ticket_data.get('CustomFields', {}).get('impact', '?')
+        ticket_type = ticket_data.get('type', '?')
+
+        ref_block = f"\n\n{similar_ref}" if similar_ref else ''
+        result = (
+            f"🔎 **QA Review: X#{ticket_id}** — {name}\n"
+            f"📌 **Impact:** {impact} · **Type:** {ticket_type}\n"
+            f"🔗 [View in XSOAR]({url})\n\n"
+            f"{llm_review}{ref_block}"
+        )
+        return FINAL_RESPONSE_PREFIX + result
+
+    except Exception as e:
+        logger.error(f"QA review failed for ticket {ticket_id}: {e}", exc_info=True)
+        return FINAL_RESPONSE_PREFIX + f"Error reviewing ticket {ticket_id}: {str(e)}"

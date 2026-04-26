@@ -1,0 +1,243 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'Connectors' %}
+{% set page_title_left_icon = '🔌' %}
+{% set page_title_right_icon = '🔗' %}
+
+{% block body_classes %}connectors-page{% endblock %}
+{% block extra_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/connectors.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="conn-container">
+
+    <!-- Summary bar -->
+    <div class="conn-summary" id="connSummary">
+        <div class="conn-summary-stat">
+            <span class="conn-stat-value" id="summaryTotal">{{ summary.total }}</span>
+            <span class="conn-stat-label">Total</span>
+        </div>
+        <div class="conn-summary-stat conn-summary-stat--healthy">
+            <span class="conn-stat-value" id="summaryHealthy">{{ summary.healthy }}</span>
+            <span class="conn-stat-label">Healthy</span>
+        </div>
+        <div class="conn-summary-stat conn-summary-stat--unhealthy">
+            <span class="conn-stat-value" id="summaryUnhealthy">{{ summary.unhealthy }}</span>
+            <span class="conn-stat-label">Unhealthy</span>
+        </div>
+        <div class="conn-summary-stat conn-summary-stat--unknown">
+            <span class="conn-stat-value" id="summaryUnknown">{{ summary.unknown }}</span>
+            <span class="conn-stat-label">Unknown</span>
+        </div>
+        <div class="conn-summary-stat conn-summary-stat--unconfigured">
+            <span class="conn-stat-value" id="summaryUnconfigured">{{ summary.total - summary.configured }}</span>
+            <span class="conn-stat-label">Unconfigured</span>
+        </div>
+        <div class="conn-summary-spacer"></div>
+        <div class="conn-filter" id="connFilter">
+            <button class="conn-filter-btn conn-filter-btn--active" data-filter="all" onclick="setFilter('all')">All</button>
+            <button class="conn-filter-btn" data-filter="healthy" onclick="setFilter('healthy')">&#10084; Working</button>
+            <button class="conn-filter-btn" data-filter="unhealthy" onclick="setFilter('unhealthy')">&#128128; Broken</button>
+            <button class="conn-filter-btn" data-filter="unknown" onclick="setFilter('unknown')">&mdash; Not tested</button>
+            <button class="conn-filter-btn" data-filter="unconfigured" onclick="setFilter('unconfigured')">&#9675; Not set up</button>
+        </div>
+        <button class="conn-btn" id="checkHealthBtn" onclick="checkHealth()">
+            <span class="conn-btn-spinner"></span>
+            <span class="conn-btn-label">Check Health</span>
+        </button>
+    </div>
+
+    <!-- Connector cards grouped by category -->
+    {% for category in categories %}
+    {% set cat_connectors = connectors | selectattr('category', 'equalto', category) | list %}
+    {% if cat_connectors %}
+    <div class="conn-section">
+        <div class="conn-section-title">{{ category }}</div>
+        <div class="conn-grid">
+            {% for c in cat_connectors %}
+            <div class="conn-card" id="card-{{ c.id }}" data-connector-id="{{ c.id }}" data-status="{% if not c.configured %}unconfigured{% elif c.healthy is true %}healthy{% elif c.healthy is false %}unhealthy{% else %}unknown{% endif %}">
+                <div class="conn-card-header">
+                    <span class="conn-card-name">{{ c.name }}</span>
+                    <span class="conn-status-dot {% if not c.configured %}conn-status-dot--unconfigured{% elif c.healthy is true %}conn-status-dot--healthy{% elif c.healthy is false %}conn-status-dot--unhealthy{% else %}conn-status-dot--unknown{% endif %}"
+                          id="dot-{{ c.id }}"></span>
+                </div>
+                <div class="conn-card-desc">{{ c.description }}</div>
+                <div class="conn-card-status">
+                    {% if c.configured %}
+                        <span class="conn-badge conn-badge--configured" title="Configured">&#9989;</span>
+                    {% else %}
+                        <span class="conn-badge conn-badge--unconfigured" title="Unconfigured">&#10060;</span>
+                    {% endif %}
+                    <span class="conn-badge" id="health-badge-{{ c.id }}" style="display:none;"></span>
+                    <span class="conn-latency" id="latency-{{ c.id }}"></span>
+                </div>
+                <div class="conn-error" id="error-{{ c.id }}" style="display:none;"></div>
+                {% if c.env_vars %}
+                <span class="conn-env-toggle" onclick="toggleEnvVars('{{ c.id }}')">Show env vars</span>
+                <div class="conn-env-list" id="env-{{ c.id }}">
+                    {% for v in c.env_vars %}
+                    <span class="conn-env-var">{{ v }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var activeFilter = 'all';
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof initTheme === 'function') initTheme();
+});
+
+function setFilter(filter) {
+    activeFilter = filter;
+
+    // Update active button
+    document.querySelectorAll('.conn-filter-btn').forEach(function(btn) {
+        btn.classList.toggle('conn-filter-btn--active', btn.dataset.filter === filter);
+    });
+
+    applyFilter();
+}
+
+function applyFilter() {
+    var cards = document.querySelectorAll('.conn-card');
+    cards.forEach(function(card) {
+        var status = card.dataset.status;
+        var show = activeFilter === 'all' || status === activeFilter;
+        card.style.display = show ? '' : 'none';
+    });
+
+    // Hide empty category sections
+    document.querySelectorAll('.conn-section').forEach(function(section) {
+        var visibleCards = section.querySelectorAll('.conn-card:not([style*="display: none"])');
+        section.style.display = visibleCards.length ? '' : 'none';
+    });
+}
+
+function toggleEnvVars(id) {
+    var el = document.getElementById('env-' + id);
+    var toggle = el.previousElementSibling;
+    el.classList.toggle('conn-env-list--open');
+    toggle.textContent = el.classList.contains('conn-env-list--open') ? 'Hide env vars' : 'Show env vars';
+}
+
+function checkHealth() {
+    var btn = document.getElementById('checkHealthBtn');
+    btn.classList.add('conn-btn--loading');
+    btn.disabled = true;
+
+    // Set all configured dots to "checking"
+    document.querySelectorAll('.conn-card').forEach(function(card) {
+        var dot = card.querySelector('.conn-status-dot');
+        if (dot && !dot.classList.contains('conn-status-dot--unconfigured')) {
+            dot.className = 'conn-status-dot conn-status-dot--checking';
+        }
+    });
+
+    fetch('/api/connectors/status')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data.success) {
+                alert('Error: ' + (data.error || 'Unknown'));
+                return;
+            }
+            updateCards(data.connectors);
+            updateSummary(data.summary);
+            applyFilter();
+        })
+        .catch(function(err) {
+            alert('Network error: ' + err.message);
+        })
+        .finally(function() {
+            btn.classList.remove('conn-btn--loading');
+            btn.disabled = false;
+        });
+}
+
+function updateCards(connectors) {
+    connectors.forEach(function(c) {
+        var dot = document.getElementById('dot-' + c.id);
+        var healthBadge = document.getElementById('health-badge-' + c.id);
+        var latencyEl = document.getElementById('latency-' + c.id);
+        var errorEl = document.getElementById('error-' + c.id);
+        var card = document.getElementById('card-' + c.id);
+
+        if (!dot) return;
+
+        // Determine status string
+        var status;
+        if (!c.configured) status = 'unconfigured';
+        else if (c.healthy === true) status = 'healthy';
+        else if (c.healthy === false) status = 'unhealthy';
+        else status = 'unknown';
+
+        card.dataset.status = status;
+
+        // Update dot
+        dot.className = 'conn-status-dot conn-status-dot--' + status;
+
+        // Update config badge
+        var configBadge = card.querySelector('.conn-badge--configured, .conn-badge--unconfigured');
+        if (configBadge) {
+            if (c.configured) {
+                configBadge.className = 'conn-badge conn-badge--configured';
+                configBadge.textContent = '\u2705';
+                configBadge.title = 'Configured';
+            } else {
+                configBadge.className = 'conn-badge conn-badge--unconfigured';
+                configBadge.textContent = '\u274C';
+                configBadge.title = 'Unconfigured';
+            }
+        }
+
+        // Health badge
+        if (c.healthy === true) {
+            healthBadge.className = 'conn-badge conn-badge--healthy';
+            healthBadge.textContent = '\uD83D\uDFE2';
+            healthBadge.title = 'Healthy';
+            healthBadge.style.display = '';
+        } else if (c.healthy === false) {
+            healthBadge.className = 'conn-badge conn-badge--unhealthy';
+            healthBadge.textContent = '\uD83D\uDD34';
+            healthBadge.title = 'Unhealthy';
+            healthBadge.style.display = '';
+        } else {
+            healthBadge.style.display = 'none';
+        }
+
+        // Latency
+        if (c.latency_ms !== null) {
+            latencyEl.textContent = c.latency_ms + ' ms';
+        } else {
+            latencyEl.textContent = '';
+        }
+
+        // Error
+        if (c.error) {
+            errorEl.textContent = c.error;
+            errorEl.style.display = '';
+        } else {
+            errorEl.style.display = 'none';
+        }
+    });
+}
+
+function updateSummary(s) {
+    document.getElementById('summaryTotal').textContent = s.total;
+    document.getElementById('summaryHealthy').textContent = s.healthy;
+    document.getElementById('summaryUnhealthy').textContent = s.unhealthy;
+    document.getElementById('summaryUnknown').textContent = s.unknown;
+    document.getElementById('summaryUnconfigured').textContent = s.total - s.configured;
+}
+</script>
+{% endblock %}

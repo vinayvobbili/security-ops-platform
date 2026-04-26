@@ -27,7 +27,6 @@ Usage:
 """
 
 import logging
-import math
 import re
 import time
 from datetime import datetime
@@ -39,6 +38,11 @@ import requests
 
 import services.azdo as azdo
 from data.data_maps import azdo_area_paths
+from src.components.embedding import (
+    OllamaEmbeddingFunction,
+    SentenceTransformerEmbeddingFunction,
+    get_embedding_function,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,46 +52,11 @@ CHROMA_PATH = ROOT_DIRECTORY / "data" / "transient" / "chroma_tipper_index"
 
 # Collection name
 COLLECTION_NAME = "threat_tippers"
+STAGING_COLLECTION_NAME = "threat_tippers_staging"
 
-
-class OllamaEmbeddingFunction:
-    """Custom embedding function using Ollama API."""
-
-    def __init__(self, model: str = None):
-        # Use config if no model specified
-        if model is None:
-            from my_config import get_config
-            config = get_config()
-            model = config.ollama_embedding_model or "all-minilm:l6-v2"
-        self.model = model
-        self.api_url = "http://localhost:11434/api/embeddings"
-
-    def __call__(self, input: List[str]) -> List[List[float]]:
-        """Generate embeddings for a list of texts."""
-        embeddings = []
-        for text in input:
-            embedding = self._embed_single(text)
-            embeddings.append(embedding)
-        return embeddings
-
-    def _embed_single(self, text: str, max_retries: int = 3) -> List[float]:
-        """Generate embedding for a single text."""
-        for attempt in range(max_retries):
-            try:
-                response = requests.post(
-                    self.api_url,
-                    json={"model": self.model, "prompt": text},
-                    timeout=60
-                )
-                response.raise_for_status()
-                result = response.json()
-                return result["embedding"]
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    logger.warning(f"Embedding failed (attempt {attempt + 1}): {e}")
-                    time.sleep(2)
-                else:
-                    raise RuntimeError(f"Failed to embed text: {e}")
+# Batch size for remote embedding calls — sending all docs in one POST hangs
+# the mac-m3 mlx-lm server past its 600s timeout when there are many tippers.
+EMBEDDING_BATCH_SIZE = 50
 
 
 class TipperIndexer:
@@ -97,7 +66,10 @@ class TipperIndexer:
         self.chroma_path = str(CHROMA_PATH)
         self._client: Optional[chromadb.PersistentClient] = None
         self._collection = None
-        self._embedding_fn = OllamaEmbeddingFunction()
+        self._embedding_fn = get_embedding_function()
+        # Fingerprint store for structured entity data (IOCs, TTPs, actors)
+        from src.components.tipper_fingerprint_store import TipperFingerprintStore
+        self.fingerprint_store = TipperFingerprintStore()
 
     @property
     def client(self) -> chromadb.PersistentClient:
@@ -112,7 +84,10 @@ class TipperIndexer:
         if self._collection is None:
             self._collection = self.client.get_or_create_collection(
                 name=COLLECTION_NAME,
-                metadata={"description": "Threat tipper embeddings for similarity search"}
+                metadata={
+                    "hnsw:space": "cosine",
+                    "description": "Threat tipper embeddings for similarity search",
+                }
             )
         return self._collection
 
@@ -134,7 +109,7 @@ class TipperIndexer:
         query = f"""
             SELECT [System.Id], [System.Title], [System.Description],
                    [System.CreatedDate], [System.Tags], [System.State],
-                   [Microsoft.VSTS.Common.ClosedDate]
+                   [System.AssignedTo], [Microsoft.VSTS.Common.ClosedDate]
             FROM WorkItems
             WHERE [System.AreaPath] UNDER '{area_path}'
               AND [System.CreatedDate] >= @Today-{days_back}
@@ -154,12 +129,17 @@ class TipperIndexer:
     # -------------------------------------------------------------------------
     # Extract text for embedding
     # -------------------------------------------------------------------------
-    def extract_tipper_text(self, tipper: dict) -> str:
+    def extract_tipper_text(self, tipper: dict, entities=None) -> str:
         """
         Extract meaningful text from a tipper for embedding.
 
         Strips HTML, CTI boilerplate, and structural formatting to focus
         on the actual threat content for semantic similarity matching.
+
+        When entities are provided, prepends structured high-signal fields
+        (actor names, malware families, MITRE techniques, top IOCs) with
+        repetition to give them proportional weight against the narrative
+        prose in the embedding space.
         """
         fields = tipper.get('fields', {})
 
@@ -211,6 +191,43 @@ class TipperIndexer:
         # Build embedding text - focus on semantic content, not structure
         text_parts = []
 
+        # Prepend structured entity emphasis for better embedding discrimination.
+        # Repeating actor/malware names 3x gives them proportional weight against
+        # the narrative prose, so embeddings differentiate "BlackSanta campaign"
+        # from "NANOREMOTE campaign" even when the surrounding text is similar.
+        if entities:
+            emphasis_parts = []
+            # Actor names (3x repetition — strongest discriminator)
+            actors = []
+            if hasattr(entities, 'threat_actors_enriched') and entities.threat_actors_enriched:
+                actors = [ta.common_name or ta.name for ta in entities.threat_actors_enriched]
+            elif hasattr(entities, 'threat_actors') and entities.threat_actors:
+                actors = list(entities.threat_actors)
+            if actors:
+                actor_str = ', '.join(actors)
+                emphasis_parts.extend([f"Threat actors: {actor_str}"] * 3)
+
+            # Malware families (3x repetition)
+            if hasattr(entities, 'malware_families') and entities.malware_families:
+                malware_str = ', '.join(entities.malware_families)
+                emphasis_parts.extend([f"Malware: {malware_str}"] * 3)
+
+            # MITRE techniques (1x — many are shared across campaigns)
+            if hasattr(entities, 'mitre_techniques') and entities.mitre_techniques:
+                emphasis_parts.append(f"MITRE: {', '.join(entities.mitre_techniques[:15])}")
+
+            # Top IOCs (1x — IPs and domains for campaign fingerprinting)
+            top_iocs = []
+            if hasattr(entities, 'ips') and entities.ips:
+                top_iocs.extend(entities.ips[:10])
+            if hasattr(entities, 'domains') and entities.domains:
+                top_iocs.extend(entities.domains[:10])
+            if top_iocs:
+                emphasis_parts.append(f"IOCs: {', '.join(top_iocs)}")
+
+            if emphasis_parts:
+                text_parts.append('. '.join(emphasis_parts))
+
         if clean_title:
             text_parts.append(clean_title)
 
@@ -234,6 +251,11 @@ class TipperIndexer:
         """Extract metadata to store alongside the embedding."""
         fields = tipper.get('fields', {})
 
+        # Extract display name from AssignedTo (can be dict with displayName or plain string)
+        assigned_to = fields.get('System.AssignedTo', '') or ''
+        if isinstance(assigned_to, dict):
+            assigned_to = assigned_to.get('displayName', '')
+
         return {
             'id': str(tipper.get('id', '')),
             'title': fields.get('System.Title', ''),
@@ -241,6 +263,7 @@ class TipperIndexer:
             'closed_date': fields.get('Microsoft.VSTS.Common.ClosedDate', '') or '',
             'state': fields.get('System.State', ''),
             'tags': fields.get('System.Tags', '') or '',
+            'assigned_to': assigned_to,
             'url': tipper.get('url', '') or '',
         }
 
@@ -270,22 +293,30 @@ class TipperIndexer:
             logger.warning("No tippers to sync")
             return 0
 
-        # Get existing IDs in ChromaDB
+        # Get existing IDs and titles in ChromaDB
         existing_ids = set()
+        existing_titles = set()
         try:
-            # Get all existing IDs (ChromaDB returns all if no filter)
-            result = self.collection.get()
+            result = self.collection.get(include=['metadatas'])
             existing_ids = set(result['ids']) if result['ids'] else set()
+            if result.get('metadatas'):
+                existing_titles = {
+                    m.get('title', '') for m in result['metadatas'] if m.get('title')
+                }
             logger.info(f"ChromaDB has {len(existing_ids)} existing tippers")
         except Exception as e:
             logger.warning(f"Could not get existing IDs: {e}")
 
-        # Find new tippers
+        # Find new tippers (skip if ID already indexed or title already indexed)
         new_tippers = []
         for tipper in tippers:
             tipper_id = str(tipper.get('id', ''))
+            title = tipper.get('fields', {}).get('System.Title', '')
             if tipper_id and tipper_id not in existing_ids:
-                new_tippers.append(tipper)
+                if title and title in existing_titles:
+                    logger.info(f"Skipping tipper #{tipper_id} — title already indexed: {title[:60]}")
+                else:
+                    new_tippers.append(tipper)
 
         if not new_tippers:
             logger.info("No new tippers to add")
@@ -324,12 +355,20 @@ class TipperIndexer:
                 logger.info(f"Processing tipper {i + 1}/{len(new_tippers)}...")
 
             try:
-                text = self.extract_tipper_text(tipper)
+                # Extract entities for structured fingerprint and embedding emphasis
+                entities = self._extract_entities_for_tipper(tipper)
+                text = self.extract_tipper_text(tipper, entities=entities)
                 meta = self.prepare_tipper_metadata(tipper)
 
                 ids.append(tipper_id)
                 documents.append(text)
                 metadatas.append(meta)
+
+                # Store structured fingerprint in sidecar DB
+                if entities:
+                    title = tipper.get('fields', {}).get('System.Title', '')
+                    created = tipper.get('fields', {}).get('System.CreatedDate', '')
+                    self.fingerprint_store.upsert(tipper_id, entities, title, created)
 
             except Exception as e:
                 logger.error(f"Failed to process tipper {tipper_id}: {e}")
@@ -352,6 +391,7 @@ class TipperIndexer:
                 embeddings=embeddings
             )
             logger.info(f"Successfully added {len(ids)} tippers")
+            logger.info(f"Fingerprint store: {self.fingerprint_store.count()} tippers")
             logger.info("=" * 60)
             logger.info("TIPPER SYNC COMPLETED")
             logger.info("=" * 60)
@@ -381,13 +421,21 @@ class TipperIndexer:
         logger.info("FULL INDEX REBUILD STARTING")
         logger.info("=" * 60)
 
-        # Delete existing collection
+        # Build into a staging collection so a mid-rebuild failure leaves the
+        # current index intact. Drop any leftover staging from a prior failed run.
         try:
-            self.client.delete_collection(COLLECTION_NAME)
-            self._collection = None  # Reset cached collection
-            logger.info(f"Deleted existing collection: {COLLECTION_NAME}")
-        except Exception as e:
-            logger.warning(f"Could not delete collection (may not exist): {e}")
+            self.client.delete_collection(STAGING_COLLECTION_NAME)
+            logger.info(f"Cleared leftover staging collection: {STAGING_COLLECTION_NAME}")
+        except Exception:
+            pass
+
+        staging_collection = self.client.create_collection(
+            name=STAGING_COLLECTION_NAME,
+            metadata={
+                "hnsw:space": "cosine",
+                "description": "Threat tipper embeddings — staging build",
+            },
+        )
 
         # Fetch all tippers
         tippers = self.fetch_historical_tippers(days_back)
@@ -422,12 +470,20 @@ class TipperIndexer:
                 logger.info(f"Processing tipper {i + 1}/{len(tippers)}...")
 
             try:
-                text = self.extract_tipper_text(tipper)
+                # Extract entities for structured fingerprint and embedding emphasis
+                entities = self._extract_entities_for_tipper(tipper)
+                text = self.extract_tipper_text(tipper, entities=entities)
                 metadata = self.prepare_tipper_metadata(tipper)
 
                 ids.append(tipper_id)
                 documents.append(text)
                 metadatas.append(metadata)
+
+                # Store structured fingerprint in sidecar DB
+                if entities:
+                    title = tipper.get('fields', {}).get('System.Title', '')
+                    created = tipper.get('fields', {}).get('System.CreatedDate', '')
+                    self.fingerprint_store.upsert(tipper_id, entities, title, created)
 
             except Exception as e:
                 logger.error(f"Failed to process tipper {tipper_id}: {e}")
@@ -437,20 +493,58 @@ class TipperIndexer:
             logger.error("No tippers processed successfully")
             return False
 
-        # Add to ChromaDB
-        logger.info(f"Adding {len(ids)} tippers to ChromaDB...")
+        # Embed and add to staging in batches — a single 700+ doc embedding
+        # request blows past the 600s remote-server timeout.
+        logger.info(f"Embedding {len(ids)} tippers in batches of {EMBEDDING_BATCH_SIZE}...")
         try:
-            # Generate embeddings
-            embeddings = self._embedding_fn(documents)
+            for start in range(0, len(ids), EMBEDDING_BATCH_SIZE):
+                end = start + EMBEDDING_BATCH_SIZE
+                batch_ids = ids[start:end]
+                batch_docs = documents[start:end]
+                batch_metas = metadatas[start:end]
 
-            self.collection.add(
-                ids=ids,
-                documents=documents,
-                metadatas=metadatas,
-                embeddings=embeddings
+                logger.info(f"  Embedding batch {start + 1}-{min(end, len(ids))}/{len(ids)}")
+                batch_embeddings = self._embedding_fn(batch_docs)
+                staging_collection.add(
+                    ids=batch_ids,
+                    documents=batch_docs,
+                    metadatas=batch_metas,
+                    embeddings=batch_embeddings,
+                )
+
+            # All batches embedded. Atomically swap staging into prod by
+            # dropping the live collection and copying staging contents into
+            # a fresh COLLECTION_NAME (Chroma has no rename).
+            logger.info("All batches embedded. Swapping staging → live collection.")
+            try:
+                self.client.delete_collection(COLLECTION_NAME)
+            except Exception:
+                pass
+
+            live_collection = self.client.create_collection(
+                name=COLLECTION_NAME,
+                metadata={
+                    "hnsw:space": "cosine",
+                    "description": "Threat tipper embeddings for similarity search",
+                },
             )
+            staged = staging_collection.get(include=["embeddings", "documents", "metadatas"])
+            live_collection.add(
+                ids=staged["ids"],
+                documents=staged["documents"],
+                metadatas=staged["metadatas"],
+                embeddings=staged["embeddings"],
+            )
+            self._collection = live_collection
+
+            # Drop staging now that prod is populated.
+            try:
+                self.client.delete_collection(STAGING_COLLECTION_NAME)
+            except Exception:
+                pass
 
             logger.info(f"Indexed {len(ids)} tippers successfully")
+            logger.info(f"Fingerprint store: {self.fingerprint_store.count()} tippers")
             logger.info("=" * 60)
             logger.info("FULL INDEX REBUILD COMPLETED")
             logger.info("=" * 60)
@@ -458,25 +552,34 @@ class TipperIndexer:
 
         except Exception as e:
             logger.error(f"Failed to create index: {e}", exc_info=True)
+            logger.error(
+                f"Live collection '{COLLECTION_NAME}' was NOT modified. "
+                f"Staging collection '{STAGING_COLLECTION_NAME}' left in place for inspection."
+            )
             return False
 
     # -------------------------------------------------------------------------
     # Search for similar tippers (pure vector similarity)
     # -------------------------------------------------------------------------
-    def find_similar_tippers(self, query_text: str, k: int = 5) -> List[dict]:
+    def find_similar_tippers(self, query_text: str, k: int = 5, query_entities=None) -> List[dict]:
         """
-        Find tippers similar to the given text using semantic vector similarity.
+        Find tippers similar to the given text using multi-signal similarity.
 
-        Uses embedding-based similarity search for accurate semantic matching.
-        No keyword matching - relies purely on the embedding model to understand
-        threat content and find genuinely similar tippers.
+        Stage 1: Vector similarity via ChromaDB embeddings (narrative similarity)
+        Stage 2: Structured scoring via fingerprint store (IOC, TTP, actor/malware overlap)
+
+        The composite score blends both signals so analysts get a meaningful
+        similarity percentage backed by a per-dimension breakdown.
 
         Args:
             query_text: Text to search for (new tipper title/description)
             k: Number of similar tippers to return
+            query_entities: Optional ExtractedEntities for the query tipper.
+                           When provided, enables multi-signal scoring.
 
         Returns:
-            List of similar tipper metadata with similarity scores (0.0 to 1.0)
+            List of similar tipper dicts with similarity_score (composite),
+            narrative_similarity, and similarity_breakdown fields.
         """
         # Check if collection has data
         try:
@@ -497,7 +600,7 @@ class TipperIndexer:
         except Exception as e:
             raise RuntimeError(f"Failed to generate query embedding: {e}")
 
-        # Vector similarity search
+        # Vector similarity search (all tippers — state shown in Related Tickets)
         try:
             results = self.collection.query(
                 query_embeddings=[query_embedding],
@@ -511,28 +614,59 @@ class TipperIndexer:
             logger.warning("No similar tippers found")
             return []
 
-        # Convert results to standardized format
+        # Build query fingerprint from entities (if available)
+        query_fingerprint = None
+        if query_entities:
+            from src.components.tipper_similarity import fingerprint_from_entities
+            query_fingerprint = fingerprint_from_entities(query_entities)
+
+        # Fetch candidate fingerprints in bulk
+        candidate_ids = [
+            results['metadatas'][0][i].get('id', '')
+            for i in range(len(results['ids'][0]))
+        ]
+        candidate_fingerprints = {}
+        if query_fingerprint:
+            try:
+                candidate_fingerprints = self.fingerprint_store.get_batch(candidate_ids)
+            except Exception as e:
+                logger.warning(f"Could not fetch fingerprints (falling back to narrative-only): {e}")
+
+        # Convert results to standardized format with multi-signal scoring
+        from src.components.tipper_similarity import compute_similarity_breakdown, SimilarityBreakdown
         similar_tippers = []
         for i, doc_id in enumerate(results['ids'][0]):
             distance = results['distances'][0][i] if results['distances'] else 0
+            narrative_similarity = 1 - distance  # Cosine distance → similarity
 
-            # Convert L2 distance to similarity score using exponential decay
-            # Ollama embeddings are not normalized, so L2 distances are large (100-400+)
-            # Scale factor of 300 gives good differentiation:
-            #   - distance ~160 (very similar) → ~60% similarity
-            #   - distance ~280 (somewhat related) → ~40% similarity
-            #   - distance ~400 (unrelated) → ~25% similarity
-            similarity = math.exp(-distance / 300)
+            meta = results['metadatas'][0][i]
+            candidate_id = meta.get('id', '')
+
+            # Compute multi-signal breakdown if fingerprints are available
+            breakdown = None
+            composite_score = narrative_similarity  # Default: narrative only
+            if query_fingerprint and candidate_id in candidate_fingerprints:
+                breakdown = compute_similarity_breakdown(
+                    query_fingerprint,
+                    candidate_fingerprints[candidate_id],
+                    narrative_similarity,
+                )
+                composite_score = breakdown.composite_score
 
             similar_tippers.append({
-                'metadata': results['metadatas'][0][i],
-                'similarity_score': round(similarity, 3),
+                'metadata': meta,
+                'similarity_score': round(composite_score, 3),
+                'narrative_similarity': round(narrative_similarity, 3),
+                'similarity_breakdown': breakdown,
                 'distance': round(distance, 3),
                 'matched_content': results['documents'][0][i][:500] if results['documents'] else ""
             })
 
-        # Sort by similarity descending (should already be sorted, but ensure)
+        # Re-sort by composite score (may differ from narrative-only ordering)
         similar_tippers.sort(key=lambda x: x['similarity_score'], reverse=True)
+
+        if query_fingerprint and candidate_fingerprints:
+            logger.info(f"Multi-signal scoring applied ({len(candidate_fingerprints)} fingerprints matched)")
 
         return similar_tippers
 
@@ -578,6 +712,28 @@ class TipperIndexer:
         text = re.sub(r'\s+', ' ', text).strip()
 
         return text
+
+    # -------------------------------------------------------------------------
+    # Entity extraction helper
+    # -------------------------------------------------------------------------
+    def _extract_entities_for_tipper(self, tipper: dict):
+        """Extract entities from a tipper for fingerprinting and embedding emphasis.
+
+        Uses full description (not truncated embedding text) for best extraction.
+        Returns ExtractedEntities or None if extraction fails.
+        """
+        try:
+            from src.utils.entity_extractor import extract_entities
+            description = tipper.get('fields', {}).get('System.Description', '')
+            if not description:
+                return None
+            # Clean HTML for entity extraction
+            clean_text = re.sub(r'<[^>]+>', ' ', description)
+            clean_text = re.sub(r'\s+', ' ', clean_text).strip()
+            return extract_entities(clean_text, include_apt_database=True)
+        except Exception as e:
+            logger.debug(f"Entity extraction failed for tipper: {e}")
+            return None
 
     # -------------------------------------------------------------------------
     # Index stats
@@ -633,8 +789,16 @@ def search_similar(query: str, k: int = 5) -> List[dict]:
         print(f"Top {len(results)} similar tippers:\n")
         for i, result in enumerate(results, 1):
             meta = result['metadata']
+            breakdown = result.get('similarity_breakdown')
             print(f"{i}. [{meta['id']}] {meta['title'][:60]}...")
-            print(f"   Similarity: {result['similarity_score']:.1%}")
+            if breakdown:
+                print(f"   Composite: {result['similarity_score']:.0%}  "
+                      f"[Narrative: {breakdown.narrative_similarity:.0%} | "
+                      f"IOC: {breakdown.shared_ioc_count} shared | "
+                      f"TTP: {breakdown.shared_ttp_count} shared | "
+                      f"Actor: {', '.join(breakdown.shared_actors[:2]) or 'none'}]")
+            else:
+                print(f"   Similarity: {result['similarity_score']:.1%} (narrative only)")
             print(f"   Tags: {meta.get('tags', 'N/A')[:50]}")
             print(f"   Created: {meta.get('created_date', 'N/A')[:10]}")
             print()
@@ -647,6 +811,41 @@ def search_similar(query: str, k: int = 5) -> List[dict]:
         return []
 
 
+def backfill_fingerprints(days_back: int = 365):
+    """Backfill fingerprint store for existing indexed tippers."""
+    indexer = TipperIndexer()
+
+    print("Backfilling fingerprint store from AZDO tippers...")
+    tippers = indexer.fetch_historical_tippers(days_back)
+    if not tippers:
+        print("No tippers found")
+        return
+
+    added = 0
+    skipped = 0
+    for i, tipper in enumerate(tippers):
+        tipper_id = str(tipper.get('id', ''))
+        if not tipper_id:
+            continue
+
+        if indexer.fingerprint_store.has(tipper_id):
+            skipped += 1
+            continue
+
+        if (i + 1) % 50 == 0:
+            print(f"  Processing {i + 1}/{len(tippers)}...")
+
+        entities = indexer._extract_entities_for_tipper(tipper)
+        if entities:
+            title = tipper.get('fields', {}).get('System.Title', '')
+            created = tipper.get('fields', {}).get('System.CreatedDate', '')
+            indexer.fingerprint_store.upsert(tipper_id, entities, title, created)
+            added += 1
+
+    print(f"Backfill complete: {added} fingerprints added, {skipped} already existed")
+    print(f"Fingerprint store total: {indexer.fingerprint_store.count()}")
+
+
 def show_stats():
     """Show index statistics."""
     indexer = TipperIndexer()
@@ -656,6 +855,7 @@ def show_stats():
     print("-" * 40)
     for key, value in stats.items():
         print(f"  {key}: {value}")
+    print(f"  fingerprint_count: {indexer.fingerprint_store.count()}")
     print()
 
 
@@ -677,11 +877,14 @@ if __name__ == "__main__":
             show_stats()
         elif command == "rebuild":
             rebuild_tipper_index(days_back=365)
+        elif command == "backfill-fingerprints":
+            backfill_fingerprints(days_back=365)
         else:
             print(f"Unknown command: {command}")
             print("Usage:")
-            print("  python -m src.components.tipper_indexer           # Sync new tippers")
-            print("  python -m src.components.tipper_indexer rebuild   # Full rebuild")
+            print("  python -m src.components.tipper_indexer                    # Sync new tippers")
+            print("  python -m src.components.tipper_indexer rebuild            # Full rebuild")
+            print("  python -m src.components.tipper_indexer backfill-fingerprints  # Backfill fingerprint store")
             print("  python -m src.components.tipper_indexer search <query>")
             print("  python -m src.components.tipper_indexer stats")
     else:

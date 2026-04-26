@@ -4,7 +4,9 @@
 
 export const state = {
     allData: [],
+    cachedData: null,  // Original 90-day cached data (for restoring after custom range)
     filteredData: [],
+    comparisonData: null,  // Period B filtered data (null = comparison off)
     currentSort: {column: null, direction: 'asc'},
     showAllRows: false,
     visibleColumns: ['id', 'name', 'severity', 'status', 'affected_country', 'impact', 'type', 'owner', 'created'],

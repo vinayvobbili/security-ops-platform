@@ -29,7 +29,7 @@ This script automates the assignment of "ring tags" to hosts in Tanium for phase
   - `IAZ` prefix → US
 - **Primary source**: Uses country data from ServiceNow when available
 - **Intelligent fallback**: When ServiceNow country is missing, uses hostname pattern matching:
-  - `VDI` prefix → United States
+  - `VMVDI` prefix → United States
   - `TK` prefix → Korea
   - First 2 characters as country codes (US, CA, etc.)
   - Leading digit in hostname → Korea
@@ -62,7 +62,7 @@ import logging
 import os
 from collections import defaultdict
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional, Protocol
 from zoneinfo import ZoneInfo
@@ -230,20 +230,103 @@ class TaniumDataLoader:
         computers = self._parse_excel_file(all_hosts_filename)
         total_computers = len(computers)
 
+        # MGCC migration whitelist: hostnames previously confirmed as India non-PMLI
+        # by the weekly tanium_mgcc_hosts job. Without this, every host with a non-MGCC
+        # ring tag would be treated as a migration candidate (~85K hosts) and the
+        # downstream ServiceNow enrichment would blow past the scheduler's 90 min budget.
+        mgcc_whitelist = self._load_mgcc_migration_whitelist()
+
         # Filter and limit
-        filtered_computers = [c for c in computers if not c.has_epp_ring_tag() and not c.has_epp_power_mode_tag()]
+        # Include hosts without any ring tag, PLUS hosts on the MGCC migration whitelist
+        # that still have an old (non-MGCC) ring tag.
+        filtered_computers = [
+            c for c in computers
+            if not c.has_epp_power_mode_tag() and (
+                not c.has_epp_ring_tag()  # no ring tag at all
+                or (
+                    mgcc_whitelist is not None
+                    and c.has_epp_ring_tag()
+                    and not c.has_mgcc_ring_tag()
+                    and c.name.lower() in mgcc_whitelist
+                )
+            )
+        ]
+        mgcc_migration_count = sum(1 for c in filtered_computers if c.has_epp_ring_tag())
+        no_tag_count = len(filtered_computers) - mgcc_migration_count
         computers_with_tags = total_computers - len(filtered_computers)
         # the line below may be used for testing code changes on small subsets of data
         # filtered_computers = [c for c in filtered_computers if c.name.startswith("MININT")]
 
         self.logger.info(f"📊 Total hosts found: {total_computers}")
-        self.logger.info(f"✅ Hosts with existing Ring/PowerMode tags: {computers_with_tags}")
-        self.logger.info(f"🔄 Hosts without Ring tags (to be processed): {len(filtered_computers)}")
+        self.logger.info(f"✅ Hosts with MGCC Ring tags (fully tagged): {computers_with_tags}")
+        self.logger.info(f"🔄 Hosts without Ring tags (to be processed): {no_tag_count}")
+        self.logger.info(f"🔄 Hosts with non-MGCC Ring tags (MGCC migration candidates): {mgcc_migration_count}")
 
         if test_limit is not None and test_limit > 0:
             filtered_computers = filtered_computers[:test_limit]
             self.logger.info(f"🧪 Test mode: limiting to {test_limit} hosts")
         return filtered_computers
+
+    def _load_mgcc_migration_whitelist(self) -> Optional[set]:
+        """Load the most recent MGCC hosts cache (cloud only) as a set of lowercase hostnames.
+
+        The cache is produced by the weekly tanium_mgcc_hosts job and contains hosts
+        confirmed via ServiceNow as India non-PMLI. We only honor caches <= 14 days old;
+        anything older or missing returns None, which causes the migration branch to
+        be skipped (only no-ring-tag hosts are processed) so the job degrades gracefully
+        instead of timing out on an 85K-host enrichment.
+        """
+        max_age_days = 14
+        epp_dir = self.data_dir / "transient" / "epp_device_tagging"
+        if not epp_dir.exists():
+            self.logger.warning(
+                f"⚠️  MGCC migration cache directory not found at {epp_dir} — "
+                f"skipping migration branch (only no-ring-tag hosts will be processed)"
+            )
+            return None
+
+        candidates = sorted(
+            epp_dir.glob("*/Tanium_MGCC_Hosts_cloud.xlsx"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        if not candidates:
+            self.logger.warning(
+                "⚠️  No Tanium_MGCC_Hosts_cloud.xlsx cache found — "
+                "skipping migration branch (only no-ring-tag hosts will be processed). "
+                "Run the weekly tanium_mgcc_hosts job to populate the cache."
+            )
+            return None
+
+        cache_path = candidates[0]
+        age_seconds = datetime.now().timestamp() - cache_path.stat().st_mtime
+        age_days = age_seconds / 86400
+        if age_days > max_age_days:
+            self.logger.warning(
+                f"⚠️  MGCC migration cache at {cache_path} is {age_days:.1f} days old "
+                f"(> {max_age_days} day limit) — skipping migration branch "
+                f"(only no-ring-tag hosts will be processed)"
+            )
+            return None
+
+        try:
+            df = pd.read_excel(cache_path, engine="openpyxl", usecols=["Hostname"])
+            hostnames = {
+                str(h).strip().lower()
+                for h in df["Hostname"].tolist()
+                if h and isinstance(h, str)
+            }
+            self.logger.info(
+                f"📂 Loaded MGCC migration whitelist: {len(hostnames)} hosts "
+                f"from {cache_path.name} ({age_days:.1f} days old)"
+            )
+            return hostnames
+        except Exception as e:
+            self.logger.error(
+                f"⚠️  Failed to load MGCC migration cache from {cache_path}: {e} — "
+                f"skipping migration branch"
+            )
+            return None
 
     def _parse_excel_file(self, filename: str) -> List[Computer]:
         """Parse Excel file into Computer objects using pandas for robustness"""
@@ -298,7 +381,7 @@ class TaniumDataLoader:
 
     def load_region_mappings(self) -> Dict[str, str]:
         """Load country to region mappings"""
-        return self._load_json_file(self.data_dir / "regions_by_country.json")
+        return self._load_json_file(self.data_dir / "regions_by_country_tanium.json")
 
     def _load_json_file(self, filepath: Path) -> Dict[str, str]:
         """Generic JSON file loader with error handling"""
@@ -376,7 +459,7 @@ class ServiceNowComputerEnricher:
                 source = original_computer.source or ""
 
                 # Select package ID based on source (cloud vs on-prem) and OS using shared utility
-                package_id = get_package_id_for_instance(source, os_platform)
+                package_id = get_package_id_for_instance(source, os_platform, action="add")
 
                 enriched_computers.append(
                     EnrichedComputer(
@@ -445,7 +528,7 @@ class SmartCountryResolver:
             was_country_guessed = False
             self.logger.debug(f'  Country set from SNOW osDomain containing "pmli": {country}')
         # Priority 1.2: Set the country to India PMLI for all METLAP*, PMDesk* and *PMLI* hosts
-        elif name.startswith('metlap') or name.startswith('pmdesk') or 'pmli' in name:
+        elif name.startswith(('metlap', 'pmdesk', 'inblr', 'inmum')) or 'pmli' in name:
             # print("Matched METLAP/PMDESK prefix -> India PMLI")
             country = 'India PMLI'
             was_country_guessed = False
@@ -495,8 +578,8 @@ class SmartCountryResolver:
 
         # Strategy 1.1: Special prefixes
         if name.startswith('vmvdi'):
-            # print("Matched VDI prefix -> United States")
-            return 'United States', "VDI prefix"
+            # print("Matched VMVDI prefix -> United States")
+            return 'United States', "VMVDI prefix"
 
         if hasattr(self.config, 'team_name') and name.startswith(self.config.team_name.lower()):
             # print(f"Matched team_name prefix -> United States")
@@ -554,16 +637,42 @@ class SmartRingTagGenerator:
 
     def generate_tags(self, computers: List[EnrichedComputer]) -> List[EnrichedComputer]:
         """Generate ring tags for all computers"""
-        workstations = [c for c in computers if c.is_workstation]
-        servers = [c for c in computers if c.is_server]
-        other = [c for c in computers if not c.is_workstation and not c.is_server]
+        # Lazy import: webex_bots.tanium_bot_base pulls in the Webex SDK at module
+        # load time, which the ring generator otherwise doesn't need.
+        from webex_bots.tanium_bot_base import is_recently_online
+
+        # Pre-filter stale hosts so ring distribution only spans hosts that can
+        # actually be tagged. Otherwise sorting workstations by last_seen ascending
+        # stuffs Ring 1 with stale hosts, which the downstream 2h online filter
+        # in apply_tags_to_hosts then drops — Ring 1 ends up never tagged.
+        reference_time = datetime.now(timezone.utc)
+        online_computers = []
+        stale_computers = []
+        for c in computers:
+            if is_recently_online(c.computer.eidLastSeen, reference_time):
+                online_computers.append(c)
+            else:
+                stale_computers.append(
+                    c.add_status("Skipped ring assignment - host not seen within last 2 hours")
+                )
+
+        if stale_computers:
+            self.logger.info(
+                f"Excluded {len(stale_computers)} stale hosts from ring assignment "
+                f"(not seen within 2h of {reference_time.isoformat()}); "
+                f"{len(online_computers)} online hosts will be ring-assigned"
+            )
+
+        workstations = [c for c in online_computers if c.is_workstation]
+        servers = [c for c in online_computers if c.is_server]
+        other = [c for c in online_computers if not c.is_workstation and not c.is_server]
 
         # Process each category
         tagged_workstations = self._process_workstations(workstations)
         tagged_servers = self._process_servers(servers)
         tagged_other = [c.add_status("Category missing or unknown - skipping") for c in other]
 
-        return tagged_workstations + tagged_servers + tagged_other
+        return tagged_workstations + tagged_servers + tagged_other + stale_computers
 
     def _process_workstations(self, workstations: List[EnrichedComputer]) -> List[EnrichedComputer]:
         """Process workstations by region/country groups"""
@@ -600,7 +709,7 @@ class SmartRingTagGenerator:
                             os_domain=computer.os_domain,
                             was_country_guessed=computer.was_country_guessed,
                             status=computer.status,
-                            ring_tag=f"EPP_ECMTag_{region}_Wks_Ring{ring}",
+                            ring_tag=f"EPP_ECMTag_{region}_WKS_Ring{ring}",
                             os_platform=computer.os_platform,
                             package_id=computer.package_id,
                             online_status=computer.online_status
@@ -771,6 +880,16 @@ class ExcelReportExporter:
         wrap_columns = {'current tags', 'comments', 'generated tag'}
         apply_professional_formatting(output_path, column_widths=column_widths, wrap_columns=wrap_columns)
 
+        # Add clickable Tanium ID hyperlinks
+        from src.utils.excel_formatting import add_tanium_hyperlinks
+        from services.tanium import TaniumClient
+        try:
+            tanium_client = TaniumClient()
+            add_tanium_hyperlinks(output_path, action_id_column=None,
+                                  portal_urls_by_source=tanium_client.get_portal_urls_by_source())
+        except Exception as e:
+            self.logger.warning(f"Could not add Tanium hyperlinks: {e}")
+
         self.logger.info(f"Exported {len(computers)} computers to {output_path}")
         return str(output_path)
 
@@ -838,6 +957,22 @@ class TaniumRingTagProcessor:
                     online_status=comp.online_status
                 )
                 final_computers.append(final_comp)
+
+            # Step 3b: Filter MGCC migration candidates
+            # Hosts that already had non-MGCC ring tags were included as migration candidates.
+            # Keep them only if they resolved to MGCC region (India non-PMLI).
+            # Drop the rest — they already have valid ring tags for their region.
+            before_mgcc_filter = len(final_computers)
+            final_computers = [
+                comp for comp in final_computers
+                if not comp.computer.has_epp_ring_tag()  # no prior ring tag — always keep
+                or comp.region == "MGCC"  # migration candidate that resolved to MGCC — keep
+            ]
+            mgcc_dropped = before_mgcc_filter - len(final_computers)
+            mgcc_kept = sum(1 for c in final_computers if c.computer.has_epp_ring_tag())
+            if mgcc_dropped or mgcc_kept:
+                self.logger.info(f"🔄 MGCC migration: {mgcc_kept} hosts will get MGCC tags, "
+                                 f"{mgcc_dropped} non-MGCC hosts with existing tags filtered out")
 
             # Step 4: Generate ring tags
             self.logger.info("Generating ring tags...")

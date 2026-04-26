@@ -48,12 +48,12 @@ def analyze_from_cli(tipper_id: str = None, text: str = None):
     return analysis
 
 
-def analyze_recent_tippers(hours_back: int = 1, room_id: str = _config.webex_room_id_dev_test_space) -> int:
+def analyze_recent_tippers(hours_back: int = 1, room_id: str = _config.webex_room_id_threat_tipper_analysis) -> int:
     """
     Fetch and analyze tippers created in the last N hours.
 
     Sends analysis results to Webex for threat hunter review.
-    Called by the hourly scheduled job in all_jobs.py.
+    Called by the hourly scheduled job in scheduler.py.
 
     Args:
         hours_back: How many hours back to look for new tippers (default 1)
@@ -155,18 +155,13 @@ def analyze_recent_tippers(hours_back: int = 1, room_id: str = _config.webex_roo
         try:
             logger.info(f"Analyzing tipper #{tipper_id}: {title[:50]}...")
 
-            # Run full flow: analyze + post to AZDO + background IOC hunt
-            result = analyzer.analyze_and_post(tipper_id, source="hourly", room_id=room_id)
-
-            # Linkify work item references for Webex Markdown
-            webex_markdown = linkify_work_items_markdown(result['content'])
-
-            # Send brief summary to Webex
-            webex_api.messages.create(
-                roomId=room_id,
-                markdown=webex_markdown
-            )
-            logger.info(f"Sent analysis for tipper #{tipper_id} to Webex")
+            # Run full flow: analyze + post to AZDO + send analysis to tipper room
+            # + background IOC hunt + background CVE exposure correlation.
+            # The analysis Webex send happens inside analyze_and_post so that the
+            # exposure follow-up can reply-thread to it. IOC hunt summary still
+            # goes to its own room (passed as room_id).
+            from . import IOC_HUNT_ROOM_ID
+            analyzer.analyze_and_post(tipper_id, source="hourly", room_id=IOC_HUNT_ROOM_ID)
 
             analyzed_count += 1
             analyzed_ids.append(tipper_id)

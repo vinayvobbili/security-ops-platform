@@ -1,0 +1,460 @@
+{% extends 'base_layout.html' %}
+
+{% block page_title_plain %}Exposed API Scanner{% endblock %}
+
+{% set page_title_text = 'Exposed API Scanner' %}
+{% set page_title_left_icon = '🔍' %}
+{% set page_title_right_icon = '🔑' %}
+
+{% block extra_css %}
+<style>
+    .eas-frame-wrap {
+        position: fixed;
+        top: calc(var(--nav-height) + 24px);
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: #fff;
+    }
+    .eas-frame-wrap iframe {
+        width: 100%;
+        height: 100%;
+        border: 0;
+        display: block;
+    }
+    .eas-version-badge {
+        position: fixed;
+        bottom: 12px;
+        right: 12px;
+        z-index: 50;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        background: rgba(15, 23, 42, 0.85);
+        color: #e2e8f0;
+        font: 600 11px/1.3 ui-monospace, "SF Mono", Monaco, monospace;
+        text-decoration: none;
+        border-radius: 999px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+        backdrop-filter: blur(6px);
+        transition: background .15s, color .15s, transform .15s;
+    }
+    .eas-version-badge:hover {
+        background: rgba(0, 47, 108, 0.95);
+        color: #fff;
+        transform: translateY(-1px);
+    }
+    .eas-version-badge .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #78BE20;
+        box-shadow: 0 0 6px rgba(120, 190, 32, 0.7);
+    }
+    .eas-version-badge.loading .dot { background: #94a3b8; box-shadow: none; }
+    .eas-version-badge.unknown .dot { background: #f59e0b; box-shadow: none; }
+    .eas-version-badge .vid { letter-spacing: .3px; }
+    .eas-version-badge .sub { color: #94a3b8; font-weight: 500; }
+
+    .app-info-btn {
+        position: fixed;
+        bottom: 12px;
+        left: 12px;
+        z-index: 50;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px;
+        background: linear-gradient(135deg, #0891b2 0%, #0ea5e9 100%);
+        color: #fff;
+        font: 600 12px/1.3 -apple-system, "Segoe UI", Roboto, sans-serif;
+        letter-spacing: .2px;
+        border: 0;
+        border-radius: 999px;
+        box-shadow: 0 6px 16px rgba(8, 145, 178, 0.35);
+        cursor: pointer;
+        transition: transform .15s, box-shadow .15s;
+    }
+    .app-info-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 22px rgba(8, 145, 178, 0.5); }
+    .app-info-btn .pulse {
+        width: 7px; height: 7px; border-radius: 50%;
+        background: #fff; box-shadow: 0 0 8px rgba(255,255,255,.9);
+        animation: easPulse 2s infinite;
+    }
+    @keyframes easPulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50%      { opacity: .6; transform: scale(1.25); }
+    }
+
+    .app-info-modal[hidden] { display: none; }
+    .app-info-modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(8, 47, 73, 0.6);
+        z-index: 9000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        backdrop-filter: blur(4px);
+        animation: easFadeIn .2s ease-out;
+    }
+    @keyframes easFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    .app-info-card {
+        position: relative;
+        background: #fff;
+        color: #1e293b;
+        border-radius: 16px;
+        max-width: 680px;
+        width: 100%;
+        max-height: 85vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+        font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+        animation: easSlideUp .25s cubic-bezier(.2, .9, .3, 1);
+    }
+    @keyframes easSlideUp {
+        from { transform: translateY(16px); opacity: 0; }
+        to   { transform: translateY(0); opacity: 1; }
+    }
+
+    .app-info-hero {
+        position: relative;
+        flex: 0 0 auto;
+        padding: 30px 34px 26px;
+        background:
+            radial-gradient(120% 100% at 0% 0%, #06b6d4 0%, transparent 55%),
+            radial-gradient(120% 100% at 100% 0%, #22d3ee 0%, transparent 60%),
+            linear-gradient(135deg, #0c1e3a 0%, #0f2b5c 100%);
+        color: #fff;
+        overflow: hidden;
+    }
+    .app-info-hero::after {
+        content: '';
+        position: absolute;
+        right: -30px; top: -30px;
+        width: 220px; height: 220px;
+        background: radial-gradient(circle, rgba(34,211,238,.22), transparent 65%);
+        pointer-events: none;
+    }
+    .app-info-hero .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 10px;
+        border-radius: 999px;
+        background: rgba(34, 211, 238, 0.18);
+        border: 1px solid rgba(34, 211, 238, 0.4);
+        color: #a5f3fc;
+        font-size: 10.5px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    .app-info-hero h2 {
+        margin: 10px 0 6px;
+        font-size: 26px;
+        font-weight: 800;
+        letter-spacing: -.4px;
+        display: flex; align-items: center; gap: 10px;
+    }
+    .app-info-hero .sub {
+        margin: 0;
+        font-size: 14px;
+        color: #bae6fd;
+        line-height: 1.5;
+        max-width: 58ch;
+    }
+    .app-info-hero .hero-icon {
+        font-size: 30px;
+        filter: drop-shadow(0 2px 6px rgba(0,0,0,.3));
+    }
+
+    .app-info-body {
+        padding: 24px 28px 28px 34px;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: scroll;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(8, 145, 178, 0.55) #f1f5f9;
+        scrollbar-gutter: stable;
+    }
+    .app-info-body::-webkit-scrollbar { width: 10px; }
+    .app-info-body::-webkit-scrollbar-track {
+        background: #f1f5f9;
+        border-radius: 6px;
+        margin: 8px 0;
+    }
+    .app-info-body::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg, #06b6d4, #0891b2);
+        border-radius: 6px;
+    }
+    .app-info-body::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(180deg, #0891b2, #0e7490);
+    }
+    .app-info-body .section-title {
+        margin: 22px 0 12px;
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 1.2px;
+        color: #0891b2;
+        display: flex; align-items: center; gap: 8px;
+    }
+    .app-info-body .section-title:first-child { margin-top: 0; }
+    .app-info-body .section-title .bar {
+        width: 24px; height: 2px;
+        background: linear-gradient(90deg, #06b6d4, #0891b2);
+        border-radius: 2px;
+    }
+    .app-info-body .lead {
+        margin: 0;
+        font-size: 14.5px;
+        line-height: 1.65;
+        color: #334155;
+    }
+
+    .vendor-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .vendor-chip {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 6px 11px;
+        border-radius: 999px;
+        font-size: 12.5px;
+        font-weight: 600;
+        border: 1px solid;
+    }
+    .vendor-chip code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11.5px; padding: 0 2px; }
+    .chip-google  { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+    .chip-aws     { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
+    .chip-github  { background: #f1f5f9; color: #1e293b; border-color: #cbd5e1; }
+    .chip-stripe  { background: #faf5ff; color: #6d28d9; border-color: #ddd6fe; }
+    .chip-sendgrid{ background: #ecfeff; color: #0e7490; border-color: #a5f3fc; }
+    .chip-slack   { background: #fdf2f8; color: #a21caf; border-color: #f5d0fe; }
+
+    .flow-steps {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        counter-reset: step;
+    }
+    .flow-step {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 14px 12px 12px;
+        position: relative;
+    }
+    .flow-step .num {
+        position: absolute;
+        top: -10px; left: 12px;
+        width: 24px; height: 24px;
+        display: inline-flex; align-items: center; justify-content: center;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #0891b2, #0ea5e9);
+        color: #fff;
+        font-size: 12px;
+        font-weight: 800;
+        box-shadow: 0 3px 8px rgba(8,145,178,.35);
+    }
+    .flow-step .step-icon { font-size: 18px; display: block; margin-bottom: 4px; margin-top: 2px; }
+    .flow-step .step-label { font-size: 12.5px; font-weight: 700; color: #0f172a; line-height: 1.35; }
+    .flow-step .step-sub   { font-size: 11.5px; color: #64748b; line-height: 1.4; margin-top: 2px; }
+
+    .when-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+    }
+    .when-card {
+        background: linear-gradient(135deg, #ecfeff 0%, #f0fdfa 100%);
+        border: 1px solid #a5f3fc;
+        border-radius: 10px;
+        padding: 12px 14px;
+    }
+    .when-card .when-ico { font-size: 20px; }
+    .when-card .when-ttl { font-size: 13px; font-weight: 700; color: #0f172a; margin: 4px 0 2px; }
+    .when-card .when-sub { font-size: 11.5px; color: #475569; line-height: 1.4; }
+
+    .app-info-close {
+        position: absolute;
+        top: 14px; right: 16px;
+        width: 32px; height: 32px;
+        background: rgba(255,255,255,.12);
+        border: 1px solid rgba(255,255,255,.25);
+        border-radius: 8px;
+        font-size: 18px;
+        color: #fff;
+        cursor: pointer;
+        line-height: 1;
+        display: inline-flex; align-items: center; justify-content: center;
+        transition: background .15s, transform .15s;
+        z-index: 2;
+    }
+    .app-info-close:hover { background: rgba(255,255,255,.22); transform: rotate(90deg); }
+
+    @media (max-width: 600px) {
+        .flow-steps, .when-grid { grid-template-columns: 1fr 1fr; }
+        .app-info-hero { padding: 22px 20px 20px; }
+        .app-info-body { padding: 18px 20px 22px; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="eas-frame-wrap">
+    <iframe src="/exposed-api-scanner-app/"
+            title="Exposed API Scanner"
+            allow="clipboard-write"
+            referrerpolicy="no-referrer-when-downgrade"></iframe>
+</div>
+
+<a id="eas-version-badge"
+   class="eas-version-badge loading"
+   href="/exposed-api-scanner/deploy"
+   title="Go to deploy portal">
+    <span class="dot"></span>
+    <span class="vid">loading…</span>
+</a>
+
+<button id="appInfoBtn" class="app-info-btn" type="button" aria-label="How does this work?">
+    <span class="pulse"></span>
+    <span>How does this work?</span>
+</button>
+
+<div id="appInfoModal" class="app-info-modal" hidden role="dialog" aria-modal="true" aria-labelledby="appInfoTitle">
+    <div class="app-info-card" role="document">
+        <button id="appInfoClose" class="app-info-close" type="button" aria-label="Close">×</button>
+
+        <div class="app-info-hero">
+            <span class="eyebrow">🛡️ White-hat scanner</span>
+            <h2 id="appInfoTitle"><span class="hero-icon">🔍</span> Exposed API Scanner</h2>
+            <p class="sub">Finds API keys accidentally committed into client-side JavaScript before someone else does — one of the top causes of credential leakage on public web properties.</p>
+        </div>
+
+        <div class="app-info-body">
+
+            <div class="section-title"><span class="bar"></span>What it catches</div>
+            <div class="vendor-chips">
+                <span class="vendor-chip chip-google">🌐 Google <code>AIza*</code></span>
+                <span class="vendor-chip chip-aws">☁️ AWS <code>AKIA*</code></span>
+                <span class="vendor-chip chip-github">🐙 GitHub <code>ghp_*</code></span>
+                <span class="vendor-chip chip-stripe">💳 Stripe <code>sk_live_*</code></span>
+                <span class="vendor-chip chip-sendgrid">✉️ SendGrid <code>SG.*</code></span>
+                <span class="vendor-chip chip-slack">💬 Slack <code>xoxb-*</code></span>
+            </div>
+
+            <div class="section-title"><span class="bar"></span>How to use it</div>
+            <div class="flow-steps">
+                <div class="flow-step">
+                    <span class="num">1</span>
+                    <span class="step-icon">📝</span>
+                    <div class="step-label">Paste URLs</div>
+                    <div class="step-sub">One per line</div>
+                </div>
+                <div class="flow-step">
+                    <span class="num">2</span>
+                    <span class="step-icon">🚀</span>
+                    <div class="step-label">Run scan</div>
+                    <div class="step-sub">Optional key verification</div>
+                </div>
+                <div class="flow-step">
+                    <span class="num">3</span>
+                    <span class="step-icon">📊</span>
+                    <div class="step-label">Review findings</div>
+                    <div class="step-sub">Grouped by severity</div>
+                </div>
+                <div class="flow-step">
+                    <span class="num">4</span>
+                    <span class="step-icon">📤</span>
+                    <div class="step-label">Export</div>
+                    <div class="step-sub">CSV or JSON</div>
+                </div>
+            </div>
+
+            <div class="section-title"><span class="bar"></span>When to run it</div>
+            <div class="when-grid">
+                <div class="when-card">
+                    <div class="when-ico">🚢</div>
+                    <div class="when-ttl">Pre-launch</div>
+                    <div class="when-sub">Before a new public site goes live.</div>
+                </div>
+                <div class="when-card">
+                    <div class="when-ico">🔄</div>
+                    <div class="when-ttl">Routine audits</div>
+                    <div class="when-sub">Across marketing, docs, and customer-facing assets.</div>
+                </div>
+                <div class="when-card">
+                    <div class="when-ico">🚨</div>
+                    <div class="when-ttl">On suspicion</div>
+                    <div class="when-sub">Whenever someone flags a possible leak.</div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const badge = document.getElementById('eas-version-badge');
+    if (!badge) return;
+    const vid = badge.querySelector('.vid');
+
+    function fmtRelTime(iso) {
+        if (!iso) return '';
+        const t = new Date(iso).getTime();
+        if (!t) return '';
+        const delta = Math.max(0, (Date.now() - t) / 1000);
+        if (delta < 90) return 'just now';
+        if (delta < 3600) return Math.floor(delta / 60) + 'm ago';
+        if (delta < 86400) return Math.floor(delta / 3600) + 'h ago';
+        return Math.floor(delta / 86400) + 'd ago';
+    }
+
+    fetch('/api/exposed-api-scanner/active-version')
+        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+        .then(data => {
+            badge.classList.remove('loading');
+            if (!data.version_id) {
+                badge.classList.add('unknown');
+                vid.textContent = 'version unknown';
+                badge.title = 'No .deploy_meta.json — pre-portal deployment. Click to open deploy portal.';
+                return;
+            }
+            const rel = fmtRelTime(data.activated_at);
+            vid.innerHTML = data.version_id +
+                (rel ? ' <span class="sub">· ' + rel + '</span>' : '');
+            const full = [
+                'Version: ' + data.version_id,
+                data.sha256_short ? 'SHA: ' + data.sha256_short : '',
+                data.uploaded_at ? 'Uploaded: ' + new Date(data.uploaded_at).toLocaleString() : '',
+                data.activated_at ? 'Activated: ' + new Date(data.activated_at).toLocaleString() : '',
+                '',
+                'Click to open the deploy portal.',
+            ].filter(Boolean).join('\n');
+            badge.title = full;
+        })
+        .catch(() => {
+            badge.classList.remove('loading');
+            badge.classList.add('unknown');
+            vid.textContent = 'version unavailable';
+        });
+
+    const modal = document.getElementById('appInfoModal');
+    const openBtn = document.getElementById('appInfoBtn');
+    const closeBtn = document.getElementById('appInfoClose');
+    function openModal() { modal.hidden = false; }
+    function closeModal() { modal.hidden = true; }
+    openBtn.addEventListener('click', openModal);
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.hidden) closeModal(); });
+})();
+</script>
+{% endblock %}

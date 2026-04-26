@@ -1,0 +1,127 @@
+{% extends 'base_layout.html' %}
+
+{% block page_title_plain %}QRadar Explorer{% endblock %}
+
+{% set page_title_text = 'QRadar Explorer' %}
+{% set page_title_left_icon = '📡' %}
+{% set page_title_right_icon = '🔍' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/qradar.css') }}">
+{% endblock %}
+
+{% block body_classes %}qradar-page{% endblock %}
+
+{% block content %}
+<div class="qr-container">
+
+    <!-- Controls bar -->
+    <div class="qr-controls">
+        <div class="qr-control-group">
+            <label for="statusFilter">Status</label>
+            <select id="statusFilter">
+                <option value="OPEN" selected>Open</option>
+                <option value="CLOSED">Closed</option>
+                <option value="HIDDEN">Hidden</option>
+                <option value="ALL">All</option>
+            </select>
+        </div>
+        <div class="qr-control-group">
+            <label for="timeFilter">Time</label>
+            <select id="timeFilter">
+                <option value="24" selected>Last 24h</option>
+                <option value="48">Last 48h</option>
+                <option value="168">Last 7 days</option>
+                <option value="0">All time</option>
+            </select>
+        </div>
+        <div class="qr-control-group">
+            <label for="limitFilter">Limit</label>
+            <select id="limitFilter">
+                <option value="25">25</option>
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+                <option value="200">200</option>
+            </select>
+        </div>
+        <button id="fetchBtn" class="qr-btn qr-btn-primary">Fetch Offenses</button>
+        <div class="qr-control-spacer"></div>
+        <div class="qr-status" id="statusIndicator">
+            <span class="qr-dot"></span>
+            <span id="statusText">Ready</span>
+        </div>
+    </div>
+
+    <!-- Summary stats -->
+    <div class="qr-stats" id="statsRow" style="display:none;">
+        <div class="qr-stat-card total">
+            <div class="qr-stat-value" id="statTotal">0</div>
+            <div class="qr-stat-label">Total</div>
+        </div>
+        <div class="qr-stat-card high">
+            <div class="qr-stat-value" id="statHigh">0</div>
+            <div class="qr-stat-label">High (7-10)</div>
+        </div>
+        <div class="qr-stat-card medium">
+            <div class="qr-stat-value" id="statMed">0</div>
+            <div class="qr-stat-label">Medium (4-6)</div>
+        </div>
+        <div class="qr-stat-card low">
+            <div class="qr-stat-value" id="statLow">0</div>
+            <div class="qr-stat-label">Low (1-3)</div>
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div id="loadingState" class="qr-loading" style="display:none;">
+        <div class="qr-spinner"></div>
+        <div>Fetching offenses from QRadar...</div>
+    </div>
+
+    <!-- Error -->
+    <div id="errorState" class="qr-error" style="display:none;"></div>
+
+    <!-- Empty state -->
+    <div id="emptyState" class="qr-empty" style="display:none;">
+        No offenses found for the selected filters.
+    </div>
+
+    <!-- Offenses table -->
+    <div id="tableWrapper" class="qr-table-wrapper" style="display:none;">
+        <table class="qr-table">
+            <thead>
+                <tr>
+                    <th class="col-id">ID</th>
+                    <th class="col-sev">Sev</th>
+                    <th class="col-mag">Mag</th>
+                    <th class="col-desc">Description</th>
+                    <th class="col-source">Source</th>
+                    <th class="col-events">Events</th>
+                    <th class="col-categories">Categories</th>
+                    <th class="col-status">Status</th>
+                    <th class="col-time">Created</th>
+                </tr>
+            </thead>
+            <tbody id="offenseTableBody"></tbody>
+        </table>
+    </div>
+
+    <!-- Detail slide-out panel -->
+    <div id="detailPanel" class="qr-detail-panel">
+        <div class="qr-detail-header">
+            <h2 id="detailTitle">Offense #---</h2>
+            <button id="detailClose" class="qr-detail-close">&times;</button>
+        </div>
+        <div id="detailBody" class="qr-detail-body">
+            <div class="qr-spinner"></div>
+            <div>Loading offense details...</div>
+        </div>
+    </div>
+    <div id="detailOverlay" class="qr-detail-overlay"></div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/qradar.js') }}"></script>
+{% endblock %}

@@ -58,7 +58,8 @@ def api_xsoar_incidents():
         incidents = xsoar_dashboard_handler.get_xsoar_incidents(prod_ticket_handler, query, period, size)
         return jsonify({'success': True, 'incidents': incidents})
     except Exception as exc:
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        logger.error(f"Error fetching XSOAR incidents: {exc}", exc_info=True)
+        return jsonify({'success': False, 'error': 'An internal error occurred'}), 500
 
 
 @xsoar_bp.route('/api/xsoar/incident/<incident_id>')
@@ -69,7 +70,8 @@ def api_xsoar_incident_detail(incident_id):
         incident, entries = xsoar_dashboard_handler.get_xsoar_incident_detail(prod_ticket_handler, incident_id)
         return jsonify({'success': True, 'incident': incident, 'entries': entries})
     except Exception as exc:
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        logger.error(f"Error fetching XSOAR incident detail: {exc}", exc_info=True)
+        return jsonify({'success': False, 'error': 'An internal error occurred'}), 500
 
 
 @xsoar_bp.route('/xsoar/incident/<incident_id>')
@@ -80,7 +82,8 @@ def xsoar_incident_detail(incident_id):
         incident, entries = xsoar_dashboard_handler.get_xsoar_incident_detail(prod_ticket_handler, incident_id)
         return render_template('xsoar_incident_detail.html', incident=incident, entries=entries)
     except Exception as exc:
-        return f"Error loading incident {incident_id}: {str(exc)}", 500
+        logger.error(f"Error loading incident {incident_id}: {exc}", exc_info=True)
+        return "An internal error occurred", 500
 
 
 @xsoar_bp.route('/api/xsoar/incident/<incident_id>/entries')
@@ -91,7 +94,8 @@ def api_xsoar_incident_entries(incident_id):
         entries = xsoar_dashboard_handler.get_xsoar_incident_entries(prod_ticket_handler, incident_id)
         return jsonify({'success': True, 'entries': entries})
     except Exception as exc:
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        logger.error(f"Error fetching XSOAR incident entries: {exc}", exc_info=True)
+        return jsonify({'success': False, 'error': 'An internal error occurred'}), 500
 
 
 @xsoar_bp.route('/api/xsoar/incident/<incident_id>/link', methods=['POST'])
@@ -103,7 +107,8 @@ def api_xsoar_link_incident(incident_id):
         result = xsoar_dashboard_handler.link_xsoar_incidents(prod_ticket_handler, incident_id, link_incident_id)
         return jsonify({'success': True, 'result': result})
     except Exception as exc:
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        logger.error(f"Error linking XSOAR incidents: {exc}", exc_info=True)
+        return jsonify({'success': False, 'error': 'An internal error occurred'}), 500
 
 
 @xsoar_bp.route('/api/xsoar/incident/<incident_id>/participant', methods=['POST'])
@@ -115,4 +120,5 @@ def api_xsoar_add_participant(incident_id):
         result = xsoar_dashboard_handler.add_participant_to_incident(prod_ticket_handler, incident_id, email)
         return jsonify({'success': True, 'result': result})
     except Exception as exc:
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        logger.error(f"Error adding participant to incident: {exc}", exc_info=True)
+        return jsonify({'success': False, 'error': 'An internal error occurred'}), 500

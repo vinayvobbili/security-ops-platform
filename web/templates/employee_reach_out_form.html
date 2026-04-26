@@ -20,7 +20,7 @@
         <div class="header">
             <div class="header-content">
                 <div class="logo-section">
-                    <img alt="{{ config.company_name }}" src="/static/images/pokedex.png" style="background: transparent;"/>
+                    <img alt="{{ config.company_name }}" src="/static/images/Company Logo.png" style="background: transparent;"/>
                 </div>
                 <div class="header-text">
                     <h1>Verify Command Execution</h1>
@@ -109,5 +109,6 @@
 </div>
 
 <script src="/static/js/employee_reach_out.js"></script>
+{% if config.watermark_author %}<div style="position:fixed;bottom:8px;right:16px;font-size:11px;color:rgba(0,0,0,0.25);font-style:italic;pointer-events:none;z-index:9999;">By {{ config.watermark_author }}</div>{% endif %}
 </body>
 </html>

@@ -1,25 +1,14 @@
 [Unit]
-Description=the security assistant bot SOC Assistant Bot
+Description=IR the security assistant bot Bot
 After=network.target
-StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-Restart=always
-RestartSec=10
-User=vinay
-WorkingDirectory=/home/vinay/pub/IR
-ExecStart=/home/vinay/pub/IR/.venv/bin/python /home/vinay/pub/IR/webex_bots/pokedex.py
-StandardOutput=append:/home/vinay/pub/IR/logs/pokedex.log
-StandardError=append:/home/vinay/pub/IR/logs/pokedex.log
-
-# Resource limits - the security assistant bot uses LLM so needs more memory
-MemoryMax=4G
-CPUQuota=200%
-
-# Restart policy
-RestartSec=10
-StartLimitBurst=5
+WorkingDirectory=/home/vinay/security-ops-platform
+ExecStart=/home/vinay/security-ops-platform/.venv/bin/python3 webex_bots/pokedex.py
+Restart=on-failure
+RestartSec=30
+Environment=PYTHONUNBUFFERED=1
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target

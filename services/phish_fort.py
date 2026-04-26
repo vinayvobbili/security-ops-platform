@@ -36,12 +36,14 @@ else:
     logger.warning("PhishFort API key is empty or None!")
 WEBEX_MESSAGE_BATCH_SIZE = 7000
 
-# List of incident statuses to fetch
+# Guard to send auth failure notification only once per process lifetime
+_auth_failure_notified = False
+
+# List of incident statuses to fetch (API uses machine-readable status values)
 INCIDENT_STATUSES = [
-    "Case Building",
-    "Pending Review",
-    "Takedown Failed",
-    "Takedown Pending",
+    "takedown_attempt_failed",
+    "takedown_in_progress",
+    "action_required",
 ]
 
 # Define column order for the final display
@@ -63,7 +65,7 @@ DISPLAY_COLUMNS = [
     "subject",
     "incidentType",
     "timestamp",
-    "statusVerbose",
+    "status",
     "incidentClass",
     "reportedBy"
 ]
@@ -76,21 +78,20 @@ COLUMN_MAPPINGS = {
     "subject": "Subject",
     "incidentType": "Type",
     "timestamp": "Submitted On",
-    "statusVerbose": "Status",
+    "status": "Status",
     "incidentClass": "Class",
     "reportedBy": "Reporter",
 }
 
-# Status display with visual indicators
+# Status display with visual indicators (keyed by API status values)
 STATUS_ICONS = {
-    "Takedown Failed": "🔴",
-    "Takedown Pending": "🟡",
-    "Pending Review": "🟢",
-    "Case Building": "🔵",
+    "takedown_attempt_failed": "🔴",
+    "takedown_in_progress": "🟡",
+    "action_required": "🟢",
 }
 
 # Priority order for statuses (most urgent first)
-STATUS_PRIORITY = ["Takedown Failed", "Takedown Pending", "Pending Review", "Case Building"]
+STATUS_PRIORITY = ["takedown_attempt_failed", "takedown_in_progress", "action_required"]
 
 
 def contact_phishfort_api(status: str) -> Optional[Dict]:
@@ -104,7 +105,7 @@ def contact_phishfort_api(status: str) -> Optional[Dict]:
         API response as dictionary or None if request failed
     """
     try:
-        payload = {'statusVerbose': status}
+        payload = {'status': status}
         headers = {
             'accept': 'application/json',
             'x-api-key': PHISHFORT_API_KEY
@@ -130,6 +131,22 @@ def contact_phishfort_api(status: str) -> Optional[Dict]:
         logger.error(f"HTTP error contacting PhishFort API: {e}")
         logger.error(f"Response status code: {e.response.status_code}")
         logger.error(f"Response content: {e.response.text}")
+        global _auth_failure_notified
+        if e.response.status_code == 401 and not _auth_failure_notified:
+            _auth_failure_notified = True
+            try:
+                dev_room = CONFIG.webex_room_id_dev_test_space
+                if dev_room:
+                    webex_api.messages.create(
+                        roomId=dev_room,
+                        markdown="⚠️ **PhishFort API key rejected (401 Unauthorized)**\n\n"
+                                 "Weekly PhishFort incident report cannot run. "
+                                 "The API key may have expired or been rotated.\n\n"
+                                 f"_Key in use: `{PHISHFORT_API_KEY[:4]}...{PHISHFORT_API_KEY[-4:]}`_"
+                    )
+                    logger.warning("Sent PhishFort auth failure notification to dev test space")
+            except Exception as notify_err:
+                logger.error(f"Failed to send PhishFort auth failure notification: {notify_err}")
         return None
     except RequestException as e:
         logger.error(f"Error contacting PhishFort API for status '{status}': {e}")
@@ -411,12 +428,11 @@ def fetch_and_report_incidents(room_id: str = None) -> None:
     try:
         all_frames = []
 
-        # Fetch and process incidents for each status in priority order
-        for status in STATUS_PRIORITY:
-            if status in INCIDENT_STATUSES:
-                df = format_phishfort_data(status)
-                if df is not None and not df.empty:
-                    all_frames.append(df)
+        # Fetch and process incidents for each status
+        for status in INCIDENT_STATUSES:
+            df = format_phishfort_data(status)
+            if df is not None and not df.empty:
+                all_frames.append(df)
 
         # Handle the case where no incidents are found
         if not all_frames:

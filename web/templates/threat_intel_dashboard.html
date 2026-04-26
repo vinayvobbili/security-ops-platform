@@ -1,0 +1,2829 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'Threat Intel Dashboard' %}
+{% set page_title_left_icon = '🕵️' %}
+{% set page_title_right_icon = '🔍' %}
+{% block head_scripts %}
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+{% endblock %}
+{% block extra_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/threat_intel_dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/chat_widget.css') }}">
+{% endblock %}
+{% block content %}
+    <div class="tid-container">
+        <!-- Loading Overlay -->
+        <div id="tidLoadingOverlay" class="tid-loading-overlay">
+            <div class="tid-loading-spinner"></div>
+            <div class="tid-loading-text">Loading threat intelligence data...</div>
+        </div>
+
+        <!-- Syncing State (shown when DB has no data yet) -->
+        <div id="tidSyncing" style="display:none;">
+            <div class="tid-no-cache">
+                <div class="tid-no-cache-icon">🛡️</div>
+                <h2>Syncing Threat Intelligence Data...</h2>
+                <p>The database is being populated with tippers from AZDO.<br>
+                   This happens automatically on a daily schedule. You can also trigger it manually.</p>
+                <p style="margin-top:12px; font-size:0.85rem; color:var(--tid-text-secondary)">
+                    Data syncs automatically at 02:15 ET daily. Check back shortly.
+                </p>
+            </div>
+        </div>
+
+        <!-- Dashboard Content (hidden until data loaded) -->
+        <div id="tidDashboard" style="display:none;">
+            <!-- Date Filter + Sync Status -->
+            <div class="tid-refresh-bar">
+                <div class="tid-date-filter">
+                    <div class="tid-date-filter-label">📅 Filter</div>
+                    <div class="tid-date-presets">
+                        <button class="tid-preset-btn preset-30" data-days="30">🗓️ 30 Days</button>
+                        <button class="tid-preset-btn preset-90" data-days="90">📊 Last Quarter</button>
+                        <button class="tid-preset-btn preset-180" data-days="180">📆 6 Months</button>
+                        <button class="tid-preset-btn preset-all active" data-days="0">🌐 All Time</button>
+                    </div>
+                    <div class="tid-date-inputs">
+                        <input type="date" id="tidStartDate" class="tid-date-input" title="Start Date">
+                        <span class="tid-date-sep">→</span>
+                        <input type="date" id="tidEndDate" class="tid-date-input" title="End Date">
+                        <button id="tidClearDates" class="tid-clear-dates-btn" title="Clear date filter" style="display:none">✕ Clear</button>
+                    </div>
+                </div>
+                <span class="tid-cache-status" id="tidCacheStatus"></span>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="tid-summary-section">
+                <div class="tid-summary-card tippers">
+                    <div class="tid-card-icon">📋</div>
+                    <div class="tid-card-content">
+                        <div class="tid-card-value" id="totalTippers">-</div>
+                        <div class="tid-card-label">Total Tippers</div>
+                    </div>
+                </div>
+                <div class="tid-summary-card actors">
+                    <div class="tid-card-icon">👤</div>
+                    <div class="tid-card-content">
+                        <div class="tid-card-value" id="uniqueActors">-</div>
+                        <div class="tid-card-label">Unique Threat Actors</div>
+                    </div>
+                </div>
+                <div class="tid-summary-card iocs">
+                    <div class="tid-card-icon">🎯</div>
+                    <div class="tid-card-content">
+                        <div class="tid-card-value" id="totalIocs">-</div>
+                        <div class="tid-card-label">Total IOCs Extracted</div>
+                    </div>
+                </div>
+                <div class="tid-summary-card mitre">
+                    <div class="tid-card-icon">⚔️</div>
+                    <div class="tid-card-content">
+                        <div class="tid-card-value" id="mitreCount">-</div>
+                        <div class="tid-card-label">MITRE ATT&CK Techniques</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="tid-charts-section">
+                <!-- Row 1: Tippers Over Time (full width) -->
+                <div class="tid-chart-row">
+                    <div class="tid-chart-card full">
+                        <h3 class="tid-chart-title">📈 Tippers Over Time (by Priority)</h3>
+                        <div id="tippersOverTimeChart" class="tid-chart-container-tall"></div>
+                    </div>
+                </div>
+
+                <!-- Row 2: Top Actors + IOC Breakdown -->
+                <div class="tid-chart-row">
+                    <div class="tid-chart-card half">
+                        <h3 class="tid-chart-title">🏴 Top 15 Threat Actors</h3>
+                        <div id="topActorsChart" class="tid-chart-container-tall"></div>
+                    </div>
+                    <div class="tid-chart-card half">
+                        <h3 class="tid-chart-title">🔬 IOC Type Breakdown</h3>
+                        <div id="iocTypeChart" class="tid-chart-container-tall"></div>
+                    </div>
+                </div>
+
+                <!-- Row 3: MITRE Techniques + Regions -->
+                <div class="tid-chart-row">
+                    <div class="tid-chart-card half">
+                        <h3 class="tid-chart-title">⚔️ Top 15 MITRE ATT&CK Techniques</h3>
+                        <div id="mitreChart" class="tid-chart-container-tall"></div>
+                    </div>
+                    <div class="tid-chart-card half">
+                        <h3 class="tid-chart-title">🌍 Threat Actor Attribution by Region</h3>
+                        <div id="regionChart" class="tid-chart-container-tall"></div>
+                    </div>
+                </div>
+
+                <!-- Row 4: Priority + Action Distribution -->
+                <div class="tid-chart-row">
+                    <div class="tid-chart-card half">
+                        <h3 class="tid-chart-title">🚨 Priority Distribution</h3>
+                        <div id="priorityChart" class="tid-chart-container"></div>
+                    </div>
+                    <div class="tid-chart-card half">
+                        <h3 class="tid-chart-title">⚡ Action Type Distribution</h3>
+                        <div id="actionChart" class="tid-chart-container"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tables Section — Tabbed -->
+            <div class="tid-tables-section">
+                <div class="tid-table-card">
+                    <!-- Date filter for tables section -->
+                    <div class="tid-tables-date-bar">
+                        <div class="tid-tables-date-label">🎯 Date Range</div>
+                        <div class="tid-date-presets tid-tables-presets">
+                            <button class="tid-preset-btn tid-tables-preset preset-30" data-days="30">🗓️ 30 Days</button>
+                            <button class="tid-preset-btn tid-tables-preset preset-90" data-days="90">📊 Last Quarter</button>
+                            <button class="tid-preset-btn tid-tables-preset preset-180" data-days="180">📆 6 Months</button>
+                            <button class="tid-preset-btn tid-tables-preset preset-all active" data-days="0">🌐 All Time</button>
+                        </div>
+                        <div class="tid-date-inputs">
+                            <input type="date" id="tidStartDate2" class="tid-date-input" title="Start Date">
+                            <span class="tid-date-sep">→</span>
+                            <input type="date" id="tidEndDate2" class="tid-date-input" title="End Date">
+                            <button id="tidClearDates2" class="tid-clear-dates-btn" title="Clear date filter" style="display:none">✕ Clear</button>
+                        </div>
+                        <span class="tid-tables-date-active" id="tidTablesDateActive"></span>
+                    </div>
+                    <div class="tid-tab-buttons">
+                        <button class="tid-tab-button active" data-tab="domains">🌐 Domains</button>
+                        <button class="tid-tab-button" data-tab="ips">📡 IPs</button>
+                        <button class="tid-tab-button" data-tab="hashes">#️⃣ Hashes</button>
+                        <button class="tid-tab-button" data-tab="cves">🔓 CVEs</button>
+                        <button class="tid-tab-button" data-tab="malware">🦠 Malware</button>
+                        <button class="tid-tab-button" data-tab="actors">🏴 Actors</button>
+                        <button class="tid-tab-button" data-tab="ttps">⚔️ TTPs</button>
+                        <button class="tid-tab-button" data-tab="redteam">🔴 Red Team</button>
+                        <button class="tid-tab-button" data-tab="attackMatrix">🗺️ ATT&CK Matrix</button>
+                        <button class="tid-tab-button" data-tab="atlasMatrix">🤖 ATLAS Matrix</button>
+                    </div>
+
+                    <!-- Domains Tab -->
+                    <div id="domainsTab" class="tid-tab-pane active">
+                        <div class="tid-search-bar">
+                            <div class="tid-search-input-wrapper">
+                                <span class="tid-search-icon">&#128269;</span>
+                                <input type="text" class="tid-search-input" id="searchDomains" placeholder="Search all domains..." data-tab="domains">
+                                <button type="button" class="tid-clear-search-btn" data-tab="domains" title="Clear search">&times;</button>
+                            </div>
+                            <span class="tid-search-count" id="searchDomainsCount"></span>
+                        </div>
+                        <table class="tid-table">
+                            <colgroup>
+                                <col style="width: 6%;"><col style="width: 38%;"><col style="width: 16%;"><col style="width: 20%;"><col style="width: 20%;">
+                            </colgroup>
+                            <thead><tr>
+                                <th class="center-cell">Rank</th><th>Value</th><th class="center-cell">Occurrences</th><th class="center-cell">VT Verdict</th><th class="center-cell">RF Risk</th>
+                            </tr></thead>
+                            <tbody id="topDomainsBody"><tr><td colspan="5" class="tid-empty-cell">Loading...</td></tr></tbody>
+                        </table>
+                        <div class="tid-table-footer">
+                            <button class="tid-download-btn" onclick="downloadTableExcel('domains')">Download Excel</button>
+                        </div>
+                    </div>
+
+                    <!-- IPs Tab -->
+                    <div id="ipsTab" class="tid-tab-pane">
+                        <div class="tid-search-bar">
+                            <div class="tid-search-input-wrapper">
+                                <span class="tid-search-icon">&#128269;</span>
+                                <input type="text" class="tid-search-input" id="searchIps" placeholder="Search all IPs..." data-tab="ips">
+                                <button type="button" class="tid-clear-search-btn" data-tab="ips" title="Clear search">&times;</button>
+                            </div>
+                            <span class="tid-search-count" id="searchIpsCount"></span>
+                        </div>
+                        <table class="tid-table">
+                            <colgroup>
+                                <col style="width: 6%;"><col style="width: 38%;"><col style="width: 16%;"><col style="width: 20%;"><col style="width: 20%;">
+                            </colgroup>
+                            <thead><tr>
+                                <th class="center-cell">Rank</th><th>Value</th><th class="center-cell">Occurrences</th><th class="center-cell">VT Verdict</th><th class="center-cell">RF Risk</th>
+                            </tr></thead>
+                            <tbody id="topIpsBody"><tr><td colspan="5" class="tid-empty-cell">Loading...</td></tr></tbody>
+                        </table>
+                        <div class="tid-table-footer">
+                            <button class="tid-download-btn" onclick="downloadTableExcel('ips')">Download Excel</button>
+                        </div>
+                    </div>
+
+                    <!-- Hashes Tab -->
+                    <div id="hashesTab" class="tid-tab-pane">
+                        <div class="tid-search-bar">
+                            <div class="tid-search-input-wrapper">
+                                <span class="tid-search-icon">&#128269;</span>
+                                <input type="text" class="tid-search-input" id="searchHashes" placeholder="Search all hashes..." data-tab="hashes">
+                                <button type="button" class="tid-clear-search-btn" data-tab="hashes" title="Clear search">&times;</button>
+                            </div>
+                            <span class="tid-search-count" id="searchHashesCount"></span>
+                        </div>
+                        <table class="tid-table tid-table-hashes">
+                            <colgroup>
+                                <col style="width: 5%;"><col style="width: 50%;"><col style="width: 15%;"><col style="width: 15%;"><col style="width: 15%;">
+                            </colgroup>
+                            <thead><tr>
+                                <th class="center-cell">Rank</th><th>Value</th><th class="center-cell">Occurrences</th><th class="center-cell">VT Verdict</th><th class="center-cell">RF Risk</th>
+                            </tr></thead>
+                            <tbody id="topHashesBody"><tr><td colspan="5" class="tid-empty-cell">Loading...</td></tr></tbody>
+                        </table>
+                        <div class="tid-table-footer">
+                            <button class="tid-download-btn" onclick="downloadTableExcel('hashes')">Download Excel</button>
+                        </div>
+                    </div>
+
+                    <!-- CVEs Tab -->
+                    <div id="cvesTab" class="tid-tab-pane">
+                        <div class="tid-search-bar">
+                            <div class="tid-search-input-wrapper">
+                                <span class="tid-search-icon">&#128269;</span>
+                                <input type="text" class="tid-search-input" id="searchCves" placeholder="Search all CVEs..." data-tab="cves">
+                                <button type="button" class="tid-clear-search-btn" data-tab="cves" title="Clear search">&times;</button>
+                            </div>
+                            <span class="tid-search-count" id="searchCvesCount"></span>
+                        </div>
+                        <table class="tid-table">
+                            <colgroup>
+                                <col style="width: 6%;"><col style="width: 28%;"><col style="width: 16%;"><col style="width: 25%;"><col style="width: 25%;">
+                            </colgroup>
+                            <thead><tr>
+                                <th class="center-cell">Rank</th><th>CVE</th><th class="center-cell">Occurrences</th><th class="center-cell">First Seen</th><th class="center-cell">Last Seen</th>
+                            </tr></thead>
+                            <tbody id="recentCvesBody"><tr><td colspan="5" class="tid-empty-cell">Loading...</td></tr></tbody>
+                        </table>
+                        <div class="tid-table-footer">
+                            <button class="tid-download-btn" onclick="downloadTableExcel('cves')">Download Excel</button>
+                        </div>
+                    </div>
+
+                    <!-- Malware Tab -->
+                    <div id="malwareTab" class="tid-tab-pane">
+                        <div class="tid-search-bar">
+                            <div class="tid-search-input-wrapper">
+                                <span class="tid-search-icon">&#128269;</span>
+                                <input type="text" class="tid-search-input" id="searchMalware" placeholder="Search all malware families..." data-tab="malware">
+                                <button type="button" class="tid-clear-search-btn" data-tab="malware" title="Clear search">&times;</button>
+                            </div>
+                            <span class="tid-search-count" id="searchMalwareCount"></span>
+                        </div>
+                        <table class="tid-table">
+                            <colgroup>
+                                <col style="width: 8%;"><col style="width: 72%;"><col style="width: 20%;">
+                            </colgroup>
+                            <thead><tr>
+                                <th class="center-cell">Rank</th><th>Name</th><th class="center-cell">Occurrences</th>
+                            </tr></thead>
+                            <tbody id="topMalwareBody"><tr><td colspan="3" class="tid-empty-cell">Loading...</td></tr></tbody>
+                        </table>
+                        <div class="tid-table-footer">
+                            <button class="tid-download-btn" onclick="downloadTableExcel('malware')">Download Excel</button>
+                        </div>
+                    </div>
+
+                    <!-- Actors Tab -->
+                    <div id="actorsTab" class="tid-tab-pane">
+                        <div class="tid-search-bar">
+                            <div class="tid-search-input-wrapper">
+                                <span class="tid-search-icon">&#128269;</span>
+                                <input type="text" class="tid-search-input" id="searchActors" placeholder="Search all actors..." data-tab="actors">
+                                <button type="button" class="tid-clear-search-btn" data-tab="actors" title="Clear search">&times;</button>
+                            </div>
+                            <span class="tid-search-count" id="searchActorsCount"></span>
+                        </div>
+                        <table class="tid-table">
+                            <colgroup>
+                                <col style="width: 7%;"><col style="width: 43%;"><col style="width: 25%;"><col style="width: 25%;">
+                            </colgroup>
+                            <thead><tr>
+                                <th class="center-cell">Rank</th><th>Actor</th><th class="center-cell">Region</th><th class="center-cell">Occurrences</th>
+                            </tr></thead>
+                            <tbody id="topActorsBody"><tr><td colspan="4" class="tid-empty-cell">Loading...</td></tr></tbody>
+                        </table>
+                        <div class="tid-table-footer">
+                            <button class="tid-download-btn" onclick="downloadTableExcel('actors')">Download Excel</button>
+                        </div>
+                    </div>
+
+                    <!-- TTPs Tab -->
+                    <div id="ttpsTab" class="tid-tab-pane">
+                        <div class="tid-search-bar">
+                            <div class="tid-search-input-wrapper">
+                                <span class="tid-search-icon">&#128269;</span>
+                                <input type="text" class="tid-search-input" id="searchTtps" placeholder="Search all TTPs..." data-tab="ttps">
+                                <button type="button" class="tid-clear-search-btn" data-tab="ttps" title="Clear search">&times;</button>
+                            </div>
+                            <span class="tid-search-count" id="searchTtpsCount"></span>
+                        </div>
+                        <table class="tid-table">
+                            <colgroup>
+                                <col style="width: 7%;"><col style="width: 43%;"><col style="width: 25%;"><col style="width: 25%;">
+                            </colgroup>
+                            <thead><tr>
+                                <th class="center-cell">Rank</th><th>Technique</th><th class="center-cell">Tipper Occurrences</th><th class="center-cell">Detection Rules</th>
+                            </tr></thead>
+                            <tbody id="topTtpsBody"><tr><td colspan="4" class="tid-empty-cell">Loading...</td></tr></tbody>
+                        </table>
+                        <div class="tid-table-footer">
+                            <button class="tid-download-btn" onclick="downloadTableExcel('ttps')">Download Excel</button>
+                        </div>
+                    </div>
+
+                    <!-- Red Team Tab -->
+                    <div id="redteamTab" class="tid-tab-pane">
+                        <div class="tid-search-bar">
+                            <div class="tid-search-input-wrapper">
+                                <span class="tid-search-icon">&#128269;</span>
+                                <input type="text" class="tid-search-input" id="searchRedteam" placeholder="Search red team TTPs..." data-tab="redteam">
+                                <button type="button" class="tid-clear-search-btn" data-tab="redteam" title="Clear search">&times;</button>
+                            </div>
+                            <span class="tid-search-count" id="searchRedteamCount"></span>
+                        </div>
+                        <table class="tid-table">
+                            <colgroup>
+                                <col style="width: 6%;"><col style="width: 20%;"><col style="width: 14%;"><col style="width: 20%;"><col style="width: 40%;">
+                            </colgroup>
+                            <thead><tr>
+                                <th class="center-cell">Rank</th><th>Technique ID</th><th class="center-cell">Submissions</th><th class="center-cell">Last Tested</th><th>Submitters</th>
+                            </tr></thead>
+                            <tbody id="topRedteamBody"><tr><td colspan="5" class="tid-empty-cell">Loading...</td></tr></tbody>
+                        </table>
+                        <div class="tid-table-footer">
+                            <button class="tid-download-btn" onclick="downloadTableExcel('redteam')">Download Excel</button>
+                        </div>
+                    </div>
+
+                    <!-- ATT&CK Matrix Tab -->
+                    <div id="attackMatrixTab" class="tid-tab-pane">
+                        <div class="tid-matrix-filters">
+                            <div class="tid-matrix-filter-group">
+                                <label>Threat Actor</label>
+                                <div class="tid-ss" id="matrixActorFilter" data-placeholder="All Actors">
+                                    <div class="tid-ss-chips"></div>
+                                    <input type="text" class="tid-ss-input" placeholder="All Actors" autocomplete="off" />
+                                    <span class="tid-ss-arrow"></span>
+                                    <div class="tid-ss-dropdown"></div>
+                                </div>
+                            </div>
+                            <div class="tid-matrix-filter-group">
+                                <label>Tipper ID</label>
+                                <div class="tid-ss" id="matrixTipperIdFilter" data-placeholder="All IDs">
+                                    <div class="tid-ss-chips"></div>
+                                    <input type="text" class="tid-ss-input" placeholder="All IDs" autocomplete="off" />
+                                    <span class="tid-ss-arrow"></span>
+                                    <div class="tid-ss-dropdown"></div>
+                                </div>
+                            </div>
+                            <div class="tid-matrix-filter-group">
+                                <label>Tipper Name</label>
+                                <div class="tid-ss" id="matrixTipperFilter" data-placeholder="All Tippers">
+                                    <div class="tid-ss-chips"></div>
+                                    <input type="text" class="tid-ss-input" placeholder="All Tippers" autocomplete="off" />
+                                    <span class="tid-ss-arrow"></span>
+                                    <div class="tid-ss-dropdown"></div>
+                                </div>
+                            </div>
+                            <button class="tid-matrix-clear-btn" id="matrixClearFilters" style="display:none">Clear Filters</button>
+                        </div>
+                        <div class="tid-attack-matrix-header">
+                            <div class="tid-legend">
+                                <span class="tid-legend-label">0</span>
+                                <div class="tid-legend-bar"></div>
+                                <span class="tid-legend-label" id="matrixMaxCount">-</span>
+                                <span class="tid-legend-text">occurrences</span>
+                            </div>
+                            <button class="tid-download-btn" onclick="exportNavigatorLayer()">Export Navigator Layer</button>
+                        </div>
+                        <div class="tid-matrix-scroll">
+                            <div class="tid-matrix-columns" id="attackMatrixGrid">
+                                <div class="tid-empty-cell" style="padding:40px;text-align:center;width:100%">Click this tab to load the ATT&CK matrix...</div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- ATLAS Matrix Tab -->
+                    <div id="atlasMatrixTab" class="tid-tab-pane">
+                        <div class="tid-atlas-banner">
+                            <div class="tid-atlas-banner-icon">🤖</div>
+                            <div class="tid-atlas-banner-text">
+                                <strong>MITRE ATLAS</strong> — Adversarial Threat Landscape for AI Systems<br>
+                                <span class="tid-atlas-banner-sub">Awaiting HiddenLayer integration. Once AI threat detections flow in, this matrix will light up with real counts — just like the ATT&amp;CK matrix.</span>
+                            </div>
+                            <a href="https://atlas.mitre.org/matrices/ATLAS" target="_blank" rel="noopener" class="tid-atlas-link-btn">
+                                Open ATLAS ↗
+                            </a>
+                        </div>
+                        <div class="tid-attack-matrix-header">
+                            <div class="tid-legend">
+                                <span class="tid-legend-label">0</span>
+                                <div class="tid-legend-bar atlas"></div>
+                                <span class="tid-legend-label" id="atlasMaxCount">0</span>
+                                <span class="tid-legend-text">detections</span>
+                            </div>
+                        </div>
+                        <div class="tid-matrix-scroll">
+                            <div class="tid-matrix-columns atlas" id="atlasMatrixGrid">
+                                <div class="tid-empty-cell" style="padding:40px;text-align:center;width:100%">Click this tab to load the ATLAS matrix...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Visual Insights Section -->
+            <div class="tid-visual-insights-section" id="tidVisualInsights">
+                <div class="tid-vi-header">
+                    <h2 class="tid-vi-title">Visual Insights
+                        <span class="tid-vi-info" tabindex="0">
+                            <span class="tid-vi-info-icon">i</span>
+                            <span class="tid-vi-info-tooltip">
+                                <strong>What is Visual Insights?</strong><br><br>
+                                The dashboard charts and tables show <em>counts</em> &mdash; top actors, top techniques, etc. Visual Insights shows the <em>connections between</em> those entities: which actors share techniques, how malware links actors to regions, and how intelligence flows from priority to action.<br><br>
+                                All diagrams respect the date filter at the top, support dark mode, and can be exported as SVG or PNG for reports.
+                            </span>
+                        </span>
+                    </h2>
+                    <p class="tid-vi-subtitle">Relationship diagrams across actors, techniques, malware, and intelligence priorities</p>
+                </div>
+                <div class="tid-vi-tabs">
+                    <button class="tid-vi-tab-btn active" data-vi-tab="actorTtpMap">Actor &rarr; TTP Map</button>
+                    <button class="tid-vi-tab-btn" data-vi-tab="intelPriorityFlow">Intelligence Priority Flow</button>
+                    <button class="tid-vi-tab-btn" data-vi-tab="malwareEcosystem">Malware Ecosystem</button>
+                </div>
+
+                <!-- Tab 1: Actor → TTP Map -->
+                <div class="tid-vi-pane active" id="actorTtpMapPane">
+                    <div class="tid-vi-description">Top 8 threat actors mapped to their most-used MITRE techniques. Techniques color-coded by detection rule coverage: <strong style="color:#16a34a">green</strong> = 5+ rules, <strong style="color:#ca8a04">yellow</strong> = 1-4 rules, <strong style="color:#ef4444">red</strong> = 0 rules.
+                        <span class="tid-vi-info" tabindex="0">
+                            <span class="tid-vi-info-icon">i</span>
+                            <span class="tid-vi-info-tooltip">
+                                <strong>How to read this diagram</strong><br><br>
+                                <strong>Actors</strong> (blue, left) connect to their most-used <strong>MITRE techniques</strong> (right). When two actors point to the same technique, that's a <em>convergence point</em> &mdash; one detection rule covers multiple actors.<br><br>
+                                <strong>Color coding</strong> comes from your Detection Rules page:<br>
+                                &bull; <strong style="color:#16a34a">Green</strong> = 5+ detection rules (strong coverage)<br>
+                                &bull; <strong style="color:#ca8a04">Yellow</strong> = 1-4 rules (moderate coverage)<br>
+                                &bull; <strong style="color:#ef4444">Red</strong> = 0 rules (detection gap)<br><br>
+                                Red nodes are your highest-priority gaps &mdash; techniques actively used by threat actors with no detection rules in place.
+                            </span>
+                        </span>
+                    </div>
+                    <div class="tid-vi-controls" id="actorTtpMapControls" style="display:none">
+                        <button class="tid-vi-export-btn" onclick="copyViSvg('actorTtpMapDiagram')">Copy SVG</button>
+                        <button class="tid-vi-export-btn" onclick="saveViPng('actorTtpMapDiagram','actor_ttp_map.png')">Save PNG</button>
+                    </div>
+                    <div class="tid-vi-body">
+                        <div class="tid-vi-placeholder" id="actorTtpMapPlaceholder">Loading Actor &rarr; TTP Map...</div>
+                        <div class="tid-vi-diagram" id="actorTtpMapDiagram"></div>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Intelligence Priority Flow -->
+                <div class="tid-vi-pane" id="intelPriorityFlowPane">
+                    <div class="tid-vi-description">Intelligence flow from priority levels through action types to top threat actors. Shows how critical intel maps to specific actors.
+                        <span class="tid-vi-info" tabindex="0">
+                            <span class="tid-vi-info-icon">i</span>
+                            <span class="tid-vi-info-tooltip">
+                                <strong>How to read this diagram</strong><br><br>
+                                Three columns flow left to right:<br>
+                                &bull; <strong>Priority levels</strong> (purple) &mdash; Critical, High, Medium, Low, Info<br>
+                                &bull; <strong>Action types</strong> (cyan) &mdash; Detection Opportunity, Hunt Opportunity, None Required<br>
+                                &bull; <strong>Top actors</strong> (blue) &mdash; the 8 most-mentioned threat actors<br><br>
+                                Look for patterns: are Critical tippers mostly flowing to "None Required"? That's a gap worth investigating. Counts on each node are accurate totals from the dashboard data.
+                            </span>
+                        </span>
+                    </div>
+                    <div class="tid-vi-controls" id="intelPriorityFlowControls" style="display:none">
+                        <button class="tid-vi-export-btn" onclick="copyViSvg('intelPriorityFlowDiagram')">Copy SVG</button>
+                        <button class="tid-vi-export-btn" onclick="saveViPng('intelPriorityFlowDiagram','intel_priority_flow.png')">Save PNG</button>
+                    </div>
+                    <div class="tid-vi-body">
+                        <div class="tid-vi-placeholder" id="intelPriorityFlowPlaceholder">Click this tab to load Intelligence Priority Flow...</div>
+                        <div class="tid-vi-diagram" id="intelPriorityFlowDiagram"></div>
+                    </div>
+                </div>
+
+                <!-- Tab 3: Malware Ecosystem -->
+                <div class="tid-vi-pane" id="malwareEcosystemPane">
+                    <div class="tid-vi-description">Top 10 malware families connected to associated threat actors and their regions. Shows tooling overlaps where multiple actors share malware.
+                        <span class="tid-vi-info" tabindex="0">
+                            <span class="tid-vi-info-icon">i</span>
+                            <span class="tid-vi-info-tooltip">
+                                <strong>How to read this diagram</strong><br><br>
+                                Three columns flow left to right:<br>
+                                &bull; <strong>Malware families</strong> (pink) &mdash; top 10 by mention count<br>
+                                &bull; <strong>Threat actors</strong> (blue) &mdash; actors associated with each malware<br>
+                                &bull; <strong>Regions</strong> (amber) &mdash; geographic attribution<br><br>
+                                When multiple actors connect to the same malware, that indicates <em>shared tooling</em> &mdash; possible shared infrastructure, supply chains, or a common developer.
+                            </span>
+                        </span>
+                    </div>
+                    <div class="tid-vi-controls" id="malwareEcosystemControls" style="display:none">
+                        <button class="tid-vi-export-btn" onclick="copyViSvg('malwareEcosystemDiagram')">Copy SVG</button>
+                        <button class="tid-vi-export-btn" onclick="saveViPng('malwareEcosystemDiagram','malware_ecosystem.png')">Save PNG</button>
+                    </div>
+                    <div class="tid-vi-body">
+                        <div class="tid-vi-placeholder" id="malwareEcosystemPlaceholder">Click this tab to load Malware Ecosystem...</div>
+                        <div class="tid-vi-diagram" id="malwareEcosystemDiagram"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="tid-footer">
+                <span>Data range: <span id="tidDateRange">-</span></span>
+                <span class="separator">|</span>
+                <span>Sources: AZDO Tippers + Entity Extraction</span>
+                <span class="separator">|</span>
+                <span>Enrichment: VirusTotal &amp; Recorded Future</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Drilldown Modal -->
+    <div class="tid-modal" id="tidDrilldownModal" style="display:none;" onclick="if(event.target===this)closeDrilldown()">
+        <div class="tid-modal-content">
+            <button class="tid-modal-close" onclick="closeDrilldown()" aria-label="Close">&times;</button>
+            <h3 class="tid-modal-title">
+                <span id="drilldownEntityType"></span>: <code id="drilldownEntityValue"></code>
+            </h3>
+            <div class="tid-modal-body">
+                <table class="tid-table tid-modal-table">
+                    <thead><tr>
+                        <th style="width:90px">AZDO #</th>
+                        <th>Title</th>
+                        <th style="width:110px" class="number-cell">Date</th>
+                    </tr></thead>
+                    <tbody id="drilldownTippersBody">
+                        <tr><td colspan="3" class="tid-empty-cell">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Coverage Modal (TTPs Rules drilldown) -->
+    <div class="tid-modal" id="tidCoverageModal" style="display:none;" onclick="if(event.target===this)closeCoverageModal()">
+        <div class="tid-modal-content">
+            <button class="tid-modal-close" onclick="closeCoverageModal()" aria-label="Close">&times;</button>
+            <h3 class="tid-modal-title">
+                Coverage: <code id="coverageTechId"></code>
+            </h3>
+            <div class="tid-modal-body" id="coverageModalBody">
+                <div class="tid-empty-cell">Loading...</div>
+            </div>
+        </div>
+    </div>
+{% include '_chat_widget.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="{{ url_for('static', filename='js/chat_widget.js') }}"></script>
+<script>
+// Re-render charts on theme change (common.js handles toggle + button)
+window.addEventListener('themechange', () => {
+    if (window.tidData) renderAllCharts(window.tidData);
+});
+
+// Chart colors
+function getColors() {
+    const isDark = document.body.classList.contains('dark-mode');
+    return {
+        bg: 'transparent',
+        text: isDark ? '#e2e8f0' : '#334155',
+        grid: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+        paper: 'transparent',
+        // Neon accent palette
+        neonCyan: isDark ? '#22d3ee' : '#0891b2',
+        neonPurple: isDark ? '#c084fc' : '#7c3aed',
+        neonPink: isDark ? '#f472b6' : '#db2777',
+        neonGreen: isDark ? '#4ade80' : '#16a34a',
+        neonOrange: isDark ? '#fb923c' : '#ea580c',
+        neonYellow: isDark ? '#fbbf24' : '#d97706',
+        neonRed: isDark ? '#f87171' : '#dc2626',
+        neonBlue: isDark ? '#60a5fa' : '#2563eb',
+        // Bar chart gradient
+        barGradient: isDark
+            ? ['#22d3ee', '#06b6d4', '#0891b2', '#0e7490', '#155e75', '#164e63', '#134e4a', '#115e59', '#0f766e', '#14b8a6', '#2dd4bf', '#5eead4', '#99f6e4', '#ccfbf1', '#f0fdfa']
+            : ['#0891b2', '#0e7490', '#155e75', '#164e63', '#1e3a5f', '#1e3a5f', '#1e3a5f', '#1e3a5f', '#164e63', '#155e75', '#0e7490', '#0891b2', '#06b6d4', '#22d3ee', '#67e8f9'],
+        // Donut palette
+        donut: isDark
+            ? ['#22d3ee', '#c084fc', '#f472b6', '#4ade80', '#fb923c', '#fbbf24', '#f87171', '#60a5fa']
+            : ['#0891b2', '#7c3aed', '#db2777', '#16a34a', '#ea580c', '#d97706', '#dc2626', '#2563eb'],
+        // Region colors
+        regionColors: {
+            'Russia': isDark ? '#f87171' : '#dc2626',
+            'China': isDark ? '#fb923c' : '#ea580c',
+            'North Korea': isDark ? '#fbbf24' : '#d97706',
+            'Iran': isDark ? '#c084fc' : '#7c3aed',
+            'United States': isDark ? '#60a5fa' : '#2563eb',
+            'Unknown': isDark ? '#94a3b8' : '#64748b',
+        }
+    };
+}
+
+function getBaseLayout() {
+    const c = getColors();
+    return {
+        paper_bgcolor: c.paper,
+        plot_bgcolor: c.bg,
+        font: { color: c.text, family: "'Inter', system-ui, -apple-system, sans-serif", size: 12 },
+        margin: { t: 20, r: 20, b: 40, l: 60 },
+        xaxis: { gridcolor: c.grid, zerolinecolor: c.grid },
+        yaxis: { gridcolor: c.grid, zerolinecolor: c.grid },
+        showlegend: true,
+        legend: { orientation: 'h', y: -0.18, font: { size: 11 } },
+    };
+}
+
+const plotlyConfig = {
+    responsive: true,
+    displayModeBar: true,
+    displaylogo: false,
+    modeBarButtonsToRemove: ['lasso2d', 'select2d']
+};
+
+// --- Date Filter State ---
+let fullDateRange = { min: null, max: null };  // populated on first load (unfiltered)
+
+function getDateParams() {
+    const start = document.getElementById('tidStartDate').value;
+    const end = document.getElementById('tidEndDate').value;
+    const params = new URLSearchParams();
+    if (start) params.set('start_date', start);
+    if (end) params.set('end_date', end);
+    return params;
+}
+
+function getDateQueryString() {
+    const qs = getDateParams().toString();
+    return qs ? '?' + qs : '';
+}
+
+// Load dashboard
+async function loadDashboard(isRefilter = false) {
+    try {
+        if (!isRefilter) {
+            document.getElementById('tidLoadingOverlay').style.display = 'flex';
+        }
+
+        const qs = getDateQueryString();
+        const response = await fetch('/api/threat-intel/data' + qs);
+        const result = await response.json();
+
+        document.getElementById('tidLoadingOverlay').style.display = 'none';
+
+        if (!result.success) {
+            throw new Error(result.error || 'Failed to load data');
+        }
+
+        if (!result.has_data || !result.data) {
+            document.getElementById('tidSyncing').style.display = 'block';
+            return;
+        }
+
+        window.tidData = result.data;
+
+        document.getElementById('tidSyncing').style.display = 'none';
+        document.getElementById('tidDashboard').style.display = 'block';
+        updateSummaryCards(result.data.summary);
+        renderAllCharts(result.data);
+        renderTables(result.data.tables);
+        initVisualInsights();
+
+        // Set date picker bounds from full (unfiltered) date range
+        const fdr = result.data.summary.full_date_range;
+        if (fdr && fdr.min && fdr.max) {
+            fullDateRange.min = fdr.min;
+            fullDateRange.max = fdr.max;
+            document.querySelectorAll('.tid-date-input').forEach(el => {
+                el.min = fdr.min;
+                el.max = fdr.max;
+            });
+        }
+
+        // Sync status
+        if (result.last_synced_at) {
+            const syncDate = new Date(result.last_synced_at);
+            const ago = timeAgo(syncDate);
+            document.getElementById('tidCacheStatus').textContent =
+                `Last synced: ${ago}`;
+        }
+
+        // Date range footer
+        if (result.data.summary.date_range) {
+            document.getElementById('tidDateRange').textContent = result.data.summary.date_range;
+        }
+
+        // If matrices were already loaded, reload with new date filter
+        if (isRefilter && attackMatrixLoaded) {
+            attackMatrixLoaded = false;
+            loadAttackMatrix();
+        }
+        if (isRefilter && atlasMatrixLoaded) {
+            atlasMatrixLoaded = false;
+            loadAtlasMatrix();
+        }
+
+        // Reset Visual Insights on refilter so diagrams refresh with new data
+        if (isRefilter) {
+            viLoadedTabs = { actorTtpMap: false, intelPriorityFlow: false, malwareEcosystem: false };
+            initVisualInsights();
+        }
+
+    } catch (error) {
+        console.error('Error loading dashboard:', error);
+        document.getElementById('tidLoadingOverlay').innerHTML = `
+            <div class="tid-loading-text error">Error: ${error.message}</div>
+        `;
+    }
+}
+
+function timeAgo(date) {
+    const seconds = Math.floor((new Date() - date) / 1000);
+    if (seconds < 60) return 'just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+}
+
+function updateSummaryCards(summary) {
+    document.getElementById('totalTippers').textContent = (summary.total_tippers || 0).toLocaleString();
+    document.getElementById('uniqueActors').textContent = (summary.unique_threat_actors || 0).toLocaleString();
+    document.getElementById('totalIocs').textContent = (summary.total_iocs || 0).toLocaleString();
+    document.getElementById('mitreCount').textContent = (summary.mitre_techniques_count || 0).toLocaleString();
+}
+
+function renderAllCharts(data) {
+    const charts = data.charts;
+    renderTippersOverTime(charts.tippers_over_time);
+    renderTopActors(charts.top_threat_actors);
+    renderIocTypeBreakdown(charts.ioc_type_breakdown);
+    renderMitreChart(charts.top_mitre_techniques);
+    renderRegionChart(charts.threat_actor_regions);
+    renderPriorityChart(charts.priority_distribution);
+    renderActionChart(charts.action_distribution);
+}
+
+// --- Chart Render Functions ---
+
+function renderTippersOverTime(data) {
+    if (!data || !data.weeks || data.weeks.length === 0) {
+        renderEmptyChart('tippersOverTimeChart', 'No timeline data');
+        return;
+    }
+
+    const c = getColors();
+    const priorityColors = {
+        'Critical': c.neonRed,
+        'High': c.neonOrange,
+        'Medium': c.neonYellow,
+        'Low': c.neonBlue,
+        'Info': isDark() ? '#94a3b8' : '#9ca3af',
+    };
+
+    const traces = [];
+    // Stack in reverse order so Critical is on top
+    for (const priority of ['Info', 'Low', 'Medium', 'High', 'Critical']) {
+        const values = data.series[priority] || [];
+        if (values.some(v => v > 0)) {
+            traces.push({
+                x: data.weeks,
+                y: values,
+                name: priority,
+                type: 'bar',
+                marker: { color: priorityColors[priority], line: { width: 0 } },
+                hovertemplate: `<b>${priority}</b><br>Week of %{x}<br>Count: %{y}<extra></extra>`,
+            });
+        }
+    }
+
+    Plotly.react('tippersOverTimeChart', traces, {
+        ...getBaseLayout(),
+        barmode: 'stack',
+        xaxis: { ...getBaseLayout().xaxis, tickangle: -45, type: 'category' },
+        yaxis: { ...getBaseLayout().yaxis, title: 'Tippers per Week' },
+        bargap: 0.15,
+    }, plotlyConfig);
+}
+
+function renderTopActors(data) {
+    if (!data || !data.labels || data.labels.length === 0) {
+        renderEmptyChart('topActorsChart', 'No threat actors detected');
+        return;
+    }
+
+    const c = getColors();
+    const colors = data.labels.map((_, i) => {
+        const t = i / Math.max(data.labels.length - 1, 1);
+        return isDark()
+            ? `hsl(${180 + t * 60}, ${80 - t * 20}%, ${65 - t * 15}%)`
+            : `hsl(${200 + t * 40}, ${75 - t * 15}%, ${35 + t * 15}%)`;
+    });
+
+    Plotly.react('topActorsChart', [{
+        type: 'bar',
+        x: data.values.slice().reverse(),
+        y: data.labels.slice().reverse(),
+        orientation: 'h',
+        marker: {
+            color: colors.reverse(),
+            line: { width: 0 },
+        },
+        text: data.values.slice().reverse().map(v => v.toString()),
+        textposition: 'outside',
+        textfont: { color: c.text, size: 11 },
+        hovertemplate: '<b>%{y}</b><br>Mentions: %{x}<extra></extra>',
+    }], {
+        ...getBaseLayout(),
+        showlegend: false,
+        margin: { t: 10, r: 50, b: 30, l: 160 },
+        xaxis: { ...getBaseLayout().xaxis, title: 'Tipper Mentions' },
+        yaxis: { ...getBaseLayout().yaxis, autorange: true },
+    }, plotlyConfig);
+}
+
+function renderIocTypeBreakdown(data) {
+    if (!data || !data.labels || data.labels.length === 0) {
+        renderEmptyChart('iocTypeChart', 'No IOCs extracted');
+        return;
+    }
+
+    const c = getColors();
+    const typeColors = {
+        'IP': c.neonRed,
+        'Domain': c.neonBlue,
+        'Hash': c.neonPurple,
+        'URL': c.neonGreen,
+        'CVE': c.neonOrange,
+    };
+    const colors = data.labels.map(l => typeColors[l] || c.neonCyan);
+
+    Plotly.react('iocTypeChart', [{
+        type: 'pie',
+        labels: data.labels,
+        values: data.values,
+        hole: 0.5,
+        marker: {
+            colors: colors,
+            line: { color: isDark() ? '#1e293b' : '#ffffff', width: 2 },
+        },
+        textinfo: 'label+percent',
+        textposition: 'outside',
+        textfont: { size: 12 },
+        hovertemplate: '<b>%{label}</b><br>Count: %{value:,}<br>%{percent}<extra></extra>',
+    }], {
+        ...getBaseLayout(),
+        showlegend: false,
+        margin: { t: 20, r: 40, b: 20, l: 40 },
+    }, plotlyConfig);
+}
+
+function renderMitreChart(data) {
+    if (!data || !data.labels || data.labels.length === 0) {
+        renderEmptyChart('mitreChart', 'No MITRE techniques detected');
+        return;
+    }
+
+    const c = getColors();
+    const colors = data.labels.map((_, i) => {
+        const t = i / Math.max(data.labels.length - 1, 1);
+        return isDark()
+            ? `hsl(${270 + t * 50}, ${75 - t * 15}%, ${65 - t * 10}%)`
+            : `hsl(${260 + t * 40}, ${65 - t * 10}%, ${40 + t * 15}%)`;
+    });
+
+    Plotly.react('mitreChart', [{
+        type: 'bar',
+        x: data.values.slice().reverse(),
+        y: data.labels.slice().reverse(),
+        orientation: 'h',
+        marker: {
+            color: colors.reverse(),
+            line: { width: 0 },
+        },
+        text: data.values.slice().reverse().map(v => v.toString()),
+        textposition: 'outside',
+        textfont: { color: c.text, size: 11 },
+        hovertemplate: '<b>%{y}</b><br>Occurrences: %{x}<extra></extra>',
+    }], {
+        ...getBaseLayout(),
+        showlegend: false,
+        margin: { t: 10, r: 50, b: 30, l: 100 },
+        xaxis: { ...getBaseLayout().xaxis, title: 'Occurrences' },
+        yaxis: { ...getBaseLayout().yaxis, autorange: true },
+    }, plotlyConfig);
+}
+
+function renderRegionChart(data) {
+    if (!data || !data.labels || data.labels.length === 0) {
+        renderEmptyChart('regionChart', 'No region attribution data');
+        return;
+    }
+
+    const c = getColors();
+    const defaultColors = [c.neonRed, c.neonOrange, c.neonYellow, c.neonPurple, c.neonBlue, c.neonGreen, c.neonPink, c.neonCyan];
+    const colors = data.labels.map((label, i) => c.regionColors[label] || defaultColors[i % defaultColors.length]);
+
+    Plotly.react('regionChart', [{
+        type: 'pie',
+        labels: data.labels,
+        values: data.values,
+        hole: 0.45,
+        marker: {
+            colors: colors,
+            line: { color: isDark() ? '#1e293b' : '#ffffff', width: 2 },
+        },
+        textinfo: 'label+percent',
+        textposition: 'inside',
+        hovertemplate: '<b>%{label}</b><br>Actors: %{value}<br>%{percent}<extra></extra>',
+    }], {
+        ...getBaseLayout(),
+        showlegend: false,
+        margin: { t: 20, r: 20, b: 20, l: 20 },
+    }, plotlyConfig);
+}
+
+function renderPriorityChart(data) {
+    if (!data || !data.labels || data.labels.length === 0) {
+        renderEmptyChart('priorityChart', 'No priority data');
+        return;
+    }
+
+    const c = getColors();
+    const priorityColors = {
+        'Critical': c.neonRed,
+        'High': c.neonOrange,
+        'Medium': c.neonYellow,
+        'Low': c.neonBlue,
+        'Info': isDark() ? '#94a3b8' : '#9ca3af',
+    };
+    const colors = data.labels.map(l => priorityColors[l] || c.neonCyan);
+
+    Plotly.react('priorityChart', [{
+        type: 'pie',
+        labels: data.labels,
+        values: data.values,
+        hole: 0.5,
+        marker: {
+            colors: colors,
+            line: { color: isDark() ? '#1e293b' : '#ffffff', width: 2 },
+        },
+        textinfo: 'label+percent',
+        textposition: 'outside',
+        hovertemplate: '<b>%{label}</b><br>Count: %{value:,}<br>%{percent}<extra></extra>',
+    }], {
+        ...getBaseLayout(),
+        showlegend: false,
+        margin: { t: 20, r: 40, b: 20, l: 40 },
+    }, plotlyConfig);
+}
+
+function renderActionChart(data) {
+    if (!data || !data.labels || data.labels.length === 0) {
+        renderEmptyChart('actionChart', 'No action data');
+        return;
+    }
+
+    const c = getColors();
+    const actionColors = {
+        'Detection Opportunity': c.neonCyan,
+        'Hunt Opportunity': c.neonGreen,
+        'None Required': isDark() ? '#64748b' : '#94a3b8',
+    };
+    const colors = data.labels.map(l => actionColors[l] || c.neonPurple);
+
+    Plotly.react('actionChart', [{
+        type: 'pie',
+        labels: data.labels,
+        values: data.values,
+        hole: 0.5,
+        marker: {
+            colors: colors,
+            line: { color: isDark() ? '#1e293b' : '#ffffff', width: 2 },
+        },
+        textinfo: 'label+percent',
+        textposition: 'outside',
+        hovertemplate: '<b>%{label}</b><br>Count: %{value:,}<br>%{percent}<extra></extra>',
+    }], {
+        ...getBaseLayout(),
+        showlegend: false,
+        margin: { t: 20, r: 40, b: 20, l: 40 },
+    }, plotlyConfig);
+}
+
+function renderEmptyChart(containerId, message) {
+    const c = getColors();
+    Plotly.react(containerId, [{
+        type: 'scatter', x: [], y: [], mode: 'lines'
+    }], {
+        ...getBaseLayout(),
+        annotations: [{ text: message, showarrow: false, font: { size: 14, color: c.text } }],
+        xaxis: { visible: false },
+        yaxis: { visible: false },
+    }, plotlyConfig);
+}
+
+function isDark() {
+    return document.body.classList.contains('dark-mode');
+}
+
+// --- Tab Switching ---
+
+document.querySelectorAll('.tid-tab-button').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const tab = btn.dataset.tab;
+        document.querySelectorAll('.tid-tab-button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tid-tab-pane').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(tab + 'Tab').classList.add('active');
+        if (tab === 'attackMatrix') onAttackMatrixTabActivated();
+        if (tab === 'atlasMatrix') onAtlasMatrixTabActivated();
+    });
+});
+
+// --- ATT&CK Matrix ---
+
+let attackMatrixLoaded = false;
+let attackMatrixData = null;
+let matrixFiltersPopulated = false;
+
+// --- Searchable Select Component ---
+const matrixSearchSelects = {};
+
+function initSearchableSelect(containerId, options, onChange) {
+    const el = document.getElementById(containerId);
+    const input = el.querySelector('.tid-ss-input');
+    const dropdown = el.querySelector('.tid-ss-dropdown');
+    const chipsContainer = el.querySelector('.tid-ss-chips');
+    const placeholder = el.dataset.placeholder || 'All';
+    let allOptions = options || [];
+    const selectedValues = new Set();
+    let highlightIdx = -1;
+
+    function renderChips() {
+        chipsContainer.innerHTML = '';
+        for (const val of selectedValues) {
+            const chip = document.createElement('span');
+            chip.className = 'tid-ss-chip';
+            const label = document.createElement('span');
+            label.className = 'tid-ss-chip-label';
+            label.textContent = val;
+            label.title = val;
+            chip.appendChild(label);
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'tid-ss-chip-remove';
+            removeBtn.innerHTML = '&times;';
+            removeBtn.title = 'Remove';
+            removeBtn.addEventListener('mousedown', e => {
+                e.preventDefault();
+                e.stopPropagation();
+                selectedValues.delete(val);
+                updateState();
+                onChange();
+            });
+            chip.appendChild(removeBtn);
+            chipsContainer.appendChild(chip);
+        }
+        el.classList.toggle('has-value', selectedValues.size > 0);
+        input.placeholder = selectedValues.size > 0
+            ? `${selectedValues.size} selected`
+            : placeholder;
+    }
+
+    function updateState() {
+        renderChips();
+        if (el.classList.contains('open')) render(input.value);
+    }
+
+    function render(filter) {
+        const q = (filter || '').toLowerCase();
+        dropdown.innerHTML = '';
+        highlightIdx = -1;
+
+        // "Clear all" option (only when selections exist)
+        if (selectedValues.size > 0) {
+            const clearOpt = document.createElement('div');
+            clearOpt.className = 'tid-ss-option all-option';
+            clearOpt.textContent = 'Clear all';
+            clearOpt.addEventListener('mousedown', e => {
+                e.preventDefault();
+                selectedValues.clear();
+                updateState();
+                onChange();
+            });
+            dropdown.appendChild(clearOpt);
+        }
+
+        const matches = q ? allOptions.filter(o => o.toLowerCase().includes(q)) : allOptions;
+        if (matches.length === 0 && q) {
+            const noMatch = document.createElement('div');
+            noMatch.className = 'tid-ss-no-match';
+            noMatch.textContent = 'No matches';
+            dropdown.appendChild(noMatch);
+        } else {
+            matches.forEach(o => {
+                const opt = document.createElement('div');
+                const isSelected = selectedValues.has(o);
+                opt.className = 'tid-ss-option' + (isSelected ? ' selected' : '');
+                if (q) {
+                    const idx = o.toLowerCase().indexOf(q);
+                    opt.innerHTML = (isSelected ? '' : '')
+                        + escapeHtml(o.substring(0, idx))
+                        + '<strong>' + escapeHtml(o.substring(idx, idx + q.length)) + '</strong>'
+                        + escapeHtml(o.substring(idx + q.length));
+                } else {
+                    opt.textContent = o;
+                }
+                opt.addEventListener('mousedown', e => {
+                    e.preventDefault();
+                    toggle(o);
+                });
+                dropdown.appendChild(opt);
+            });
+        }
+    }
+
+    function toggle(value) {
+        if (selectedValues.has(value)) {
+            selectedValues.delete(value);
+        } else {
+            selectedValues.add(value);
+        }
+        input.value = '';
+        updateState();
+        onChange();
+    }
+
+    function open() {
+        if (el.classList.contains('open')) return;
+        el.classList.add('open');
+        input.value = '';
+        render('');
+    }
+
+    function close() {
+        el.classList.remove('open');
+        input.value = '';
+        highlightIdx = -1;
+    }
+
+    input.addEventListener('focus', open);
+    input.addEventListener('input', () => {
+        if (!el.classList.contains('open')) el.classList.add('open');
+        render(input.value);
+    });
+    input.addEventListener('blur', () => { setTimeout(close, 150); });
+
+    input.addEventListener('keydown', e => {
+        const items = dropdown.querySelectorAll('.tid-ss-option:not(.all-option)');
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            highlightIdx = Math.min(highlightIdx + 1, items.length - 1);
+            items.forEach((it, i) => it.classList.toggle('highlighted', i === highlightIdx));
+            if (items[highlightIdx]) items[highlightIdx].scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            highlightIdx = Math.max(highlightIdx - 1, -1);
+            items.forEach((it, i) => it.classList.toggle('highlighted', i === highlightIdx));
+            if (highlightIdx >= 0 && items[highlightIdx]) items[highlightIdx].scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (highlightIdx >= 0 && items[highlightIdx]) {
+                items[highlightIdx].dispatchEvent(new Event('mousedown'));
+            }
+        } else if (e.key === 'Escape') {
+            close();
+            input.blur();
+        }
+    });
+
+    const api = {
+        getValue: () => [...selectedValues].join(','),
+        getValues: () => selectedValues,
+        setValue: (v) => {
+            selectedValues.clear();
+            if (v) v.split(',').forEach(s => { if (s) selectedValues.add(s); });
+            updateState();
+        },
+        setOptions: (opts) => { allOptions = opts; },
+    };
+    matrixSearchSelects[containerId] = api;
+    return api;
+}
+
+function getMatrixFilterValue(id) {
+    return matrixSearchSelects[id] ? matrixSearchSelects[id].getValue() : '';
+}
+
+// --- ATT&CK Matrix Tab ---
+
+function onAttackMatrixTabActivated() {
+    if (!matrixFiltersPopulated) populateMatrixFilters();
+    if (!attackMatrixLoaded) loadAttackMatrix();
+}
+
+function populateMatrixFilters() {
+    matrixFiltersPopulated = true;
+
+    const actorSS = initSearchableSelect('matrixActorFilter', [], onMatrixFilterChange);
+    fetch('/api/threat-intel/actors')
+        .then(r => r.json())
+        .then(data => { if (data.success) actorSS.setOptions(data.actors); })
+        .catch(() => {});
+
+    // Tipper ID dropdown — shows "ID — Title" labels, stores ID as value
+    const tipperIdSS = initSearchableSelect('matrixTipperIdFilter', [], onMatrixFilterChange);
+    fetch('/api/threat-intel/tipper-ids')
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const labels = data.tippers.map(t => t.id + ' \u2014 ' + t.title);
+                tipperIdSS.setOptions(labels);
+            }
+        })
+        .catch(() => {});
+
+    // Tipper Name dropdown — distinct titles for partial text search
+    const tipperSS = initSearchableSelect('matrixTipperFilter', [], onMatrixFilterChange);
+    fetch('/api/threat-intel/tipper-titles')
+        .then(r => r.json())
+        .then(data => { if (data.success) tipperSS.setOptions(data.titles); })
+        .catch(() => {});
+
+    document.getElementById('matrixClearFilters').addEventListener('click', clearMatrixFilters);
+}
+
+function onMatrixFilterChange() {
+    const actor = getMatrixFilterValue('matrixActorFilter');
+    const tipperId = getMatrixFilterValue('matrixTipperIdFilter');
+    const tipper = getMatrixFilterValue('matrixTipperFilter');
+    document.getElementById('matrixClearFilters').style.display = (actor || tipperId || tipper) ? 'inline-flex' : 'none';
+    attackMatrixLoaded = false;
+    loadAttackMatrix();
+}
+
+function clearMatrixFilters() {
+    matrixSearchSelects['matrixActorFilter'].setValue('');
+    matrixSearchSelects['matrixTipperIdFilter'].setValue('');
+    matrixSearchSelects['matrixTipperFilter'].setValue('');
+    document.getElementById('matrixClearFilters').style.display = 'none';
+    // Trigger re-fetch without filters (don't call onChange since we handle it here)
+    attackMatrixLoaded = false;
+    loadAttackMatrix();
+}
+
+async function loadAttackMatrix() {
+    const grid = document.getElementById('attackMatrixGrid');
+    grid.innerHTML = '<div class="tid-empty-cell" style="padding:40px;text-align:center;width:100%">Loading ATT&CK matrix...</div>';
+
+    try {
+        const params = getDateParams();
+        const actor = getMatrixFilterValue('matrixActorFilter');
+        const tipperIdRaw = getMatrixFilterValue('matrixTipperIdFilter');
+        const tipper = getMatrixFilterValue('matrixTipperFilter');
+        if (actor) params.set('actor', actor);
+        // Extract numeric IDs from comma-separated "12345 — Title" labels
+        if (tipperIdRaw) {
+            const ids = tipperIdRaw.split(',').map(s => {
+                const m = s.match(/^(\d+)/);
+                return m ? m[1] : '';
+            }).filter(Boolean);
+            if (ids.length) params.set('tipper_id', ids.join(','));
+        }
+        if (tipper) params.set('tipper_title', tipper);
+        const qs = params.toString();
+        const url = '/api/threat-intel/attack-matrix' + (qs ? '?' + qs : '');
+
+        const resp = await fetch(url);
+        const result = await resp.json();
+        if (!result.success) throw new Error(result.error || 'Failed to load matrix');
+
+        attackMatrixData = result;
+        attackMatrixLoaded = true;
+        renderAttackMatrix(result);
+    } catch (err) {
+        grid.innerHTML = `<div class="tid-empty-cell" style="padding:40px;text-align:center;width:100%">Error: ${escapeHtml(err.message)}</div>`;
+    }
+}
+
+function renderAttackMatrix(matrix) {
+    const grid = document.getElementById('attackMatrixGrid');
+    document.getElementById('matrixMaxCount').textContent = matrix.max_count;
+    grid.innerHTML = '';
+
+    // Index techniques by tactic
+    const techByTactic = {};
+    const subsByParent = {};
+    for (const t of matrix.techniques) {
+        if (t.is_subtechnique) {
+            if (!subsByParent[t.parent_id]) subsByParent[t.parent_id] = [];
+            subsByParent[t.parent_id].push(t);
+        }
+    }
+    // Sort sub-techniques by ID
+    for (const pid of Object.keys(subsByParent)) {
+        subsByParent[pid].sort((a, b) => a.id.localeCompare(b.id));
+    }
+
+    for (const tactic of matrix.tactics) {
+        const techs = matrix.techniques
+            .filter(t => !t.is_subtechnique && t.tactics.includes(tactic.id))
+            .sort((a, b) => b.count - a.count || a.id.localeCompare(b.id));
+
+        techByTactic[tactic.id] = techs;
+
+        const col = document.createElement('div');
+        col.className = 'tid-matrix-column';
+
+        const header = document.createElement('div');
+        header.className = 'tid-matrix-tactic-header';
+        header.textContent = tactic.name;
+        header.title = `${tactic.name} (${techs.length} techniques)`;
+        col.appendChild(header);
+
+        for (const tech of techs) {
+            const subs = subsByParent[tech.id] || [];
+            const hasSubs = subs.length > 0;
+            const cell = createMatrixCell(tech, matrix.max_count, hasSubs, false);
+            col.appendChild(cell);
+
+            // Sub-technique container (hidden by default)
+            if (hasSubs) {
+                const subContainer = document.createElement('div');
+                subContainer.className = 'tid-matrix-subs';
+                subContainer.id = `subs-${tech.id}`;
+                subContainer.style.display = 'none';
+                for (const sub of subs) {
+                    const subCell = createMatrixCell(sub, matrix.max_count, false, true);
+                    subContainer.appendChild(subCell);
+                }
+                col.appendChild(subContainer);
+            }
+        }
+
+        grid.appendChild(col);
+    }
+}
+
+function createMatrixCell(tech, maxCount, expandable, isSub) {
+    const cell = document.createElement('div');
+    cell.className = 'tid-matrix-cell' + (isSub ? ' sub' : '');
+    if (tech.count === 0) cell.classList.add('zero');
+
+    const bg = getCellColor(tech.count, maxCount);
+    const fg = getCellTextColor(tech.count, maxCount);
+    cell.style.background = bg;
+    cell.style.color = fg;
+
+    const displayId = isSub ? '.' + tech.id.split('.')[1] : tech.id;
+    let label = displayId;
+    if (expandable) label = '<span class="tid-expand-icon">&#9654;</span> ' + label;
+
+    cell.innerHTML = label;
+    cell.title = `${tech.id}: ${tech.name} (${tech.count})`;
+
+    cell.addEventListener('click', (e) => handleMatrixCellClick(e, tech, expandable));
+    return cell;
+}
+
+function getCellColor(count, maxCount) {
+    if (count === 0 || maxCount === 0) {
+        return isDark() ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)';
+    }
+    const t = Math.log1p(count) / Math.log1p(maxCount);
+    if (isDark()) {
+        // Dark mode: deep blue gradient
+        const r = Math.round(8 + (30 - 8) * (1 - t));
+        const g = Math.round(48 + (80 - 48) * (1 - t) * 0.5);
+        const b = Math.round(107 + (180 - 107) * (1 - t) * 0.3);
+        const alpha = 0.25 + t * 0.7;
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    } else {
+        // Light mode: blue gradient
+        const r = Math.round(8 + (198 - 8) * (1 - t));
+        const g = Math.round(48 + (219 - 48) * (1 - t));
+        const b = Math.round(107 + (239 - 107) * (1 - t));
+        return `rgb(${r}, ${g}, ${b})`;
+    }
+}
+
+function getCellTextColor(count, maxCount) {
+    if (count === 0) return isDark() ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.25)';
+    const t = Math.log1p(count) / Math.log1p(maxCount);
+    if (isDark()) return t > 0.3 ? '#e2e8f0' : 'rgba(226,232,240,0.7)';
+    return t > 0.4 ? '#ffffff' : '#1e293b';
+}
+
+function handleMatrixCellClick(e, tech, expandable) {
+    if (expandable) {
+        const subsEl = document.getElementById(`subs-${tech.id}`);
+        const icon = e.currentTarget.querySelector('.tid-expand-icon');
+        if (subsEl) {
+            const isOpen = subsEl.style.display !== 'none';
+            subsEl.style.display = isOpen ? 'none' : 'block';
+            if (icon) icon.classList.toggle('expanded', !isOpen);
+        }
+        return;
+    }
+    if (tech.count > 0) {
+        openDrilldown('TTP', tech.id);
+    }
+}
+
+function exportNavigatorLayer() {
+    const params = new URLSearchParams();
+    const actor = getMatrixFilterValue('matrixActorFilter');
+    const tipperIdRaw = getMatrixFilterValue('matrixTipperIdFilter');
+    const tipper = getMatrixFilterValue('matrixTipperFilter');
+    if (actor) params.set('actor', actor);
+    if (tipperIdRaw) {
+        const ids = tipperIdRaw.split(',').map(s => {
+            const m = s.match(/^(\d+)/);
+            return m ? m[1] : '';
+        }).filter(Boolean);
+        if (ids.length) params.set('tipper_id', ids.join(','));
+    }
+    if (tipper) params.set('tipper_title', tipper);
+    const qs = params.toString();
+    window.location.href = '/api/threat-intel/navigator-layer' + (qs ? '?' + qs : '');
+}
+
+// Re-render matrices on theme change
+window.addEventListener('themechange', () => {
+    if (attackMatrixData) renderAttackMatrix(attackMatrixData);
+    if (atlasMatrixData) renderAtlasMatrix(atlasMatrixData);
+});
+
+// --- ATLAS Matrix ---
+
+let atlasMatrixLoaded = false;
+let atlasMatrixData = null;
+
+function onAtlasMatrixTabActivated() {
+    if (!atlasMatrixLoaded) loadAtlasMatrix();
+}
+
+async function loadAtlasMatrix() {
+    const grid = document.getElementById('atlasMatrixGrid');
+    grid.innerHTML = '<div class="tid-empty-cell" style="padding:40px;text-align:center;width:100%">Loading ATLAS matrix...</div>';
+
+    try {
+        const params = getDateParams();
+        const qs = params.toString();
+        const resp = await fetch('/api/threat-intel/atlas-matrix' + (qs ? '?' + qs : ''));
+        const result = await resp.json();
+        if (!result.success) throw new Error(result.error || 'Failed to load ATLAS matrix');
+
+        atlasMatrixData = result;
+        atlasMatrixLoaded = true;
+        renderAtlasMatrix(result);
+    } catch (err) {
+        grid.innerHTML = `<div class="tid-empty-cell" style="padding:40px;text-align:center;width:100%">Error: ${escapeHtml(err.message)}</div>`;
+    }
+}
+
+function getAtlasCellColor(count, maxCount) {
+    if (count === 0 || maxCount === 0) {
+        return isDark() ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)';
+    }
+    const t = Math.log1p(count) / Math.log1p(maxCount);
+    if (isDark()) {
+        const r = Math.round(107 + (30 - 107) * t * 0.3);
+        const g = Math.round(20 + (60 - 20) * (1 - t) * 0.5);
+        const b = Math.round(48 + (80 - 48) * (1 - t) * 0.3);
+        const alpha = 0.25 + t * 0.7;
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    } else {
+        const r = Math.round(107 + (239 - 107) * (1 - t));
+        const g = Math.round(48 + (219 - 48) * (1 - t));
+        const b = Math.round(160 + (239 - 160) * (1 - t));
+        return `rgb(${r}, ${g}, ${b})`;
+    }
+}
+
+function getAtlasCellTextColor(count, maxCount) {
+    if (count === 0) return isDark() ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.25)';
+    const t = Math.log1p(count) / Math.log1p(maxCount);
+    if (isDark()) return t > 0.3 ? '#e2e8f0' : 'rgba(226,232,240,0.7)';
+    return t > 0.4 ? '#ffffff' : '#1e293b';
+}
+
+function renderAtlasMatrix(matrix) {
+    const grid = document.getElementById('atlasMatrixGrid');
+    document.getElementById('atlasMaxCount').textContent = matrix.max_count;
+    grid.innerHTML = '';
+
+    const subsByParent = {};
+    for (const t of matrix.techniques) {
+        if (t.is_subtechnique) {
+            if (!subsByParent[t.parent_id]) subsByParent[t.parent_id] = [];
+            subsByParent[t.parent_id].push(t);
+        }
+    }
+    for (const pid of Object.keys(subsByParent)) {
+        subsByParent[pid].sort((a, b) => a.id.localeCompare(b.id));
+    }
+
+    for (const tactic of matrix.tactics) {
+        const techs = matrix.techniques
+            .filter(t => !t.is_subtechnique && t.tactics.includes(tactic.id))
+            .sort((a, b) => b.count - a.count || a.id.localeCompare(b.id));
+
+        const col = document.createElement('div');
+        col.className = 'tid-matrix-column';
+
+        const header = document.createElement('div');
+        header.className = 'tid-matrix-tactic-header atlas';
+        header.textContent = tactic.name;
+        header.title = `${tactic.name} (${techs.length} techniques)`;
+        col.appendChild(header);
+
+        for (const tech of techs) {
+            const subs = subsByParent[tech.id] || [];
+            const hasSubs = subs.length > 0;
+            const cell = createAtlasCell(tech, matrix.max_count, hasSubs, false);
+            col.appendChild(cell);
+
+            if (hasSubs) {
+                const subContainer = document.createElement('div');
+                subContainer.className = 'tid-matrix-subs';
+                subContainer.id = `atlas-subs-${tech.id}`;
+                subContainer.style.display = 'none';
+                for (const sub of subs) {
+                    const subCell = createAtlasCell(sub, matrix.max_count, false, true);
+                    subContainer.appendChild(subCell);
+                }
+                col.appendChild(subContainer);
+            }
+        }
+
+        grid.appendChild(col);
+    }
+}
+
+function createAtlasCell(tech, maxCount, expandable, isSub) {
+    const cell = document.createElement('div');
+    cell.className = 'tid-matrix-cell atlas' + (isSub ? ' sub' : '');
+    if (tech.count === 0) cell.classList.add('zero');
+
+    const bg = getAtlasCellColor(tech.count, maxCount);
+    const fg = getAtlasCellTextColor(tech.count, maxCount);
+    cell.style.background = bg;
+    cell.style.color = fg;
+
+    // Show short ID: AML.T0051 → T0051
+    const shortId = tech.id.replace('AML.', '');
+    const displayId = isSub ? '.' + shortId.split('.')[1] : shortId;
+    let label = displayId;
+    if (expandable) label = '<span class="tid-expand-icon">&#9654;</span> ' + label;
+
+    cell.innerHTML = label;
+    cell.title = `${tech.id}: ${tech.name} (${tech.count})`;
+
+    cell.addEventListener('click', (e) => {
+        if (expandable) {
+            const subsEl = document.getElementById(`atlas-subs-${tech.id}`);
+            const icon = e.currentTarget.querySelector('.tid-expand-icon');
+            if (subsEl) {
+                const isOpen = subsEl.style.display !== 'none';
+                subsEl.style.display = isOpen ? 'none' : 'block';
+                if (icon) icon.classList.toggle('expanded', !isOpen);
+            }
+        }
+    });
+    return cell;
+}
+
+// --- Table Rendering ---
+
+function renderTables(tables) {
+    currentTableData.domains = tables.top_domains || [];
+    currentTableData.ips = tables.top_ips || [];
+    currentTableData.hashes = tables.top_hashes || [];
+    currentTableData.cves = tables.recent_cves || [];
+    currentTableData.malware = tables.top_malware_families || [];
+    currentTableData.actors = tables.top_threat_actors || [];
+    currentTableData.ttps = tables.top_mitre_techniques || [];
+    currentTableData.redteam = tables.top_redteam_ttps || [];
+
+    renderIocTab('topDomainsBody', tables.top_domains || [], 'No domains extracted');
+    renderIocTab('topIpsBody', tables.top_ips || [], 'No IPs extracted');
+    renderIocTab('topHashesBody', tables.top_hashes || [], 'No hashes extracted');
+    renderCvesTab(tables.recent_cves || []);
+    renderMalwareTab(tables.top_malware_families || []);
+    renderActorsTab(tables.top_threat_actors || []);
+    renderTtpsTab(tables.top_mitre_techniques || []);
+    renderRedteamTab(tables.top_redteam_ttps || []);
+}
+
+function renderIocTab(tbodyId, iocs, emptyMsg) {
+    const tbody = document.getElementById(tbodyId);
+    if (!iocs.length) {
+        tbody.innerHTML = `<tr><td colspan="5" class="tid-empty-cell">${escapeHtml(emptyMsg)}</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = iocs.map((ioc, i) => {
+        // VT verdict badge
+        let vtCell = '<span class="tid-verdict-placeholder">--</span>';
+        if (ioc.vt_verdict) {
+            const vtClass = ioc.vt_verdict.toLowerCase();
+            const vtDetail = (ioc.vt_malicious != null && ioc.vt_total != null)
+                ? ` (${ioc.vt_malicious}/${ioc.vt_total})`
+                : '';
+            vtCell = `<span class="tid-verdict-badge ${vtClass}">${escapeHtml(ioc.vt_verdict)}${vtDetail}</span>`;
+        }
+
+        // RF risk badge
+        let rfCell = '<span class="tid-verdict-placeholder">--</span>';
+        if (ioc.rf_risk_score != null) {
+            const rfClass = (ioc.rf_risk_level || 'low').toLowerCase();
+            rfCell = `<span class="tid-risk-badge ${rfClass}">${ioc.rf_risk_score} ${escapeHtml(ioc.rf_risk_level || '')}</span>`;
+        }
+
+        return `
+            <tr>
+                <td class="center-cell">${i + 1}</td>
+                <td class="tid-ioc-value">${escapeHtml(ioc.value)}</td>
+                <td class="center-cell"><a href="#" class="tid-drilldown-link" onclick="openDrilldown('${escapeAttr(ioc.type)}','${escapeAttr(ioc.value)}');return false;">${ioc.count}</a></td>
+                <td class="center-cell">${vtCell}</td>
+                <td class="center-cell">${rfCell}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function renderCvesTab(cves) {
+    const tbody = document.getElementById('recentCvesBody');
+    if (!cves.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="tid-empty-cell">No CVEs found</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = cves.map((cve, i) => `
+        <tr>
+            <td class="center-cell">${i + 1}</td>
+            <td><a href="https://nvd.nist.gov/vuln/detail/${encodeURIComponent(cve.cve)}" target="_blank" rel="noopener noreferrer" class="tid-cve-link">${escapeHtml(cve.cve)}</a></td>
+            <td class="center-cell"><a href="#" class="tid-drilldown-link" onclick="openDrilldown('CVE','${escapeAttr(cve.cve)}');return false;">${cve.count}</a></td>
+            <td class="center-cell">${cve.first_seen || '-'}</td>
+            <td class="center-cell">${cve.last_seen || '-'}</td>
+        </tr>
+    `).join('');
+}
+
+function renderMalwareTab(malware) {
+    const tbody = document.getElementById('topMalwareBody');
+    if (!malware.length) {
+        tbody.innerHTML = '<tr><td colspan="3" class="tid-empty-cell">No malware families detected</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = malware.map((m, i) => `
+        <tr>
+            <td class="center-cell">${i + 1}</td>
+            <td><strong>${escapeHtml(m.name)}</strong></td>
+            <td class="center-cell"><a href="#" class="tid-drilldown-link" onclick="openDrilldown('Malware','${escapeAttr(m.name)}');return false;">${m.count}</a></td>
+        </tr>
+    `).join('');
+}
+
+function renderActorsTab(actors) {
+    const tbody = document.getElementById('topActorsBody');
+    if (!actors.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="tid-empty-cell">No threat actors detected</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = actors.map((a, i) => `
+        <tr>
+            <td class="center-cell">${i + 1}</td>
+            <td><strong>${escapeHtml(a.name)}</strong></td>
+            <td class="center-cell">${escapeHtml(a.region || 'Unknown')}</td>
+            <td class="center-cell"><a href="#" class="tid-drilldown-link" onclick="openDrilldown('Actor','${escapeAttr(a.name)}');return false;">${a.count}</a></td>
+        </tr>
+    `).join('');
+}
+
+async function renderTtpsTab(techniques) {
+    const tbody = document.getElementById('topTtpsBody');
+    if (!techniques.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="tid-empty-cell">No MITRE techniques detected</td></tr>';
+        return;
+    }
+
+    const ruleCounts = await fetchDetectionRuleCounts();
+    tbody.innerHTML = techniques.map((t, i) => {
+        const rc = ruleCounts[t.technique_id] || 0;
+        const coverageClass = getTechCoverageClass(t.technique_id, ruleCounts);
+        return `<tr>
+            <td class="center-cell"><span class="tid-rank-badge">${i + 1}</span></td>
+            <td><a href="#" class="tid-tech-id" onclick="openDrilldown('TTP','${escapeAttr(t.technique_id)}');return false;">${escapeHtml(t.technique_id)}</a></td>
+            <td class="center-cell"><a href="#" class="tid-occurrence-pill" onclick="openDrilldown('TTP','${escapeAttr(t.technique_id)}');return false;">${t.count}</a></td>
+            <td class="center-cell"><a href="#" class="tid-coverage-pill ${coverageClass}" onclick="openCoverageModal('${escapeAttr(t.technique_id)}');return false;">${rc}</a></td>
+        </tr>`;
+    }).join('');
+}
+
+function renderRedteamTab(ttps) {
+    const tbody = document.getElementById('topRedteamBody');
+    if (!ttps.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="tid-empty-cell">No red team TTPs submitted yet</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = ttps.map((t, i) => `
+        <tr>
+            <td class="center-cell">${i + 1}</td>
+            <td><strong>${escapeHtml(t.technique_id)}</strong></td>
+            <td class="center-cell">${t.count}</td>
+            <td class="center-cell">${t.last_tested ? t.last_tested.substring(0, 10) : '-'}</td>
+            <td>${escapeHtml(t.submitters || '')}</td>
+        </tr>
+    `).join('');
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// --- Search ---
+
+// Map tab name to tbody ID and render function
+const tabConfig = {
+    domains:  { tbody: 'topDomainsBody',  countEl: 'searchDomainsCount',  searchEl: 'searchDomains',  colSpan: 5, type: 'ioc' },
+    ips:      { tbody: 'topIpsBody',      countEl: 'searchIpsCount',      searchEl: 'searchIps',      colSpan: 5, type: 'ioc' },
+    hashes:   { tbody: 'topHashesBody',   countEl: 'searchHashesCount',   searchEl: 'searchHashes',   colSpan: 5, type: 'ioc' },
+    cves:     { tbody: 'recentCvesBody',  countEl: 'searchCvesCount',     searchEl: 'searchCves',     colSpan: 5, type: 'cve' },
+    malware:  { tbody: 'topMalwareBody',  countEl: 'searchMalwareCount',  searchEl: 'searchMalware',  colSpan: 3, type: 'malware' },
+    actors:   { tbody: 'topActorsBody',   countEl: 'searchActorsCount',   searchEl: 'searchActors',   colSpan: 4, type: 'actor' },
+    ttps:     { tbody: 'topTtpsBody',     countEl: 'searchTtpsCount',     searchEl: 'searchTtps',     colSpan: 4, type: 'ttp' },
+    redteam:  { tbody: 'topRedteamBody', countEl: 'searchRedteamCount', searchEl: 'searchRedteam', colSpan: 5, type: 'redteam' },
+};
+
+// Store current displayed data per tab (for CSV download)
+const currentTableData = {};
+
+let searchDebounceTimers = {};
+
+function initSearchListeners() {
+    document.querySelectorAll('.tid-search-input').forEach(input => {
+        input.addEventListener('input', () => {
+            const tab = input.dataset.tab;
+            // Show/hide clear button
+            const clearBtn = input.parentElement.querySelector('.tid-clear-search-btn');
+            if (clearBtn) clearBtn.style.display = input.value ? 'flex' : 'none';
+            clearTimeout(searchDebounceTimers[tab]);
+            searchDebounceTimers[tab] = setTimeout(() => performSearch(tab, input.value.trim()), 300);
+        });
+    });
+
+    // Clear button handlers
+    document.querySelectorAll('.tid-clear-search-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tab = btn.dataset.tab;
+            const input = btn.parentElement.querySelector('.tid-search-input');
+            input.value = '';
+            btn.style.display = 'none';
+            performSearch(tab, '');
+            input.focus();
+        });
+    });
+}
+
+async function performSearch(tab, query) {
+    const cfg = tabConfig[tab];
+    const countEl = document.getElementById(cfg.countEl);
+
+    if (!query) {
+        // Restore original top-N data
+        countEl.textContent = '';
+        if (window.tidData && window.tidData.tables) {
+            renderTabFromOriginal(tab);
+        }
+        return;
+    }
+
+    // Show searching indicator
+    const tbody = document.getElementById(cfg.tbody);
+    tbody.innerHTML = `<tr><td colspan="${cfg.colSpan}" class="tid-empty-cell">Searching...</td></tr>`;
+
+    try {
+        const resp = await fetch(`/api/threat-intel/search?tab=${encodeURIComponent(tab)}&q=${encodeURIComponent(query)}`);
+        const result = await resp.json();
+
+        if (!result.success) {
+            tbody.innerHTML = `<tr><td colspan="${cfg.colSpan}" class="tid-empty-cell">Error: ${escapeHtml(result.error)}</td></tr>`;
+            countEl.textContent = '';
+            return;
+        }
+
+        const items = result.results || [];
+        countEl.innerHTML = items.length ? `<strong>${items.length}</strong> result${items.length !== 1 ? 's' : ''}` : '';
+        currentTableData[tab] = items;
+
+        // Render using existing render functions
+        if (cfg.type === 'ioc')     renderIocTab(cfg.tbody, items, 'No matches found');
+        else if (cfg.type === 'cve') renderCvesFromData(items);
+        else if (cfg.type === 'malware') renderMalwareFromData(items);
+        else if (cfg.type === 'actor') renderActorsFromData(items);
+        else if (cfg.type === 'ttp') renderTtpsFromData(items);
+        else if (cfg.type === 'redteam') renderRedteamFromData(items);
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="${cfg.colSpan}" class="tid-empty-cell">Error: ${escapeHtml(err.message)}</td></tr>`;
+        countEl.textContent = '';
+    }
+}
+
+function renderTabFromOriginal(tab) {
+    const tables = window.tidData.tables;
+    const mapping = {
+        domains: () => { currentTableData.domains = tables.top_domains || []; renderIocTab('topDomainsBody', tables.top_domains || [], 'No domains extracted'); },
+        ips:     () => { currentTableData.ips = tables.top_ips || []; renderIocTab('topIpsBody', tables.top_ips || [], 'No IPs extracted'); },
+        hashes:  () => { currentTableData.hashes = tables.top_hashes || []; renderIocTab('topHashesBody', tables.top_hashes || [], 'No hashes extracted'); },
+        cves:    () => { currentTableData.cves = tables.recent_cves || []; renderCvesTab(tables.recent_cves || []); },
+        malware: () => { currentTableData.malware = tables.top_malware_families || []; renderMalwareTab(tables.top_malware_families || []); },
+        actors:  () => { currentTableData.actors = tables.top_threat_actors || []; renderActorsTab(tables.top_threat_actors || []); },
+        ttps:    () => { currentTableData.ttps = tables.top_mitre_techniques || []; renderTtpsTab(tables.top_mitre_techniques || []); },
+        redteam: () => { currentTableData.redteam = tables.top_redteam_ttps || []; renderRedteamTab(tables.top_redteam_ttps || []); },
+    };
+    if (mapping[tab]) mapping[tab]();
+}
+
+// Render functions for search results (reuse existing logic but accept data directly)
+function renderCvesFromData(cves) {
+    const tbody = document.getElementById('recentCvesBody');
+    if (!cves.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="tid-empty-cell">No matches found</td></tr>';
+        return;
+    }
+    tbody.innerHTML = cves.map((cve, i) => `
+        <tr>
+            <td class="center-cell">${i + 1}</td>
+            <td><a href="https://nvd.nist.gov/vuln/detail/${encodeURIComponent(cve.cve)}" target="_blank" rel="noopener noreferrer" class="tid-cve-link">${escapeHtml(cve.cve)}</a></td>
+            <td class="center-cell"><a href="#" class="tid-drilldown-link" onclick="openDrilldown('CVE','${escapeAttr(cve.cve)}');return false;">${cve.count}</a></td>
+            <td class="center-cell">${cve.first_seen || '-'}</td>
+            <td class="center-cell">${cve.last_seen || '-'}</td>
+        </tr>
+    `).join('');
+}
+
+function renderMalwareFromData(malware) {
+    const tbody = document.getElementById('topMalwareBody');
+    if (!malware.length) {
+        tbody.innerHTML = '<tr><td colspan="3" class="tid-empty-cell">No matches found</td></tr>';
+        return;
+    }
+    tbody.innerHTML = malware.map((m, i) => `
+        <tr>
+            <td class="center-cell">${i + 1}</td>
+            <td><strong>${escapeHtml(m.name)}</strong></td>
+            <td class="center-cell"><a href="#" class="tid-drilldown-link" onclick="openDrilldown('Malware','${escapeAttr(m.name)}');return false;">${m.count}</a></td>
+        </tr>
+    `).join('');
+}
+
+function renderActorsFromData(actors) {
+    const tbody = document.getElementById('topActorsBody');
+    if (!actors.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="tid-empty-cell">No matches found</td></tr>';
+        return;
+    }
+    tbody.innerHTML = actors.map((a, i) => `
+        <tr>
+            <td class="center-cell">${i + 1}</td>
+            <td><strong>${escapeHtml(a.name)}</strong></td>
+            <td class="center-cell">${escapeHtml(a.region || 'Unknown')}</td>
+            <td class="center-cell"><a href="#" class="tid-drilldown-link" onclick="openDrilldown('Actor','${escapeAttr(a.name)}');return false;">${a.count}</a></td>
+        </tr>
+    `).join('');
+}
+
+async function renderTtpsFromData(techniques) {
+    const tbody = document.getElementById('topTtpsBody');
+    if (!techniques.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="tid-empty-cell">No matches found</td></tr>';
+        return;
+    }
+    const ruleCounts = await fetchDetectionRuleCounts();
+    tbody.innerHTML = techniques.map((t, i) => {
+        const rc = ruleCounts[t.technique_id] || 0;
+        const coverageClass = getTechCoverageClass(t.technique_id, ruleCounts);
+        return `<tr>
+            <td class="center-cell"><span class="tid-rank-badge">${i + 1}</span></td>
+            <td><a href="#" class="tid-tech-id" onclick="openDrilldown('TTP','${escapeAttr(t.technique_id)}');return false;">${escapeHtml(t.technique_id)}</a></td>
+            <td class="center-cell"><a href="#" class="tid-occurrence-pill" onclick="openDrilldown('TTP','${escapeAttr(t.technique_id)}');return false;">${t.count}</a></td>
+            <td class="center-cell"><a href="#" class="tid-coverage-pill ${coverageClass}" onclick="openCoverageModal('${escapeAttr(t.technique_id)}');return false;">${rc}</a></td>
+        </tr>`;
+    }).join('');
+}
+
+function renderRedteamFromData(ttps) {
+    const tbody = document.getElementById('topRedteamBody');
+    if (!ttps.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="tid-empty-cell">No matches found</td></tr>';
+        return;
+    }
+    tbody.innerHTML = ttps.map((t, i) => `
+        <tr>
+            <td class="center-cell">${i + 1}</td>
+            <td><strong>${escapeHtml(t.technique_id)}</strong></td>
+            <td class="center-cell">${t.count}</td>
+            <td class="center-cell">${t.last_tested ? t.last_tested.substring(0, 10) : '-'}</td>
+            <td>${escapeHtml(t.submitters || '')}</td>
+        </tr>
+    `).join('');
+}
+
+// ============================================================
+// Visual Insights — Mermaid Diagram Tabs
+// ============================================================
+
+let viMermaidRenderCounter = 0;
+let viDetectionRuleCounts = null;  // {techId: ruleCount} — fetched once
+let viDetectionRulesByTech = null; // {techId: [{name, platform, severity, rule_type}, ...]}
+let viLoadedTabs = { actorTtpMap: false, intelPriorityFlow: false, malwareEcosystem: false };
+
+function initViMermaid() {
+    const theme = isDark() ? 'dark' : 'default';
+    mermaid.initialize({
+        startOnLoad: false,
+        theme: theme,
+        securityLevel: 'loose',
+        flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
+    });
+}
+
+// --- Utility helpers ---
+
+function viNodeId(prefix, text) {
+    return prefix + '_' + String(text).replace(/[^a-zA-Z0-9]/g, '');
+}
+
+function viSanitize(text) {
+    return String(text).replace(/"/g, '#quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function viClassDefs() {
+    const dk = isDark();
+    return `
+    classDef strong fill:${dk ? '#166534' : '#dcfce7'},stroke:${dk ? '#22c55e' : '#16a34a'},color:${dk ? '#bbf7d0' : '#14532d'}
+    classDef moderate fill:${dk ? '#854d0e' : '#fef9c3'},stroke:${dk ? '#eab308' : '#ca8a04'},color:${dk ? '#fef08a' : '#713f12'}
+    classDef weak fill:${dk ? '#991b1b' : '#fee2e2'},stroke:${dk ? '#ef4444' : '#dc2626'},color:${dk ? '#fecaca' : '#7f1d1d'}
+    classDef actor fill:${dk ? '#1e3a5f' : '#dbeafe'},stroke:${dk ? '#3b82f6' : '#2563eb'},color:${dk ? '#93c5fd' : '#1e3a8a'}
+    classDef priority fill:${dk ? '#4c1d95' : '#ede9fe'},stroke:${dk ? '#8b5cf6' : '#7c3aed'},color:${dk ? '#c4b5fd' : '#3b0764'}
+    classDef action fill:${dk ? '#164e63' : '#cffafe'},stroke:${dk ? '#06b6d4' : '#0891b2'},color:${dk ? '#67e8f9' : '#083344'}
+    classDef malware fill:${dk ? '#831843' : '#fce7f3'},stroke:${dk ? '#ec4899' : '#db2777'},color:${dk ? '#f9a8d4' : '#500724'}
+    classDef region fill:${dk ? '#713f12' : '#fef3c7'},stroke:${dk ? '#f59e0b' : '#d97706'},color:${dk ? '#fcd34d' : '#451a03'}
+    `;
+}
+
+async function viRenderDiagram(diagramElId, definition, placeholderId, controlsId) {
+    const diagramEl = document.getElementById(diagramElId);
+    const placeholder = document.getElementById(placeholderId);
+    const controls = document.getElementById(controlsId);
+
+    try {
+        initViMermaid();
+        viMermaidRenderCounter++;
+        const renderId = 'vi-diagram-' + viMermaidRenderCounter;
+        const { svg } = await mermaid.render(renderId, definition);
+        diagramEl.innerHTML = svg;
+        placeholder.style.display = 'none';
+        controls.style.display = 'flex';
+    } catch (err) {
+        console.error('Mermaid render error:', err);
+        diagramEl.innerHTML = '';
+        placeholder.textContent = 'Failed to render diagram. Check console for details.';
+        placeholder.style.display = 'flex';
+        controls.style.display = 'none';
+    }
+}
+
+// --- Detection rule counts (for technique coloring) ---
+
+async function fetchDetectionRuleCounts() {
+    if (viDetectionRuleCounts) return viDetectionRuleCounts;
+    try {
+        const resp = await fetch('/api/detection-rules');
+        const result = await resp.json();
+        const counts = {};
+        const rulesByTech = {};
+        if (result.success && result.data && result.data.platforms) {
+            for (const [platform, info] of Object.entries(result.data.platforms)) {
+                for (const rule of (info.rules || [])) {
+                    for (const techId of (rule.mitre_techniques || [])) {
+                        counts[techId] = (counts[techId] || 0) + 1;
+                        if (!rulesByTech[techId]) rulesByTech[techId] = [];
+                        rulesByTech[techId].push({
+                            name: rule.name,
+                            platform: info.name,
+                            severity: rule.severity || '',
+                            rule_type: rule.rule_type || ''
+                        });
+                    }
+                }
+            }
+        }
+        viDetectionRuleCounts = counts;
+        viDetectionRulesByTech = rulesByTech;
+        return counts;
+    } catch (err) {
+        console.warn('Could not fetch detection rules for coverage coloring:', err);
+        viDetectionRuleCounts = {};
+        viDetectionRulesByTech = {};
+        return {};
+    }
+}
+
+function getTechCoverageClass(techId, ruleCounts) {
+    const count = ruleCounts[techId] || 0;
+    if (count >= 5) return 'strong';
+    if (count >= 1) return 'moderate';
+    return 'weak';
+}
+
+// --- Tab 1: Actor → TTP Map ---
+
+async function loadActorTtpMap() {
+    if (viLoadedTabs.actorTtpMap) return;
+
+    const placeholder = document.getElementById('actorTtpMapPlaceholder');
+    placeholder.textContent = 'Loading Actor \u2192 TTP Map...';
+    placeholder.style.display = 'flex';
+
+    try {
+        const qs = getDateQueryString();
+        const [mapResp, ruleCounts] = await Promise.all([
+            fetch('/api/threat-intel/actor-technique-map' + qs).then(r => r.json()),
+            fetchDetectionRuleCounts()
+        ]);
+
+        if (!mapResp.success || !mapResp.data || mapResp.data.length === 0) {
+            placeholder.textContent = 'No actor-technique relationships found for the selected date range.';
+            document.getElementById('actorTtpMapControls').style.display = 'none';
+            return;
+        }
+
+        const actors = mapResp.data;
+        let lines = ['graph LR'];
+        lines.push(viClassDefs());
+
+        const seenTechs = new Set();
+        for (const actor of actors) {
+            const actorId = viNodeId('A', actor.actor_name);
+            const region = actor.region || 'Unknown';
+            lines.push(`    ${actorId}["${viSanitize(actor.actor_name)}<br/><small>${viSanitize(region)}</small>"]:::actor`);
+
+            for (const tech of actor.techniques) {
+                const techId = viNodeId('T', tech.technique_id);
+                const coverageClass = getTechCoverageClass(tech.technique_id, ruleCounts);
+                if (!seenTechs.has(tech.technique_id)) {
+                    seenTechs.add(tech.technique_id);
+                    const ruleCount = ruleCounts[tech.technique_id] || 0;
+                    lines.push(`    ${techId}["${viSanitize(tech.technique_id)}<br/><small>${ruleCount} rule${ruleCount !== 1 ? 's' : ''}</small>"]:::${coverageClass}`);
+                }
+                lines.push(`    ${actorId} --> ${techId}`);
+            }
+        }
+
+        const definition = lines.join('\n');
+        await viRenderDiagram('actorTtpMapDiagram', definition, 'actorTtpMapPlaceholder', 'actorTtpMapControls');
+        viLoadedTabs.actorTtpMap = true;
+    } catch (err) {
+        console.error('Error loading actor TTP map:', err);
+        placeholder.textContent = 'Error loading diagram: ' + err.message;
+    }
+}
+
+// --- Tab 2: Intelligence Priority Flow ---
+
+async function loadIntelPriorityFlow() {
+    if (viLoadedTabs.intelPriorityFlow) return;
+
+    const placeholder = document.getElementById('intelPriorityFlowPlaceholder');
+    placeholder.textContent = 'Loading Intelligence Priority Flow...';
+    placeholder.style.display = 'flex';
+
+    try {
+        const charts = window.tidData && window.tidData.charts;
+        if (!charts) {
+            placeholder.textContent = 'No chart data available.';
+            return;
+        }
+
+        const priorities = charts.priority_distribution;
+        const actions = charts.action_distribution;
+        const actors = charts.top_threat_actors;
+
+        if (!priorities || !priorities.labels || priorities.labels.length === 0) {
+            placeholder.textContent = 'No priority distribution data available.';
+            return;
+        }
+
+        let lines = ['graph LR'];
+        lines.push(viClassDefs());
+
+        // Priority nodes (left)
+        for (let i = 0; i < priorities.labels.length; i++) {
+            const label = priorities.labels[i];
+            const value = priorities.values[i];
+            const nodeId = viNodeId('P', label);
+            lines.push(`    ${nodeId}["${viSanitize(label)}<br/><small>${value} tippers</small>"]:::priority`);
+        }
+
+        // Action nodes (middle)
+        if (actions && actions.labels) {
+            for (let i = 0; i < actions.labels.length; i++) {
+                const label = actions.labels[i];
+                const value = actions.values[i];
+                const nodeId = viNodeId('X', label);
+                lines.push(`    ${nodeId}["${viSanitize(label)}<br/><small>${value}</small>"]:::action`);
+            }
+        }
+
+        // Actor nodes (right) — top 8
+        const actorLimit = 8;
+        if (actors && actors.labels) {
+            const topActors = actors.labels.slice(0, actorLimit);
+            const topValues = actors.values.slice(0, actorLimit);
+            for (let i = 0; i < topActors.length; i++) {
+                const nodeId = viNodeId('A', topActors[i]);
+                lines.push(`    ${nodeId}["${viSanitize(topActors[i])}<br/><small>${topValues[i]} mentions</small>"]:::actor`);
+            }
+
+            // Edges: priority → action → actor (all-to-all since aggregate data)
+            if (actions && actions.labels) {
+                for (const pLabel of priorities.labels) {
+                    for (const aLabel of actions.labels) {
+                        lines.push(`    ${viNodeId('P', pLabel)} --> ${viNodeId('X', aLabel)}`);
+                    }
+                }
+                for (const aLabel of actions.labels) {
+                    for (const actorLabel of topActors) {
+                        lines.push(`    ${viNodeId('X', aLabel)} --> ${viNodeId('A', actorLabel)}`);
+                    }
+                }
+            }
+        }
+
+        const definition = lines.join('\n');
+        await viRenderDiagram('intelPriorityFlowDiagram', definition, 'intelPriorityFlowPlaceholder', 'intelPriorityFlowControls');
+        viLoadedTabs.intelPriorityFlow = true;
+    } catch (err) {
+        console.error('Error loading intel priority flow:', err);
+        placeholder.textContent = 'Error loading diagram: ' + err.message;
+    }
+}
+
+// --- Tab 3: Malware Ecosystem ---
+
+async function loadMalwareEcosystem() {
+    if (viLoadedTabs.malwareEcosystem) return;
+
+    const placeholder = document.getElementById('malwareEcosystemPlaceholder');
+    placeholder.textContent = 'Loading Malware Ecosystem...';
+    placeholder.style.display = 'flex';
+
+    try {
+        const qs = getDateQueryString();
+        const resp = await fetch('/api/threat-intel/malware-actor-map' + qs);
+        const result = await resp.json();
+
+        if (!result.success || !result.data || result.data.length === 0) {
+            placeholder.textContent = 'No malware-actor relationships found for the selected date range.';
+            document.getElementById('malwareEcosystemControls').style.display = 'none';
+            return;
+        }
+
+        const families = result.data;
+        let lines = ['graph LR'];
+        lines.push(viClassDefs());
+
+        const seenActors = new Set();
+        const seenRegions = new Set();
+        for (const family of families) {
+            const malId = viNodeId('M', family.family_name);
+            lines.push(`    ${malId}["${viSanitize(family.family_name)}<br/><small>${family.count} mentions</small>"]:::malware`);
+
+            for (const actor of family.actors) {
+                const actorId = viNodeId('A', actor.actor_name);
+                if (!seenActors.has(actor.actor_name)) {
+                    seenActors.add(actor.actor_name);
+                    lines.push(`    ${actorId}["${viSanitize(actor.actor_name)}"]:::actor`);
+                }
+                lines.push(`    ${malId} --> ${actorId}`);
+
+                // Actor → Region
+                const region = actor.region || 'Unknown';
+                const regionId = viNodeId('R', region);
+                if (!seenRegions.has(region)) {
+                    seenRegions.add(region);
+                    lines.push(`    ${regionId}["${viSanitize(region)}"]:::region`);
+                }
+                lines.push(`    ${actorId} --> ${regionId}`);
+            }
+        }
+
+        const definition = lines.join('\n');
+        await viRenderDiagram('malwareEcosystemDiagram', definition, 'malwareEcosystemPlaceholder', 'malwareEcosystemControls');
+        viLoadedTabs.malwareEcosystem = true;
+    } catch (err) {
+        console.error('Error loading malware ecosystem:', err);
+        placeholder.textContent = 'Error loading diagram: ' + err.message;
+    }
+}
+
+// --- Export helpers ---
+
+async function copyViSvg(diagramElId) {
+    const diagramEl = document.getElementById(diagramElId);
+    const svgContent = diagramEl.innerHTML;
+    if (!svgContent) return;
+
+    try {
+        await navigator.clipboard.writeText(svgContent);
+    } catch (err) {
+        const ta = document.createElement('textarea');
+        ta.value = svgContent;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+    }
+    // Find the button that triggered this (closest export btn in the pane)
+    const pane = diagramEl.closest('.tid-vi-pane');
+    const btn = pane ? pane.querySelector('.tid-vi-export-btn') : null;
+    if (btn) {
+        const orig = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = orig; }, 1500);
+    }
+}
+
+function saveViPng(diagramElId, filename) {
+    const diagramEl = document.getElementById(diagramElId);
+    const svgEl = diagramEl.querySelector('svg');
+    if (!svgEl) return;
+
+    // --- Gather context from the DOM ---
+    const pane = diagramEl.closest('.tid-vi-pane');
+    const paneId = pane ? pane.id : '';
+
+    // Title from the matching tab button
+    const tabBtns = document.querySelectorAll('.tid-vi-tab-btn');
+    let title = 'Visual Insights';
+    tabBtns.forEach(btn => {
+        const tabKey = btn.dataset.viTab;
+        if (paneId.startsWith(tabKey)) title = btn.textContent.trim();
+    });
+
+    // Plain-text description (strip the tooltip span)
+    let description = '';
+    if (pane) {
+        const descEl = pane.querySelector('.tid-vi-description');
+        if (descEl) {
+            const descClone = descEl.cloneNode(true);
+            const tooltip = descClone.querySelector('.tid-vi-info');
+            if (tooltip) tooltip.remove();
+            description = descClone.textContent.trim();
+        }
+    }
+
+    // Legend items per diagram type
+    const legends = {
+        actorTtpMap: [
+            { color: '#16a34a', label: 'Green = 5+ detection rules (strong coverage)' },
+            { color: '#ca8a04', label: 'Yellow = 1-4 rules (moderate coverage)' },
+            { color: '#ef4444', label: 'Red = 0 rules (detection gap)' },
+        ],
+        intelPriorityFlow: [
+            { color: '#7c3aed', label: 'Priority levels (Critical \u2192 Info)' },
+            { color: '#0891b2', label: 'Action types (Detection / Hunt / None)' },
+            { color: '#2563eb', label: 'Top threat actors' },
+        ],
+        malwareEcosystem: [
+            { color: '#db2777', label: 'Malware families (top 10)' },
+            { color: '#2563eb', label: 'Threat actors' },
+            { color: '#d97706', label: 'Regions (geographic attribution)' },
+        ],
+    };
+    const legendKey = Object.keys(legends).find(k => paneId.startsWith(k)) || '';
+    const legendItems = legends[legendKey] || [];
+
+    // Date range from the page footer
+    const dateRangeEl = document.getElementById('tidDateRange');
+    const dateRange = dateRangeEl ? dateRangeEl.textContent.trim() : '';
+
+    // --- Prepare the SVG image ---
+    const clone = svgEl.cloneNode(true);
+    const bbox = svgEl.getBoundingClientRect();
+    clone.setAttribute('width', bbox.width);
+    clone.setAttribute('height', bbox.height);
+
+    const svgData = new XMLSerializer().serializeToString(clone);
+    const svgBase64 = btoa(unescape(encodeURIComponent(svgData)));
+    const dataUri = 'data:image/svg+xml;base64,' + svgBase64;
+
+    const img = new Image();
+    img.onload = function() {
+        const scale = 2;
+        const pad = 48;
+        const headerH = 72;
+        const descH = description ? 56 : 0;
+        const legendH = legendItems.length ? 52 : 0;
+        const footerH = 44;
+        const diagramW = bbox.width;
+        const diagramH = bbox.height;
+        const totalW = Math.max(diagramW + pad * 2, 700);
+        const totalH = headerH + descH + pad + diagramH + pad + legendH + footerH;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = totalW * scale;
+        canvas.height = totalH * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(scale, scale);
+
+        // --- Background ---
+        ctx.fillStyle = '#f0f4f8';
+        ctx.fillRect(0, 0, totalW, totalH);
+
+        // --- Header gradient bar ---
+        const hGrad = ctx.createLinearGradient(0, 0, totalW, 0);
+        hGrad.addColorStop(0, '#1e3a5f');
+        hGrad.addColorStop(1, '#2563eb');
+        ctx.fillStyle = hGrad;
+        ctx.fillRect(0, 0, totalW, headerH);
+
+        // Title text
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 24px -apple-system, "Segoe UI", Roboto, sans-serif';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(title, pad, headerH / 2);
+
+        // "Threat Intel Dashboard" badge on the right
+        ctx.font = '13px -apple-system, "Segoe UI", Roboto, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        const badge = 'Threat Intel Dashboard';
+        const badgeW = ctx.measureText(badge).width;
+        ctx.fillText(badge, totalW - pad - badgeW, headerH / 2);
+
+        // --- Description ---
+        let y = headerH;
+        if (description) {
+            y += 16;
+            ctx.fillStyle = '#475569';
+            ctx.font = '13px -apple-system, "Segoe UI", Roboto, sans-serif';
+            // Word-wrap description
+            const maxLineW = totalW - pad * 2;
+            const words = description.split(' ');
+            let line = '';
+            for (const word of words) {
+                const test = line ? line + ' ' + word : word;
+                if (ctx.measureText(test).width > maxLineW && line) {
+                    ctx.fillText(line, pad, y);
+                    line = word;
+                    y += 18;
+                } else {
+                    line = test;
+                }
+            }
+            if (line) { ctx.fillText(line, pad, y); y += 18; }
+            y += 10;
+        } else {
+            y += pad;
+        }
+
+        // --- Diagram ---
+        // White card behind diagram
+        const cardX = pad - 12;
+        const cardY = y - 8;
+        const cardW = diagramW + 24;
+        const cardH = diagramH + 16;
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = 'rgba(0,0,0,0.08)';
+        ctx.shadowBlur = 12;
+        ctx.shadowOffsetY = 2;
+        _roundRect(ctx, cardX, cardY, cardW, cardH, 8);
+        ctx.fill();
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+
+        ctx.drawImage(img, pad, y, diagramW, diagramH);
+        y += diagramH + pad;
+
+        // --- Legend ---
+        if (legendItems.length) {
+            let lx = pad;
+            ctx.font = '12px -apple-system, "Segoe UI", Roboto, sans-serif';
+            ctx.fillStyle = '#64748b';
+            ctx.fillText('Legend:', lx, y + 4);
+            lx += ctx.measureText('Legend:').width + 14;
+            for (const item of legendItems) {
+                ctx.fillStyle = item.color;
+                _roundRect(ctx, lx, y - 5, 12, 12, 2);
+                ctx.fill();
+                lx += 18;
+                ctx.fillStyle = '#334155';
+                ctx.fillText(item.label, lx, y + 4);
+                lx += ctx.measureText(item.label).width + 24;
+            }
+            y += legendH;
+        }
+
+        // --- Footer ---
+        const footGrad = ctx.createLinearGradient(0, totalH - footerH, totalW, totalH - footerH);
+        footGrad.addColorStop(0, '#e2e8f0');
+        footGrad.addColorStop(1, '#cbd5e1');
+        ctx.fillStyle = footGrad;
+        ctx.fillRect(0, totalH - footerH, totalW, footerH);
+
+        ctx.font = '11px -apple-system, "Segoe UI", Roboto, sans-serif';
+        ctx.fillStyle = '#64748b';
+        ctx.textBaseline = 'middle';
+        const footY = totalH - footerH / 2;
+        const now = new Date();
+        const ts = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                 + ' ' + now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        ctx.fillText('Generated ' + ts, pad, footY);
+        if (dateRange && dateRange !== '-') {
+            const drText = 'Data range: ' + dateRange;
+            const drW = ctx.measureText(drText).width;
+            ctx.fillText(drText, totalW - pad - drW, footY);
+        }
+
+        // --- Download ---
+        canvas.toBlob(function(blob) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 'image/png');
+    };
+    img.src = dataUri;
+}
+
+// Canvas rounded-rect helper
+function _roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+// --- Tab switching ---
+
+document.querySelectorAll('.tid-vi-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const tab = btn.dataset.viTab;
+        document.querySelectorAll('.tid-vi-tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tid-vi-pane').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(tab + 'Pane').classList.add('active');
+
+        // Lazy-load diagram
+        if (tab === 'actorTtpMap') loadActorTtpMap();
+        else if (tab === 'intelPriorityFlow') loadIntelPriorityFlow();
+        else if (tab === 'malwareEcosystem') loadMalwareEcosystem();
+    });
+});
+
+// --- Theme change listener ---
+
+window.addEventListener('themechange', () => {
+    // Reset loaded flags and re-render active tab
+    viLoadedTabs = { actorTtpMap: false, intelPriorityFlow: false, malwareEcosystem: false };
+    viDetectionRuleCounts = null;  // Force re-fetch for fresh colors
+    viDetectionRulesByTech = null;
+
+    const activeBtn = document.querySelector('.tid-vi-tab-btn.active');
+    if (activeBtn) {
+        const tab = activeBtn.dataset.viTab;
+        if (tab === 'actorTtpMap') loadActorTtpMap();
+        else if (tab === 'intelPriorityFlow') loadIntelPriorityFlow();
+        else if (tab === 'malwareEcosystem') loadMalwareEcosystem();
+    }
+});
+
+function initVisualInsights() {
+    // Load the default active tab (Actor → TTP Map)
+    loadActorTtpMap();
+}
+
+// --- Excel Download (server-side with professional formatting) ---
+
+function downloadTableExcel(tab) {
+    const searchInput = document.getElementById(tabConfig[tab].searchEl);
+    const query = searchInput ? searchInput.value.trim() : '';
+    const params = new URLSearchParams({ tab });
+    if (query) params.set('q', query);
+    window.location.href = `/api/threat-intel/export?${params.toString()}`;
+}
+
+// --- Drilldown Modal ---
+
+function escapeAttr(text) {
+    return String(text).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
+async function openDrilldown(entityType, entityValue) {
+    const modal = document.getElementById('tidDrilldownModal');
+    document.getElementById('drilldownEntityType').textContent = entityType;
+    document.getElementById('drilldownEntityValue').textContent = entityValue;
+    document.getElementById('drilldownTippersBody').innerHTML =
+        '<tr><td colspan="3" class="tid-empty-cell">Loading...</td></tr>';
+    modal.style.display = 'flex';
+
+    try {
+        const resp = await fetch(`/api/threat-intel/tippers-for-entity?type=${encodeURIComponent(entityType)}&value=${encodeURIComponent(entityValue)}`);
+        const result = await resp.json();
+        const tbody = document.getElementById('drilldownTippersBody');
+
+        if (!result.success || !result.tippers || result.tippers.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="tid-empty-cell">No tippers found</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = result.tippers.map(t => `
+            <tr>
+                <td><a href="${escapeHtml(t.url)}" target="_blank" rel="noopener noreferrer" class="tid-cve-link">${t.azdo_id}</a></td>
+                <td>${escapeHtml(t.title)}</td>
+                <td class="number-cell">${escapeHtml(t.created_date)}</td>
+            </tr>
+        `).join('');
+    } catch (err) {
+        document.getElementById('drilldownTippersBody').innerHTML =
+            `<tr><td colspan="3" class="tid-empty-cell">Error: ${escapeHtml(err.message)}</td></tr>`;
+    }
+}
+
+function closeDrilldown() {
+    document.getElementById('tidDrilldownModal').style.display = 'none';
+}
+
+// --- Coverage Modal (TTPs Rules drilldown) ---
+
+const coveragePlatformColors = {
+    'CrowdStrike': { bg: 'rgba(220,38,38,0.12)', color: '#dc2626' },
+    'QRadar':      { bg: 'rgba(2,132,199,0.12)', color: '#0284c7' },
+    'Tanium Signals': { bg: 'rgba(217,119,6,0.12)', color: '#d97706' }
+};
+
+const severityOrder = { critical: 0, high: 1, medium: 2, low: 3, informational: 4 };
+
+async function openCoverageModal(techId) {
+    const modal = document.getElementById('tidCoverageModal');
+    document.getElementById('coverageTechId').textContent = techId;
+    const body = document.getElementById('coverageModalBody');
+    body.innerHTML = '<div class="tid-empty-cell">Loading...</div>';
+    modal.style.display = 'flex';
+
+    let html = '';
+
+    await fetchDetectionRuleCounts();  // ensure cache is populated
+    const rules = (viDetectionRulesByTech && viDetectionRulesByTech[techId]) || [];
+    if (rules.length > 0) {
+        // Sort by platform then severity
+        const sorted = [...rules].sort((a, b) => {
+            if (a.platform !== b.platform) return a.platform.localeCompare(b.platform);
+            return (severityOrder[a.severity.toLowerCase()] ?? 99) - (severityOrder[b.severity.toLowerCase()] ?? 99);
+        });
+        html += '<table class="tid-table tid-modal-table"><thead><tr>';
+        html += '<th style="width:120px">Platform</th><th>Rule Name</th><th style="width:90px" class="center-cell">Severity</th><th style="width:100px" class="center-cell">Type</th>';
+        html += '</tr></thead><tbody>';
+        html += sorted.map(r => {
+            const pc = coveragePlatformColors[r.platform] || { bg: 'rgba(136,136,136,0.12)', color: '#888' };
+            const sev = r.severity ? r.severity.toUpperCase() : '-';
+            const rtype = r.rule_type ? r.rule_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '-';
+            return `<tr>
+                <td><span class="tid-platform-badge" style="background:${pc.bg};color:${pc.color}">${escapeHtml(r.platform)}</span></td>
+                <td>${escapeHtml(r.name)}</td>
+                <td class="center-cell">${sev}</td>
+                <td class="center-cell">${escapeHtml(rtype)}</td>
+            </tr>`;
+        }).join('');
+        html += '</tbody></table>';
+    } else {
+        html += '<div class="tid-empty-cell" style="padding:12px 0">No detection rules mapped to this technique</div>';
+    }
+
+    body.innerHTML = html;
+}
+
+function closeCoverageModal() {
+    document.getElementById('tidCoverageModal').style.display = 'none';
+}
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeDrilldown();
+        closeCoverageModal();
+    }
+});
+
+// --- Date Filter Event Listeners ---
+// Both top-bar and tables-section date filters stay in sync.
+// Primary inputs (#tidStartDate/#tidEndDate) are the source of truth.
+
+function syncDateFilters(source) {
+    // Sync values between both sets of date inputs
+    const start1 = document.getElementById('tidStartDate');
+    const end1 = document.getElementById('tidEndDate');
+    const start2 = document.getElementById('tidStartDate2');
+    const end2 = document.getElementById('tidEndDate2');
+    const clear1 = document.getElementById('tidClearDates');
+    const clear2 = document.getElementById('tidClearDates2');
+
+    if (source === 'tables') {
+        start1.value = start2.value;
+        end1.value = end2.value;
+    } else {
+        start2.value = start1.value;
+        end2.value = end1.value;
+    }
+
+    const hasFilter = start1.value || end1.value;
+    clear1.style.display = hasFilter ? 'inline-flex' : 'none';
+    clear2.style.display = hasFilter ? 'inline-flex' : 'none';
+
+    // Sync preset button active states across both bars
+    document.querySelectorAll('.tid-preset-btn').forEach(b => b.classList.remove('active'));
+    if (!hasFilter) {
+        document.querySelectorAll('.tid-preset-btn[data-days="0"]').forEach(b => b.classList.add('active'));
+    }
+
+    // Update active filter label in the tables section
+    const label = document.getElementById('tidTablesDateActive');
+    if (hasFilter) {
+        const s = start1.value || '...';
+        const e = end1.value || '...';
+        label.textContent = `Filtering: ${s} to ${e}`;
+        label.style.display = 'inline';
+    } else {
+        label.textContent = '';
+        label.style.display = 'none';
+    }
+}
+
+function initDateFilter() {
+    const start1 = document.getElementById('tidStartDate');
+    const end1 = document.getElementById('tidEndDate');
+    const clear1 = document.getElementById('tidClearDates');
+    const start2 = document.getElementById('tidStartDate2');
+    const end2 = document.getElementById('tidEndDate2');
+    const clear2 = document.getElementById('tidClearDates2');
+
+    // Top-bar date input changes
+    function onTopDateChange() {
+        syncDateFilters('top');
+        loadDashboard(true);
+    }
+    start1.addEventListener('change', onTopDateChange);
+    end1.addEventListener('change', onTopDateChange);
+
+    // Tables-section date input changes
+    function onTablesDateChange() {
+        syncDateFilters('tables');
+        loadDashboard(true);
+    }
+    start2.addEventListener('change', onTablesDateChange);
+    end2.addEventListener('change', onTablesDateChange);
+
+    // Clear buttons
+    function clearAll() {
+        start1.value = ''; end1.value = '';
+        start2.value = ''; end2.value = '';
+        syncDateFilters('top');
+        loadDashboard(true);
+    }
+    clear1.addEventListener('click', clearAll);
+    clear2.addEventListener('click', clearAll);
+
+    // Preset buttons (both bars use the same handler)
+    document.querySelectorAll('.tid-preset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const days = parseInt(btn.dataset.days);
+            // Mark all same-days presets as active across both bars
+            document.querySelectorAll('.tid-preset-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll(`.tid-preset-btn[data-days="${days}"]`).forEach(b => b.classList.add('active'));
+
+            if (days === 0) {
+                start1.value = ''; end1.value = '';
+            } else {
+                const endD = new Date();
+                const startD = new Date();
+                startD.setDate(endD.getDate() - days);
+                start1.value = startD.toISOString().slice(0, 10);
+                end1.value = endD.toISOString().slice(0, 10);
+            }
+            syncDateFilters('top');
+            loadDashboard(true);
+        });
+    });
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    loadDashboard();
+    initSearchListeners();
+    initDateFilter();
+
+    // ── Chat Widget ──
+    initChatWidget({
+        title: 'Ask about threat intel',
+        greeting: 'Hi! Ask me anything about the threat intelligence data on this page.',
+        loadingMessages: [
+            'Analyzing threat actors\u2026',
+            'Correlating IOC data\u2026',
+            'Mapping MITRE techniques\u2026',
+            'Reviewing malware families\u2026',
+            'Scanning risk indicators\u2026'
+        ],
+        chips: [
+            {label: 'Top threat actors', q: 'Who are the top threat actors and what regions are they from?'},
+            {label: 'High-risk IOCs', q: 'Which domains or IPs have the highest risk scores?'},
+            {label: 'MITRE coverage', q: 'Which MITRE ATT&CK techniques are most frequently seen?'},
+            {label: 'Malware families', q: 'What are the top malware families and who uses them?'}
+        ],
+        getContext: function() {
+            var d = window.tidData;
+            if (!d) return '';
+            var lines = ['# Threat Intel Dashboard Data\n'];
+
+            // Summary
+            var s = d.summary || {};
+            lines.push('## Summary');
+            lines.push('- Total tippers: ' + (s.total_tippers || 0));
+            lines.push('- Unique threat actors: ' + (s.unique_threat_actors || 0));
+            lines.push('- Total IOCs: ' + (s.total_iocs || 0));
+            lines.push('- MITRE techniques: ' + (s.mitre_techniques_count || 0));
+            lines.push('- Date range: ' + (s.date_range || 'N/A'));
+            lines.push('');
+
+            // Tables — serialize each as markdown
+            var tables = d.tables || {};
+
+            function toTable(title, rows, cols) {
+                if (!rows || !rows.length) return '';
+                var out = ['## ' + title, '| ' + cols.join(' | ') + ' |', '| ' + cols.map(function(){return '---';}).join(' | ') + ' |'];
+                rows.forEach(function(r) {
+                    out.push('| ' + cols.map(function(c){ return r[c] != null ? r[c] : '-'; }).join(' | ') + ' |');
+                });
+                return out.join('\n') + '\n';
+            }
+
+            lines.push(toTable('Top Domains', tables.top_domains, ['rank','value','count','vt_verdict','rf_risk_level']));
+            lines.push(toTable('Top IPs', tables.top_ips, ['rank','value','count','vt_verdict','rf_risk_level']));
+            lines.push(toTable('Top Hashes', tables.top_hashes, ['rank','value','count','vt_verdict']));
+            lines.push(toTable('Recent CVEs', tables.recent_cves, ['rank','cve','count','first_seen','last_seen']));
+            lines.push(toTable('Top Malware Families', tables.top_malware_families, ['rank','name','count']));
+            lines.push(toTable('Top Threat Actors', tables.top_threat_actors, ['rank','name','region','count']));
+            lines.push(toTable('Top MITRE Techniques', tables.top_mitre_techniques, ['rank','technique_id','count','detection_rules']));
+            lines.push(toTable('Top Red Team TTPs', tables.top_redteam_ttps, ['rank','technique_id','count','last_tested','submitters']));
+
+            // Charts summaries
+            var charts = d.charts || {};
+            if (charts.priority_distribution) {
+                lines.push('## Priority Distribution');
+                (charts.priority_distribution.labels || []).forEach(function(l, i) {
+                    lines.push('- ' + l + ': ' + (charts.priority_distribution.values[i] || 0));
+                });
+                lines.push('');
+            }
+            if (charts.action_distribution) {
+                lines.push('## Recommended Actions');
+                (charts.action_distribution.labels || []).forEach(function(l, i) {
+                    lines.push('- ' + l + ': ' + (charts.action_distribution.values[i] || 0));
+                });
+                lines.push('');
+            }
+
+            return lines.join('\n');
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,30 @@
+[Unit]
+Description=IR Datasette - SQLite Browser
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/vinay/security-ops-platform
+ExecStart=/home/vinay/security-ops-platform/.venv/bin/datasette \
+    data/transient/memory/team_memory.db \
+    data/transient/sessions/conversations.db \
+    data/escalation_contacts/escalation_contacts.db \
+    data/threat_intel/threat_intel_dashboard.db \
+    data/epp_tagging/epp_tagging_metrics.db \
+    data/xsoar_timeline/xsoar_timeline.db \
+    data/ruai_screening/ruai_screening.db \
+    data/oe_detection/oe_detection.db \
+    data/ai_intake/ai_intake.db \
+    data/transient/logs/bot_logs.db \
+    --host 0.0.0.0 --port 8201 \
+    --setting sql_time_limit_ms 5000 \
+    --static static:web/static \
+    --metadata datasette_metadata.json \
+    --template-dir deployment/datasette_templates
+Restart=on-failure
+KillMode=mixed
+TimeoutStopSec=10
+RestartSec=5
+
+[Install]
+WantedBy=default.target

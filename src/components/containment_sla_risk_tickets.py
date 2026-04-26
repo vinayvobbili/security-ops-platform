@@ -159,7 +159,7 @@ def start(room_id):
     try:
         ticket_handler = TicketHandler(XsoarEnvironment.PROD)
         query = f'-category:job -status:closed type:{CONFIG.team_name} timetocontain.runStatus:running (timetocontain.slaStatus:risk or timetocontain.slaStatus:2) -hostname:""'
-        tickets = ticket_handler.get_tickets(query)
+        tickets = ticket_handler.get_tickets(query, paginate=False, test_connection=False, read_timeout=15)
 
         if not tickets:
             return  # Silent when no tickets at risk

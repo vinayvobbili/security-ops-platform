@@ -10,6 +10,21 @@ DEFAULT_QRADAR_HUNT_HOURS = 168    # 7 days
 DEFAULT_CROWDSTRIKE_HUNT_HOURS = 720  # 30 days
 
 
+class VulnerableProductMention(BaseModel):
+    """A product/version combination explicitly flagged as vulnerable in the tipper text."""
+    product: str = Field(
+        description="Software or product name as it appears in the tipper, e.g. 'Apache Struts', 'OpenSSL', 'Microsoft Exchange'. Use the canonical product name, not the vendor."
+    )
+    vendor: Optional[str] = Field(
+        default=None,
+        description="Vendor name if mentioned, e.g. 'Apache', 'OpenSSL Project', 'Microsoft'."
+    )
+    version_constraint: Optional[str] = Field(
+        default=None,
+        description="Affected version range exactly as stated, e.g. '< 2.5.30', '1.0.0 - 2.0.0', 'all versions before 4.2'. Use null if no version constraint is given."
+    )
+
+
 class NoveltyLLMResponse(BaseModel):
     """Simplified Pydantic model for LLM output.
 
@@ -39,7 +54,18 @@ class NoveltyLLMResponse(BaseModel):
     )
     whats_familiar_reasons: List[str] = Field(
         default_factory=list,
-        description="1-3 specific elements that make this tipper FAMILIAR to past tippers (e.g., 'Same Octo Tempest campaign from #1237886', 'Identical phishing TTPs to #1240351'). Reference ticket IDs when possible. Leave empty if nothing is familiar."
+        description="1-3 specific elements that connect this tipper to the HISTORICAL TIPPERS provided. ONLY base this on the historical tippers shown — do NOT use your own knowledge. Reference ticket IDs (e.g., 'Same Octo Tempest campaign from #1237886'). MUST be empty if no historical tippers were provided."
+    )
+    vulnerable_products: List[VulnerableProductMention] = Field(
+        default_factory=list,
+        description=(
+            "Products on a defender's environment that the tipper says are vulnerable AND that have "
+            "NO CVE ID assigned anywhere in the tipper. Default is empty — only populate when both "
+            "conditions are clearly met. Skip: (a) any product covered by a CVE-YYYY-NNNNN reference "
+            "in the tipper, (b) tools the attacker uses, (c) products the attacker merely targets "
+            "without a vulnerability claim, (d) attacker-owned infrastructure, (e) domains/URLs/IPs, "
+            "(f) generic categories like 'Linux servers'. See the prompt for WRONG/RIGHT examples."
+        )
     )
 
 
@@ -73,6 +99,8 @@ class NoveltyAnalysis:
     actionable_steps: List[Dict[str, str]] = field(default_factory=list)  # {action, priority, detail}
     # Environment exposure
     exposure_summary: Dict[str, Any] = field(default_factory=dict)  # {hosts_affected, users_affected, etc.}
+    # CVE-less vulnerable products extracted from tipper text by the LLM
+    vulnerable_products: List[Dict[str, Optional[str]]] = field(default_factory=list)
     # Token metrics from LLM call
     input_tokens: int = 0
     output_tokens: int = 0
@@ -101,6 +129,8 @@ class ToolHuntResult:
     queries: List[Dict[str, str]] = field(default_factory=list)  # [{type, query}]
     # CrowdStrike Foundry access status
     foundry_access_denied: bool = False  # True if foundry:read perms not available
+    # Raw telemetry events matched in LogScale (CrowdStrike only). Not scored into total_hits.
+    logscale_events_found: int = 0
 
 
 @dataclass

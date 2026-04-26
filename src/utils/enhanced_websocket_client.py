@@ -149,8 +149,18 @@ def patch_websocket_client():
                             return
                     except Exception as e:
                         # Log other exceptions but don't retry
-                        # Only include traceback for non-timeout errors
                         logger.error(f"Error processing websocket message: {e}", exc_info=True)
+                        # Best-effort: send error feedback to the Webex room
+                        try:
+                            activity = msg.get('data', {}).get('activity', {})
+                            message_id = self._get_base64_message_id(activity)
+                            webex_message = self.teams.messages.get(message_id)
+                            self.teams.messages.create(
+                                roomId=webex_message.roomId,
+                                markdown=f"⚠️ Something went wrong processing your request: `{e}`"
+                            )
+                        except Exception:
+                            pass  # Don't let error reporting break the loop
                         return  # Don't crash the websocket loop
 
             async def _websocket_recv():

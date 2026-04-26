@@ -1,0 +1,341 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'Cyber Tool Inventory' %}
+{% set page_title_left_icon = '🧰' %}
+{% set page_title_right_icon = '🛡️' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/cyber_tool_inventory.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/chat_widget.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="cti-container">
+    <div class="cti-info-strip">
+        <button class="cti-info-btn" onclick="document.getElementById('ctiInfoModal').style.display='flex'" title="How does this work?">
+            <span class="cti-info-btn-icon">✦</span> How does this work?
+        </button>
+    </div>
+
+    <div class="cti-intro">
+        Single source of truth for tools owned under the CISO organization (CISO: <strong>Dan Antilley</strong>).
+        <strong>Phase 1</strong> is seeded from the Security Policy team's spreadsheet snapshot;
+        once an EAI API key is provisioned, this list will refresh automatically and the descriptor
+        fields below will reflect real ownership.
+    </div>
+
+    <div class="cti-synthetic-banner">
+        🦸 <strong>Preview data:</strong> Application Long Name, Sr. Business Leader, Business Working
+        Client, and Business Sponsor are <em>synthetic</em> for now — populated from Marvel/DC
+        characters so they're unmistakably placeholders. EAI ID and Application Name are real.
+    </div>
+
+    <div class="cti-toolbar">
+        <div class="cti-search-wrap">
+            <input id="ctiSearch" type="search" class="cti-search" placeholder="Search across any field…" autocomplete="off">
+        </div>
+        <span id="ctiCount" class="cti-count">Loading…</span>
+    </div>
+
+    <div class="cti-table-wrap">
+        <table class="cti-table">
+            <thead>
+                <tr>
+                    <th class="cti-th-eai cti-sortable" data-sort-key="eai_id" data-sort-type="numeric">EAI ID<span class="cti-sort-arrow"></span></th>
+                    <th class="cti-sortable" data-sort-key="app_name">Application Name<span class="cti-sort-arrow"></span></th>
+                    <th class="cti-sortable" data-sort-key="app_long_name">Application Long Name<span class="cti-sort-arrow"></span></th>
+                    <th class="cti-sortable" data-sort-key="sr_business_leader">Sr. Business Leader<span class="cti-sort-arrow"></span></th>
+                    <th class="cti-sortable" data-sort-key="business_working_client">Business Working Client<span class="cti-sort-arrow"></span></th>
+                    <th class="cti-sortable" data-sort-key="business_sponsor">Business Sponsor<span class="cti-sort-arrow"></span></th>
+                </tr>
+            </thead>
+            <tbody id="ctiTbody">
+                <tr><td colspan="6" class="cti-empty">Loading inventory…</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% include '_chat_widget.html' %}
+
+<!-- How Does This Work? Modal -->
+<div class="cti-info-backdrop" id="ctiInfoModal" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+    <div class="cti-info-modal" onclick="event.stopPropagation()">
+        <div class="cti-info-header">
+            <h3>How Does the Cyber Tool Inventory Work?</h3>
+            <button class="cti-info-close" onclick="document.getElementById('ctiInfoModal').style.display='none'">&times;</button>
+        </div>
+        <div class="cti-info-body">
+            {% set demo_video_url = url_for('static', filename='videos/cyber_tool_inventory_demo.mp4') %}
+            <div class="cti-info-video-wrap">
+                <video class="cti-info-video" controls preload="metadata">
+                    <source src="{{ demo_video_url }}" type="video/mp4">
+                    Your browser doesn't support embedded video.
+                </video>
+                <div class="cti-info-video-caption">
+                    Short walkthrough — searching the inventory and asking the chat widget for answers.
+                </div>
+            </div>
+
+            <div class="cti-info-kpis">
+                <div class="cti-info-kpi">
+                    <div class="cti-info-kpi-value">{{ tool_count }}</div>
+                    <div class="cti-info-kpi-label">Tools, all CISO-owned</div>
+                </div>
+                <div class="cti-info-kpi">
+                    <div class="cti-info-kpi-value">Plain English</div>
+                    <div class="cti-info-kpi-label">Ask, no DAX or SQL</div>
+                </div>
+                <div class="cti-info-kpi">
+                    <div class="cti-info-kpi-value">0</div>
+                    <div class="cti-info-kpi-label">Tickets to find a tool</div>
+                </div>
+            </div>
+
+            <div class="cti-info-section">
+                <div class="cti-info-icon">🎯</div>
+                <div>
+                    <h4>The problem it solves</h4>
+                    <p>Answers about <em>"what tools do we own?"</em> live in a spreadsheet on the Security Policy team's laptop. Every <em>"do we have an EDR?"</em>, <em>"who sponsors Splunk?"</em>, <em>"which tools cover identity?"</em> turns into a ping, a context-switch, and a wait. This page is a <strong>self-serve front door</strong> over the same catalog — anyone with web-app access can answer their own question in seconds.</p>
+                </div>
+            </div>
+
+            <div class="cti-info-section">
+                <div class="cti-info-icon">🔎</div>
+                <div>
+                    <h4>1. Search & sort</h4>
+                    <p>The search box matches across <strong>every visible field</strong> — app name, long name, leader, working client, sponsor — live as you type. Click any column header to sort, click again to flip direction; the table remembers your sort and search query so the view comes back the way you left it.</p>
+                </div>
+            </div>
+
+            <div class="cti-info-section">
+                <div class="cti-info-icon">💬</div>
+                <div>
+                    <h4>2. Ask in plain English</h4>
+                    <p>The chat widget in the bottom-right has the <strong>entire inventory loaded as context</strong>. Ask things like <em>"how many tools do we have?"</em>, <em>"which tools look like EDR?"</em>, <em>"group by sponsor and show counts"</em>, <em>"any identity tools?"</em> — the LLM filters, groups, and summarizes against the live list, no ticket needed.</p>
+                </div>
+            </div>
+
+            <div class="cti-info-section">
+                <div class="cti-info-icon">🧪</div>
+                <div>
+                    <h4>3. Phase 1 today — Phase 2 later</h4>
+                    <p><strong>Today (Phase 1):</strong> EAI ID and Application Name are the real values from the Security Policy snapshot. The four descriptor columns — Application Long Name, Sr. Business Leader, Business Working Client, Business Sponsor — are <strong>obviously-fake Marvel/DC names</strong> as a placeholder, so no one mistakes them for real ownership data. <strong>Phase 2 (when EAI provides an API key):</strong> the loader swaps to the live API, the synthetic fields are replaced by real ownership, and nothing else on this page changes.</p>
+                </div>
+            </div>
+
+            <div class="cti-info-divider"></div>
+
+            <div class="cti-info-section">
+                <div class="cti-info-icon">🔒</div>
+                <div>
+                    <h4>Access &amp; governance</h4>
+                    <p>Auth is the <strong>same SSO</strong> as the rest of the web app — no extra access path, no separate permissions to grant. The catalog is a <em>read-only</em> view; updates still flow through the Security Policy team. This page removes a skill gate (knowing where the spreadsheet lives), not a security gate.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    const PREFS_KEY = 'cti_prefs_v1';
+    const DEFAULT_PREFS = { sortKey: 'app_name', sortDir: 'asc', query: '' };
+
+    let allRows = [];
+    let prefs = loadPrefs();
+
+    const tbody = document.getElementById('ctiTbody');
+    const search = document.getElementById('ctiSearch');
+    const countEl = document.getElementById('ctiCount');
+    const headers = document.querySelectorAll('th.cti-sortable');
+
+    function loadPrefs() {
+        try {
+            const stored = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
+            return Object.assign({}, DEFAULT_PREFS, stored);
+        } catch (e) { return Object.assign({}, DEFAULT_PREFS); }
+    }
+    function savePrefs() {
+        try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (e) {}
+    }
+
+    function makeCell(text, className) {
+        const td = document.createElement('td');
+        if (className) td.className = className;
+        td.textContent = text || '—';
+        return td;
+    }
+
+    function renderRows(rows) {
+        if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="6" class="cti-empty">No matches.</td></tr>';
+            return;
+        }
+        const frag = document.createDocumentFragment();
+        rows.forEach(function(r) {
+            const tr = document.createElement('tr');
+
+            const tdId = document.createElement('td');
+            tdId.className = 'cti-td-eai';
+            const pill = document.createElement('span');
+            pill.className = 'cti-eai-pill' + (r.eai_id ? '' : ' cti-eai-missing');
+            pill.textContent = r.eai_id || 'no ID';
+            tdId.appendChild(pill);
+            tr.appendChild(tdId);
+
+            tr.appendChild(makeCell(r.app_name, 'cti-app-name'));
+            tr.appendChild(makeCell(r.app_long_name, 'cti-long-name'));
+            tr.appendChild(makeCell(r.sr_business_leader, 'cti-person cti-synthetic'));
+            tr.appendChild(makeCell(r.business_working_client, 'cti-team cti-synthetic'));
+            tr.appendChild(makeCell(r.business_sponsor, 'cti-person cti-synthetic'));
+
+            frag.appendChild(tr);
+        });
+        tbody.replaceChildren(frag);
+    }
+
+    function compareValues(a, b, type) {
+        // Empty values sort to the end regardless of direction
+        const aEmpty = a == null || a === '';
+        const bEmpty = b == null || b === '';
+        if (aEmpty && bEmpty) return 0;
+        if (aEmpty) return 1;
+        if (bEmpty) return -1;
+
+        if (type === 'numeric') {
+            const an = parseFloat(a), bn = parseFloat(b);
+            if (!isNaN(an) && !isNaN(bn)) return an - bn;
+        }
+        return String(a).toLowerCase().localeCompare(String(b).toLowerCase());
+    }
+
+    function sortRows(rows) {
+        const th = document.querySelector('th[data-sort-key="' + prefs.sortKey + '"]');
+        const type = th ? (th.getAttribute('data-sort-type') || 'string') : 'string';
+        const sign = prefs.sortDir === 'desc' ? -1 : 1;
+        return rows.slice().sort(function(x, y) {
+            const xv = x[prefs.sortKey], yv = y[prefs.sortKey];
+            const xEmpty = xv == null || xv === '';
+            const yEmpty = yv == null || yv === '';
+            // Empty values always sink to the bottom, regardless of direction —
+            // applied here (not inside compareValues) so the sign multiplier below
+            // can't flip them to the top on desc.
+            if (xEmpty && !yEmpty) return 1;
+            if (!xEmpty && yEmpty) return -1;
+            if (xEmpty && yEmpty) return compareValues(x.app_name, y.app_name, 'string');
+            const cmp = compareValues(xv, yv, type);
+            // Tie-break by app_name so order stays stable
+            return cmp !== 0 ? cmp * sign : compareValues(x.app_name, y.app_name, 'string');
+        });
+    }
+
+    function updateHeaderIndicators() {
+        headers.forEach(function(h) {
+            const arrow = h.querySelector('.cti-sort-arrow');
+            const isActive = h.getAttribute('data-sort-key') === prefs.sortKey;
+            h.classList.toggle('cti-sort-active', isActive);
+            // Active column shows a bright directional arrow; inactive columns
+            // show a faded ⇅ so the user can see at a glance that headers sort.
+            arrow.textContent = isActive ? (prefs.sortDir === 'desc' ? ' ▼' : ' ▲') : ' ⇅';
+        });
+    }
+
+    function applyFilter() {
+        const q = (prefs.query || '').trim().toLowerCase();
+        const filtered = q
+            ? allRows.filter(function(r) {
+                return [r.app_name, r.app_long_name, r.eai_id, r.sr_business_leader,
+                        r.business_working_client, r.business_sponsor]
+                    .some(function(v) { return (v || '').toLowerCase().includes(q); });
+              })
+            : allRows;
+        const sorted = sortRows(filtered);
+        renderRows(sorted);
+        countEl.textContent = q
+            ? sorted.length + ' of ' + allRows.length + ' tools'
+            : allRows.length + ' tools';
+    }
+
+    headers.forEach(function(h) {
+        h.addEventListener('click', function() {
+            const key = h.getAttribute('data-sort-key');
+            if (prefs.sortKey === key) {
+                prefs.sortDir = prefs.sortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                prefs.sortKey = key;
+                prefs.sortDir = 'asc';
+            }
+            savePrefs();
+            updateHeaderIndicators();
+            applyFilter();
+        });
+    });
+
+    search.addEventListener('input', function() {
+        prefs.query = search.value || '';
+        savePrefs();
+        applyFilter();
+    });
+
+    // Restore persisted state to UI
+    search.value = prefs.query || '';
+    updateHeaderIndicators();
+
+    fetch('/api/cyber-tool-inventory/list')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            allRows = data.rows || [];
+            window._ctiRows = allRows;
+            applyFilter();
+        })
+        .catch(function() {
+            tbody.innerHTML = '<tr><td colspan="6" class="cti-empty">Failed to load inventory.</td></tr>';
+            countEl.textContent = '';
+        });
+})();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="{{ url_for('static', filename='js/chat_widget.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    initChatWidget({
+        title: 'Ask about the tool inventory',
+        greeting: 'Hi! Ask me about the CISO tool inventory — search by app, category, leader, sponsor, or working client.',
+        loadingMessages: [
+            'Scanning the inventory…',
+            'Cross-referencing EAI IDs…',
+            'Looking up business owners…'
+        ],
+        chips: [
+            {label: 'How many tools?', q: 'How many tools are in the inventory?'},
+            {label: 'EDR tools', q: 'Which tools look like EDR or endpoint protection?'},
+            {label: 'Identity tools', q: 'Which tools are related to identity, IAM, or access management?'},
+            {label: 'Tools by sponsor', q: 'Group the tools by Business Sponsor and show counts.'}
+        ],
+        getContext: function() {
+            const rows = window._ctiRows || [];
+            const lines = [
+                '# Cyber Tool Inventory',
+                '',
+                'Total tools: ' + rows.length,
+                '',
+                'NOTE: Application Long Name, Sr. Business Leader, Business Working Client, and Business Sponsor are SYNTHETIC placeholder values (Marvel/DC characters) for preview purposes. CISO is "Dan Antilley" for every row by definition. EAI ID and Application Name are real.',
+                '',
+                '| EAI ID | App Name | Long Name | CISO | Sr. Business Leader | Working Client | Sponsor |',
+                '| --- | --- | --- | --- | --- | --- | --- |'
+            ];
+            rows.forEach(function(r) {
+                lines.push('| ' + (r.eai_id || '-') + ' | ' + r.app_name + ' | ' +
+                           (r.app_long_name || '-') + ' | ' + (r.ciso || '-') + ' | ' +
+                           (r.sr_business_leader || '-') + ' | ' +
+                           (r.business_working_client || '-') + ' | ' +
+                           (r.business_sponsor || '-') + ' |');
+            });
+            return lines.join('\n');
+        }
+    });
+});
+</script>
+{% endblock %}

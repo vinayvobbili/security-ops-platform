@@ -1,0 +1,27 @@
+{
+  "name": "DnR Dashboard",
+  "short_name": "Dashboard",
+  "start_url": "/",
+  "scope": "/",
+  "display": "minimal-ui",
+  "background_color": "#1e1b4b",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "/static/icons/pwa/dashboard-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/pwa/dashboard-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/icons/pwa/dashboard-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

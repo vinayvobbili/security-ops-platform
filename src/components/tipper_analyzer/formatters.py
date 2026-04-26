@@ -15,6 +15,11 @@ from .utils import (
 )
 
 
+def _escape_aql_value(value: str) -> str:
+    """Escape a value for safe interpolation into AQL query strings."""
+    return value.replace("'", "''")
+
+
 def _get_falcon_console_link(query_type: str, fql_query: str) -> Optional[Tuple[str, str]]:
     """Generate a clickable Falcon console link for a CrowdStrike FQL query.
 
@@ -76,11 +81,18 @@ def _get_qradar_console_link(aql_query: str) -> Optional[Tuple[str, str]]:
     import re
     from my_config import get_config
 
-    # Get QRadar console URL from config
+    # Get QRadar console URL from config (fall back to API URL with /api stripped)
     config = get_config()
     qradar_base = config.qradar_console_url
     if not qradar_base:
-        return None  # Console URL not configured
+        # Derive console URL from API URL (strip /api suffix)
+        api_url = (config.qradar_api_url or '').rstrip('/')
+        if api_url.endswith('/api'):
+            qradar_base = api_url[:-4]
+        elif api_url:
+            qradar_base = api_url
+        else:
+            return None  # No QRadar URL configured
 
     # Remove trailing slash if present
     qradar_base = qradar_base.rstrip('/')
@@ -96,6 +108,67 @@ def _get_qradar_console_link(aql_query: str) -> Optional[Tuple[str, str]]:
     link_text = "Open in QRadar Log Activity"
 
     return (url, link_text)
+
+
+def _format_similarity_compact(ticket: dict) -> str:
+    """Format similarity as a compact string with multi-signal breakdown.
+
+    Examples:
+        "72% [IOC:3 TTP:2 Actor:APT29]"
+        "91%"  (no breakdown available)
+    """
+    breakdown = ticket.get('similarity_breakdown')
+    similarity = ticket.get('similarity', 0)
+
+    if not breakdown:
+        return f"{similarity:.0%}" if similarity else ""
+
+    parts = [f"{breakdown.composite_score:.0%}"]
+    details = []
+    if breakdown.shared_ioc_count:
+        details.append(f"IOC:{breakdown.shared_ioc_count}")
+    if breakdown.shared_ttp_count:
+        details.append(f"TTP:{breakdown.shared_ttp_count}")
+    if breakdown.shared_actors:
+        details.append(f"Actor:{','.join(breakdown.shared_actors[:2])}")
+    if breakdown.shared_malware:
+        details.append(f"Malware:{','.join(breakdown.shared_malware[:2])}")
+    if details:
+        parts.append(f"[{' '.join(details)}]")
+    return ' '.join(parts)
+
+
+def _format_similarity_html(ticket: dict) -> str:
+    """Format similarity as HTML with multi-signal detail for AZDO display.
+
+    Returns a cell content string with the composite score prominent
+    and individual signals in smaller text below.
+    """
+    breakdown = ticket.get('similarity_breakdown')
+    similarity = ticket.get('similarity', 0)
+
+    if not breakdown:
+        return f"<strong>{similarity:.0%}</strong>" if similarity else ""
+
+    lines = [f"<strong>{breakdown.composite_score:.0%}</strong>"]
+    detail_parts = []
+    if breakdown.shared_ioc_count:
+        detail_parts.append(f"IOC: {breakdown.shared_ioc_count} shared")
+    else:
+        detail_parts.append(f"IOC: 0")
+    if breakdown.shared_ttp_count:
+        detail_parts.append(f"TTP: {breakdown.shared_ttp_count}")
+    if breakdown.shared_actors:
+        detail_parts.append(f"Actor: {', '.join(breakdown.shared_actors[:2])}")
+    if breakdown.shared_malware:
+        detail_parts.append(f"Malware: {', '.join(breakdown.shared_malware[:2])}")
+    if detail_parts:
+        lines.append(
+            '<span style="font-size: 11px; color: #666;">'
+            + '<br/>'.join(detail_parts)
+            + '</span>'
+        )
+    return '<br/>'.join(lines)
 
 
 def _recency_label(tipper_ids: List[str], history_dates: Dict[str, str]) -> str:
@@ -242,16 +315,39 @@ def format_analysis_for_display(analysis: NoveltyAnalysis, source: str = "on-dem
         for ticket in analysis.related_tickets:
             title = ticket.get('title', '')
             similarity = ticket.get('similarity', 0)
-            similarity_pct = f"({similarity:.0%})" if similarity else ""
-            if title:
-                # Strip "[PRIORITY] CTI Threat Tipper: " prefix
-                if '] CTI Threat Tipper: ' in title:
-                    title = title.split('] CTI Threat Tipper: ', 1)[1]
-                # Truncate long titles
-                display_title = title[:70] + '...' if len(title) > 70 else title
-                output += f"  • #{ticket['id']} {similarity_pct}: {display_title}\n"
+            breakdown = ticket.get('similarity_breakdown')
+            # Build similarity display with multi-signal breakdown
+            sim_str = _format_similarity_compact(ticket)
+            # Format created date compactly
+            raw_date = ticket.get('created_date', '')
+            if raw_date:
+                try:
+                    dt = datetime.fromisoformat(raw_date.replace('Z', '+00:00'))
+                    created_str = dt.strftime('%m/%d/%Y')
+                except Exception:
+                    created_str = raw_date[:10]
             else:
-                output += f"  • #{ticket['id']} {similarity_pct}\n"
+                created_str = ''
+            state = ticket.get('state', '')
+            assigned_to = ticket.get('assigned_to', '')
+            # Show first name + last initial for space
+            if assigned_to and ' ' in assigned_to:
+                parts = assigned_to.split()
+                assigned_to = f"{parts[0]} {parts[-1][0]}."
+            tags = ticket.get('tags', '')
+            # Filter out ubiquitous tags that appear on all tippers
+            if tags:
+                tags = '; '.join(t.strip() for t in tags.split(';') if t.strip().upper() != 'CTI')
+            if tags and len(tags) > 20:
+                tags = tags[:18] + '..'
+            # Strip "[PRIORITY] CTI Threat Tipper: " prefix from title
+            if '] CTI Threat Tipper: ' in title:
+                title = title.split('] CTI Threat Tipper: ', 1)[1]
+            display_title = title[:50] + '...' if len(title) > 50 else title
+            # Use raw #{id} — the outer linkify_work_items_markdown call handles hyperlinking
+            details = [sim_str, created_str, state, assigned_to, tags]
+            details_str = ' · '.join(d for d in details if d)
+            output += f"  • #{ticket['id']} ({details_str}): {display_title}\n"
     else:
         output += "  (No semantically related tickets found)\n"
 
@@ -400,6 +496,10 @@ def format_analysis_for_display(analysis: NoveltyAnalysis, source: str = "on-dem
     if source in ("hourly", "command"):
         output += "_📝 Full analysis with all IOCs has been posted to the AZDO work item._\n"
 
+    # Show LLM generation time if available
+    if analysis.generation_time > 0:
+        output += f"_⏱ LLM analysis: {analysis.generation_time:.1f}s_\n"
+
     return output
 
 
@@ -458,19 +558,69 @@ def format_analysis_for_azdo(analysis: NoveltyAnalysis) -> str:
     html += "</ul>\n"
 
     if analysis.related_tickets:
-        html += "<p><strong>🔗 Related Tickets:</strong></p>\n<ul>\n"
+        html += "<p><strong>🔗 Related Tickets:</strong></p>\n"
+        html += '<table style="border-collapse: collapse; width: 100%; margin-bottom: 10px;">\n'
+        html += (
+            '<tr style="background-color: #e3f2fd;">'
+            '<th style="padding: 6px; border: 1px solid #ccc; width: 80px;">ID</th>'
+            '<th style="padding: 6px; border: 1px solid #ccc; width: 120px;">Match Signals</th>'
+            '<th style="padding: 6px; border: 1px solid #ccc; width: 90px;">Created</th>'
+            '<th style="padding: 6px; border: 1px solid #ccc; width: 70px;">Status</th>'
+            '<th style="padding: 6px; border: 1px solid #ccc; width: 100px;">Owner</th>'
+            '<th style="padding: 6px; border: 1px solid #ccc;">Tags</th>'
+            '<th style="padding: 6px; border: 1px solid #ccc;">Name</th>'
+            '</tr>\n'
+        )
         for t in analysis.related_tickets:
-            similarity = t.get('similarity', 0)
-            similarity_pct = f" ({similarity:.0%} similar)" if similarity else ""
+            sim_html = _format_similarity_html(t)
             title = t.get('title', '')
-            # Strip "[PRIORITY] CTI Threat Tipper: " prefix for cleaner display
             if '] CTI Threat Tipper: ' in title:
                 title = title.split('] CTI Threat Tipper: ', 1)[1]
-            display_title = title[:60] + '...' if len(title) > 60 else title
+            display_title = title[:50] + '...' if len(title) > 50 else title
             ticket_id = t['id']
             ticket_link = linkify_work_items_html(f'#{ticket_id}')
-            html += f"<li>{ticket_link}{similarity_pct}: {display_title}</li>\n"
-        html += "</ul>\n"
+            # Format created date
+            raw_date = t.get('created_date', '')
+            if raw_date:
+                try:
+                    from datetime import datetime
+                    dt = datetime.fromisoformat(raw_date.replace('Z', '+00:00'))
+                    created_str = dt.strftime('%m/%d/%Y')
+                except Exception:
+                    created_str = raw_date[:10]
+            else:
+                created_str = ''
+            state = t.get('state', '')
+            assigned_to = t.get('assigned_to', '')
+            tags = t.get('tags', '')
+            # Filter out ubiquitous tags that appear on all tippers
+            if tags:
+                tags = ';'.join(t_tag.strip() for t_tag in tags.split(';') if t_tag.strip().upper() != 'CTI')
+            # Show tags as small badges
+            tag_badges = ''
+            if tags:
+                for tag in tags.split(';')[:3]:
+                    tag = tag.strip()
+                    if tag:
+                        tag_badges += (
+                            f'<span style="background-color: #e8eaf6; padding: 1px 5px; '
+                            f'border-radius: 3px; font-size: 11px; margin: 1px;">{tag}</span> '
+                        )
+                remaining = len(tags.split(';')) - 3
+                if remaining > 0:
+                    tag_badges += f'<em style="font-size: 11px;">(+{remaining})</em>'
+            html += (
+                f'<tr>'
+                f'<td style="padding: 6px; border: 1px solid #ccc;">{ticket_link}</td>'
+                f'<td style="padding: 6px; border: 1px solid #ccc; text-align: center;">{sim_html}</td>'
+                f'<td style="padding: 6px; border: 1px solid #ccc;">{created_str}</td>'
+                f'<td style="padding: 6px; border: 1px solid #ccc;">{state}</td>'
+                f'<td style="padding: 6px; border: 1px solid #ccc;">{assigned_to}</td>'
+                f'<td style="padding: 6px; border: 1px solid #ccc;">{tag_badges}</td>'
+                f'<td style="padding: 6px; border: 1px solid #ccc;">{display_title}</td>'
+                f'</tr>\n'
+            )
+        html += "</table>\n"
 
     # Add threat intelligence section
     rf = analysis.rf_enrichment
@@ -848,14 +998,15 @@ def format_single_tool_hunt_for_azdo(
         if not qradar_console or tool_result.tool_name != 'QRadar':
             return str(count)
         days = search_hours // 24
+        escaped = _escape_aql_value(ioc_value)
         if ioc_type == 'domain':
-            aql = f"SELECT * FROM events WHERE LOWER(\"URL\") LIKE '%{ioc_value.lower()}%' OR LOWER(\"TSLD\") LIKE '%{ioc_value.lower()}%' LAST {days} DAYS"
+            aql = f"SELECT * FROM events WHERE LOWER(\"URL\") LIKE '%{escaped.lower()}%' OR LOWER(\"TSLD\") LIKE '%{escaped.lower()}%' LAST {days} DAYS"
         elif ioc_type == 'url':
-            aql = f"SELECT * FROM events WHERE LOWER(\"URL\") LIKE '%{ioc_value.lower()}%' LAST {days} DAYS"
+            aql = f"SELECT * FROM events WHERE LOWER(\"URL\") LIKE '%{escaped.lower()}%' LAST {days} DAYS"
         elif ioc_type == 'ip':
-            aql = f"SELECT * FROM events WHERE sourceip = '{ioc_value}' OR destinationip = '{ioc_value}' LAST {days} DAYS"
+            aql = f"SELECT * FROM events WHERE sourceip = '{escaped}' OR destinationip = '{escaped}' LAST {days} DAYS"
         elif ioc_type == 'hash':
-            aql = f"SELECT * FROM events WHERE \"MD5 Hash\" = '{ioc_value}' OR \"SHA256 Hash\" = '{ioc_value}' LAST {days} DAYS"
+            aql = f"SELECT * FROM events WHERE \"MD5 Hash\" = '{escaped}' OR \"SHA256 Hash\" = '{escaped}' LAST {days} DAYS"
         else:
             return str(count)
         encoded_aql = quote(aql, safe='')
@@ -1276,15 +1427,16 @@ def format_hunt_results_for_azdo(result: IOCHuntResult, rf_enrichment: dict = No
         if not qradar_console:
             return str(count)
         days = result.search_hours_qradar // 24
+        escaped = _escape_aql_value(ioc_value)
         if ioc_type == 'domain':
-            aql = f"SELECT * FROM events WHERE LOWER(\"URL\") LIKE '%{ioc_value.lower()}%' OR LOWER(\"TSLD\") LIKE '%{ioc_value.lower()}%' LAST {days} DAYS"
+            aql = f"SELECT * FROM events WHERE LOWER(\"URL\") LIKE '%{escaped.lower()}%' OR LOWER(\"TSLD\") LIKE '%{escaped.lower()}%' LAST {days} DAYS"
         elif ioc_type == 'url':
             # URL paths like registry.npmjs.org/openclaw/
-            aql = f"SELECT * FROM events WHERE LOWER(\"URL\") LIKE '%{ioc_value.lower()}%' LAST {days} DAYS"
+            aql = f"SELECT * FROM events WHERE LOWER(\"URL\") LIKE '%{escaped.lower()}%' LAST {days} DAYS"
         elif ioc_type == 'ip':
-            aql = f"SELECT * FROM events WHERE sourceip = '{ioc_value}' OR destinationip = '{ioc_value}' LAST {days} DAYS"
+            aql = f"SELECT * FROM events WHERE sourceip = '{escaped}' OR destinationip = '{escaped}' LAST {days} DAYS"
         elif ioc_type == 'hash':
-            aql = f"SELECT * FROM events WHERE \"MD5 Hash\" = '{ioc_value}' OR \"SHA256 Hash\" = '{ioc_value}' LAST {days} DAYS"
+            aql = f"SELECT * FROM events WHERE \"MD5 Hash\" = '{escaped}' OR \"SHA256 Hash\" = '{escaped}' LAST {days} DAYS"
         else:
             return str(count)
         encoded_aql = quote(aql, safe='')
@@ -1314,7 +1466,7 @@ def format_hunt_results_for_azdo(result: IOCHuntResult, rf_enrichment: dict = No
         ioc_sections.append(('Hashes', result.searched_hashes, 'hash'))
 
     if ioc_sections:
-        html_parts.append("<details open><summary><strong>IOCs Searched</strong></summary>")
+        html_parts.append("<details><summary><strong>IOCs Searched</strong></summary>")
         html_parts.append("<div style='font-size: 12px; margin: 8px 0;'>")
 
         for section_name, items, ioc_type in ioc_sections:
@@ -1363,7 +1515,7 @@ def format_hunt_results_for_azdo(result: IOCHuntResult, rf_enrichment: dict = No
         if not tool_result or tool_result.total_hits == 0:
             return []
 
-        parts = [f"<h4>{tool_icon} {tool_result.tool_name} ({tool_result.total_hits} hits)</h4>"]
+        parts = []
 
         th_style = "padding: 6px; border: 1px solid #ccc;"
         td_style = "padding: 6px; border: 1px solid #ccc;"
@@ -1586,13 +1738,24 @@ def format_hunt_results_for_azdo(result: IOCHuntResult, rf_enrichment: dict = No
 
         return parts
 
-    # Add each tool's results
-    if result.qradar:
-        html_parts.extend(format_tool_section(result.qradar, "&#x1F50D;", "qradar"))
-    if result.crowdstrike:
-        html_parts.extend(format_tool_section(result.crowdstrike, "&#x1F985;", "crowdstrike"))
-    if result.abnormal:
-        html_parts.extend(format_tool_section(result.abnormal, "&#x1F4E7;", "abnormal"))
+    # Add each tool's results wrapped in collapsible sections
+    for tool_result, tool_icon, tool_key in [
+        (result.qradar, "&#x1F50D;", "qradar"),
+        (result.crowdstrike, "&#x1F985;", "crowdstrike"),
+        (result.abnormal, "&#x1F4E7;", "abnormal"),
+    ]:
+        if not tool_result:
+            continue
+        section_parts = format_tool_section(tool_result, tool_icon, tool_key)
+        if section_parts:
+            hits = tool_result.total_hits
+            telemetry = getattr(tool_result, 'logscale_events_found', 0) or 0
+            summary_suffix = f"{hits} hit(s)"
+            if telemetry > 0:
+                summary_suffix += f" + {telemetry} LogScale telemetry event(s)"
+            html_parts.append(f"<details><summary>{tool_icon} <strong>{tool_result.tool_name}</strong> &mdash; {summary_suffix}</summary>")
+            html_parts.extend(section_parts)
+            html_parts.append("</details>")
 
     # Tools with no hits (only show if no errors for that tool)
     # Check if errors contain tool-specific messages
@@ -1609,6 +1772,15 @@ def format_hunt_results_for_azdo(result: IOCHuntResult, rf_enrichment: dict = No
         no_hits.append("Abnormal")
     if no_hits:
         html_parts.append(f"<p><em>No hits in: {', '.join(no_hits)}</em></p>")
+
+    # Raw LogScale telemetry events (CrowdStrike): not scored as hits, but worth surfacing
+    # so "no hits" doesn't imply the IOC was never seen in the environment.
+    cs_telemetry = getattr(result.crowdstrike, 'logscale_events_found', 0) if result.crowdstrike else 0
+    if cs_telemetry > 0:
+        html_parts.append(
+            f"<p><em>&#x1F4E1; CrowdStrike LogScale: {cs_telemetry} telemetry event(s) matched "
+            f"(not counted as scored hits &mdash; see Event Search Queries below for context).</em></p>"
+        )
 
     # Errors
     if result.errors:
@@ -1632,7 +1804,7 @@ def format_hunt_results_for_azdo(result: IOCHuntResult, rf_enrichment: dict = No
             else:
                 api_queries.append(('CrowdStrike', q.get('type', 'Search'), q.get('query', '')))
 
-    # Event Search queries (LogScale) - shown prominently for analysts
+    # Event Search queries (LogScale) - collapsed for reference
     if logscale_queries:
         falcon_base = config.cs_falcon_console_url
         if falcon_base:
@@ -1641,7 +1813,7 @@ def format_hunt_results_for_azdo(result: IOCHuntResult, rf_enrichment: dict = No
         else:
             event_search_url = None
 
-        html_parts.append("<h4>&#x1F50E; Event Search Queries (for deeper investigation)</h4>")
+        html_parts.append("<details><summary>&#x1F50E; <strong>Event Search Queries</strong> (for deeper investigation)</summary>")
         if event_search_url:
             html_parts.append(f"<p><a href='{event_search_url}' target='_blank' style='color: #1976d2; font-weight: bold;'>&#x1F517; Open Falcon Event Search</a></p>")
         html_parts.append("<p><em>Copy and paste these queries into Event Search to hunt across raw telemetry:</em></p>")
@@ -1653,6 +1825,7 @@ def format_hunt_results_for_azdo(result: IOCHuntResult, rf_enrichment: dict = No
                 f"<pre style='background-color: #e3f2fd; padding: 10px; font-size: 11px; "
                 f"overflow-x: auto; white-space: pre-wrap; border-left: 4px solid #1976d2;'>{escaped_query}</pre>"
             )
+        html_parts.append("</details>")
 
     # API queries executed - collapsed for reference
     if api_queries:
@@ -1679,3 +1852,177 @@ def format_hunt_results_for_azdo(result: IOCHuntResult, rf_enrichment: dict = No
     html_parts.append("</div>")
 
     return "\n".join(html_parts)
+
+
+def format_exposure_for_webex(cve_ids: List[str], records: List, tipper_id: str, azdo_url: str = "") -> str:
+    """Short markdown summary for the Webex room — called only when there are findings.
+
+    Shows a one-line headline, the top confirmed exposures grouped by CVE, and a
+    link back to the AZDO story where the full table lives.
+    """
+    if not records:
+        return ""  # option A: silent on empty
+
+    confirmed = [r for r in records if r.confidence == "confirmed"]
+    potential = [r for r in records if r.confidence == "potential"]
+    assets = len({r.asset for r in records})
+
+    out = f"🚨 **CVE Exposure** — #{tipper_id} — "
+    bits = []
+    if confirmed:
+        bits.append(f"**{len(confirmed)} confirmed**")
+    if potential:
+        bits.append(f"{len(potential)} potential")
+    out += " · ".join(bits)
+    out += f" across {assets} asset(s)\n\n"
+
+    # Per-CVE headline lines, confirmed first, cap at 5 CVEs for readability
+    from collections import defaultdict
+    by_cve: dict = defaultdict(list)
+    for r in records:
+        by_cve[r.cve_id].append(r)
+
+    # Rank CVEs: most confirmed first, then potential count
+    cve_order = sorted(
+        by_cve.keys(),
+        key=lambda c: (
+            -sum(1 for r in by_cve[c] if r.confidence == "confirmed"),
+            -len(by_cve[c]),
+        ),
+    )
+    for cve_id in cve_order[:5]:
+        rows = by_cve[cve_id]
+        c = sum(1 for r in rows if r.confidence == "confirmed")
+        p = len(rows) - c
+        sev = rows[0].severity or "—"
+        score = rows[0].cvss_score
+        score_str = f" {score}" if score is not None else ""
+        # Show first confirmed asset as the example, flag prod environment loudly
+        example = next((r for r in rows if r.confidence == "confirmed"), rows[0])
+        env = getattr(example, "environment", None)
+        env_tag = ""
+        if env:
+            env_tag = f" **[{env.upper()}]**" if "prod" in env.lower() else f" _[{env}]_"
+        # Count prod assets across all rows for this CVE — surface impact
+        prod_count = sum(1 for r in rows if (getattr(r, "environment", "") or "").lower().startswith("prod"))
+        prod_str = f" · **{prod_count} in PROD**" if prod_count else ""
+        out += (
+            f"- **{cve_id}** ({sev}{score_str}) — {c} confirmed, {p} potential{prod_str} · "
+            f"e.g. `{example.app}` {example.version} on `{example.asset}`{env_tag}\n"
+        )
+    if len(cve_order) > 5:
+        out += f"- _…and {len(cve_order) - 5} more CVE(s)_\n"
+
+    if azdo_url:
+        out += f"\n_📝 Full table posted to [#{tipper_id}]({azdo_url})_"
+    return out
+
+
+def format_exposure_for_azdo(cve_ids: List[str], result: "CorrelationResult") -> str:
+    """Format CVE exposure correlator output as HTML for an AZDO comment.
+
+    Four cases:
+      1. scanned=False, skip_reason="no_input" → tipper had no CVEs and no
+         vulnerable_products; analyzer chose not to look anything up. Post a
+         short stub so the audit trail shows we considered it.
+      2. scanned=False, skip_reason="no_usable_cpes" → NVD gave no usable CPEs;
+         Tanium was never queried.
+      3. scanned=True, records=[] → real clean scan.
+      4. records non-empty → findings table.
+    """
+    records = result.records
+    html: list = ['<div style="font-family: Arial, sans-serif;">']
+    cve_list = ", ".join(cve_ids) if cve_ids else "—"
+
+    if not records and not result.scanned and result.skip_reason == "no_input":
+        html.append("<h3>&#x1F50D; CVE Exposure Check</h3>")
+        html.append(
+            "<p><strong>Nothing to check.</strong> No CVEs or vulnerable "
+            "products were identified in this tipper, so no Tanium scan was run.</p>"
+        )
+        html.append("</div>")
+        return "\n".join(html)
+
+    if not records and not result.scanned:
+        html.append("<h3>&#x1F50D; CVE Exposure Check</h3>")
+        html.append(
+            "<p>&#x26A0;&#xFE0F; <strong>Not checked.</strong> "
+            "NVD returned no endpoint-software CPEs for these CVE(s) "
+            "(typically firmware/hardware-only advisories), so no Tanium scan was run.</p>"
+        )
+        html.append(f"<p style='color: #666;'>CVE(s): <code>{cve_list}</code></p>")
+        html.append(f"<p style='color: #666;'><em>Skip reason: <code>{result.skip_reason or 'unknown'}</code></em></p>")
+        html.append("</div>")
+        return "\n".join(html)
+
+    if not records:
+        html.append("<h3>&#x1F50D; CVE Exposure Check</h3>")
+        html.append(f"<p>&#x2705; <strong>No assets with affected software found.</strong></p>")
+        html.append(f"<p style='color: #666;'>Checked CVE(s): <code>{cve_list}</code></p>")
+        html.append("<p><em>Source: Tanium Installed Applications · NVD CPE</em></p>")
+        html.append("</div>")
+        return "\n".join(html)
+
+    confirmed = [r for r in records if r.confidence == "confirmed"]
+    potential = [r for r in records if r.confidence == "potential"]
+
+    html.append("<h3>&#x1F6A8; CVE Exposure Check</h3>")
+    html.append(
+        f"<p><strong>{len(confirmed)} confirmed</strong> · "
+        f"<strong>{len(potential)} potential</strong> exposure(s) found across "
+        f"<strong>{len({r.asset for r in records})}</strong> asset(s).</p>"
+    )
+    html.append(f"<p style='color: #666;'>CVE(s) checked: <code>{cve_list}</code></p>")
+
+    # Group by CVE, confirmed first
+    from collections import defaultdict
+    by_cve: dict = defaultdict(list)
+    for r in records:
+        by_cve[r.cve_id].append(r)
+
+    for cve_id in sorted(by_cve.keys()):
+        rows = by_cve[cve_id]
+        rows.sort(key=lambda r: (0 if r.confidence == "confirmed" else 1, r.asset))
+        sev = rows[0].severity or "—"
+        score = rows[0].cvss_score
+        score_str = f" ({score})" if score is not None else ""
+        html.append(f"<h4><code>{cve_id}</code> — {sev}{score_str} · {len(rows)} match(es)</h4>")
+        html.append("<table style='border-collapse: collapse; margin-bottom: 12px;'>")
+        html.append(
+            "<tr style='background: #f4f4f4;'>"
+            "<th style='padding: 6px; border: 1px solid #ccc;'>Confidence</th>"
+            "<th style='padding: 6px; border: 1px solid #ccc;'>Asset</th>"
+            "<th style='padding: 6px; border: 1px solid #ccc;'>Env</th>"
+            "<th style='padding: 6px; border: 1px solid #ccc;'>OS / CI</th>"
+            "<th style='padding: 6px; border: 1px solid #ccc;'>App</th>"
+            "<th style='padding: 6px; border: 1px solid #ccc;'>Version</th>"
+            "<th style='padding: 6px; border: 1px solid #ccc;'>Match</th>"
+            "</tr>"
+        )
+        for r in rows:
+            color = "#d32f2f" if r.confidence == "confirmed" else "#f57c00"
+            badge = (
+                f"<strong style='color: {color};'>"
+                f"{'CONFIRMED' if r.confidence == 'confirmed' else 'POTENTIAL'}</strong>"
+            )
+            env = getattr(r, "environment", None) or "—"
+            env_color = "#d32f2f" if env and "prod" in env.lower() else "#444"
+            ci = getattr(r, "ci_class", None)
+            os_ci = f"{r.os or '—'}{f' / {ci}' if ci else ''}"
+            html.append(
+                "<tr>"
+                f"<td style='padding: 6px; border: 1px solid #ccc;'>{badge}</td>"
+                f"<td style='padding: 6px; border: 1px solid #ccc;'><code>{r.asset}</code></td>"
+                f"<td style='padding: 6px; border: 1px solid #ccc; color: {env_color};'>{env}</td>"
+                f"<td style='padding: 6px; border: 1px solid #ccc;'>{os_ci}</td>"
+                f"<td style='padding: 6px; border: 1px solid #ccc;'>{r.app}</td>"
+                f"<td style='padding: 6px; border: 1px solid #ccc;'><code>{r.version or '—'}</code></td>"
+                f"<td style='padding: 6px; border: 1px solid #ccc; font-size: 90%;'>{r.reason}</td>"
+                "</tr>"
+            )
+        html.append("</table>")
+
+    html.append("<p><em>Source: Tanium Installed Applications · NVD CPE. "
+                "Confirmed = vendor+product+version all match; potential = vendor or version uncertain.</em></p>")
+    html.append("</div>")
+    return "\n".join(html)

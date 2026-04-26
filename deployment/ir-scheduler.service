@@ -1,0 +1,25 @@
+[Unit]
+Description=Security Operations Job Scheduler
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=10
+User=user
+WorkingDirectory=/home/user/IR
+ExecStart=/home/user/IR/.venv/bin/python /home/user/IR/src/ir_scheduler.py
+StandardOutput=append:/home/user/IR/logs/ir_scheduler.log
+StandardError=append:/home/user/IR/logs/ir_scheduler.log
+
+# Resource limits
+MemoryMax=2G
+CPUQuota=200%
+
+# Restart policy
+RestartSec=10
+StartLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target

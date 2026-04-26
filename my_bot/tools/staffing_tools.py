@@ -71,16 +71,29 @@ def get_current_staffing() -> str:
                 if clean_members:
                     teams[team] = clean_members
 
-        # Create simple structured data
-        result = {
-            "shift": current_shift,
-            "day": eastern_time.strftime('%A'),
-            "time": eastern_time.strftime('%H:%M EST'),
-            "date": eastern_time.strftime('%Y-%m-%d'),
-            "teams": teams
-        }
+        # Build pre-formatted text (Webex doesn't render markdown tables)
+        lines = [
+            f"**Shift:** {current_shift.title()}",
+            f"**Day:** {eastern_time.strftime('%A')}",
+            f"**Time:** {eastern_time.strftime('%H:%M EST')}",
+            "",
+            "**Staffing:**",
+        ]
 
-        return json.dumps(result)
+        analyst_count = 0
+        for team, members in teams.items():
+            if team == 'On-Call':
+                continue
+            analyst_count += len(members)
+            lines.append(f"- **{team}:** {', '.join(str(m) for m in members)}")
+
+        # On-Call always last
+        if 'On-Call' in teams:
+            lines.append(f"- **On-Call:** {', '.join(str(m) for m in teams['On-Call'])}")
+
+        lines.append(f"\n**Total:** {analyst_count} analysts on shift")
+
+        return "\n".join(lines)
 
     except Exception as e:
         logging.error(f"Error getting current staffing: {e}")

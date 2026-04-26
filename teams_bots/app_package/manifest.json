@@ -1,0 +1,61 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.19/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.19",
+  "version": "1.0.0",
+  "id": "{{AZURE_AD_APP_ID}}",
+  "developer": {
+    "name": "Detection and Response",
+    "websiteUrl": "https://placeholder.com",
+    "privacyUrl": "https://placeholder.com/privacy",
+    "termsOfUseUrl": "https://placeholder.com/terms"
+  },
+  "name": {
+    "short": "the notification service",
+    "full": "the notification service Bot - Security Operations Toolbox"
+  },
+  "description": {
+    "short": "Security operations toolbox bot for the SOC team",
+    "full": "the notification service handles XSOAR ticket creation, CrowdStrike containment lookups, IOC/threat hunts, Azure DevOps work items, URL block verdicts, domain lookalike scanning, on-call rotation, approved testing, and more."
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "accentColor": "#4B0082",
+  "bots": [
+    {
+      "botId": "{{AZURE_AD_APP_ID}}",
+      "scopes": ["personal", "team", "groupChat"],
+      "supportsFiles": false,
+      "isNotificationOnly": false,
+      "commandLists": [
+        {
+          "scopes": ["personal", "team", "groupChat"],
+          "commands": [
+            { "title": "who", "description": "Show current on-call person" },
+            { "title": "rotation", "description": "Show on-call rotation schedule" },
+            { "title": "status", "description": "CrowdStrike containment status for a host" },
+            { "title": "options", "description": "Show all available commands" },
+            { "title": "testing", "description": "Submit approved security testing entry" },
+            { "title": "current_approved_testing", "description": "View current approved testing entries" },
+            { "title": "get_x_ticket_form", "description": "Create a new XSOAR ticket" },
+            { "title": "get_search_xsoar_card", "description": "Search XSOAR tickets" },
+            { "title": "ioc", "description": "Create an IOC hunt in XSOAR" },
+            { "title": "threat", "description": "Create a threat hunt in XSOAR" },
+            { "title": "azdo_wit", "description": "Create Azure DevOps work item" },
+            { "title": "tuning_request", "description": "Submit a detection tuning request" },
+            { "title": "import", "description": "Import XSOAR ticket from prod to dev" },
+            { "title": "get_url_block_verdict_form", "description": "Test URL block status in ZScaler/Bloxone" },
+            { "title": "domain_lookalike", "description": "Scan for lookalike domains" },
+            { "title": "holidays", "description": "Show company holidays" },
+            { "title": "health", "description": "Check bot health status" },
+            { "title": "urls", "description": "Show team favorite URLs" },
+            { "title": "hi", "description": "Check if bot is alive" }
+          ]
+        }
+      ]
+    }
+  ],
+  "permissions": ["identity", "messageTeamMembers"],
+  "validDomains": []
+}

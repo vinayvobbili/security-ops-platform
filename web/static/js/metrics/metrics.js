@@ -6,8 +6,8 @@
 import {state} from './state.js';
 
 // Feature flags for delta values and tooltips
-const should_show_delta_values = false;
-const should_show_card_tooltips = false;
+const should_show_delta_values = true;
+const should_show_card_tooltips = true;
 
 /**
  * Calculate metrics for a given data set
@@ -53,24 +53,39 @@ function calculatePeriodMetrics(data) {
  * Calculate metrics for the previous period for comparison
  */
 function calculatePreviousPeriodMetrics() {
-    // Get current date range setting
-    const dateSlider = document.getElementById('dateRangeSlider');
-    const dateRange = parseInt(dateSlider.value) || 30;
+    // Detect custom date mode
+    const customStartEl = document.getElementById('customDateStart');
+    const customEndEl = document.getElementById('customDateEnd');
+    const customMode = document.getElementById('dateCustomMode');
+    const useCustom = customStartEl && customEndEl && customStartEl.value && customEndEl.value &&
+        customMode && customMode.style.display !== 'none';
 
-    // For longer periods (60, 90 days), we likely don't have enough historical data
-    // Only show deltas for 7 and 30 day periods
-    if (dateRange > 30) {
-        return null; // No previous period comparison available
+    let dateRange;
+    let currentPeriodStart, previousPeriodStart, previousPeriodEnd;
+
+    if (useCustom) {
+        const cStart = new Date(customStartEl.value + 'T00:00:00');
+        const cEnd = new Date(customEndEl.value + 'T23:59:59');
+        dateRange = Math.round((cEnd - cStart) / 86400000);
+        currentPeriodStart = cStart;
+        previousPeriodEnd = new Date(cStart);
+        previousPeriodStart = new Date(cStart);
+        previousPeriodStart.setDate(previousPeriodStart.getDate() - dateRange);
+    } else {
+        const dateSlider = document.getElementById('dateRangeSlider');
+        dateRange = parseInt(dateSlider.value) || 30;
+        const now = new Date();
+        currentPeriodStart = new Date(now);
+        currentPeriodStart.setDate(currentPeriodStart.getDate() - dateRange);
+        previousPeriodEnd = new Date(currentPeriodStart);
+        previousPeriodStart = new Date(currentPeriodStart);
+        previousPeriodStart.setDate(previousPeriodStart.getDate() - dateRange);
     }
 
-    // Calculate previous period dates
-    const now = new Date();
-    const currentPeriodStart = new Date(now);
-    currentPeriodStart.setDate(currentPeriodStart.getDate() - dateRange);
-
-    const previousPeriodStart = new Date(currentPeriodStart);
-    previousPeriodStart.setDate(previousPeriodStart.getDate() - dateRange);
-    const previousPeriodEnd = currentPeriodStart;
+    // For very long periods, skip comparison — not enough prior data
+    if (dateRange > 180) {
+        return null;
+    }
 
     // Filter data for previous period
     const previousPeriodData = state.allData.filter(item => {
@@ -79,7 +94,7 @@ function calculatePreviousPeriodMetrics() {
     });
 
     // Only return metrics if we have reasonable data in the previous period
-    if (previousPeriodData.length < 5) {
+    if (previousPeriodData.length < 2) {
         return null; // Not enough data for meaningful comparison
     }
 
@@ -145,6 +160,68 @@ function createDeltaBadge(currentValue, previousValue, isPercentage = false, rev
 }
 
 /**
+ * Generate an inline SVG sparkline from an array of daily values.
+ * Returns an HTML string for an SVG element, or '' if insufficient data.
+ */
+function createSparkline(dailyValues, color = 'var(--text-primary)') {
+    if (!dailyValues || dailyValues.length < 2) return '';
+
+    const width = 120;
+    const height = 36;
+    const padding = 2;
+
+    const max = Math.max(...dailyValues);
+    const min = Math.min(...dailyValues);
+    const range = max - min || 1;
+
+    const points = dailyValues.map((v, i) => {
+        const x = padding + (i / (dailyValues.length - 1)) * (width - 2 * padding);
+        const y = height - padding - ((v - min) / range) * (height - 2 * padding);
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+
+    return `<svg class="sparkline" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+        <polyline points="${points}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
+}
+
+/**
+ * Build daily time series from filtered data for sparklines.
+ * Returns an object with arrays keyed by metric name.
+ */
+function buildDailyTimeSeries() {
+    const byDate = {};
+
+    state.filteredData.forEach(item => {
+        if (!item.created) return;
+        const d = new Date(item.created);
+        if (isNaN(d.getTime())) return;
+        const key = d.toISOString().split('T')[0];
+        if (!byDate[key]) byDate[key] = {total: 0, mttrSum: 0, mttrCount: 0, mttcSum: 0, mttcCount: 0, breaches: 0, open: 0};
+        byDate[key].total++;
+        if (item.time_to_respond_secs > 0) {
+            byDate[key].mttrSum += item.time_to_respond_secs;
+            byDate[key].mttrCount++;
+        }
+        if (item.has_hostname && item.time_to_contain_secs > 0) {
+            byDate[key].mttcSum += item.time_to_contain_secs;
+            byDate[key].mttcCount++;
+        }
+        if (item.has_breached_response_sla) byDate[key].breaches++;
+        if (item.is_open) byDate[key].open++;
+    });
+
+    const sortedDates = Object.keys(byDate).sort();
+    return {
+        total: sortedDates.map(d => byDate[d].total),
+        mttr: sortedDates.map(d => byDate[d].mttrCount > 0 ? byDate[d].mttrSum / byDate[d].mttrCount / 60 : 0),
+        mttc: sortedDates.map(d => byDate[d].mttcCount > 0 ? byDate[d].mttcSum / byDate[d].mttcCount / 60 : 0),
+        breaches: sortedDates.map(d => byDate[d].breaches),
+        open: sortedDates.map(d => byDate[d].open)
+    };
+}
+
+/**
  * Update metric cards display
  */
 export function updateMetrics() {
@@ -165,6 +242,9 @@ export function updateMetrics() {
     const mttrFormatted = formatTime(currentMetrics.mttr);
     const mttcFormatted = formatTime(currentMetrics.mttc);
 
+    // Build sparkline data
+    const spark = buildDailyTimeSeries();
+
     document.getElementById('metricsGrid').innerHTML = `
         <div class="metric-card">
             <div class="metric-title">🎫 Total Cases</div>
@@ -172,6 +252,7 @@ export function updateMetrics() {
                 ${currentMetrics.totalIncidents.toLocaleString()}<br>
                 ${createDeltaBadge(currentMetrics.totalIncidents, previousMetrics?.totalIncidents, false, true)}
             </div>
+            ${createSparkline(spark.total, '#3b82f6')}
         </div>
         <div class="metric-card">
             <div class="metric-title">⏱️ MTTR (mins:secs)</div>
@@ -179,6 +260,7 @@ export function updateMetrics() {
                 ${mttrFormatted}<br>
                 ${createDeltaBadge(currentMetrics.mttr, previousMetrics?.mttr, false, true, true)}
             </div>
+            ${createSparkline(spark.mttr, '#f59e0b')}
             <div class="metric-subtitle">${currentMetrics.casesWithOwnerAndTimeToRespond} cases acknowledged</div>
         </div>
         <div class="metric-card">
@@ -187,6 +269,7 @@ export function updateMetrics() {
                 ${mttcFormatted}<br>
                 ${createDeltaBadge(currentMetrics.mttc, previousMetrics?.mttc, false, true, true)}
             </div>
+            ${createSparkline(spark.mttc, '#8b5cf6')}
             <div class="metric-subtitle">${currentMetrics.casesWithOwnerAndTimeToContain} cases with hostnames</div>
         </div>
         <div class="metric-card">
@@ -195,6 +278,7 @@ export function updateMetrics() {
                 ${currentMetrics.responseSlaBreaches.toLocaleString()}<br>
                 ${createDeltaBadge(currentMetrics.responseSlaBreaches, previousMetrics?.responseSlaBreaches, false, true)}
             </div>
+            ${createSparkline(spark.breaches, '#ef4444')}
         </div>
         <div class="metric-card">
             <div class="metric-title">🔒 Containment SLA Breaches</div>
@@ -209,6 +293,7 @@ export function updateMetrics() {
                 ${currentMetrics.openIncidents.toLocaleString()}<br>
                 ${createDeltaBadge(currentMetrics.openIncidents, previousMetrics?.openIncidents, false, true)}
             </div>
+            ${createSparkline(spark.open, '#10b981')}
         </div>
         <div class="metric-card">
             <div class="metric-title">🌍 Total Countries</div>
@@ -218,4 +303,54 @@ export function updateMetrics() {
             </div>
         </div>
     `;
+
+    // Period B comparison overlay
+    if (state.comparisonData && window.ComparisonMode) {
+        const compMetrics = calculatePeriodMetrics(state.comparisonData);
+        const compMttr = formatTime(compMetrics.mttr);
+        const compMttc = formatTime(compMetrics.mttc);
+        const CM = window.ComparisonMode;
+
+        const cards = document.querySelectorAll('#metricsGrid .metric-card');
+        const compData = [
+            CM.kpiComparisonHtml(currentMetrics.totalIncidents, compMetrics.totalIncidents, {invertedGood: true}),
+            CM.kpiComparisonHtml(mttrFormatted, compMttr, {invertedGood: true}),
+            CM.kpiComparisonHtml(mttcFormatted, compMttc, {invertedGood: true}),
+            CM.kpiComparisonHtml(currentMetrics.responseSlaBreaches, compMetrics.responseSlaBreaches, {invertedGood: true}),
+            CM.kpiComparisonHtml(currentMetrics.containmentSlaBreaches, compMetrics.containmentSlaBreaches, {invertedGood: true}),
+            CM.kpiComparisonHtml(currentMetrics.openIncidents, compMetrics.openIncidents, {invertedGood: true}),
+            CM.kpiComparisonHtml(currentMetrics.uniqueCountries, compMetrics.uniqueCountries, {})
+        ];
+        cards.forEach(function (card, i) {
+            if (compData[i]) {
+                var valueEl = card.querySelector('.metric-value');
+                if (valueEl) valueEl.insertAdjacentHTML('beforeend', compData[i]);
+            }
+        });
+    }
+
+    // Goal target badges
+    if (window.GoalTargets) {
+        const targets = window.GoalTargets.getTargets();
+        const cards = document.querySelectorAll('#metricsGrid .metric-card');
+        // MTTR card (index 1)
+        if (cards[1] && targets.mttr_secs != null) {
+            const badge = window.GoalTargets.kpiTargetBadge(currentMetrics.mttr, targets.mttr_secs, {lowerIsBetter: true, unit: 's'});
+            if (badge) cards[1].querySelector('.metric-title').insertAdjacentHTML('beforeend', ' ' + badge);
+        }
+        // MTTC card (index 2)
+        if (cards[2] && targets.mttc_secs != null) {
+            const badge = window.GoalTargets.kpiTargetBadge(currentMetrics.mttc, targets.mttc_secs, {lowerIsBetter: true, unit: 's'});
+            if (badge) cards[2].querySelector('.metric-title').insertAdjacentHTML('beforeend', ' ' + badge);
+        }
+        // Response SLA Breaches (index 3) - target 0
+        if (cards[3] && targets.response_sla_breaches != null) {
+            const badge = window.GoalTargets.kpiTargetBadge(currentMetrics.responseSlaBreaches, targets.response_sla_breaches, {lowerIsBetter: true});
+            if (badge) cards[3].querySelector('.metric-title').insertAdjacentHTML('beforeend', ' ' + badge);
+        }
+    }
+
+    // Show metrics grid header
+    const hdr = document.getElementById('metricsGridHeader');
+    if (hdr) hdr.style.display = 'flex';
 }

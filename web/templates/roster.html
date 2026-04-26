@@ -1,0 +1,314 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'SecOps Daily Roster' %}
+{% set page_title_left_icon = '&#128101;' %}
+{% set page_title_right_icon = '&#128197;' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/roster.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="ro-container">
+
+    <!-- Current Shift Banner -->
+    {% if current_lead %}
+    <div class="ro-banner">
+        <div class="ro-banner-label">Current Shift</div>
+        <div class="ro-banner-shift">{{ shift_meta[current_shift].icon|safe }} {{ shift_meta[current_shift].label }} ({{ shift_meta[current_shift].time_et }})</div>
+        <div class="ro-banner-ist">{{ shift_meta[current_shift].time_ist }}</div>
+        <div class="ro-banner-lead">Lead: {{ current_lead }}</div>
+    </div>
+    {% else %}
+    <div class="ro-banner ro-banner-warn">
+        <div class="ro-banner-shift">No staffing data for current shift</div>
+    </div>
+    {% endif %}
+
+    <!-- Period Navigation -->
+    <div class="ro-period-nav">
+        <a class="ro-btn ro-btn-nav" href="?period={{ prev_period }}" title="{{ prev_period }}">&#8592;</a>
+        <span class="ro-period-label">{{ period_label }}</span>
+        <a class="ro-btn ro-btn-nav" href="?period={{ next_period }}" title="{{ next_period }}">&#8594;</a>
+        {% if requested_period == current_period_id %}
+        <span class="ro-period-badge">Current</span>
+        {% endif %}
+        {% if not period_exists %}
+        <button class="ro-btn ro-btn-add" onclick="createPeriod('{{ requested_period }}')">Create Schedule</button>
+        {% endif %}
+    </div>
+
+    {% if period_exists %}
+
+    <!-- Top-level Tabs: Schedule | Team Members -->
+    <div class="ro-top-tabs">
+        <button class="ro-top-tab ro-top-tab-active" data-tab="schedule" onclick="switchTab('schedule')">
+            &#128197; Schedule
+        </button>
+        <button class="ro-top-tab" data-tab="team" onclick="switchTab('team')">
+            &#129333; Team Members
+            <span class="ro-tab-count">{{ team_members|length }}</span>
+        </button>
+    </div>
+
+    <!-- ========== Schedule Tab ========== -->
+    <div class="ro-tab-panel" id="tab-schedule">
+        {% for shift_id in shifts %}
+        <div class="ro-shift-section ro-shift-{{ shift_id }} {% if shift_id == current_shift and requested_period == current_period_id %}ro-shift-current{% endif %}">
+            <div class="ro-shift-header">
+                <div class="ro-shift-header-left">
+                    <span class="ro-shift-icon">{{ shift_meta[shift_id].icon|safe }}</span>
+                    <span class="ro-shift-name">{{ shift_meta[shift_id].label }}</span>
+                    <span class="ro-shift-time-badge">{{ shift_meta[shift_id].time_et }}</span>
+                    <span class="ro-shift-time-badge ro-shift-time-ist">{{ shift_meta[shift_id].time_ist }}</span>
+                </div>
+                <div class="ro-shift-header-right">
+                    {% if shift_id == current_shift and requested_period == current_period_id %}
+                    <span class="ro-badge-active">Active</span>
+                    {% endif %}
+                    <span class="ro-shift-headcount" data-shift="{{ shift_id }}"></span>
+                </div>
+            </div>
+            <div class="ro-grid-scroll">
+            <table class="ro-grid">
+                <thead>
+                    <tr>
+                        <th class="ro-grid-role-hdr"></th>
+                        {% for day in days %}
+                        <th class="ro-grid-day-hdr {% if day == current_day and requested_period == current_period_id %}ro-grid-day-today{% endif %}">
+                            {{ day[:3] }}
+                            {% if day == current_day and requested_period == current_period_id and shift_id == current_shift %}
+                            <span class="ro-badge-now">NOW</span>
+                            {% endif %}
+                        </th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% set team_labels = {
+                        'monitoring_analysts': 'Monitoring',
+                        'response_analysts': 'Response',
+                        'senior_analysts': 'Senior'
+                    } %}
+                    {% set team_icons = {
+                        'monitoring_analysts': '&#128421;&#65039;',
+                        'response_analysts': '&#128269;',
+                        'senior_analysts': '&#11088;'
+                    } %}
+                    {% for team in teams %}
+                    <tr class="ro-team-header-row">
+                        <td colspan="{{ days|length + 1 }}">{{ team_icons[team]|safe }} {{ team_labels[team] }}</td>
+                    </tr>
+                    {% for slot in range(slots_per_team) %}
+                    <tr>
+                        <td class="ro-grid-role">
+                            {% if team == 'senior_analysts' and slot == 0 %}
+                            <span class="ro-lead-star">&#9733;</span> Lead
+                            {% else %}
+                            {{ slot + 1 }}
+                            {% endif %}
+                        </td>
+                        {% for day in days %}
+                        {% set cell_value = schedule[day][shift_id][team][slot] if schedule else '' %}
+                        <td class="ro-grid-cell {% if day == current_day and requested_period == current_period_id %}ro-grid-cell-today{% endif %} {% if cell_value %}ro-grid-cell-filled{% endif %}"
+                            data-period="{{ requested_period }}"
+                            data-day="{{ day }}" data-shift="{{ shift_id }}"
+                            data-team="{{ team }}" data-slot="{{ slot }}"
+                            onclick="editCell(this)">
+                            <span class="ro-cell-name">{{ cell_value }}</span>
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                    {% endfor %}
+                </tbody>
+            </table>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- ========== Team Members Tab ========== -->
+    <div class="ro-tab-panel" id="tab-team" style="display:none">
+        <div class="ro-team-panel">
+            <div class="ro-section-header">
+                <h2>Team Members</h2>
+                <button class="ro-btn ro-btn-add" onclick="openAddMember()">+ Add</button>
+            </div>
+
+            {% set role_meta = {
+                'monitoring_analysts': {'label': 'Monitoring', 'icon': '&#128421;&#65039;', 'cls': 'monitoring'},
+                'response_analysts':   {'label': 'Response',   'icon': '&#128269;',         'cls': 'response'},
+                'senior_analysts':     {'label': 'Senior',     'icon': '&#11088;',          'cls': 'senior'}
+            } %}
+
+            <div class="ro-role-columns" id="teamList">
+                {% for team_key in teams %}
+                {% set meta = role_meta[team_key] %}
+                {% set members = members_by_role.get(team_key, []) %}
+                <div class="ro-role-col ro-role-{{ meta.cls }}">
+                    <div class="ro-role-col-header">
+                        <span class="ro-role-col-icon">{{ meta.icon|safe }}</span>
+                        <span class="ro-role-col-title">{{ meta.label }}</span>
+                        <span class="ro-role-col-count">{{ members|length }}</span>
+                    </div>
+                    <div class="ro-role-col-list">
+                        {% for name in members %}
+                        {% set detail = member_details.get(name, {}) %}
+                        <div class="ro-member-card" data-name="{{ name }}">
+                            <span class="ro-member-name-wrap">
+                                <span class="ro-member-avatar">{{ name[0] }}</span>
+                                <span class="ro-member-info">
+                                    <span class="ro-member-name">{{ name }}</span>
+                                    {% if detail.get('email') %}
+                                    <span class="ro-member-email">{{ detail.email }}</span>
+                                    {% endif %}
+                                </span>
+                            </span>
+                            <span class="ro-member-actions">
+                                <button class="ro-btn-icon ro-btn-icon-edit" onclick="openEditMember('{{ name }}')" title="Edit">&#9998;</button>
+                                <button class="ro-btn-icon ro-btn-icon-del" onclick="removeMember('{{ name }}')" title="Remove">&times;</button>
+                            </span>
+                        </div>
+                        {% endfor %}
+                        {% if not members %}
+                        <div class="ro-empty-role">No members</div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            {% if unassigned_members %}
+            <div class="ro-unassigned-section">
+                <div class="ro-role-col-header ro-role-col-header-unassigned">
+                    <span class="ro-role-col-icon">&#128100;</span>
+                    <span class="ro-role-col-title">Unassigned</span>
+                    <span class="ro-role-col-count">{{ unassigned_members|length }}</span>
+                </div>
+                <div class="ro-unassigned-list">
+                    {% for name in unassigned_members %}
+                    {% set detail = member_details.get(name, {}) %}
+                    <div class="ro-member-card" data-name="{{ name }}">
+                        <span class="ro-member-name-wrap">
+                            <span class="ro-member-avatar">{{ name[0] }}</span>
+                            <span class="ro-member-info">
+                                <span class="ro-member-name">{{ name }}</span>
+                                {% if detail.get('email') %}
+                                <span class="ro-member-email">{{ detail.email }}</span>
+                                {% endif %}
+                            </span>
+                        </span>
+                        <span class="ro-member-actions">
+                            <button class="ro-btn-icon ro-btn-icon-edit" onclick="openEditMember('{{ name }}')" title="Edit">&#9998;</button>
+                            <button class="ro-btn-icon ro-btn-icon-del" onclick="removeMember('{{ name }}')" title="Remove">&times;</button>
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% else %}
+    <!-- Empty period -->
+    <div class="ro-empty-period">
+        <div class="ro-empty-icon">&#128197;</div>
+        <p>No schedule exists for <b>{{ period_label }}</b> yet.</p>
+        <button class="ro-btn ro-btn-add ro-btn-lg" onclick="createPeriod('{{ requested_period }}')">Create Schedule</button>
+    </div>
+    {% endif %}
+
+</div>
+
+<!-- Confirm Dialog (reusable) -->
+<div class="ro-confirm-overlay" id="confirmOverlay" style="display:none;">
+    <div class="ro-confirm">
+        <div class="ro-confirm-icon" id="confirmIcon"></div>
+        <div class="ro-confirm-title" id="confirmTitle"></div>
+        <div class="ro-confirm-msg" id="confirmMsg"></div>
+        <div class="ro-confirm-actions">
+            <button class="ro-btn ro-btn-cancel" id="confirmCancel">Cancel</button>
+            <button class="ro-btn ro-confirm-ok" id="confirmOk">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<!-- Add Member Modal -->
+<div class="ro-modal-overlay" id="addMemberModal" style="display:none;" onclick="closeAddMember(event)">
+    <div class="ro-modal" onclick="event.stopPropagation()">
+        <div class="ro-modal-header">
+            <h3>Add Team Member</h3>
+            <button class="ro-btn-icon" onclick="closeAddMember()">&times;</button>
+        </div>
+        <form id="addMemberForm" onsubmit="saveMember(event)">
+            <div class="ro-form-group">
+                <label for="memberName">Name</label>
+                <input type="text" id="memberName" required placeholder="Enter name">
+            </div>
+            <div class="ro-form-group">
+                <label for="memberEmail">Email Address</label>
+                <input type="email" id="memberEmail" placeholder="email@example.com">
+            </div>
+            <div class="ro-form-group">
+                <label for="memberRole">Role <span class="ro-label-hint">(optional)</span></label>
+                <select id="memberRole" class="ro-form-select">
+                    <option value="">-- None --</option>
+                    <option value="monitoring_analysts">Monitoring</option>
+                    <option value="response_analysts">Response</option>
+                    <option value="senior_analysts">Senior</option>
+                </select>
+            </div>
+            <div class="ro-modal-actions">
+                <button type="button" class="ro-btn ro-btn-cancel" onclick="closeAddMember()">Cancel</button>
+                <button type="submit" class="ro-btn ro-btn-save">Add</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Member Modal -->
+<div class="ro-modal-overlay" id="editMemberModal" style="display:none;" onclick="closeEditMember(event)">
+    <div class="ro-modal" onclick="event.stopPropagation()">
+        <div class="ro-modal-header">
+            <h3>Edit Team Member</h3>
+            <button class="ro-btn-icon" onclick="closeEditMember()">&times;</button>
+        </div>
+        <form id="editMemberForm" onsubmit="saveEditMember(event)">
+            <input type="hidden" id="editOldName">
+            <div class="ro-form-group">
+                <label for="editFirstName">First Name</label>
+                <input type="text" id="editFirstName" required placeholder="First name">
+            </div>
+            <div class="ro-form-group">
+                <label for="editLastName">Last Name</label>
+                <input type="text" id="editLastName" required placeholder="Last name">
+            </div>
+            <div class="ro-form-group">
+                <label for="editEmail">Email Address</label>
+                <input type="email" id="editEmail" placeholder="email@example.com">
+            </div>
+            <div class="ro-modal-actions">
+                <button type="button" class="ro-btn ro-btn-cancel" onclick="closeEditMember()">Cancel</button>
+                <button type="submit" class="ro-btn ro-btn-save">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="ro-toast" id="toast"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    var TEAM_MEMBERS = {{ team_members|tojson }};
+    var MEMBER_DETAILS = {{ member_details|tojson }};
+    var CURRENT_PERIOD = {{ requested_period|tojson }};
+    var CURRENT_SHIFT = {{ current_shift|tojson }};
+    var REQUESTED_PERIOD = {{ requested_period|tojson }};
+    var CURRENT_PERIOD_ID = {{ current_period_id|tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/roster.js') }}"></script>
+{% endblock %}

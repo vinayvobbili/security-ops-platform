@@ -3,10 +3,12 @@ import concurrent.futures
 import json
 import logging
 import os
+import sqlite3
 import sys
 import threading
 import time
 from datetime import UTC, datetime
+from typing import List
 from pathlib import Path
 
 import pandas as pd
@@ -27,6 +29,8 @@ logger = logging.getLogger(__name__)
 config = get_config()
 TOKEN_FILE = Path(__file__).parent.parent / "data/transient/service_now_access_token.json"
 DATA_DIR = Path(__file__).parent.parent / "data/transient/epp_device_tagging"
+SNOW_HOST_CACHE_DB = Path(__file__).parent.parent / "data/transient/snow_host_cache.db"
+SNOW_CACHE_TTL_HOURS = 168  # 7 days — env/country rarely change; long TTL lets on-demand reports hit warm cache
 
 
 class ServiceNowTokenManager:
@@ -189,7 +193,68 @@ class ServiceNowClient:
         self.last_request_time = 0
         self.rate_limit_lock = threading.Lock()
         logger.info(f"Rate limiting enabled: {requests_per_second} requests/second (min {self.min_request_interval * 1000:.0f}ms between requests)")
+
+        # Host details cache (SQLite)
+        self._init_host_cache()
         logger.debug("ServiceNowClient initialized successfully")
+
+    def _init_host_cache(self):
+        """Initialize SQLite cache for host details using per-thread connections."""
+        SNOW_HOST_CACHE_DB.parent.mkdir(parents=True, exist_ok=True)
+        self._cache_local = threading.local()
+
+        # Create table and purge expired entries using a temporary connection
+        conn = sqlite3.connect(str(SNOW_HOST_CACHE_DB))
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=5000")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS host_cache (
+                hostname TEXT PRIMARY KEY,
+                response_json TEXT NOT NULL,
+                cached_at REAL NOT NULL
+            )
+        """)
+        conn.commit()
+
+        # Purge expired entries on init
+        cutoff = time.time() - (SNOW_CACHE_TTL_HOURS * 3600)
+        deleted = conn.execute("DELETE FROM host_cache WHERE cached_at < ?", (cutoff,)).rowcount
+        if deleted:
+            conn.commit()
+            logger.info(f"Purged {deleted} expired entries from SNOW host cache")
+        conn.close()
+
+    def _get_cache_conn(self):
+        """Get a per-thread SQLite connection for the host cache."""
+        if not hasattr(self._cache_local, 'conn') or self._cache_local.conn is None:
+            self._cache_local.conn = sqlite3.connect(str(SNOW_HOST_CACHE_DB))
+            self._cache_local.conn.execute("PRAGMA journal_mode=WAL")
+            self._cache_local.conn.execute("PRAGMA busy_timeout=5000")
+        return self._cache_local.conn
+
+    def _get_cached_host(self, hostname):
+        """Return cached host details if within TTL, else None."""
+        conn = self._get_cache_conn()
+        row = conn.execute(
+            "SELECT response_json, cached_at FROM host_cache WHERE hostname = ?",
+            (hostname.lower(),)
+        ).fetchone()
+        if row:
+            age_hours = (time.time() - row[1]) / 3600
+            if age_hours < SNOW_CACHE_TTL_HOURS:
+                return json.loads(row[0])
+        return None
+
+    def _cache_host(self, hostname, details):
+        """Cache host details. Skip transient API errors."""
+        if not details or details.get('status') == 'ServiceNow API Error':
+            return
+        conn = self._get_cache_conn()
+        conn.execute(
+            "INSERT OR REPLACE INTO host_cache (hostname, response_json, cached_at) VALUES (?, ?, ?)",
+            (hostname.lower(), json.dumps(details), time.time())
+        )
+        conn.commit()
 
     def _wait_for_rate_limit(self):
         """Enforce rate limiting by waiting if necessary."""
@@ -202,32 +267,48 @@ class ServiceNowClient:
             self.last_request_time = time.time()
 
     def get_host_details(self, hostname):
-        """Get host details by hostname, checking servers first then workstations."""
-        # Safely handle hostname that might be None or not a string
+        """Get host details by hostname, with SQLite caching."""
         if not hostname or not isinstance(hostname, str):
             logger.warning(f"Invalid hostname provided: {hostname}")
             return {"name": str(hostname) if hostname is not None else "unknown", "status": "Invalid Hostname"}
 
         hostname = hostname.split('.')[0]  # Remove domain
 
+        # Check cache first
+        cached = self._get_cached_host(hostname)
+        if cached is not None:
+            return cached
+
+        # Fetch from API
+        result = self._fetch_host_details_from_api(hostname)
+
+        # Cache the result (skips transient API errors)
+        self._cache_host(hostname, result)
+
+        return result
+
+    def _fetch_host_details_from_api(self, hostname):
+        """Fetch host details from ServiceNow API (uncached)."""
         # Try workstations
         host_details = self._search_endpoint(self.workstation_url, hostname)
-        if host_details:
+        if host_details and 'error' not in host_details:
             host_details['category'] = 'workstation'
-            # Override CI class for VDI hosts (always workstations regardless of SNOW data)
-            if hostname.upper().startswith('VDI'):
+            if hostname.upper().startswith('VMVDI'):
                 host_details['ciClass'] = 'Workstation'
             return host_details
 
-        # Try servers first
+        # Try servers
         host_details = self._search_endpoint(self.server_url, hostname)
-        if host_details:
+        if host_details and 'error' not in host_details:
             host_details['category'] = 'server'
-            # Override for VDI hosts - always treat as workstations regardless of SNOW classification
-            if hostname.upper().startswith('VDI'):
+            if hostname.upper().startswith('VMVDI'):
                 host_details['category'] = 'workstation'
                 host_details['ciClass'] = 'Workstation'
-                logger.debug(f"Overriding SNOW category for VDI host {hostname}: server → workstation")
+                logger.debug(f"Overriding SNOW category for VMVDI host {hostname}: server → workstation")
+            return host_details
+
+        # If both endpoints returned API errors, return the last error
+        if host_details and 'error' in host_details:
             return host_details
 
         return {"name": hostname, "status": "Not Found"}
@@ -264,15 +345,27 @@ class ServiceNowClient:
 
                 # Check if response has content before trying to parse JSON
                 if not response.text or response.text.strip() == '':
-                    logger.debug(f"Empty response body for {hostname}, treating as 'not found'")
-                    return None
+                    if attempt < max_retries - 1:
+                        wait_time = 2 ** (attempt + 1)
+                        logger.warning(f"Empty response body for {hostname} from {endpoint}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        logger.warning(f"Empty response body for {hostname} from {endpoint} after {max_retries} attempts")
+                        return None
 
                 # Try to parse JSON with better error handling
                 try:
                     data = response.json()
                 except ValueError as json_error:
-                    logger.debug(f"Invalid JSON in response for {hostname}: {json_error}. Response body: {response.text[:200]}")
-                    return None
+                    if attempt < max_retries - 1:
+                        wait_time = 2 ** (attempt + 1)
+                        logger.warning(f"Invalid JSON for {hostname}: {json_error}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        logger.warning(f"Invalid JSON for {hostname} after {max_retries} attempts: {json_error}. Body: {response.text[:200]}")
+                        return None
 
                 items = data.get('items', data) if isinstance(data, dict) else data
 
@@ -280,10 +373,13 @@ class ServiceNowClient:
                     logger.debug(f"No items found for {hostname}")
                     return None
 
-                # Return most recently discovered item
+                # Discard retired records; pick most recently discovered from the rest
                 if len(items) > 1:
-                    logger.debug(f"Multiple items found for {hostname}, selecting most recent")
-                    items = sorted(items, key=_parse_discovery_date, reverse=True)
+                    non_retired = [i for i in items if str(i.get('lifecycleStatus', '')).lower() != 'retired']
+                    pool = non_retired if non_retired else items
+                    pool = sorted(pool, key=_parse_discovery_date, reverse=True)
+                    logger.debug(f"Multiple items for {hostname}: {len(items)} total, {len(non_retired)} non-retired, selected {pool[0].get('lifecycleStatus')}")
+                    return pool[0]
 
                 logger.debug(f"Successfully retrieved details for {hostname}")
                 return items[0]
@@ -317,14 +413,18 @@ class ServiceNowClient:
             return {"error": str(e), "status": "ServiceNow API Error"}
 
     def get_recent_incidents(self, assignment_group_name, minutes=15):
-        """Fetch incidents assigned to a group in the past N minutes.
+        """Fetch incidents assigned to a group, optionally filtered by createdDate.
 
         Uses the ITSM Incident API endpoint (not the Table API).
         See KB0224060 for API documentation.
 
+        The API does not support date-range filtering, so we fetch all incidents
+        for the group and optionally filter client-side by createdDate.
+
         Args:
             assignment_group_name: The display name of the assignment group
-            minutes: How far back to look (default 15 minutes)
+            minutes: How far back to look (default 15 minutes).
+                     Pass 0 to skip date filtering and return all results.
 
         Returns:
             List of incident records or error dict
@@ -333,57 +433,62 @@ class ServiceNowClient:
 
         base_url = config.snow_base_url.rstrip('/')
         endpoint = f"{base_url}/itsm-incident/process/incidents"
+        headers = self.token_manager.get_auth_headers()
 
-        # Query params - ITSM API may use different param names than Table API
-        # Try common variations: filter, query, assignmentGroup
-        # NOTE: Once API access is granted, test which params work and adjust
+        logger.debug(f"Fetching incidents for group '{assignment_group_name}' (minutes={minutes})")
+
         params = {
             'assignmentGroup': assignment_group_name,
             'limit': 100
         }
 
-        headers = self.token_manager.get_auth_headers()
-        logger.info(f"Fetching incidents for group '{assignment_group_name}' from past {minutes} minutes")
-        logger.debug(f"Endpoint: {endpoint}, Params: {params}")
-
         try:
             self._wait_for_rate_limit()
             response = self.session.get(endpoint, headers=headers, params=params, timeout=30, verify=False)
 
-            # Log response details for debugging
             if response.status_code >= 400:
                 logger.error(f"API error {response.status_code}: {response.text[:500]}")
+                return {"error": f"HTTP {response.status_code}", "status": "ServiceNow API Error"}
 
             response.raise_for_status()
 
             data = response.json()
-            # ITSM API returns 'items' array per KB0224060
-            results = data.get('items', data.get('result', []))
+            all_results = data.get('items', data.get('result', []))
             if isinstance(data, list):
-                results = data
+                all_results = data
 
-            # Filter by createdDate client-side since API may not support date filtering
-            # CreatedDate format: "MM-DD-YYYY HH:MM AM/PM"
-            threshold_dt = datetime.now(UTC) - timedelta(minutes=minutes)
-            filtered_results = []
-            for inc in results:
-                created_str = inc.get('createdDate', '')
-                if created_str:
-                    try:
-                        created_dt = datetime.strptime(created_str, '%m-%d-%Y %I:%M %p')
-                        if created_dt >= threshold_dt:
-                            filtered_results.append(inc)
-                    except ValueError:
-                        # If date parsing fails, include the incident to be safe
-                        filtered_results.append(inc)
-                else:
-                    filtered_results.append(inc)
+            logger.info(f"SNOW returned {len(all_results)} total incident(s) for '{assignment_group_name}'")
+            for inc in all_results[:10]:
+                logger.info(f"  INC {inc.get('number','?')} state={inc.get('state','?')} created={inc.get('createdDate','?')} group={inc.get('assignmentGroup', inc.get('assignment_group','?'))}")
 
-            logger.info(f"Found {len(filtered_results)} incidents for '{assignment_group_name}' in the past {minutes} minutes (filtered from {len(results)} total)")
-            return filtered_results
         except requests.exceptions.RequestException as e:
             logger.error(f"Error fetching incidents: {str(e)}")
             return {"error": str(e), "status": "ServiceNow API Error"}
+
+        # minutes=0 means caller handles filtering (e.g. seen-ID tracking)
+        if minutes == 0:
+            logger.info(f"MIM poll '{assignment_group_name}': returning all {len(all_results)} incident(s) (no date filter)")
+            return all_results
+
+        # Filter by createdDate client-side — API does not support date-range params
+        # CreatedDate format from ITSM API: "MM-DD-YYYY HH:MM AM/PM" (ET)
+        threshold_dt = datetime.now() - timedelta(minutes=minutes)
+        filtered_results = []
+        for inc in all_results:
+            created_str = inc.get('createdDate', '')
+            if created_str:
+                try:
+                    created_dt = datetime.strptime(created_str, '%m-%d-%Y %I:%M %p')
+                    if created_dt >= threshold_dt:
+                        filtered_results.append(inc)
+                except ValueError:
+                    # If date parsing fails, include the incident to be safe
+                    filtered_results.append(inc)
+            else:
+                filtered_results.append(inc)
+
+        logger.info(f"MIM poll '{assignment_group_name}': {len(filtered_results)} recent out of {len(all_results)} total incidents")
+        return filtered_results
 
     def get_recent_incidents_by_group_name(self, group_name, minutes=15):
         """Fetch incidents by group name.
@@ -398,6 +503,208 @@ class ServiceNowClient:
             List of incident records or error dict
         """
         return self.get_recent_incidents(group_name, minutes=minutes)
+
+    def get_recent_changes(self, assignment_group_name, minutes=15):
+        """Fetch change tickets assigned to a group in the past N minutes.
+
+        Uses the same process/changes endpoint as get_process_changes.
+        Filters client-side by createdDate since the API has no date-range param.
+
+        Args:
+            assignment_group_name: The display name of the assignment group
+            minutes: How far back to look (default 15 minutes)
+
+        Returns:
+            List of change records or error dict
+        """
+        from datetime import timedelta
+
+        base_url = config.snow_base_url.rstrip('/')
+        endpoint = f"{base_url}/api/x_company_it/process/changes"
+        headers = self.token_manager.get_auth_headers()
+
+        params = {
+            'assignmentGroup': assignment_group_name,
+            'limit': 100
+        }
+
+        try:
+            self._wait_for_rate_limit()
+            response = self.session.get(endpoint, headers=headers, params=params, timeout=30, verify=False)
+
+            if response.status_code >= 400:
+                logger.error(f"CHG API error {response.status_code}: {response.text[:500]}")
+                return {"error": f"HTTP {response.status_code}", "status": "ServiceNow API Error"}
+
+            response.raise_for_status()
+
+            data = response.json()
+            all_results = data.get('items', data.get('result', []))
+            if isinstance(data, list):
+                all_results = data
+
+            logger.info(f"SNOW returned {len(all_results)} total change(s) for '{assignment_group_name}'")
+            for chg in all_results[:10]:
+                logger.info(f"  CHG {chg.get('number','?')} state={chg.get('state','?')} created={chg.get('createdDate', chg.get('startDate','?'))} group={chg.get('assignmentGroup', chg.get('assignment_group','?'))}")
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error fetching changes: {str(e)}")
+            return {"error": str(e), "status": "ServiceNow API Error"}
+
+        # Filter client-side by creation date — changes may use different date field names
+        threshold_dt = datetime.now() - timedelta(minutes=minutes)
+        filtered_results = []
+        for chg in all_results:
+            created_str = (chg.get('createdDate') or chg.get('startDate') or
+                           chg.get('sys_created_on') or '')
+            if created_str:
+                try:
+                    created_dt = datetime.strptime(created_str, '%m-%d-%Y %I:%M %p')
+                    if created_dt >= threshold_dt:
+                        filtered_results.append(chg)
+                except ValueError:
+                    filtered_results.append(chg)
+            else:
+                filtered_results.append(chg)
+
+        logger.info(f"MIM CHG poll '{assignment_group_name}': {len(filtered_results)} recent out of {len(all_results)} total changes")
+        return filtered_results
+
+
+    def search_incidents_by_ci(self, hostname: str, hours: int = 72) -> List[dict]:
+        """Search for recent SNOW incidents where the affected CI matches a hostname.
+
+        Queries the ITSM Incident API with a configurationItem filter, then
+        filters client-side by hostname match as a fallback to handle environments
+        where the param is not supported.
+
+        Args:
+            hostname: Hostname to search for (short name, no domain)
+            hours: How far back to look in hours (default 72 = 3 days)
+
+        Returns:
+            List of matching incident records, empty list on error
+        """
+        from datetime import timedelta
+
+        base_url = config.snow_base_url.rstrip('/')
+        endpoint = f"{base_url}/itsm-incident/process/incidents"
+        headers = self.token_manager.get_auth_headers()
+        short_hostname = hostname.split('.')[0].upper()
+        threshold_dt = datetime.now() - timedelta(hours=hours)
+
+        all_results = []
+        try:
+            params = {
+                'configurationItem': short_hostname,
+                'limit': 50,
+            }
+            self._wait_for_rate_limit()
+            response = self.session.get(
+                endpoint, headers=headers, params=params, timeout=15, verify=False
+            )
+            if response.status_code >= 400:
+                logger.debug(f"SNOW incident CI search returned {response.status_code} for {short_hostname}")
+                return []
+            data = response.json()
+            all_results = data.get('items', data.get('result', []))
+            if isinstance(data, list):
+                all_results = data
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"SNOW search_incidents_by_ci failed for {hostname}: {e}")
+            return []
+
+        # Client-side filter: created within the time window and CI matches hostname
+        filtered = []
+        for inc in all_results:
+            # Date filter
+            created_str = inc.get('createdDate', '') or inc.get('openedAt', '')
+            if created_str:
+                try:
+                    created_dt = datetime.strptime(created_str, '%m-%d-%Y %I:%M %p')
+                    if created_dt < threshold_dt:
+                        continue
+                except (ValueError, TypeError):
+                    pass  # Include if date can't be parsed
+
+            # Hostname relevance filter — match on CI, description, or short description
+            match_fields = ' '.join(str(inc.get(f, '')) for f in (
+                'configurationItem', 'ciItem', 'shortDescription',
+                'description', 'cmdbCi', 'u_affected_ci',
+            )).upper()
+            if short_hostname in match_fields:
+                filtered.append(inc)
+
+        logger.info(
+            f"SNOW incidents for CI '{short_hostname}': "
+            f"{len(filtered)} found in last {hours}h"
+        )
+        return filtered
+
+    def search_changes_by_ci(self, hostname: str) -> List[dict]:
+        """Search for active or recently scheduled SNOW change tickets for a hostname.
+
+        Fetches change tickets from the process/changes endpoint and filters
+        client-side for records that reference the given hostname. Active change
+        windows are a critical context signal — a planned change on the affected
+        host can explain an alert as expected activity.
+
+        Args:
+            hostname: Hostname to search for (short name, no domain)
+
+        Returns:
+            List of matching change ticket records, empty list on error
+        """
+        base_url = config.snow_base_url.rstrip('/')
+        endpoint = f"{base_url}/api/x_company_it/process/changes"
+        headers = self.token_manager.get_auth_headers()
+        short_hostname = hostname.split('.')[0].upper()
+
+        try:
+            self._wait_for_rate_limit()
+            params = {'configurationItem': short_hostname, 'limit': 50}
+            response = self.session.get(
+                endpoint, headers=headers, params=params, timeout=15, verify=False
+            )
+            if response.status_code >= 400:
+                logger.debug(
+                    f"SNOW change CI param returned {response.status_code}, "
+                    f"falling back to unfiltered fetch"
+                )
+                # Fallback: fetch recent changes and filter client-side
+                self._wait_for_rate_limit()
+                response = self.session.get(
+                    endpoint, headers=headers,
+                    params={'state': 'Implement', 'limit': 100},
+                    timeout=15, verify=False
+                )
+                if response.status_code >= 400:
+                    return []
+
+            response.raise_for_status()
+            data = response.json()
+            changes = data.get('items', data.get('result', []))
+            if isinstance(data, list):
+                changes = data
+
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"SNOW search_changes_by_ci failed for {hostname}: {e}")
+            return []
+
+        # Client-side hostname filter
+        filtered = []
+        for chg in changes:
+            match_fields = ' '.join(str(chg.get(f, '')) for f in (
+                'configurationItem', 'ciItem', 'shortDescription',
+                'description', 'cmdbCi', 'u_affected_ci',
+            )).upper()
+            if short_hostname in match_fields:
+                filtered.append(chg)
+
+        logger.info(
+            f"SNOW changes for CI '{short_hostname}': {len(filtered)} found"
+        )
+        return filtered
 
 
 class AsyncServiceNowClient:
@@ -422,8 +729,8 @@ class AsyncServiceNowClient:
         result = await self._search_endpoint(session, self.server_url, hostname_short)
         if result:
             result['category'] = 'server'
-            # Override for VDI hosts - always treat as workstations regardless of SNOW classification
-            if hostname_short.upper().startswith('VDI'):
+            # Override for VMVDI hosts - always treat as workstations regardless of SNOW classification
+            if hostname_short.upper().startswith('VMVDI'):
                 result['category'] = 'workstation'
                 result['ciClass'] = 'Workstation'
             return result
@@ -431,8 +738,8 @@ class AsyncServiceNowClient:
         result = await self._search_endpoint(session, self.workstation_url, hostname_short)
         if result:
             result['category'] = 'workstation'
-            # Override CI class for VDI hosts (always workstations regardless of SNOW data)
-            if hostname_short.upper().startswith('VDI'):
+            # Override CI class for VMVDI hosts (always workstations regardless of SNOW data)
+            if hostname_short.upper().startswith('VMVDI'):
                 result['ciClass'] = 'Workstation'
             return result
         return {"name": hostname_short, "status": "Not Found"}
@@ -551,29 +858,36 @@ def enrich_host_report(input_file):
     logger.info(f"Retrieved data for {len(snow_data)} hosts from ServiceNow")
     logger.info("Merging ServiceNow data into dataframe...")
 
-    # Create new columns for ServiceNow data
     snow_columns = ['id', 'ciClass', 'environment', 'lifecycleStatus', 'country',
                     'supportedCountry', 'operatingSystem', 'category', 'status', 'error']
 
-    for col in snow_columns:
-        df[f'SNOW_{col}'] = ''
-
-    # For each row in the dataframe, add the ServiceNow data
-    logger.debug(f"Processing {len(df)} rows to add ServiceNow enrichment")
+    # Vectorized merge. The prior row-by-row `df.loc[idx, col] = ...` loop was
+    # O(rows × cols) pandas setitem calls against arrow-backed string columns,
+    # which dominated runtime (observed 30+ min on 85K rows).
     merge_start = time.time()
-    for idx, row in df.iterrows():
-        hostname = row[hostname_col]
-        if not isinstance(hostname, str):
-            hostname = str(hostname)
-        short_hostname = hostname.split('.')[0].lower() if hostname else ""
-        if short_hostname in snow_data:
-            result = snow_data[short_hostname]
-            # If there is an error, always set category to empty string
-            if result.get('status') == 'ServiceNow API Error':
-                df.loc[idx, 'SNOW_category'] = ''  # type: ignore[call-overload]
-            for col in snow_columns:
-                if col in result and not (col == 'category' and result.get('status') == 'ServiceNow API Error'):
-                    df.loc[idx, f'SNOW_{col}'] = result[col]  # type: ignore[call-overload]
+    snow_records = []
+    for short_hostname, result in snow_data.items():
+        rec = {'_snow_key': short_hostname}
+        is_api_error = result.get('status') == 'ServiceNow API Error'
+        for col in snow_columns:
+            if col in result:
+                rec[f'SNOW_{col}'] = result[col]
+        if is_api_error:
+            # API-error rows: blank category regardless of what the API returned
+            rec['SNOW_category'] = ''
+        snow_records.append(rec)
+    snow_df = pd.DataFrame(snow_records)
+
+    df['_snow_key'] = df[hostname_col].astype(str).str.split('.').str[0].str.lower()
+    df = df.merge(snow_df, on='_snow_key', how='left').drop(columns=['_snow_key'])
+
+    # Guarantee every SNOW_* column exists and unmatched rows get '' (not NaN)
+    for col in snow_columns:
+        col_name = f'SNOW_{col}'
+        if col_name not in df.columns:
+            df[col_name] = ''
+        else:
+            df[col_name] = df[col_name].fillna('').astype(str)
 
     merge_elapsed = time.time() - merge_start
     logger.info(f"Merged ServiceNow data into dataframe in {merge_elapsed:.1f}s")
@@ -602,7 +916,7 @@ def enrich_host_report(input_file):
 if __name__ == "__main__":
     client = ServiceNowClient()
 
-    hostname = "YOURHOSTNAME.internal.example.com"
+    hostname = "USHZK3C64.internal.example.com"
     logger.info(f"Looking up in SNOW: {hostname}...")
 
     details = client.get_host_details(hostname)

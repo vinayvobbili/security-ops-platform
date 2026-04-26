@@ -1,0 +1,26 @@
+{# Reusable Chat Widget — include in any page with include '_chat_widget.html' #}
+<!-- Requires: chat_widget.css, chat_widget.js (loaded via marked.min.js first), and a call to initChatWidget({...}) -->
+<div id="chatWidget" class="cw-widget">
+    <button id="cwToggle" class="cw-fab" title="Ask about this page">
+        <span class="cw-fab-icon">💬</span>
+    </button>
+    <div id="cwWindow" class="cw-window" style="display:none;">
+        <div class="cw-header" id="cwHeader">
+            <span id="cwTitle">Ask about this page</span>
+            <div class="cw-header-actions">
+                <button id="cwClear" class="cw-clear-btn" title="Clear conversation">🗑️</button>
+                <button id="cwClose" class="cw-close-btn">&times;</button>
+            </div>
+        </div>
+        <div id="cwMessages" class="cw-messages">
+            <div class="cw-msg cw-assistant">
+                <div class="cw-bubble" id="cwGreeting">Hi! Ask me anything about this page.</div>
+            </div>
+            <div id="cwChips" class="cw-chips"></div>
+        </div>
+        <div class="cw-input-row">
+            <input id="cwInput" type="text" class="cw-input" placeholder="Type a question..." maxlength="2000" autocomplete="off">
+            <button id="cwSend" class="cw-send-btn">➤</button>
+        </div>
+    </div>
+</div>

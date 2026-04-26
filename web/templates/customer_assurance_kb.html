@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Assurance — Knowledge Base</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/customer_assurance.css') }}">
+</head>
+<body class="ca-page" data-ca-tour="landing">
+{% import 'title_macros.html' as titles %}
+{% set page_title = titles.build_title('Customer Assurance', '🛡️', '📚') %}
+{% include 'top_bar.html' %}
+
+<div class="ca-container ca-narrow">
+    <div style="margin-bottom:18px;">
+        <a href="/customer-assurance" style="color:var(--ca-brand);text-decoration:none;font-size:13px;">← Back to Customer Assurance</a>
+    </div>
+
+    <h1 class="ca-h1">Knowledge Base</h1>
+    <p class="ca-subtitle">Source documents that the drafter retrieves from: policies, SOC 2 reports, standard responses, SME-provided material.</p>
+
+    <div class="ca-tip-card">
+        <div class="ca-tip-card-icon">?</div>
+        <div>
+            <strong>What is the KB for?</strong> Every AI-generated draft is grounded in these documents. When a question comes in, we retrieve the most relevant chunks, pass them to the internal LLM gateway, and require the LLM to answer only from the retrieved context. No policies in here = no real grounding = the tool falls back to canned demo answers.
+            <br><br>
+            <span class="ca-next-ribbon">What to do next</span>
+            &nbsp;Upload real policies below, then click <strong>Reindex</strong>. Or click <strong>Load Demo KB</strong> to populate placeholder files for demos.
+        </div>
+    </div>
+
+    <div class="ca-banner ca-banner-info">
+        💡 Drafted answers are grounded in these documents. More high-quality sources = better draft accuracy and real citations.
+    </div>
+
+    <div class="ca-card">
+        <h3>Current KB</h3>
+        <div class="ca-stats" style="margin:0;">
+            <div class="ca-stat">
+                <div class="ca-stat-value">{{ kb.chunk_count }}</div>
+                <div class="ca-stat-label">Indexed chunks <span class="ca-tip" data-tip="Source documents are split into smaller pieces (~1500 chars each) for retrieval. Each chunk is embedded and searchable independently. More chunks = finer-grained matching."></span></div>
+            </div>
+            <div class="ca-stat">
+                <div class="ca-stat-value">{{ kb.source_files|length }}</div>
+                <div class="ca-stat-label">Source documents <span class="ca-tip" data-tip="The original files uploaded to the KB. Drafts cite these by filename, so name them well (e.g. 'Access-Control-Policy-v4.2.pdf', not 'doc1.pdf')."></span></div>
+            </div>
+        </div>
+
+        {% if kb.source_files %}
+        <p style="margin:18px 0 6px;font-size:13px;color:var(--ca-text-muted);">Source files in <code>{{ kb.source_dir }}</code>:</p>
+        <ul class="ca-kb-file-list">
+            {% for f in kb.source_files %}
+            <li>
+                <span>📄 {{ f }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div style="text-align:center;padding:28px 12px;color:var(--ca-text-muted);">
+            <div style="font-size:42px;opacity:0.3;">📂</div>
+            <p><strong>No source documents yet.</strong></p>
+            <p style="font-size:13px;">Drop files in <code>{{ kb.source_dir }}</code> and click Reindex.</p>
+            <p style="font-size:13px;">For Monday's demo, the drafter will use canned answers until real docs are indexed.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="ca-card" style="margin-top:16px;">
+        <h3>Actions</h3>
+        <p style="font-size:13px;color:var(--ca-text-muted);margin:0 0 14px;">
+            Upload source documents here (PDF / Word / Excel / text). After upload, click <strong>Reindex</strong> to chunk + embed + upsert them into the vector store so drafts can use them.
+        </p>
+
+        <form id="ca-kb-upload-form" enctype="multipart/form-data">
+            <div class="ca-field">
+                <label>Upload documents</label>
+                <input type="file" name="documents" id="ca-kb-files" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.md">
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+                <button type="submit" class="ca-btn ca-btn-primary" data-tip="Save the selected files into the KB source directory. Files are NOT indexed yet — click Reindex after uploading.">📤 Upload</button>
+                <button type="button" class="ca-btn ca-btn-accent" id="ca-kb-reindex" data-tip="Re-process all source files: chunk → embed → upsert to vector store. Run this after uploading new docs. Existing chunks are deduplicated, so it's safe to run repeatedly.">🔄 Reindex KB</button>
+                <button type="button" class="ca-btn ca-btn-ghost" id="ca-kb-load-demo" data-tip="For demos only: creates empty placeholder files with realistic names so the KB looks populated. These are NOT indexed and NOT used for drafting — the tool uses canned demo answers until you load real documents.">🎭 Load Demo KB</button>
+                <button type="button" class="ca-btn ca-btn-ghost ca-btn-sm" id="ca-kb-clear" data-tip="Remove all source files from the KB folder. The existing vector index is preserved — run Reindex after clearing to rebuild.">Clear Sources</button>
+            </div>
+            <p style="font-size:11px;color:var(--ca-text-muted);margin:10px 0 0;">
+                <strong>Load Demo KB</strong> creates placeholder files so the page looks populated for a demo. Use real documents to enable the internal LLM gateway-grounded drafts.
+            </p>
+        </form>
+    </div>
+
+    <div class="ca-card" style="margin-top:16px;">
+        <h3>How it connects</h3>
+        <div class="ca-flow" style="margin:8px 0 0;">
+            <div class="ca-flow-step">
+                <div class="ca-flow-num">1</div>
+                <h4>Source files</h4>
+                <p>Policies, SOC 2, standard answers</p>
+            </div>
+            <div class="ca-flow-step">
+                <div class="ca-flow-num">2</div>
+                <h4>Chunk + embed</h4>
+                <p>Split into 1500-char chunks, vectorize</p>
+            </div>
+            <div class="ca-flow-step">
+                <div class="ca-flow-num">3</div>
+                <h4>Hybrid search</h4>
+                <p>Vector + keyword retrieval on each question</p>
+            </div>
+            <div class="ca-flow-step">
+                <div class="ca-flow-num">4</div>
+                <h4>the internal LLM gateway draft</h4>
+                <p>LLM writes answer grounded in retrieved chunks</p>
+            </div>
+            <div class="ca-flow-step">
+                <div class="ca-flow-num">5</div>
+                <h4>Citations</h4>
+                <p>Each chunk shown in workspace as evidence</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/common.js') }}"></script>
+<script src="{{ url_for('static', filename='js/customer_assurance_tour.js') }}"></script>
+<script>
+// ---------- Upload ----------
+document.getElementById('ca-kb-upload-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const files = document.getElementById('ca-kb-files').files;
+    if (!files.length) { alert('Pick at least one file.'); return; }
+    const formData = new FormData();
+    for (const f of files) formData.append('documents', f);
+    const resp = await fetch('/customer-assurance/kb/upload', {method: 'POST', body: formData});
+    const data = await resp.json();
+    if (data.status === 'success') {
+        alert(`Uploaded ${data.count} file(s). Click Reindex to embed them.`);
+        location.reload();
+    } else {
+        alert('Upload failed: ' + (data.message || ''));
+    }
+});
+
+// ---------- Reindex ----------
+document.getElementById('ca-kb-reindex').addEventListener('click', async () => {
+    if (!confirm('Reindex the KB from source files? This can take a minute.')) return;
+    const btn = document.getElementById('ca-kb-reindex');
+    btn.disabled = true;
+    btn.textContent = '⏳ Reindexing…';
+    try {
+        const resp = await fetch('/customer-assurance/kb/reindex', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({reset: false}),
+        });
+        const data = await resp.json();
+        if (data.status === 'success') {
+            alert(`Reindex complete.\nFiles: ${data.files}\nChunks added: ${data.chunks_added}\nSkipped: ${data.chunks_skipped}\nErrors: ${(data.errors || []).length}`);
+            location.reload();
+        } else {
+            alert('Reindex failed: ' + (data.message || ''));
+            btn.disabled = false;
+            btn.textContent = '🔄 Reindex KB';
+        }
+    } catch (err) {
+        alert('Error: ' + err);
+        btn.disabled = false;
+        btn.textContent = '🔄 Reindex KB';
+    }
+});
+
+// ---------- Load Demo KB ----------
+document.getElementById('ca-kb-load-demo').addEventListener('click', async () => {
+    const resp = await fetch('/customer-assurance/kb/load-demo', {method: 'POST'});
+    const data = await resp.json();
+    alert(`Created ${data.created} demo file(s) (${data.total} total). Reload.`);
+    location.reload();
+});
+
+// ---------- Clear ----------
+document.getElementById('ca-kb-clear').addEventListener('click', async () => {
+    if (!confirm('Remove all source files from the KB folder? (Chroma index is preserved.)')) return;
+    const resp = await fetch('/customer-assurance/kb/clear', {method: 'POST'});
+    const data = await resp.json();
+    alert(`Removed ${data.removed} file(s).`);
+    location.reload();
+});
+</script>
+{% include '_ca_fab.html' %}
+{% if config.watermark_author %}<div style="position:fixed;bottom:8px;right:16px;font-size:11px;color:rgba(0,0,0,0.25);font-style:italic;pointer-events:none;z-index:9999;">By {{ config.watermark_author }}</div>{% endif %}
+</body>
+</html>

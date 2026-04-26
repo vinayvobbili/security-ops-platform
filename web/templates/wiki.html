@@ -1,0 +1,300 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'GDnR Wiki' %}
+{% set page_title_left_icon = '🧠' %}
+{% set page_title_right_icon = '📖' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/wiki.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="wk-page">
+
+    <!-- Hero Header with Search -->
+    <div class="wk-hero">
+        <button class="wk-info-btn" id="wkInfoBtn" title="How does this work?">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        </button>
+        <div class="wk-hero-inner">
+            <h1 class="wk-hero-title">Knowledge Base</h1>
+            <p class="wk-hero-subtitle">Your team's playbooks, procedures, and tribal knowledge — all in one place</p>
+            <div class="wk-hero-search">
+                <svg class="wk-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" class="wk-search" id="wkSearch" placeholder="Search articles..." autocomplete="off">
+            </div>
+            <div class="wk-hero-stats">
+                <span><strong id="wkArticleCount">{{ stats.article_count | default(0) }}</strong> articles</span>
+                <span class="wk-hero-dot"></span>
+                <span><strong id="wkTagCount">{{ stats.tag_count | default(0) }}</strong> tags</span>
+                <span class="wk-hero-dot"></span>
+                <span><strong id="wkTotalSize">{{ stats.total_size_str | default('0 KB') }}</strong></span>
+                <span class="wk-hero-dot"></span>
+                <button class="wk-graph-btn" id="wkGraphBtn" title="Knowledge Graph">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="5" cy="6" r="3"/><circle cx="19" cy="6" r="3"/><circle cx="12" cy="19" r="3"/><line x1="7.5" y1="7.5" x2="10" y2="17"/><line x1="16.5" y1="7.5" x2="14" y2="17"/><line x1="8" y1="6" x2="16" y2="6"/></svg>
+                    Graph
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Compile Banner -->
+    <div class="wk-compile-banner" id="wkCompileBanner">
+        <div class="wk-spinner"></div>
+        <span id="wkCompileMsg">Compiling wiki articles...</span>
+    </div>
+
+    <!-- Search Results (hidden by default) -->
+    <div class="wk-search-results-panel" id="wkSearchPanel" style="display:none;">
+        <div class="wk-container">
+            <div class="wk-breadcrumb"><a href="/wiki">Knowledge Base</a> <span class="wk-bc-sep">/</span> Search Results</div>
+            <div class="wk-search-results" id="wkSearchResults"></div>
+        </div>
+    </div>
+
+    {% if current_content %}
+    <!-- Article View -->
+    <div class="wk-container">
+        <div class="wk-breadcrumb">
+            <a href="/wiki">Knowledge Base</a>
+            <span class="wk-bc-sep">/</span>
+            <span>{{ (article_meta.title if article_meta and article_meta.title) or (current_slug | replace('-', ' ') | title) }}</span>
+        </div>
+
+        {% if article_meta and article_meta.tags %}
+        <div class="wk-tag-bar wk-tag-bar-article">
+            {% for tag in article_meta.tags %}
+            <a href="/wiki?tag={{ tag | urlencode }}" class="wk-tag" data-group="{{ tag.split('/')[0] if '/' in tag else 'other' }}">{{ tag }}</a>
+            {% endfor %}
+            {% if article_meta.date %}
+            <span class="wk-article-date">{{ article_meta.date }}</span>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <div class="wk-article-layout">
+            <aside class="wk-sidebar">
+                <div class="wk-sidebar-title">Articles</div>
+                <nav class="wk-sidebar-nav" id="wkArticleList">
+                    {% for article in articles %}
+                    <a href="/wiki/{{ article.slug }}"
+                       class="wk-nav-link {% if current_slug == article.slug %}active{% endif %}"
+                       data-slug="{{ article.slug }}">
+                        {{ article.title }}
+                    </a>
+                    {% endfor %}
+                </nav>
+            </aside>
+            <main class="wk-article-main">
+                <article class="wk-article" id="wkArticle">{{ current_content }}</article>
+
+                {% if backlinks %}
+                <div class="wk-backlinks-panel">
+                    <div class="wk-backlinks-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M15 7h3a5 5 0 0 1 0 10h-3m-6 0H6a5 5 0 0 1 0-10h3"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                        {{ backlinks | length }} Backlink{{ 's' if backlinks | length != 1 else '' }}
+                    </div>
+                    <div class="wk-backlinks-list">
+                        {% for bl in backlinks %}
+                        <a href="/wiki/{{ bl.slug }}" class="wk-backlink-item">{{ bl.title }}</a>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </main>
+        </div>
+    </div>
+
+    {% elif error %}
+    <div class="wk-container">
+        <div class="wk-error">{{ error }}</div>
+    </div>
+
+    {% else %}
+    <!-- Home: tag filter + article cards grid -->
+    <div class="wk-container" id="wkHomePanel">
+        <!-- Admin toolbar -->
+        <div class="wk-admin-bar">
+            <span class="wk-admin-label">Admin</span>
+            <button class="wk-admin-btn" onclick="triggerCompile(false)" title="Compile new/changed docs">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                Compile
+            </button>
+            <button class="wk-admin-btn wk-admin-btn-alt" onclick="triggerCompile(true)" title="Force recompile all docs">Rebuild All</button>
+        </div>
+
+        <!-- Tag Filter -->
+        {% if all_tags %}
+        <div class="wk-tag-filter" id="wkTagFilter">
+            <button class="wk-tag-chip active" data-tag="all">All</button>
+            {% for t in all_tags %}
+            <button class="wk-tag-chip" data-tag="{{ t.tag }}">{{ t.tag }} <span class="wk-tag-count">{{ t.count }}</span></button>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if articles %}
+        <div class="wk-cards-grid" id="wkCardsGrid">
+            {% for article in articles %}
+            <a href="/wiki/{{ article.slug }}" class="wk-card" data-slug="{{ article.slug }}"
+               data-tags="{{ article.tags | join(',') }}">
+                <div class="wk-card-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="28" height="28"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                </div>
+                <div class="wk-card-body">
+                    <div class="wk-card-title">{{ article.title }}</div>
+                    <div class="wk-card-meta">
+                        {% if article.date %}{{ article.date }} &middot; {% endif %}
+                        {{ article.modified }}
+                    </div>
+                    {% if article.tags %}
+                    <div class="wk-card-tags">
+                        {% for tag in article.tags[:3] %}
+                        <span class="wk-card-tag">{{ tag.split('/')[-1] }}</span>
+                        {% endfor %}
+                        {% if article.tags | length > 3 %}
+                        <span class="wk-card-tag wk-card-tag-more">+{{ article.tags | length - 3 }}</span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+                <svg class="wk-card-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="9 18 15 12 9 6"/></svg>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="wk-empty">
+            <div class="wk-empty-icon">📄</div>
+            <h3>No articles yet</h3>
+            <p>Upload documents to the <a href="/docs-library">Docs Library</a>, then click <strong>Compile</strong> to generate wiki articles.</p>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+</div>
+
+<!-- Info Modal -->
+<div class="wk-info-backdrop" id="wkInfoBackdrop" style="display:none;">
+    <div class="wk-info-modal">
+        <div class="wk-info-header">
+            <h3>How Does the GDnR Wiki Work?</h3>
+            <button class="wk-info-close" id="wkInfoClose">&times;</button>
+        </div>
+        <div class="wk-info-body">
+            <div class="wk-info-section">
+                <div class="wk-info-section-icon">📖</div>
+                <div>
+                    <h4>What is this?</h4>
+                    <p>The GDnR Wiki is a <strong>knowledge garden</strong> built from your team's incident response runbooks and procedures. It takes the original Word documents from the corporate wiki and transforms them into a searchable, cross-linked, tagged knowledge base.</p>
+                </div>
+            </div>
+
+            <div class="wk-info-section">
+                <div class="wk-info-section-icon">🤖</div>
+                <div>
+                    <h4>How are articles created?</h4>
+                    <p>Source documents (DOCX, PDF, etc.) are uploaded to the <strong>Docs Library</strong>, then compiled by a local LLM into structured markdown articles. The compiler extracts key facts, builds tables, and adds cross-links to related articles. Click <strong>Compile</strong> to process new documents.</p>
+                </div>
+            </div>
+
+            <div class="wk-info-section">
+                <div class="wk-info-section-icon">🏷️</div>
+                <div>
+                    <h4>Tags & Filtering</h4>
+                    <p>Every article is auto-tagged by <strong>category</strong> (phishing, malware, credential theft), <strong>platform</strong> (CrowdStrike, Tanium, QRadar), <strong>threat actor</strong> (Scattered Spider, APT41), and <strong>tool</strong> (Impacket, TruffleHog). Use the tag chips on the home page to filter, or click a tag on any article to find related runbooks.</p>
+                </div>
+            </div>
+
+            <div class="wk-info-section">
+                <div class="wk-info-section-icon">🔗</div>
+                <div>
+                    <h4>Cross-Links & Backlinks</h4>
+                    <p>Articles reference each other with <strong>[[wikilinks]]</strong>, rendered as clickable blue chips in the text. At the bottom of each article, the <strong>Backlinks</strong> panel shows every other article that links <em>to</em> the current one &mdash; so you can always trace connections in both directions.</p>
+                </div>
+            </div>
+
+            <div class="wk-info-section">
+                <div class="wk-info-section-icon">🕸️</div>
+                <div>
+                    <h4>Knowledge Graph</h4>
+                    <p>Click the <strong>Graph</strong> button to open a full-screen interactive visualization of the entire wiki. Each <strong>node</strong> is an article, colored by its primary tag group. <strong>Edges</strong> represent wikilinks between articles. Bigger nodes have more connections.</p>
+                    <ul>
+                        <li><strong>Hover</strong> a node to see its full title and highlight its connections</li>
+                        <li><strong>Click</strong> a node to navigate to that article</li>
+                        <li><strong>Drag</strong> nodes to rearrange the layout</li>
+                    </ul>
+                    <div class="wk-info-legend">
+                        <span><span class="wk-info-dot" style="background:#3b82f6"></span> Category</span>
+                        <span><span class="wk-info-dot" style="background:#10b981"></span> Platform</span>
+                        <span><span class="wk-info-dot" style="background:#ef4444"></span> Threat Actor</span>
+                        <span><span class="wk-info-dot" style="background:#f59e0b"></span> Malware</span>
+                        <span><span class="wk-info-dot" style="background:#8b5cf6"></span> Tool</span>
+                        <span><span class="wk-info-dot" style="background:#6b7280"></span> Type</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="wk-info-section">
+                <div class="wk-info-section-icon">🔍</div>
+                <div>
+                    <h4>Search</h4>
+                    <p>The search bar matches against article <strong>titles</strong>, <strong>tags</strong>, and <strong>body content</strong>. Title matches are boosted so the most relevant runbook surfaces first. Results show tag chips and a snippet for quick scanning.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Graph Overlay -->
+<div class="wk-graph-overlay" id="wkGraphOverlay">
+    <div class="wk-graph-header">
+        <h2 class="wk-graph-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="5" cy="6" r="3"/><circle cx="19" cy="6" r="3"/><circle cx="12" cy="19" r="3"/><line x1="7.5" y1="7.5" x2="10" y2="17"/><line x1="16.5" y1="7.5" x2="14" y2="17"/><line x1="8" y1="6" x2="16" y2="6"/></svg>
+            Knowledge Graph
+        </h2>
+        <button class="wk-graph-close" id="wkGraphClose">&times;</button>
+    </div>
+    <div class="wk-graph-legend" id="wkGraphLegend"></div>
+    <div class="wk-graph-controls" id="wkGraphControls">
+        <button class="wk-gc-btn" id="wkZoomIn" title="Zoom in">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        </button>
+        <button class="wk-gc-btn" id="wkZoomOut" title="Zoom out">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        </button>
+        <span class="wk-gc-divider"></span>
+        <button class="wk-gc-btn" id="wkPanUp" title="Pan up">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="18 15 12 9 6 15"/></svg>
+        </button>
+        <button class="wk-gc-btn" id="wkPanDown" title="Pan down">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <button class="wk-gc-btn" id="wkPanLeft" title="Pan left">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <button class="wk-gc-btn" id="wkPanRight" title="Pan right">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+        <span class="wk-gc-divider"></span>
+        <button class="wk-gc-btn" id="wkResetView" title="Reset view">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        </button>
+    </div>
+    <canvas id="wkGraphCanvas"></canvas>
+    <div class="wk-graph-hint" id="wkGraphHint">Scroll to zoom &middot; Drag to pan &middot; Click node to open &middot; Drag node to pin &middot; Right-click to unpin</div>
+    <div class="wk-graph-preview" id="wkGraphPreview" style="display:none;">
+        <div class="wk-gp-title" id="wkGpTitle"></div>
+        <div class="wk-gp-tags" id="wkGpTags"></div>
+        <div class="wk-gp-stats" id="wkGpStats"></div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="wk-toast" id="wkToast"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="{{ url_for('static', filename='js/wiki.js') }}"></script>
+{% endblock %}

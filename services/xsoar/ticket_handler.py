@@ -66,7 +66,10 @@ class TicketHandler:
     # --- Search Operations (delegated to _search module) ---
 
     def get_tickets(self, query: str, period: Optional[Dict[str, Any]] = None,
-                    size: int = 20000, paginate: bool = True) -> List[Dict[str, Any]]:
+                    size: int = 20000, paginate: bool = True,
+                    test_connection: bool = True,
+                    read_timeout: Optional[int] = None,
+                    progress_callback=None) -> List[Dict[str, Any]]:
         """
         Fetch security incidents from XSOAR using demisto-py SDK.
 
@@ -75,13 +78,18 @@ class TicketHandler:
             period: Optional time period filter
             size: Maximum number of results (used when paginate=False)
             paginate: Whether to fetch all results with pagination
+            test_connection: Whether to run connectivity test before querying
+            read_timeout: Override read timeout in seconds (None = use client default)
+            progress_callback: Optional callback(page, page_count, total) for progress tracking
 
         Returns:
             List of incident dictionaries
         """
         return _search.get_tickets(
             self.client, self.base_url, query, CONFIG.team_name,
-            period=period, size=size, paginate=paginate
+            period=period, size=size, paginate=paginate,
+            test_connection=test_connection, read_timeout=read_timeout,
+            progress_callback=progress_callback
         )
 
     # --- Entry Operations (delegated to _entries module) ---
@@ -104,6 +112,29 @@ class TicketHandler:
     def execute_command_in_war_room(self, incident_id: str, command: str) -> Dict[str, Any]:
         """Execute a command in the war room of the specified incident."""
         return _entries.execute_command_in_war_room(self.client, incident_id, command)
+
+    def run_command_and_read_context(
+        self,
+        incident_id: str,
+        command: str,
+        args: Dict[str, str],
+        context_path: str,
+        wait_seconds: int = 10,
+        using: str = "",
+    ) -> Any:
+        """Fire an XSOAR integration command and return the context it writes.
+
+        For services without direct API credentials (e.g. Varonis, AD) — fires
+        the command in the war room, waits wait_seconds, then reads back the
+        structured data written to context_path in the incident context.
+
+        Args:
+            using: Integration instance name to target. Required to avoid
+                   running the command against ALL configured instances.
+        """
+        return _entries.run_command_and_read_context(
+            self.client, incident_id, command, args, context_path, wait_seconds, using
+        )
 
     # --- File Upload Operations (delegated to _files module) ---
 

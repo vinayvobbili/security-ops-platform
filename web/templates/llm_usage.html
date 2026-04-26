@@ -1,0 +1,441 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'LLM Usage' %}
+{% set page_title_left_icon = '🐚' %}
+{% set page_title_right_icon = '💰' %}
+
+{% block extra_css %}
+<style>
+/* ── Auth Overlay ─────────────────────────────────── */
+.lu-auth-overlay {
+    position:fixed; inset:0; z-index:1000;
+    display:flex; align-items:center; justify-content:center;
+    background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+}
+.lu-auth-overlay::before {
+    content:''; position:absolute; inset:0;
+    background: radial-gradient(circle at 20% 80%, rgba(99,102,241,0.15) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(236,72,153,0.1) 0%, transparent 50%);
+    pointer-events:none;
+}
+.lu-auth-box {
+    background: rgba(255,255,255,0.06); backdrop-filter:blur(24px);
+    border-radius:20px; padding:48px 40px; text-align:center;
+    max-width:380px; width:90%;
+    border:1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 24px 80px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08);
+    position:relative;
+}
+.lu-auth-box h2 { margin:0 0 4px; font-size:22px; font-weight:700; color:#fff; letter-spacing:-0.02em; }
+.lu-auth-box .lu-auth-sub { color:rgba(255,255,255,0.5); margin:0 0 24px; font-size:13px; }
+.lu-auth-box input {
+    width:100%; padding:14px 16px; border-radius:12px; font-size:14px; box-sizing:border-box;
+    background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.15); color:#fff;
+    transition:border-color 0.2s, box-shadow 0.2s;
+}
+.lu-auth-box input::placeholder { color:rgba(255,255,255,0.35); }
+.lu-auth-box input:focus { outline:none; border-color:rgba(99,102,241,0.6); box-shadow:0 0 0 3px rgba(99,102,241,0.15); }
+.lu-auth-box button {
+    margin-top:16px; padding:12px 36px; border-radius:12px; border:none;
+    background:linear-gradient(135deg, #6366f1, #8b5cf6);
+    color:#fff; font-weight:700; font-size:14px; cursor:pointer;
+    transition:transform 0.15s, box-shadow 0.2s; letter-spacing:0.02em;
+}
+.lu-auth-box button:hover { transform:translateY(-1px); box-shadow:0 8px 24px rgba(99,102,241,0.35); }
+.lu-auth-err { color:#f87171; font-size:13px; margin-top:10px; min-height:18px; }
+.lu-auth-icon { font-size:40px; margin-bottom:12px; display:block; animation:iconFloat 3s ease-in-out infinite; }
+@keyframes iconFloat { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-6px); } }
+
+/* ── Page background ──────────────────────────────── */
+.lu-page-bg {
+    min-height:100vh;
+    background:
+        radial-gradient(ellipse at 10% 20%, rgba(99,102,241,0.12) 0%, transparent 50%),
+        radial-gradient(ellipse at 90% 80%, rgba(236,72,153,0.10) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(168,85,247,0.08) 0%, transparent 60%),
+        linear-gradient(180deg, #eef0ff 0%, #e8e4f4 100%);
+}
+body.dark-mode .lu-page-bg {
+    background:
+        radial-gradient(ellipse at 10% 20%, rgba(99,102,241,0.15) 0%, transparent 50%),
+        radial-gradient(ellipse at 90% 80%, rgba(236,72,153,0.10) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(168,85,247,0.08) 0%, transparent 60%),
+        linear-gradient(180deg, #0f172a 0%, #1a1035 100%);
+}
+
+/* ── Container ────────────────────────────────────── */
+.lu-container { max-width:1280px; margin:0 auto; padding:24px 20px; }
+
+/* ── Header ───────────────────────────────────────── */
+.lu-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; flex-wrap:wrap; gap:12px; }
+.lu-header-left { display:flex; align-items:center; gap:12px; }
+.lu-header-title {
+    font-size:20px; font-weight:800; letter-spacing:-0.03em;
+    background:linear-gradient(135deg, #6366f1, #ec4899, #f59e0b);
+    background-size:300% 300%; animation:gradientShift 6s ease-in-out infinite;
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+}
+.lu-header-badge { font-size:28px; animation:iconFloat 3s ease-in-out infinite; }
+.lu-filter-select {
+    padding:8px 14px 8px 12px; border-radius:10px; font-size:13px; font-weight:600;
+    border:1px solid rgba(99,102,241,0.3); color:#6366f1;
+    background:rgba(99,102,241,0.08); cursor:pointer; transition:all 0.2s;
+}
+.lu-filter-select:hover { border-color:rgba(99,102,241,0.5); background:rgba(99,102,241,0.14); }
+.lu-filter-select:focus { outline:none; box-shadow:0 0 0 3px rgba(99,102,241,0.15); }
+body.dark-mode .lu-filter-select { background:rgba(99,102,241,0.15); border-color:rgba(99,102,241,0.4); color:#a5b4fc; }
+
+/* ── KPI Cards ────────────────────────────────────── */
+.lu-kpi-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:14px; margin-bottom:24px; }
+.lu-kpi {
+    position:relative; border-radius:16px; padding:20px 18px; overflow:hidden;
+    transition:transform 0.2s, box-shadow 0.2s;
+    box-shadow:0 2px 8px rgba(0,0,0,0.06);
+}
+.lu-kpi:hover { transform:translateY(-3px); box-shadow:0 12px 32px rgba(0,0,0,0.15); }
+.lu-kpi::before { content:''; position:absolute; top:0; left:0; right:0; height:4px; }
+
+/* Light KPI backgrounds — saturated gradients */
+.lu-kpi-1 { background:linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%); border:1px solid #c7d2fe; }
+.lu-kpi-1::before { background:linear-gradient(90deg, #6366f1, #818cf8); }
+.lu-kpi-2 { background:linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); border:1px solid #a7f3d0; }
+.lu-kpi-2::before { background:linear-gradient(90deg, #10b981, #34d399); }
+.lu-kpi-3 { background:linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%); border:1px solid #fbcfe8; }
+.lu-kpi-3::before { background:linear-gradient(90deg, #ec4899, #f472b6); }
+.lu-kpi-4 { background:linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); border:1px solid #fde68a; }
+.lu-kpi-4::before { background:linear-gradient(90deg, #f59e0b, #fbbf24); }
+.lu-kpi-5 { background:linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border:1px solid #bfdbfe; }
+.lu-kpi-5::before { background:linear-gradient(90deg, #3b82f6, #60a5fa); }
+.lu-kpi-6 { background:linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%); border:1px solid #e9d5ff; }
+.lu-kpi-6::before { background:linear-gradient(90deg, #a855f7, #c084fc); }
+
+/* Dark KPI backgrounds */
+body.dark-mode .lu-kpi-1 { background:linear-gradient(135deg, rgba(99,102,241,0.2) 0%, rgba(99,102,241,0.08) 100%); border-color:rgba(99,102,241,0.3); }
+body.dark-mode .lu-kpi-2 { background:linear-gradient(135deg, rgba(16,185,129,0.2) 0%, rgba(16,185,129,0.08) 100%); border-color:rgba(16,185,129,0.3); }
+body.dark-mode .lu-kpi-3 { background:linear-gradient(135deg, rgba(236,72,153,0.2) 0%, rgba(236,72,153,0.08) 100%); border-color:rgba(236,72,153,0.3); }
+body.dark-mode .lu-kpi-4 { background:linear-gradient(135deg, rgba(245,158,11,0.2) 0%, rgba(245,158,11,0.08) 100%); border-color:rgba(245,158,11,0.3); }
+body.dark-mode .lu-kpi-5 { background:linear-gradient(135deg, rgba(59,130,246,0.2) 0%, rgba(59,130,246,0.08) 100%); border-color:rgba(59,130,246,0.3); }
+body.dark-mode .lu-kpi-6 { background:linear-gradient(135deg, rgba(168,85,247,0.2) 0%, rgba(168,85,247,0.08) 100%); border-color:rgba(168,85,247,0.3); }
+
+.lu-kpi-icon { font-size:20px; vertical-align:middle; }
+.lu-kpi-val { font-size:28px; font-weight:800; letter-spacing:-0.03em; margin-bottom:2px; }
+.lu-kpi-1 .lu-kpi-val { color:#4f46e5; }
+.lu-kpi-2 .lu-kpi-val { color:#059669; }
+.lu-kpi-3 .lu-kpi-val { color:#db2777; }
+.lu-kpi-4 .lu-kpi-val { color:#d97706; }
+.lu-kpi-5 .lu-kpi-val { color:#2563eb; }
+.lu-kpi-6 .lu-kpi-val { color:#9333ea; }
+body.dark-mode .lu-kpi-1 .lu-kpi-val { color:#a5b4fc; }
+body.dark-mode .lu-kpi-2 .lu-kpi-val { color:#6ee7b7; }
+body.dark-mode .lu-kpi-3 .lu-kpi-val { color:#f9a8d4; }
+body.dark-mode .lu-kpi-4 .lu-kpi-val { color:#fcd34d; }
+body.dark-mode .lu-kpi-5 .lu-kpi-val { color:#93c5fd; }
+body.dark-mode .lu-kpi-6 .lu-kpi-val { color:#d8b4fe; }
+.lu-kpi-lbl { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#6b7280; }
+body.dark-mode .lu-kpi-lbl { color:#9ca3af; }
+
+/* ── Breakdown Panels ─────────────────────────────── */
+.lu-panels { display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:16px; margin-bottom:28px; }
+.lu-panel {
+    border-radius:16px; padding:20px; overflow:hidden;
+    background:rgba(255,255,255,0.8); backdrop-filter:blur(12px);
+    border:1px solid rgba(99,102,241,0.15);
+    box-shadow:0 2px 12px rgba(99,102,241,0.08);
+}
+body.dark-mode .lu-panel {
+    background:rgba(30,27,55,0.7);
+    border-color:rgba(99,102,241,0.2);
+    box-shadow:0 2px 12px rgba(0,0,0,0.3);
+}
+.lu-panel-hdr {
+    display:flex; align-items:center; gap:8px;
+    margin-bottom:14px; padding-bottom:10px;
+    border-bottom:1px solid rgba(99,102,241,0.1);
+}
+body.dark-mode .lu-panel-hdr { border-bottom-color:rgba(99,102,241,0.15); }
+.lu-panel-icon { font-size:18px; }
+.lu-panel-title { font-size:14px; font-weight:700; letter-spacing:-0.01em; color:#1f2937; }
+body.dark-mode .lu-panel-title { color:#e5e7eb; }
+.lu-row {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:8px 10px; font-size:13px; border-radius:8px; transition:background 0.15s;
+}
+.lu-row:hover { background:rgba(99,102,241,0.06); }
+body.dark-mode .lu-row:hover { background:rgba(99,102,241,0.1); }
+.lu-row-label { font-weight:500; color:#374151; }
+body.dark-mode .lu-row-label { color:#d1d5db; }
+.lu-row-val { font-weight:700; font-size:12px; color:#6366f1; font-variant-numeric:tabular-nums; }
+body.dark-mode .lu-row-val { color:#a5b4fc; }
+.lu-row-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:8px; vertical-align:middle; }
+
+/* ── Table ─────────────────────────────────────────── */
+.lu-table-section { margin-bottom:28px; }
+.lu-table-hdr { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+.lu-table-hdr-icon { font-size:18px; }
+.lu-table-hdr-title { font-size:15px; font-weight:700; letter-spacing:-0.01em; color:#1f2937; }
+body.dark-mode .lu-table-hdr-title { color:#e5e7eb; }
+.lu-table-wrap {
+    overflow-x:auto; border-radius:14px;
+    background:rgba(255,255,255,0.8); backdrop-filter:blur(12px);
+    border:1px solid rgba(99,102,241,0.15);
+    box-shadow:0 2px 12px rgba(99,102,241,0.08);
+}
+body.dark-mode .lu-table-wrap {
+    background:rgba(30,27,55,0.7);
+    border-color:rgba(99,102,241,0.2);
+    box-shadow:0 2px 12px rgba(0,0,0,0.3);
+}
+.lu-table { width:100%; border-collapse:collapse; font-size:13px; }
+.lu-table th {
+    text-align:left; padding:12px 14px; font-weight:700; font-size:11px;
+    text-transform:uppercase; letter-spacing:0.06em; color:#6b7280;
+    border-bottom:2px solid rgba(99,102,241,0.12); position:sticky; top:0;
+    background:rgba(238,240,255,0.9);
+}
+body.dark-mode .lu-table th { background:rgba(30,27,55,0.95); color:#9ca3af; border-bottom-color:rgba(99,102,241,0.2); }
+.lu-table td { padding:10px 14px; border-bottom:1px solid rgba(99,102,241,0.06); color:#374151; }
+body.dark-mode .lu-table td { border-bottom-color:rgba(99,102,241,0.08); color:#d1d5db; }
+.lu-table tr { transition:background 0.15s; }
+.lu-table tr:hover td { background:rgba(99,102,241,0.05); }
+body.dark-mode .lu-table tr:hover td { background:rgba(99,102,241,0.08); }
+.lu-table .lu-bot-tag { display:inline-block; padding:2px 8px; border-radius:6px; font-size:11px; font-weight:700; letter-spacing:0.02em; }
+.lu-bot-barnacles { background:rgba(99,102,241,0.15); color:#4f46e5; }
+.lu-bot-money_ball { background:rgba(245,158,11,0.15); color:#d97706; }
+body.dark-mode .lu-bot-barnacles { background:rgba(99,102,241,0.25); color:#a5b4fc; }
+body.dark-mode .lu-bot-money_ball { background:rgba(245,158,11,0.25); color:#fcd34d; }
+.lu-prompt-cell { max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#9ca3af; }
+.lu-cost-cell { font-weight:700; color:#db2777; font-variant-numeric:tabular-nums; }
+body.dark-mode .lu-cost-cell { color:#f9a8d4; }
+.lu-token-cell { font-weight:600; color:#4f46e5; font-variant-numeric:tabular-nums; }
+body.dark-mode .lu-token-cell { color:#a5b4fc; }
+
+/* ── Pagination ────────────────────────────────────── */
+.lu-pagination { display:flex; gap:8px; justify-content:center; margin-top:16px; }
+.lu-pagination button {
+    padding:8px 20px; border-radius:10px; font-size:13px; font-weight:600;
+    border:1px solid rgba(99,102,241,0.25); color:#6366f1;
+    background:rgba(99,102,241,0.06); cursor:pointer; transition:all 0.2s;
+}
+body.dark-mode .lu-pagination button { background:rgba(99,102,241,0.12); border-color:rgba(99,102,241,0.3); color:#a5b4fc; }
+.lu-pagination button:disabled { opacity:0.3; cursor:default; }
+.lu-pagination button:hover:not(:disabled) {
+    background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; border-color:transparent;
+    box-shadow:0 4px 16px rgba(99,102,241,0.3);
+}
+
+/* ── Stagger animations ───────────────────────────── */
+@keyframes fadeSlideUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+.lu-kpi, .lu-panel, .lu-table-section { animation:fadeSlideUp 0.5s ease-out both; }
+.lu-kpi:nth-child(1) { animation-delay:0.05s; }
+.lu-kpi:nth-child(2) { animation-delay:0.1s; }
+.lu-kpi:nth-child(3) { animation-delay:0.15s; }
+.lu-kpi:nth-child(4) { animation-delay:0.2s; }
+.lu-kpi:nth-child(5) { animation-delay:0.25s; }
+.lu-kpi:nth-child(6) { animation-delay:0.3s; }
+.lu-panel:nth-child(1) { animation-delay:0.35s; }
+.lu-panel:nth-child(2) { animation-delay:0.4s; }
+.lu-panel:nth-child(3) { animation-delay:0.45s; }
+.lu-table-section { animation-delay:0.5s; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Auth overlay -->
+<div class="lu-auth-overlay" id="luAuthOverlay">
+    <div class="lu-auth-box">
+        <span class="lu-auth-icon">🔐</span>
+        <h2>LLM Usage Dashboard</h2>
+        <p class="lu-auth-sub">Enter password to view cost & usage analytics</p>
+        <form id="luAuthForm" onsubmit="event.preventDefault();luAuth();" autocomplete="on">
+            <input type="text" name="username" id="luUsername" value="admin" autocomplete="username" style="position:absolute;opacity:0;height:0;pointer-events:none;">
+            <input type="password" name="password" id="luPassword" placeholder="Password" autocomplete="current-password">
+            <div class="lu-auth-err" id="luAuthErr"></div>
+            <button type="submit">Unlock Dashboard</button>
+        </form>
+    </div>
+</div>
+
+<!-- Main content (hidden until auth) -->
+<div class="lu-page-bg" id="luMain" style="display:none;">
+<div class="lu-container">
+
+    <!-- Header -->
+    <div class="lu-header" style="justify-content:center; text-align:center;">
+        <div class="lu-header-left">
+            <span class="lu-header-badge">🐚</span>
+            <span class="lu-header-title">the alert triage service' LLM Usage & Cost Analytics</span>
+        </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="lu-kpi-grid">
+        <div class="lu-kpi lu-kpi-1">
+            <div class="lu-kpi-val"><span class="lu-kpi-icon">💬</span> <span id="sTodayPrompts">-</span></div>
+            <div class="lu-kpi-lbl">Today's Prompts</div>
+        </div>
+        <div class="lu-kpi lu-kpi-2">
+            <div class="lu-kpi-val"><span class="lu-kpi-icon">💵</span> <span id="sTodayCost">-</span></div>
+            <div class="lu-kpi-lbl">Today's Cost</div>
+        </div>
+        <div class="lu-kpi lu-kpi-3">
+            <div class="lu-kpi-val"><span class="lu-kpi-icon">📊</span> <span id="sMonthPrompts">-</span></div>
+            <div class="lu-kpi-lbl">MTD Prompts</div>
+        </div>
+        <div class="lu-kpi lu-kpi-4">
+            <div class="lu-kpi-val"><span class="lu-kpi-icon">🔥</span> <span id="sMonthCost">-</span></div>
+            <div class="lu-kpi-lbl">MTD Cost</div>
+        </div>
+        <div class="lu-kpi lu-kpi-5">
+            <div class="lu-kpi-val"><span class="lu-kpi-icon">🧮</span> <span id="sMonthTokens">-</span></div>
+            <div class="lu-kpi-lbl">MTD Tokens</div>
+        </div>
+        <div class="lu-kpi lu-kpi-6">
+            <div class="lu-kpi-val"><span class="lu-kpi-icon">⏱️</span> <span id="sAvgElapsed">-</span></div>
+            <div class="lu-kpi-lbl">Avg Response (s)</div>
+        </div>
+    </div>
+
+    <!-- Breakdown Panels -->
+    <div class="lu-panels">
+        <div class="lu-panel">
+            <div class="lu-panel-hdr">
+                <span class="lu-panel-icon">🧠</span>
+                <span class="lu-panel-title">By Model</span>
+            </div>
+            <div id="byModelRows"></div>
+        </div>
+        <div class="lu-panel">
+            <div class="lu-panel-hdr">
+                <span class="lu-panel-icon">👥</span>
+                <span class="lu-panel-title">Top Users</span>
+            </div>
+            <div id="topUserRows"></div>
+        </div>
+    </div>
+
+    <!-- Recent Prompts Table -->
+    <div class="lu-table-section">
+        <div class="lu-table-hdr">
+            <span class="lu-table-hdr-icon">📝</span>
+            <span class="lu-table-hdr-title">Recent Prompts</span>
+        </div>
+        <div class="lu-table-wrap">
+            <table class="lu-table">
+                <thead><tr>
+                    <th>Time</th><th>Bot</th><th>User</th><th>Prompt</th>
+                    <th>Model</th><th>Tokens</th><th>Cost</th><th>Time(s)</th>
+                </tr></thead>
+                <tbody id="luBody"><tr><td colspan="8" style="text-align:center;padding:32px;color:#9ca3af;">Loading...</td></tr></tbody>
+            </table>
+        </div>
+        <div class="lu-pagination" id="luPagination"></div>
+    </div>
+</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function(){
+    const PAGE_SIZE = 50;
+    let currentOffset = 0;
+    let authPassword = '';
+
+    const botColors = { barnacles:'#6366f1', money_ball:'#f59e0b' };
+    function fmt$(v) { return v != null ? '$' + v.toFixed(4) : '-'; }
+    function fmtK(v) { return v >= 1000 ? (v/1000).toFixed(1) + 'k' : (v || 0).toString(); }
+    function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    function botParam() { return 'barnacles'; }
+    function authParam() { return '&password=' + encodeURIComponent(authPassword); }
+    function botTag(name) {
+        const cls = name === 'barnacles' ? 'lu-bot-barnacles' : name === 'money_ball' ? 'lu-bot-money_ball' : '';
+        return `<span class="lu-bot-tag ${cls}">${esc(name)}</span>`;
+    }
+
+    window.luAuth = function() {
+        const pw = document.getElementById('luPassword').value;
+        fetch('/api/llm-usage/auth', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({password: pw})
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                authPassword = pw;
+                document.getElementById('luAuthOverlay').style.display = 'none';
+                document.getElementById('luMain').style.display = 'block';
+                loadAll();
+            } else {
+                document.getElementById('luAuthErr').textContent = 'Invalid password';
+                document.getElementById('luPassword').select();
+            }
+        });
+    };
+
+    function loadStats() {
+        const bot = botParam();
+        fetch('/api/llm-usage/stats?_=1' + (bot ? '&bot=' + bot : '') + authParam())
+            .then(r => r.json())
+            .then(d => {
+                if (!d.success) return;
+                document.getElementById('sTodayPrompts').textContent = d.today_prompts || 0;
+                document.getElementById('sTodayCost').textContent = fmt$(d.today_cost);
+                document.getElementById('sMonthPrompts').textContent = d.month_prompts || 0;
+                document.getElementById('sMonthCost').textContent = fmt$(d.month_cost);
+                document.getElementById('sMonthTokens').textContent = fmtK(d.month_tokens);
+                document.getElementById('sAvgElapsed').textContent = (d.avg_elapsed || 0).toFixed(1);
+
+                const noData = '<div class="lu-row"><span class="lu-row-label" style="color:#9ca3af">No data yet</span></div>';
+
+                document.getElementById('byBotRows').innerHTML = (d.by_bot || []).map(b => {
+                    const c = botColors[b.bot] || '#6366f1';
+                    return `<div class="lu-row"><span class="lu-row-label"><span class="lu-row-dot" style="background:${c}"></span>${esc(b.bot)}</span><span class="lu-row-val">${b.count} prompts &middot; ${fmtK(b.tokens)} tok &middot; ${fmt$(b.cost)}</span></div>`;
+                }).join('') || noData;
+
+                document.getElementById('byModelRows').innerHTML = (d.by_model || []).map(m =>
+                    `<div class="lu-row"><span class="lu-row-label"><span class="lu-row-dot" style="background:#a855f7"></span>${esc(m.model || 'unknown')}</span><span class="lu-row-val">${m.count} &middot; ${fmt$(m.cost)}</span></div>`
+                ).join('') || noData;
+
+                document.getElementById('topUserRows').innerHTML = (d.top_users || []).map(u =>
+                    `<div class="lu-row"><span class="lu-row-label"><span class="lu-row-dot" style="background:#10b981"></span>${esc(u.actor || 'unknown')}</span><span class="lu-row-val">${u.count} &middot; ${fmt$(u.cost)}</span></div>`
+                ).join('') || noData;
+            });
+    }
+
+    function loadLogs(offset) {
+        currentOffset = offset || 0;
+        const bot = botParam();
+        const url = `/api/llm-usage/logs?limit=${PAGE_SIZE}&offset=${currentOffset}` + (bot ? '&bot=' + bot : '') + authParam();
+        fetch(url).then(r => r.json()).then(d => {
+            if (!d.success) return;
+            const rows = d.rows || [];
+            const tbody = document.getElementById('luBody');
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#9ca3af;">No LLM usage logged yet — send a message to a bot!</td></tr>';
+            } else {
+                tbody.innerHTML = rows.map(r => `<tr>
+                    <td style="white-space:nowrap;font-size:12px;color:#9ca3af;">${esc(r.timestamp_eastern || '')}</td>
+                    <td>${botTag(r.bot || '')}</td>
+                    <td style="font-weight:500;">${esc(r.actor || '')}</td>
+                    <td class="lu-prompt-cell" title="${esc(r.prompt_preview || '')}">${esc(r.prompt_preview || '')}</td>
+                    <td style="font-size:12px;">${esc(r.model || '')}</td>
+                    <td class="lu-token-cell">${fmtK(r.total_tokens)}</td>
+                    <td class="lu-cost-cell">${r.cost ? fmt$(r.cost) : '-'}</td>
+                    <td style="font-variant-numeric:tabular-nums;">${r.elapsed_s ? r.elapsed_s.toFixed(1) : '-'}</td>
+                </tr>`).join('');
+            }
+            const pg = document.getElementById('luPagination');
+            const prevDisabled = currentOffset === 0 ? 'disabled' : '';
+            const nextDisabled = rows.length < PAGE_SIZE ? 'disabled' : '';
+            pg.innerHTML = `<button ${prevDisabled} onclick="window._luLoadLogs(${currentOffset - PAGE_SIZE})">← Prev</button>
+                            <button ${nextDisabled} onclick="window._luLoadLogs(${currentOffset + PAGE_SIZE})">Next →</button>`;
+        });
+    }
+
+    function loadAll() { loadStats(); loadLogs(0); }
+
+    window._luLoadLogs = loadLogs;
+    window.loadAll = loadAll;
+
+    document.getElementById('luPassword').focus();
+})();
+</script>
+{% endblock %}

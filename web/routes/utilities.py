@@ -99,6 +99,7 @@ def apt_other_names_search():
 
 
 @utilities_bp.route('/api/random-audio', methods=['GET'])
+@log_web_activity
 def random_audio():
     """Return a random mp3 filename from the static/audio directory."""
     audio_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static', 'audio')
@@ -108,6 +109,13 @@ def random_audio():
         return jsonify({'error': 'No audio files found'}), 404
 
     return jsonify({'filename': filename})
+
+
+@utilities_bp.route("/all-pages")
+@log_web_activity
+def all_pages():
+    """Directory page with cards linking to every available page."""
+    return render_template("all_pages.html")
 
 
 @utilities_bp.route("/healthz")
@@ -125,16 +133,18 @@ def healthz():
         )
         return jsonify(health), 200
     except Exception as exc:
-        return jsonify({"status": "error", "error": str(exc)}), 500
+        return jsonify({"status": "error", "error": "An internal error occurred"}), 500
 
 
 @utilities_bp.route("/api/config")
+@log_web_activity
 def api_public_config():
     """Return public config values for JavaScript clients."""
     return jsonify(PUBLIC_CONFIG)
 
 
 @utilities_bp.route('/api/countdown-timer')
+@log_web_activity
 def countdown_timer():
     """Generate an animated countdown timer GIF for emails."""
     try:
@@ -146,8 +156,8 @@ def countdown_timer():
         return send_file(img_buffer, mimetype='image/gif', as_attachment=False)
 
     except ValueError as val_err:
-        current_app.logger.error(f"Invalid deadline format: {val_err}", exc_info=True)
-        return jsonify({'error': str(val_err)}), 400
+        current_app.logger.warning(f"Invalid deadline format: {val_err}")
+        return jsonify({'error': 'Invalid deadline format'}), 400
     except Exception as exc:
         current_app.logger.error(f"Error generating countdown timer: {exc}", exc_info=True)
         error_buffer = countdown_timer_handler.generate_error_timer()

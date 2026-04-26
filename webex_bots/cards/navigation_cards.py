@@ -1,194 +1,135 @@
-"""Navigation and options cards for the notification service bot."""
+"""Navigation and options cards for the notification service bot.
 
-from .ticket_cards import IOC_HUNT, THREAT_HUNT
-from .testing_cards import APPROVED_TESTING_CARD
-from .import_cards import TICKET_IMPORT_CARD
+Uses Action.Submit buttons instead of Action.ShowCard to keep the card
+under Webex's size limit. Each button triggers the corresponding command
+keyword, which loads the full card on-demand.
+"""
 
 
 def get_all_options_card():
-    """Build the all_options_card with references to other cards.
-
-    This is a function because it needs to reference other card definitions
-    and we want to ensure imports are resolved correctly.
-    """
+    """Build a lightweight all-options card using submit buttons."""
     return {
         "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
         "type": "AdaptiveCard",
         "version": "1.3",
-        "actions": [
+        "body": [
             {
-                "type": "Action.ShowCard",
-                "title": "Approved Testing",
-                "card": APPROVED_TESTING_CARD
+                "type": "TextBlock",
+                "text": "📋 More Commands",
+                "weight": "Bolder",
+                "size": "Medium",
+                "horizontalAlignment": "Center",
+                "color": "Accent"
+            },
+            # --- Testing & Suppression ---
+            {
+                "type": "TextBlock",
+                "text": "🧪 Testing & Suppression",
+                "weight": "Bolder",
+                "spacing": "Medium",
+                "separator": True
             },
             {
-                "type": "Action.ShowCard",
-                "title": "On Call",
-                "card": {
-                    "type": "AdaptiveCard",
-                    "body": [{
-                        "type": "ActionSet",
-                        "spacing": "None",
-                        "actions": [
-                            {
-                                "type": "Action.Submit",
-                                "title": "Who",
-                                "data": {
-                                    "callback_keyword": "who"
-                                }
-                            },
-                            {
-                                "type": "Action.Submit",
-                                "title": "Rotation",
-                                "data": {
-                                    "callback_keyword": "rotation"
-                                }
-                            }
-                        ]
-                    }]
-                }
+                "type": "ActionSet",
+                "spacing": "Small",
+                "actions": [
+                    {"type": "Action.Submit", "title": "🧪 Approved Testing", "data": {"callback_keyword": "testing"}, "style": "positive"},
+                    {"type": "Action.Submit", "title": "🔇 Ticket Cannon Silencer", "data": {"callback_keyword": "silencer"}, "style": "positive"},
+                    {"type": "Action.Submit", "title": "🔕 Noisy Rule Suppressor", "data": {"callback_keyword": "suppressor"}, "style": "destructive"},
+                ]
+            },
+            # --- On-Call ---
+            {
+                "type": "TextBlock",
+                "text": "📞 On-Call",
+                "weight": "Bolder",
+                "spacing": "Medium",
+                "separator": True
             },
             {
-                "type": "Action.ShowCard",
-                "title": "CrowdStrike",
-                "card": {
-                    "type": "AdaptiveCard",
-                    "body": [
-                        {
-                            "type": "TextBlock",
-                            "size": "small",
-                            "weight": "bolder",
-                            "text": "CS Containment Status",
-                            "horizontalAlignment": "center",
-                            "wrap": True,
-                            "style": "heading"
-                        },
-                        {
-                            "type": "ColumnSet",
-                            "columns": [
-                                {
-                                    "type": "Column",
-                                    "width": "1",
-                                    "items": [
-                                        {
-                                            "type": "TextBlock",
-                                            "text": "Host Name:",
-                                            "wrap": True,
-                                            "horizontalAlignment": "right"
-                                        }
-                                    ]
-                                },
-                                {
-                                    "type": "Column",
-                                    "width": 3,
-                                    "items": [
-                                        {
-                                            "type": "Input.Text",
-                                            "id": "host_name_cs"
-                                        }
-                                    ]
-                                }
-                            ]
-                        },
-                        {
-                            "type": "ActionSet",
-                            "spacing": "None",
-                            "actions": [
-                                {
-                                    "type": "Action.Submit",
-                                    "title": "Check Status",
-                                    "data": {
-                                        "callback_keyword": "status"
-                                    }
-                                },
-                                {
-                                    "type": "Action.Submit",
-                                    "title": "Uncontain",
-                                    "data": {
-                                        "callback_keyword": "uncontain"
-                                    },
-                                    "style": "positive"
-                                },
-                                {
-                                    "type": "Action.Submit",
-                                    "title": "Contain",
-                                    "data": {
-                                        "callback_keyword": "contain"
-                                    },
-                                    "style": "destructive"
-                                }
-                            ],
-                            "horizontalAlignment": "right"
-                        }
-                    ]
-                }
+                "type": "ActionSet",
+                "spacing": "Small",
+                "actions": [
+                    {"type": "Action.Submit", "title": "👤 Who's On-Call", "data": {"callback_keyword": "who"}, "style": "positive"},
+                    {"type": "Action.Submit", "title": "🔄 Rotation", "data": {"callback_keyword": "rotation"}, "style": "positive"},
+                ]
+            },
+            # --- CrowdStrike ---
+            {
+                "type": "TextBlock",
+                "text": "🦅 CrowdStrike",
+                "weight": "Bolder",
+                "spacing": "Medium",
+                "separator": True
             },
             {
-                "type": "Action.ShowCard",
-                "title": "XSOAR",
-                "card": {
-                    "type": "AdaptiveCard",
-                    "body": [
-                        {
-                            "type": "ActionSet",
-                            "spacing": "None",
-                            "actions": [
-                                {
-                                    "type": "Action.ShowCard",
-                                    "title": "IOC Hunt",
-                                    "card": IOC_HUNT
-                                },
-                                {
-                                    "type": "Action.ShowCard",
-                                    "title": "Threat Hunt",
-                                    "card": THREAT_HUNT
-                                },
-                                {
-                                    "type": "Action.ShowCard",
-                                    "title": "Import Ticket",
-                                    "card": TICKET_IMPORT_CARD.to_dict()
-                                }
-                            ]
-                        }
-                    ]
-                },
+                "type": "ColumnSet",
+                "spacing": "Small",
+                "columns": [
+                    {
+                        "type": "Column", "width": "stretch",
+                        "items": [{"type": "Input.Text", "id": "host_name_cs", "placeholder": "Hostname for CS actions"}]
+                    }
+                ]
             },
             {
-                "type": "Action.ShowCard",
-                "title": "Misc",
-                "card": {
-                    "type": "AdaptiveCard",
-                    "body": [
-                        {
-                            "type": "ActionSet",
-                            "spacing": "None",
-                            "actions": [
-                                {
-                                    "type": "Action.Submit",
-                                    "title": "Fav URLs",
-                                    "data": {
-                                        "callback_keyword": "urls"
-                                    }
-                                },
-                                {
-                                    "type": "Action.Submit",
-                                    "title": "Holidays",
-                                    "data": {
-                                        "callback_keyword": "holidays"
-                                    }
-                                },
-                                {
-                                    "type": "Action.Submit",
-                                    "title": "Birthday & Anniversary",
-                                    "data": {
-                                        "callback_keyword": "get_birthday_anniversary_form"
-                                    }
-                                }
-                            ]
-                        }
-                    ]
-                }
-            }
+                "type": "ActionSet",
+                "spacing": "Small",
+                "actions": [
+                    {"type": "Action.Submit", "title": "🔍 Check Status", "data": {"callback_keyword": "status"}, "style": "positive"},
+                    {"type": "Action.Submit", "title": "🔓 Uncontain", "data": {"callback_keyword": "uncontain"}, "style": "positive"},
+                    {"type": "Action.Submit", "title": "🔒 Contain", "data": {"callback_keyword": "contain"}, "style": "destructive"},
+                ]
+            },
+            {
+                "type": "ActionSet",
+                "spacing": "Small",
+                "actions": [
+                    {"type": "Action.Submit", "title": "🌐 Browser History", "data": {"callback_keyword": "get_browser_history_card"}, "style": "positive"},
+                    {"type": "Action.Submit", "title": "📁 File Pull", "data": {"callback_keyword": "get_file_pull_card"}, "style": "positive"},
+                ]
+            },
+            # --- XSOAR ---
+            {
+                "type": "TextBlock",
+                "text": "📋 XSOAR",
+                "weight": "Bolder",
+                "spacing": "Medium",
+                "separator": True
+            },
+            {
+                "type": "ActionSet",
+                "spacing": "Small",
+                "actions": [
+                    {"type": "Action.Submit", "title": "📝 Create Ticket", "data": {"callback_keyword": "get_x_ticket_form"}, "style": "positive"},
+                    {"type": "Action.Submit", "title": "🎯 IOC Hunt", "data": {"callback_keyword": "ioc"}, "style": "destructive"},
+                    {"type": "Action.Submit", "title": "🕵️ Threat Hunt", "data": {"callback_keyword": "show_threat_hunt_form"}, "style": "destructive"},
+                    {"type": "Action.Submit", "title": "📥 Import Ticket", "data": {"callback_keyword": "import"}, "style": "positive"},
+                    {"type": "Action.Submit", "title": "🔎 Search X", "data": {"callback_keyword": "get_search_xsoar_card"}, "style": "positive"},
+                ]
+            },
+            # --- Misc ---
+            {
+                "type": "TextBlock",
+                "text": "🔧 Misc",
+                "weight": "Bolder",
+                "spacing": "Medium",
+                "separator": True
+            },
+            {
+                "type": "ActionSet",
+                "spacing": "Small",
+                "actions": [
+                    {"type": "Action.Submit", "title": "🔗 Fav URLs", "data": {"callback_keyword": "urls"}, "style": "positive"},
+                    {"type": "Action.Submit", "title": "🏖️ Holidays", "data": {"callback_keyword": "holidays"}, "style": "positive"},
+                    {"type": "Action.Submit", "title": "🎂 Birthday & Anniversary", "data": {"callback_keyword": "get_birthday_anniversary_form"}, "style": "positive"},
+                    {"type": "Action.Submit", "title": "💼 AZDO Work Item", "data": {"callback_keyword": "azdo"}, "style": "positive"},
+                    {"type": "Action.Submit", "title": "🌐 Domain Lookalike", "data": {"callback_keyword": "domain_lookalike"}, "style": "destructive"},
+                    {"type": "Action.Submit", "title": "🚫 URL Block Verdict", "data": {"callback_keyword": "get_url_block_verdict_form"}, "style": "destructive"},
+                    {"type": "Action.Submit", "title": "🔧 Tuning Request", "data": {"callback_keyword": "tuning"}, "style": "positive"},
+                    {"type": "Action.Submit", "title": "📇 Contacts", "data": {"callback_keyword": "contacts"}, "style": "positive"},
+                ]
+            },
         ]
     }
 

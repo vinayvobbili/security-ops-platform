@@ -10,6 +10,7 @@ This package contains all card definitions organized by functionality:
 - domain_cards: Domain lookalike scanning cards
 - birthday_cards: Birthday and anniversary cards
 - navigation_cards: Main navigation/options card
+- contacts_cards: Escalation contacts menu and add form
 """
 
 from .ticket_cards import NEW_TICKET_CARD, IOC_HUNT, THREAT_HUNT
@@ -20,7 +21,10 @@ from .tuning_cards import TUNING_REQUEST_CARD
 from .url_cards import URL_BLOCK_VERDICT_CARD
 from .domain_cards import DOMAIN_LOOKALIKE_CARD
 from .birthday_cards import BIRTHDAY_ANNIVERSARY_CARD
+from .crowdstrike_cards import BROWSER_HISTORY_CARD, FILE_PULL_CARD
 from .navigation_cards import all_options_card, get_all_options_card
+from .ticket_cannon_cards import TICKET_CANNON_CARD, NOISE_SUPPRESSOR_CARD
+from .contacts_cards import CONTACTS_MENU_CARD, build_contacts_add_card
 
 __all__ = [
     # Ticket/Hunt cards
@@ -41,7 +45,16 @@ __all__ = [
     'DOMAIN_LOOKALIKE_CARD',
     # Birthday cards
     'BIRTHDAY_ANNIVERSARY_CARD',
+    # CrowdStrike cards
+    'BROWSER_HISTORY_CARD',
+    'FILE_PULL_CARD',
     # Navigation
     'all_options_card',
     'get_all_options_card',
+    # Ticket Cannon cards
+    'TICKET_CANNON_CARD',
+    'NOISE_SUPPRESSOR_CARD',
+    # Contacts cards
+    'CONTACTS_MENU_CARD',
+    'build_contacts_add_card',
 ]

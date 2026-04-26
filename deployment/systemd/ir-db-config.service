@@ -1,0 +1,41 @@
+[Unit]
+Description=DB Config Sidecar (containerized) — serves DB Config UI at :8034
+After=network.target
+# docker.service is a system-level unit; user-level systemd can't Requires= it,
+# but docker is enabled at boot so it's always up by the time user services start.
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=60
+TimeoutStopSec=20
+
+ExecStartPre=-/usr/bin/docker stop ir-db-config
+ExecStartPre=-/usr/bin/docker rm ir-db-config
+
+# Run the current image. The :current tag is updated by the deploy portal on
+# activate/rollback. Container is read-only except for /app/backup (bind mount
+# for persistent state) and tmpfs for /tmp and /run. Only 127.0.0.1 is exposed —
+# external access is via the Flask reverse proxy at /db-config-app/*.
+ExecStart=/usr/bin/docker run --rm --name ir-db-config \
+  -p 127.0.0.1:8034:8000 \
+  --user 1001:1001 \
+  --read-only \
+  --tmpfs /tmp:rw,size=64M \
+  --tmpfs /run:rw,size=16M \
+  --memory=1g --cpus=1.0 --pids-limit=128 \
+  --security-opt no-new-privileges \
+  --cap-drop=ALL \
+  --add-host=host.docker.internal:host-gateway \
+  -e AZURE_OPENAI_ENDPOINT=http://host.docker.internal:8011 \
+  -e AZURE_OPENAI_KEY=dummy \
+  -e AZURE_OPENAI_DEPLOYMENT=metiq-gpt-4.1 \
+  -e AZURE_OPENAI_API_VERSION=2024-08-01-preview \
+  -v /home/vinay/security-ops-platform/external/db_config/backup:/app/backup \
+  ir-db-config:current
+
+ExecStop=/usr/bin/docker stop ir-db-config
+
+[Install]
+WantedBy=default.target

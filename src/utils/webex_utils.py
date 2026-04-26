@@ -5,8 +5,12 @@ Keep it simple - just retry on transient errors.
 """
 
 import logging
+import threading
 import time
+from contextlib import contextmanager
+from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Any
+from zoneinfo import ZoneInfo
 
 import requests
 from webexteamssdk import WebexTeamsAPI
@@ -17,6 +21,34 @@ from my_config import get_config
 config = get_config()
 
 logger = logging.getLogger(__name__)
+
+
+def clear_stale_lock(lock_path) -> None:
+    """Remove a lock file left behind by a SIGKILLed process.
+
+    Tests if the file-level fcntl lock is held by anyone. If not, the lock
+    file is stale and safe to delete.
+    """
+    import fcntl
+    from pathlib import Path
+    lock_path = Path(lock_path)
+    if not lock_path.exists():
+        return
+    try:
+        with open(lock_path, 'r') as f:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        lock_path.unlink(missing_ok=True)
+        logger.info(f"Removed stale lock file: {lock_path}")
+    except (OSError, IOError):
+        pass  # Lock is actively held — leave it
+
+
+def format_eta(minutes: int) -> str:
+    """Return ETA string in US-Eastern and IST, e.g. '10:43 AM EDT / 8:13 PM IST'."""
+    eta_utc = datetime.now(timezone.utc) + timedelta(minutes=minutes)
+    et = eta_utc.astimezone(ZoneInfo("America/New_York")).strftime("%-I:%M %p %Z")
+    ist = eta_utc.astimezone(ZoneInfo("Asia/Kolkata")).strftime("%-I:%M %p IST")
+    return f"{et} / {ist}"
 
 
 def send_message_with_retry(webex_api, room_id: str, text: Optional[str] = None,
@@ -68,6 +100,41 @@ def send_message_with_retry(webex_api, room_id: str, text: Optional[str] = None,
                 return None
 
     return None
+
+
+@contextmanager
+def periodic_progress_pinger(webex_api, room_id: str, interval_seconds: int = 1200,
+                             label: str = "your request"):
+    """Keep the room warm with a periodic "still working" ping during long jobs.
+
+    Starts a daemon thread that sends one webex message every `interval_seconds`
+    until the context exits. First ping fires at `interval_seconds`, so fast jobs
+    that finish before the interval never send anything.
+
+    Default 1200s (20 min) matches the typical hour-long runtime of these jobs
+    without flooding the room. Exceptions inside the pinger thread are logged
+    and swallowed so they can never break the wrapped job.
+    """
+    stop_event = threading.Event()
+    started_monotonic = time.monotonic()
+
+    def _loop():
+        while not stop_event.wait(interval_seconds):
+            elapsed_min = int((time.monotonic() - started_monotonic) / 60)
+            try:
+                send_message_with_retry(
+                    webex_api, room_id=room_id,
+                    markdown=f"⏳ Still working on {label} ({elapsed_min} min elapsed)..."
+                )
+            except Exception as e:
+                logger.warning(f"periodic_progress_pinger send failed (non-fatal): {e}")
+
+    thread = threading.Thread(target=_loop, name="webex-progress-pinger", daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        stop_event.set()
 
 
 def send_card_with_retry(webex_api, room_id: str, text: str, attachments: List[Any],

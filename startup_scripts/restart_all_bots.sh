@@ -2,7 +2,7 @@
 # Safely restart all Webex bots with the reconnection fix
 
 BOTS=("toodles" "barnacles" "money_ball" "msoar" "jarvis" "tars")
-BOT_DIR="$HOME/pub/IR"
+BOT_DIR="$HOME/IR"
 
 echo "🔄 Restarting all Webex bots with reconnection fix"
 echo "=================================================="
@@ -104,7 +104,7 @@ done
 echo ""
 echo "🔍 Monitor individual bots:"
 for bot in "${BOTS[@]}"; do
-    echo "   tail -f ~/pub/IR/logs/${bot}.log"
+    echo "   tail -f ~/security-ops-platform/logs/${bot}.log"
 done
 
 echo ""

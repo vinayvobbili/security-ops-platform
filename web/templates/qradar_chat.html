@@ -1,0 +1,89 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'QRadar AQL Explorer' %}
+{% set page_title_left_icon = '📡' %}
+{% set page_title_right_icon = '🤖' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/qradar_chat.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="qrc-layout">
+
+    <!-- LEFT: Category Sidebar -->
+    <aside class="qrc-sidebar" id="qrcSidebar">
+        <div class="qrc-sidebar-title">Log Sources</div>
+        <div class="qrc-category-list" id="qrcCategoryList">
+            {% for cat in categories %}
+            <button class="qrc-category-item" data-id="{{ cat.id }}" data-name="{{ cat.name }}" data-icon="{{ cat.icon }}">
+                <span class="qrc-cat-icon">{{ cat.icon }}</span>
+                <span class="qrc-cat-text">
+                    <span class="qrc-cat-name">{{ cat.name }}</span>
+                    <span class="qrc-cat-desc">{{ cat.description }}</span>
+                </span>
+            </button>
+            {% endfor %}
+        </div>
+    </aside>
+
+    <!-- RIGHT: Main Content -->
+    <main class="qrc-main">
+        {% if not configured %}
+        <div class="qrc-notice qrc-notice-warn">
+            QRadar API not configured. Queries will fail until the API URL and key are set in the environment.
+        </div>
+        {% endif %}
+
+        <!-- Loading overlay -->
+        <div id="qrcLoadingOverlay" class="qrc-loading-overlay" style="display:none;">
+            <div class="qrc-loading-card">
+                <div class="qrc-loading-spinner-ring"></div>
+                <div class="qrc-loading-card-text" id="qrcLoadingText">Loading...</div>
+            </div>
+        </div>
+
+        <!-- Schema Preview (collapsible) -->
+        <details id="qrcSchemaDetails" class="qrc-schema-details" style="display:none;">
+            <summary class="qrc-schema-summary">Available Fields</summary>
+            <div id="qrcSchemaText" class="qrc-schema-text"></div>
+        </details>
+
+        <!-- Chat Panel -->
+        <div class="qrc-chat-panel">
+            <div class="qrc-chat-main">
+                <div class="qrc-chat-toolbar">
+                    <button id="qrcHistoryBtn" class="qrc-toolbar-btn" title="Query history">&#128340;</button>
+                    <div id="qrcHistoryDropdown" class="qrc-history-dropdown" style="display:none;"></div>
+                    <button id="qrcSavedBtn" class="qrc-toolbar-btn" title="Saved queries">&#11088;</button>
+                    <div id="qrcSavedDropdown" class="qrc-history-dropdown" style="display:none;"></div>
+                </div>
+                <div id="qrcMessages" class="qrc-messages">
+                    <div class="qrc-welcome" id="qrcWelcome">
+                        <div class="qrc-welcome-icon">📡</div>
+                        <h2 id="qrcGreeting">Ask About Your SIEM Data</h2>
+                        <p>Select a log source category from the sidebar, then ask questions in plain English. The AI will generate and execute AQL queries against QRadar.</p>
+                        <p style="font-size:0.75rem; color:#94a3b8; margin-top:4px;">Note: AQL queries may take 10-30s to execute as QRadar processes the search.</p>
+                    </div>
+                    <div class="qrc-welcome-examples" id="qrcChips"></div>
+                </div>
+                <div class="qrc-input-bar">
+                    <div class="qrc-input-row">
+                        <textarea id="qrcInput" class="qrc-input" placeholder="Ask a question about your QRadar data..." maxlength="2000" autocomplete="off" disabled rows="3"></textarea>
+                        <button id="qrcSend" class="qrc-send-btn" disabled title="Send message">Send &raquo;</button>
+                    </div>
+                    <div class="qrc-input-utils">
+                        <button id="qrcDownloadTranscript" class="qrc-util-btn" title="Download chat transcript" style="display:none;">&#128229; Download</button>
+                        <button id="qrcClearChat" class="qrc-util-btn qrc-clear-icon" title="Clear chat">&#128465; Clear</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/qradar_chat.js') }}"></script>
+{% endblock %}

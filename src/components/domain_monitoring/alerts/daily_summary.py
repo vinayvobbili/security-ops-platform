@@ -13,19 +13,18 @@ from typing import Any, Dict, List, Tuple
 
 from webexteamssdk import WebexTeamsAPI
 from webexpythonsdk.models.cards import (
-    AdaptiveCard, TextBlock, Container, options, HorizontalAlignment,
+    AdaptiveCard, TextBlock, options, HorizontalAlignment,
 )
 from webexpythonsdk.models.cards.actions import OpenUrl
 
 from services.cert_transparency import get_outstanding_threats
 
-from ..config import EASTERN_TZ
-from ..card_helpers import get_container_style, send_adaptive_card
+from ..config import EASTERN_TZ, ENABLE_INTELX
+from ..card_helpers import send_adaptive_card
 
 
 def send_daily_summary(webex_api: WebexTeamsAPI, results: Dict[str, Any], report_url: str) -> None:
     """Send a concise daily monitoring summary. Critical IOCs only, details on web."""
-    timestamp = datetime.now(EASTERN_TZ).strftime('%Y-%m-%d %I:%M %p %Z')
 
     # Collect critical findings (specific IOCs, not just counts)
     critical_items: List[Tuple[str, str]] = []  # (icon, description)
@@ -41,12 +40,13 @@ def send_daily_summary(webex_api: WebexTeamsAPI, results: Dict[str, Any], report
             warning_count += lookalikes.get("new_count", 0)
 
         # Dark web mentions - CRITICAL (show source)
-        intelx = domain_data.get("intelx", {})
-        if intelx.get("success"):
-            for f in intelx.get("darkweb_findings", [])[:2]:  # Top 2
-                source = f.get("name", "unknown source")[:30]
-                critical_items.append(("🌑", f"{domain} on dark web: {source}"))
-            warning_count += len(intelx.get("leak_findings", []))
+        if ENABLE_INTELX:
+            intelx = domain_data.get("intelx", {})
+            if intelx.get("success"):
+                for f in intelx.get("darkweb_findings", [])[:2]:  # Top 2
+                    source = f.get("name", "unknown source")[:30]
+                    critical_items.append(("🌑", f"{domain} on dark web: {source}"))
+                warning_count += len(intelx.get("leak_findings", []))
 
         # CVEs - CRITICAL (show CVE ID)
         shodan = domain_data.get("shodan", {})
@@ -108,35 +108,19 @@ def send_daily_summary(webex_api: WebexTeamsAPI, results: Dict[str, Any], report
     if critical_items:
         status_icon = "🔴"
         status_text = "CRITICAL"
-        header_color = "red"
     elif warning_count > 0:
         status_icon = "🟡"
         status_text = "WARNINGS"
-        header_color = "yellow"
     else:
         status_icon = "🟢"
         status_text = "ALL CLEAR"
-        header_color = "green"
 
     # Build concise card
     body = [
-        Container(
-            style=get_container_style(header_color),
-            items=[
-                TextBlock(
-                    text=f"{status_icon} Domain Monitoring: {status_text}",
-                    size=options.FontSize.LARGE,
-                    weight=options.FontWeight.BOLDER,
-                    color=options.Colors.LIGHT,
-                    horizontalAlignment=HorizontalAlignment.CENTER
-                ),
-                TextBlock(
-                    text=timestamp,
-                    size=options.FontSize.SMALL,
-                    color=options.Colors.LIGHT,
-                    horizontalAlignment=HorizontalAlignment.CENTER
-                )
-            ]
+        TextBlock(
+            text=f"{status_icon} Domain Monitoring: {status_text}",
+            size=options.FontSize.MEDIUM,
+            weight=options.FontWeight.BOLDER,
         ),
     ]
 

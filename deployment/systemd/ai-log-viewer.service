@@ -1,0 +1,29 @@
+[Unit]
+Description=Log Viewer - AI Scheduler
+After=network-online.target ai-scheduler.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=user
+Group=user
+WorkingDirectory=/home/user/IR
+EnvironmentFile=/home/user/IR/.env
+
+# Kill any orphan process using this port before starting
+ExecStartPre=-/bin/bash -c 'fuser -k 8045/tcp 2>/dev/null || true'
+
+# Start log viewer for AI scheduler
+ExecStart=/home/user/IR/.venv/bin/python deployment/log_viewer.py --port 8045 --title "AI Scheduler" --file /home/user/IR/logs/ai_scheduler.log
+
+Restart=on-failure
+KillMode=mixed
+TimeoutStopSec=10
+RestartSec=10
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ai-log-viewer
+
+[Install]
+WantedBy=multi-user.target

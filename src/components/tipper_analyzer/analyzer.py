@@ -8,22 +8,26 @@ against historical data.
 import logging
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from typing import List, Dict, Optional, Any
 
 import services.azdo as azdo
 from src.components.tipper_indexer import TipperIndexer
-from my_config import get_config
-
-from .models import NoveltyAnalysis, NoveltyLLMResponse, IOCHuntResult, DEFAULT_QRADAR_HUNT_HOURS, DEFAULT_CROWDSTRIKE_HUNT_HOURS
 from .formatters import (
     format_analysis_for_display,
     format_analysis_for_azdo,
     format_hunt_results_for_azdo,
-    format_single_tool_hunt_for_azdo,
+    format_exposure_for_azdo,
+    format_exposure_for_webex,
 )
 from .hunting import hunt_iocs
+from .models import NoveltyAnalysis, NoveltyLLMResponse, IOCHuntResult, DEFAULT_QRADAR_HUNT_HOURS, DEFAULT_CROWDSTRIKE_HUNT_HOURS
 
 logger = logging.getLogger(__name__)
+
+# Maximum time (seconds) to wait for an LLM response before giving up.
+# Prevents the bot from hanging for hours if the Mac/Ollama tunnel is down.
+LLM_TIMEOUT_SECONDS = 300
 
 
 class TipperAnalyzer:
@@ -46,22 +50,26 @@ class TipperAnalyzer:
     # -------------------------------------------------------------------------
     def build_entity_history(self, similar_tippers: List[Dict], exclude_tipper_id: str = None) -> tuple:
         """
-        Build IOC and malware history in a single pass (one AZDO fetch per tipper).
+        Build IOC, malware, TTP, and actor history in a single pass (one AZDO fetch per tipper).
 
         Args:
             similar_tippers: List of similar tipper results from find_similar_tippers
             exclude_tipper_id: Tipper ID to exclude (current tipper being analyzed)
 
         Returns:
-            Tuple of (ioc_history, malware_history, history_dates) where:
+            Tuple of (ioc_history, malware_history, history_dates, ttp_history, actor_history) where:
             - ioc_history: dict mapping entity value (lowercase) -> list of tipper IDs
             - malware_history: dict mapping malware name -> list of tipper IDs
             - history_dates: dict mapping tipper_id -> created_date string
+            - ttp_history: dict mapping MITRE technique ID (uppercase) -> list of tipper IDs
+            - actor_history: dict mapping actor name (lowercase) -> list of tipper IDs
         """
         from src.utils.entity_extractor import extract_entities
 
         ioc_to_tippers: Dict[str, List[str]] = {}
         malware_to_tippers: Dict[str, List[str]] = {}
+        ttp_to_tippers: Dict[str, List[str]] = {}
+        actor_to_tippers: Dict[str, List[str]] = {}
         tipper_dates: Dict[str, str] = {}
 
         for similar in similar_tippers:
@@ -106,12 +114,41 @@ class TipperAnalyzer:
                 if tipper_id not in ioc_to_tippers[ioc]:
                     ioc_to_tippers[ioc].append(tipper_id)
 
-            # NOTE: Malware family collection removed - vector similarity handles this
+            # Collect malware families
+            for family in entities.malware_families:
+                if family not in malware_to_tippers:
+                    malware_to_tippers[family] = []
+                if tipper_id not in malware_to_tippers[family]:
+                    malware_to_tippers[family].append(tipper_id)
 
-        if ioc_to_tippers:
-            logger.info(f"Built entity history: {len(ioc_to_tippers)} IOCs across {len(tipper_dates)} tippers")
+            # Collect MITRE techniques
+            for technique in entities.mitre_techniques:
+                tech_upper = technique.upper()
+                if tech_upper not in ttp_to_tippers:
+                    ttp_to_tippers[tech_upper] = []
+                if tipper_id not in ttp_to_tippers[tech_upper]:
+                    ttp_to_tippers[tech_upper].append(tipper_id)
 
-        return ioc_to_tippers, malware_to_tippers, tipper_dates
+            # Collect threat actors
+            actor_names = set()
+            if entities.threat_actors_enriched:
+                for ta in entities.threat_actors_enriched:
+                    actor_names.add((ta.common_name or ta.name).lower())
+            elif entities.threat_actors:
+                actor_names.update(a.lower() for a in entities.threat_actors)
+            for actor in actor_names:
+                if actor not in actor_to_tippers:
+                    actor_to_tippers[actor] = []
+                if tipper_id not in actor_to_tippers[actor]:
+                    actor_to_tippers[actor].append(tipper_id)
+
+        if ioc_to_tippers or malware_to_tippers or ttp_to_tippers or actor_to_tippers:
+            logger.info(
+                f"Built entity history: {len(ioc_to_tippers)} IOCs, {len(malware_to_tippers)} malware, "
+                f"{len(ttp_to_tippers)} TTPs, {len(actor_to_tippers)} actors across {len(tipper_dates)} tippers"
+            )
+
+        return ioc_to_tippers, malware_to_tippers, tipper_dates, ttp_to_tippers, actor_to_tippers
 
     # -------------------------------------------------------------------------
     # Recorded Future Enrichment
@@ -216,9 +253,9 @@ class TipperAnalyzer:
             """Enrich hashes with RF."""
             iocs = []
             all_hashes = (
-                entities.hashes.get('md5', []) +
-                entities.hashes.get('sha1', []) +
-                entities.hashes.get('sha256', [])
+                    entities.hashes.get('md5', []) +
+                    entities.hashes.get('sha1', []) +
+                    entities.hashes.get('sha256', [])
             )
             if not all_hashes:
                 return iocs
@@ -334,10 +371,10 @@ class TipperAnalyzer:
     # Build the analysis prompt
     # -------------------------------------------------------------------------
     def _build_analysis_prompt(
-        self,
-        new_tipper: Dict,
-        similar_tippers: List[Dict],
-        rf_enrichment: Dict[str, Any] = None
+            self,
+            new_tipper: Dict,
+            similar_tippers: List[Dict],
+            rf_enrichment: Dict[str, Any] = None
     ) -> str:
         """Build a structured prompt for the LLM to analyze novelty."""
         fields = new_tipper.get('fields', {})
@@ -372,7 +409,31 @@ class TipperAnalyzer:
             for similar in similar_tippers:
                 meta = similar['metadata']
                 tipper_id = meta.get('id', 'Unknown')
-                prompt += f"""
+                breakdown = similar.get('similarity_breakdown')
+                # Show multi-signal context if available
+                if breakdown:
+                    signals = []
+                    signals.append(f"Narrative: {breakdown.narrative_similarity:.0%}")
+                    if breakdown.shared_ioc_count:
+                        signals.append(f"IOC: {breakdown.shared_ioc_count} shared")
+                    else:
+                        signals.append("IOC: 0 shared")
+                    if breakdown.shared_ttp_count:
+                        signals.append(f"TTP: {breakdown.shared_ttp_count} shared")
+                    if breakdown.shared_actors:
+                        signals.append(f"Actor: {', '.join(breakdown.shared_actors[:2])}")
+                    if breakdown.shared_malware:
+                        signals.append(f"Malware: {', '.join(breakdown.shared_malware[:2])}")
+                    signal_str = ' | '.join(signals)
+                    prompt += f"""
+### Ticket #{tipper_id} (Composite: {similar['similarity_score']:.0%} | {signal_str})
+- **Title**: {meta.get('title', 'No title')}
+- **Tags**: {meta.get('tags', 'None')}
+- **Created**: {meta.get('created_date', 'Unknown')[:10]}
+- **Preview**: {similar.get('matched_content', '')[:500]}
+"""
+                else:
+                    prompt += f"""
 ### Ticket #{tipper_id} (Similarity: {similar['similarity_score']:.0%})
 - **Title**: {meta.get('title', 'No title')}
 - **Tags**: {meta.get('tags', 'None')}
@@ -451,11 +512,12 @@ class TipperAnalyzer:
 
 Analyze the NEW tipper against the historical tippers above and provide:
 
-1. **NOVELTY SCORE** (1-10):
-   - 1-3: "Seen Before" - Nearly identical to a past tipper, same actor/campaign
-   - 4-5: "Familiar" - Similar patterns but some variations
-   - 6-7: "Mostly New" - New elements but some familiar aspects
-   - 8-10: "Net New" - New threat actor, new TTPs, new campaign
+1. **NOVELTY SCORE** (1-10) — base this ONLY on similarity to the historical tippers above, NOT your own knowledge:
+   - 1-3: "Seen Before" - Nearly identical to a historical tipper above, same actor/campaign
+   - 4-5: "Familiar" - Similar patterns to historical tippers above but some variations
+   - 6-7: "Mostly New" - New elements with some overlap to historical tippers above
+   - 8-10: "Net New" - No meaningful overlap with historical tippers above
+   - If no historical tippers were provided, the score should be 8-10.
 
 2. **SUMMARY**: Write a 2-3 sentence executive summary. Describe: What is the threat? Who is the actor (if known)? How does it relate to the historical tippers? Reference specific ticket IDs when comparing (e.g., "similar to #1243497").
 
@@ -467,8 +529,41 @@ Analyze the NEW tipper against the historical tippers above and provide:
 4. **WHAT'S NEW**: List 1-3 specific elements that make this tipper NOVEL (leave empty if nothing is new):
    - Examples: "New threat actor: APT47", "Novel supply chain attack vector", "First campaign targeting healthcare sector"
 
-5. **WHAT'S FAMILIAR**: List 1-3 specific elements that connect this to PAST tippers (leave empty if nothing is familiar):
-   - Reference specific ticket IDs when comparing (e.g., "Same Octo Tempest campaign from #1237886", "Identical phishing TTPs to #1240351")
+5. **WHAT'S FAMILIAR**: List 1-3 specific elements that connect this to the HISTORICAL TIPPERS shown above (leave empty if nothing is familiar):
+   - ONLY base this on the historical tippers provided above. Do NOT use your own knowledge to determine familiarity.
+   - If no similar historical tippers were provided, this list MUST be empty.
+   - Reference specific ticket IDs (e.g., "Same Octo Tempest campaign from #1237886", "Identical phishing TTPs to #1240351")
+
+6. **VULNERABLE PRODUCTS** (vulnerable_products): Extract CVE-less vulnerable products. Default is EMPTY. Populate only when every check below passes.
+
+   **CHECK #1 — CVE EXCLUSION (most important, do this FIRST):**
+   Scan the entire tipper for any CVE-YYYY-NNNNN pattern. For each candidate product you're thinking of extracting, ask: "Does any CVE in this tipper cover this product?" If YES — even if the CVE is 5 paragraphs away, even if the product also has an explicit version range, even if the tipper reads like a vulnerability advisory — DROP IT. CVEs are extracted to a separate field and drive the same downstream correlation. Duplicating them here causes false-positive asset scans.
+
+   If the tipper's whole narrative is "$PRODUCT has vulnerability CVE-YYYY-NNNNN" then vulnerable_products must be EMPTY. Only when a product's vulnerability has NO corresponding CVE anywhere in the text does it belong here.
+
+   **CHECK #2 — DEFENDER ASSET:**
+   The product must be something a defender would deploy or run (server software, application, library, OS, firmware, appliance). Exclude:
+   - Tools the attacker USES as tradecraft ("actor deploys Cobalt Strike" — not vulnerable, just operated by attacker).
+   - Products the attacker TARGETS without a direct vulnerability claim against the product ("malicious Chrome extensions steal sessions" — Chrome is not stated as vulnerable).
+   - Attacker-owned infrastructure ("attacker's VPS runs Laravel Ignition" — attacker's own server, not a defender asset).
+   - Domains, URLs, IP addresses, hostnames.
+   - Generic categories ("Linux servers", "web applications", "RDP").
+   - Victims of credential theft / session hijacking / social engineering — not vulnerability claims.
+
+   **CHECK #3 — VULNERABILITY IS IN THE PRODUCT ITSELF, NOT ITS DISTRIBUTION CHANNEL:**
+   The tipper must claim a defect inside the product's own code, config, or design. Supply-chain incidents — where the *hosting infrastructure*, *update server*, *package registry*, *code-signing cert*, or *download site* was compromised to ship a trojanized build — do NOT qualify. The legitimate product has no flaw in these cases; the issue is a poisoned distribution channel. Omit the product.
+
+   **WRONG examples — every one of these was extracted by a prior run and was wrong:**
+   - Title "Marimo Authentication Bypass Exploit (CVE-2026-39987)" + body "affecting Marimo versions 0.20.4 and earlier" → CVE present → vulnerable_products MUST be empty.
+   - Title "Critical Authentication Bypass in nginx-ui (CVE-2026-33032)" + body "nginx-ui v2.3.4" → CVE present → empty.
+   - Body "actively exploiting CVE-2026-35616 and CVE-2026-21643 in FortiClient Enterprise Management Server (EMS) versions 7.4.5 through 7.4.6" → CVEs present → empty. The version range does NOT override CVE exclusion.
+   - Body "108 malicious Chrome extensions harvest Google account identities" → Chrome not vulnerable → empty.
+   - Body "exposed attack server running Ubuntu 20.04 LTS with OpenSSH 8.2p1" → attacker infra → empty.
+   - Title "Notepad++ Supply Chain Attack via Compromised Hosting Infrastructure" + body "threat actors compromised shared hosting to distribute malicious Notepad++ updates" → supply-chain compromise of the *distribution channel*, not a flaw in Notepad++ itself → empty.
+
+   **RIGHT examples:**
+   - Body "exploits an unpatched vulnerability in Adobe Reader 26.00121367; no CVE has been assigned" + NO CVE anywhere in tipper → product=Adobe Reader, vendor=Adobe, version_constraint=26.00121367.
+   - Body "Apache Struts versions before 2.5.30 are vulnerable" with NO CVE anywhere in tipper → product=Apache Struts, version_constraint=< 2.5.30.
 
 Focus on the narrative analysis. IOC overlaps are computed separately and will supplement your analysis.
 """
@@ -478,18 +573,26 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
     # Build analysis from structured LLM response
     # -------------------------------------------------------------------------
     def _build_analysis_from_response(
-        self,
-        llm_response: NoveltyLLMResponse,
-        tipper: Dict,
-        similar_tippers: List[Dict],
-        ioc_history: Dict[str, List[str]],
-        malware_history: Dict[str, List[str]],
-        entities,
+            self,
+            llm_response: NoveltyLLMResponse,
+            tipper: Dict,
+            similar_tippers: List[Dict],
+            ioc_history: Dict[str, List[str]],
+            malware_history: Dict[str, List[str]],
+            entities,
+            ttp_history: Dict[str, List[str]] = None,
+            actor_history: Dict[str, List[str]] = None,
+            global_entity_sets: Dict = None,
     ) -> NoveltyAnalysis:
         """Convert LLM response to NoveltyAnalysis.
 
         LLM provides: novelty_score, novelty_label, summary, recommendation
         Python computes: what_is_new, what_is_familiar, related_tickets
+
+        global_entity_sets: sets of all TTPs/IOCs/actors seen across ALL indexed tippers.
+        Used for "first-time" (What's New) detection so that an entity seen in an
+        unrelated tipper isn't falsely labelled first-time just because it didn't surface
+        in the top-K cosine similarity results.
         """
         fields = tipper.get('fields', {})
         tipper_id = str(tipper.get('id', 'Unknown'))
@@ -511,8 +614,8 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
             created_date = ''
 
         # --- PYTHON-COMPUTED: Related tickets from vector search ---
-        # Only include tickets with similarity >= 55% and limit to top 3 most relevant
-        MIN_RELATED_SIMILARITY = 0.55
+        # Only include tickets with similarity >= 35% and limit to top 5 most relevant
+        MIN_RELATED_SIMILARITY = 0.35
         MAX_RELATED_TICKETS = 5
         related_tickets = []
         for similar in similar_tippers[:10]:
@@ -522,11 +625,18 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
             meta = similar.get('metadata', {})
             ticket_id = str(meta.get('id', ''))
             if ticket_id and ticket_id != tipper_id:
-                related_tickets.append({
+                ticket_data = {
                     'id': ticket_id,
                     'title': meta.get('title', ''),
-                    'similarity': similarity_score,  # Include for display
-                })
+                    'similarity': similarity_score,  # Composite score for display
+                    'narrative_similarity': similar.get('narrative_similarity', similarity_score),
+                    'similarity_breakdown': similar.get('similarity_breakdown'),
+                    'created_date': meta.get('created_date', ''),
+                    'state': meta.get('state', ''),
+                    'tags': meta.get('tags', ''),
+                    'assigned_to': meta.get('assigned_to', ''),
+                }
+                related_tickets.append(ticket_data)
                 if len(related_tickets) >= MAX_RELATED_TICKETS:
                     break  # Stop after top 3
 
@@ -592,6 +702,14 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
         # NOTE: Malware family matching removed - vector similarity handles this better.
         # If two tippers mention "ClawdBot", ChromaDB embeddings will match them.
 
+        # If what_is_familiar is still empty but related tickets exist, note the narrative-level
+        # similarity so the section doesn't contradict the Related Tickets shown below it.
+        if not what_is_familiar and related_tickets:
+            refs = ', '.join(f"#{t['id']} ({int(t['similarity'] * 100)}%)" for t in related_tickets[:3])
+            what_is_familiar.append(
+                f"Narrative-level similarity to: {refs} (different attack vector/malware family — no shared IOCs or TTPs)"
+            )
+
         # --- PYTHON-COMPUTED: What's New (IOCs/entities NOT seen before) ---
         what_is_new = []
 
@@ -606,8 +724,12 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
             for hash_list in entities.hashes.values():
                 all_current_iocs.update(hash_list)
 
-            seen_iocs = set(ioc_history.keys()) if ioc_history else set()
-            new_iocs = all_current_iocs - seen_iocs
+            # Use global IOC set when available; fall back to similarity-based history
+            seen_iocs = (
+                global_entity_sets.get('iocs', set()) if global_entity_sets
+                else set(ioc_history.keys()) if ioc_history else set()
+            )
+            new_iocs = {ioc.lower() for ioc in all_current_iocs} - seen_iocs
 
             if new_iocs:
                 # Filter new IOCs through VT to exclude benign domains
@@ -636,6 +758,42 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
                     more = f" (+{len(filtered_new_iocs) - 5} more)" if len(filtered_new_iocs) > 5 else ""
                     what_is_new.append(f"First-time IOCs: {new_display}{more}")
 
+        # --- PYTHON-COMPUTED: First-time MITRE TTPs (not seen in ANY indexed tipper) ---
+        if entities and entities.mitre_techniques:
+            # Use global TTP set when available; fall back to similarity-based history
+            seen_ttps = (
+                global_entity_sets.get('ttps', set()) if global_entity_sets
+                else set(ttp_history.keys()) if ttp_history else set()
+            )
+            current_ttps = {t.upper() for t in entities.mitre_techniques}
+            new_ttps = current_ttps - seen_ttps
+            if new_ttps:
+                ttp_sample = sorted(new_ttps)[:5]
+                ttp_display = ', '.join(f"`{t}`" for t in ttp_sample)
+                more = f" (+{len(new_ttps) - 5} more)" if len(new_ttps) > 5 else ""
+                what_is_new.append(f"First-time TTPs: {ttp_display}{more}")
+
+        # --- PYTHON-COMPUTED: First-time threat actors (not seen in ANY indexed tipper) ---
+        if entities:
+            current_actors = set()
+            if entities.threat_actors_enriched:
+                for ta in entities.threat_actors_enriched:
+                    current_actors.add((ta.common_name or ta.name).lower())
+            elif entities.threat_actors:
+                current_actors.update(a.lower() for a in entities.threat_actors)
+            if current_actors:
+                # Use global actor set when available; fall back to similarity-based history
+                seen_actors = (
+                    global_entity_sets.get('actors', set()) if global_entity_sets
+                    else set(actor_history.keys()) if actor_history else set()
+                )
+                new_actors = current_actors - seen_actors
+                if new_actors:
+                    # Display with original casing
+                    actor_display = ', '.join(f"`{a}`" for a in sorted(new_actors)[:5])
+                    more = f" (+{len(new_actors) - 5} more)" if len(new_actors) > 5 else ""
+                    what_is_new.append(f"First-time actors: {actor_display}{more}")
+
         # Log raw LLM response at debug level
         logger.debug(f"Raw LLM response: {llm_response.model_dump_json()}")
 
@@ -651,17 +809,18 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
             related_tickets=related_tickets,
             recommendation=llm_response.recommendation,
             raw_llm_response=llm_response.model_dump_json(indent=2),
+            vulnerable_products=[vp.model_dump() for vp in llm_response.vulnerable_products],
         )
 
     # -------------------------------------------------------------------------
     # Generate Actionable Steps
     # -------------------------------------------------------------------------
     def _generate_actionable_steps(
-        self,
-        analysis: NoveltyAnalysis,
-        entities,
-        rf_enrichment: Dict[str, Any],
-        mitre_gaps: List[str],
+            self,
+            analysis: NoveltyAnalysis,
+            entities,
+            rf_enrichment: Dict[str, Any],
+            mitre_gaps: List[str],
     ) -> List[Dict[str, str]]:
         """Generate specific actionable recommendations based on analysis.
 
@@ -724,7 +883,7 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
         # Add IOCs to watchlist (for lower risk)
         if rf_enrichment and rf_enrichment.get('high_risk_iocs'):
             medium_risk = [ioc for ioc in rf_enrichment['high_risk_iocs']
-                          if 25 <= ioc.get('risk_score', 0) < 65]
+                           if 25 <= ioc.get('risk_score', 0) < 65]
             if medium_risk:
                 steps.append({
                     'action': 'Add to watchlist',
@@ -738,10 +897,10 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
     # Main analysis method
     # -------------------------------------------------------------------------
     def analyze_tipper(
-        self,
-        tipper_id: str = None,
-        tipper_text: str = None,
-        similar_count: int = 10
+            self,
+            tipper_id: str = None,
+            tipper_text: str = None,
+            similar_count: int = 20
     ) -> NoveltyAnalysis:
         """
         Analyze a tipper for novelty.
@@ -775,47 +934,8 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
         else:
             raise ValueError("Must provide either tipper_id or tipper_text")
 
-        # Find similar tippers
-        logger.info("Searching for similar historical tippers...")
-        try:
-            similar_tippers = self.indexer.find_similar_tippers(query_text, k=similar_count)
-
-            # Filter out the current tipper if it's in the results (self-match from cache)
-            if tipper_id:
-                similar_tippers = [
-                    t for t in similar_tippers
-                    if str(t.get('metadata', {}).get('id', '')) != str(tipper_id)
-                ]
-
-            # Filter out low-similarity matches (noise reduction)
-            # Keep matches above 35% similarity - below this threshold, matches are
-            # typically unrelated threats that happen to share generic terminology
-            MIN_SIMILARITY = 0.35
-            similar_tippers = [
-                t for t in similar_tippers
-                if t.get('similarity_score', 0) >= MIN_SIMILARITY
-            ]
-            logger.info(f"Found {len(similar_tippers)} similar tippers (≥{MIN_SIMILARITY:.0%} similarity)")
-        except RuntimeError as e:
-            logger.warning(f"Could not search index: {e}")
-            similar_tippers = []
-
-        # Build IOC and malware history from similar tippers (single pass)
-        # Exclude current tipper to avoid marking its own IOCs/malware as "familiar"
-        ioc_history = {}
-        malware_history = {}
-        history_dates = {}
-        if similar_tippers:
-            logger.info("Building entity history from similar tippers...")
-            try:
-                ioc_history, malware_history, history_dates = self.build_entity_history(
-                    similar_tippers, exclude_tipper_id=tipper_id
-                )
-            except Exception as e:
-                logger.warning(f"Could not build entity history: {e}")
-
-        # Extract entities and enrich with Recorded Future
-        # Use full description for entity extraction (query_text is truncated for embedding)
+        # Extract entities FIRST — needed for both multi-signal similarity search
+        # and Recorded Future enrichment. Uses full description (not truncated query_text).
         rf_enrichment = {}
         entities = None
         try:
@@ -832,6 +952,65 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
                 logger.info("No entities found to enrich")
         except Exception as e:
             logger.warning(f"Entity extraction/enrichment failed (continuing without): {e}")
+
+        # Find similar tippers with multi-signal scoring
+        # Pass entities so find_similar_tippers can compute IOC/TTP/actor overlap
+        logger.info("Searching for similar historical tippers...")
+        try:
+            similar_tippers = self.indexer.find_similar_tippers(
+                query_text, k=similar_count, query_entities=entities
+            )
+
+            # Filter out the current tipper if it's in the results (self-match from cache)
+            if tipper_id:
+                similar_tippers = [
+                    t for t in similar_tippers
+                    if str(t.get('metadata', {}).get('id', '')) != str(tipper_id)
+                ]
+
+            # Filter out low-similarity matches (noise reduction)
+            # Keep matches above 35% composite similarity
+            MIN_SIMILARITY = 0.35
+            similar_tippers = [
+                t for t in similar_tippers
+                if t.get('similarity_score', 0) >= MIN_SIMILARITY
+            ]
+            logger.info(f"Found {len(similar_tippers)} similar tippers (≥{MIN_SIMILARITY:.0%} similarity)")
+        except RuntimeError as e:
+            logger.warning(f"Could not search index: {e}")
+            similar_tippers = []
+
+        # Build IOC, malware, TTP, and actor history from similar tippers (single pass)
+        # Used for "What's Familiar" (overlaps with specific related tickets)
+        ioc_history = {}
+        malware_history = {}
+        history_dates = {}
+        ttp_history = {}
+        actor_history = {}
+        if similar_tippers:
+            logger.info("Building entity history from similar tippers...")
+            try:
+                ioc_history, malware_history, history_dates, ttp_history, actor_history = self.build_entity_history(
+                    similar_tippers, exclude_tipper_id=tipper_id
+                )
+            except Exception as e:
+                logger.warning(f"Could not build entity history: {e}")
+
+        # Global entity sets from ALL tippers — used for "first-time" (What's New) detection.
+        # This is separate from similar_tippers: a TTP seen in an unrelated tipper still
+        # shouldn't be labelled "first-time" just because it didn't surface in the top-K results.
+        global_entity_sets = {}
+        try:
+            global_entity_sets = self.indexer.fingerprint_store.get_global_entity_sets(
+                exclude_tipper_id=tipper_id
+            )
+            logger.info(
+                f"Global entity sets: {len(global_entity_sets.get('ttps', set()))} TTPs, "
+                f"{len(global_entity_sets.get('iocs', set()))} IOCs, "
+                f"{len(global_entity_sets.get('actors', set()))} actors across all tippers"
+            )
+        except Exception as e:
+            logger.warning(f"Could not fetch global entity sets (falling back to similar-only): {e}")
 
         # Compute MITRE ATT&CK coverage gaps (check directly against rules catalog)
         mitre_techniques = []
@@ -886,9 +1065,8 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
                 logger.info("All MITRE techniques have existing detection coverage")
 
         # Build prompt and call LLM
-        # Filter similar_tippers to the same criteria used for Related Tickets display
-        # This ensures LLM only references tickets that will actually be shown
-        MIN_RELATED_SIMILARITY = 0.55
+        # Use same threshold as Related Tickets display so LLM can reference all shown tickets
+        MIN_RELATED_SIMILARITY = 0.35
         MAX_RELATED_TICKETS = 5
         tippers_for_llm = [
             t for t in similar_tippers
@@ -905,14 +1083,33 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
 
         # Use structured output to guarantee valid JSON response
         structured_llm = self.llm.with_structured_output(NoveltyLLMResponse)
-        logger.info("Sending request to LLM (this may take 30-60 seconds)...")
-        llm_response = structured_llm.invoke(prompt)
+        logger.info(f"Sending request to LLM (timeout={LLM_TIMEOUT_SECONDS}s)...")
+
+        # Python-level timeout: ChatOllama's client_kwargs timeout may not be
+        # honored through the with_structured_output() wrapper, so we enforce
+        # our own deadline via a thread + Future to prevent multi-hour hangs
+        # when the Mac/Ollama SSH tunnel is down.
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(structured_llm.invoke, prompt)
+            try:
+                llm_response = future.result(timeout=LLM_TIMEOUT_SECONDS)
+            except FuturesTimeoutError:
+                future.cancel()
+                generation_time = time.time() - start_time
+                logger.error(f"LLM call timed out after {generation_time:.1f}s")
+                raise RuntimeError(
+                    f"LLM did not respond within {LLM_TIMEOUT_SECONDS}s. "
+                    "The Ollama server or SSH tunnel may be down."
+                )
+
         generation_time = time.time() - start_time
         logger.info(f"LLM response received in {generation_time:.1f}s")
 
         # Convert structured response to NoveltyAnalysis (Python computes overlaps)
         analysis = self._build_analysis_from_response(
-            llm_response, tipper, similar_tippers, ioc_history, malware_history, entities
+            llm_response, tipper, similar_tippers, ioc_history, malware_history, entities,
+            ttp_history=ttp_history, actor_history=actor_history,
+            global_entity_sets=global_entity_sets,
         )
         analysis.generation_time = generation_time
         analysis.rf_enrichment = rf_enrichment  # Attach RF enrichment to analysis
@@ -929,8 +1126,8 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
                 'urls': len(entities.urls),
                 'filenames': len(entities.filenames),
                 'hashes': (len(entities.hashes.get('md5', [])) +
-                          len(entities.hashes.get('sha1', [])) +
-                          len(entities.hashes.get('sha256', []))),
+                           len(entities.hashes.get('sha1', [])) +
+                           len(entities.hashes.get('sha256', []))),
                 'cves': len(entities.cves),
             }
         # Store detection rules coverage results
@@ -950,6 +1147,10 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
             rf_enrichment=rf_enrichment,
             mitre_gaps=mitre_gaps,
         )
+
+        # Attach extracted entities so downstream consumers (CVE exposure thread,
+        # IOC hunt) can read entities.cves etc. without re-extracting.
+        analysis.entities = entities
 
         logger.info(f"Analysis complete: {analysis.novelty_label} ({analysis.novelty_score}/10)")
 
@@ -1062,13 +1263,13 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
     # IOC Hunting (delegates to hunting module)
     # -------------------------------------------------------------------------
     def hunt_iocs(
-        self,
-        tipper_id: str = None,
-        tipper_text: str = None,
-        qradar_hours: int = DEFAULT_QRADAR_HUNT_HOURS,
-        crowdstrike_hours: int = DEFAULT_CROWDSTRIKE_HUNT_HOURS,
-        tools: List[str] = None,
-        on_tool_complete=None,
+            self,
+            tipper_id: str = None,
+            tipper_text: str = None,
+            qradar_hours: int = DEFAULT_QRADAR_HUNT_HOURS,
+            crowdstrike_hours: int = DEFAULT_CROWDSTRIKE_HUNT_HOURS,
+            tools: List[str] = None,
+            on_tool_complete=None,
     ) -> IOCHuntResult:
         """
         Hunt for tipper IOCs across multiple security tools.
@@ -1146,6 +1347,96 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
             logger.error(f"Failed to post hunt results to tipper #{result.tipper_id}")
             return False
 
+    def post_exposure_to_tipper(self, tipper_id: str, cve_ids: list,
+                                 parent_id: str = None,
+                                 vulnerable_products: list = None) -> bool:
+        """Correlate CVEs against Tanium installed software and comment on the tipper.
+
+        Always posts an AZDO comment — including the "nothing to check" stub
+        when the tipper has no CVEs and no vulnerable_products, so the audit
+        trail on the story shows we considered exposure. When there are
+        findings, also sends a loud Webex notification to the tipper analysis
+        room — threaded as a reply to parent_id when provided so it appears
+        under the original analysis message instead of as a standalone room post.
+
+        Returns True if the AZDO comment was posted, False otherwise.
+        """
+        vulnerable_products = vulnerable_products or []
+        if tipper_id == 'text-input':
+            logger.warning("Cannot post exposure - input was text, not a real tipper")
+            return False
+
+        try:
+            from src.components.cve_exposure import correlate_cves, CorrelationResult
+            from services.azdo import add_comment_to_work_item
+            from my_config import get_config
+            config = get_config()
+
+            if not cve_ids and not vulnerable_products:
+                logger.info(
+                    f"[exposure] Nothing to check for tipper #{tipper_id} "
+                    f"(no CVEs, no vulnerable_products) — posting stub"
+                )
+                result = CorrelationResult(records=[], scanned=False, skip_reason="no_input")
+            else:
+                from services.tanium import TaniumClient
+                logger.info(
+                    f"[exposure] Correlating {len(cve_ids)} CVE(s) + "
+                    f"{len(vulnerable_products)} tipper-flagged product(s) for tipper #{tipper_id}..."
+                )
+                client = TaniumClient(instance="cloud")
+                result = correlate_cves(
+                    cve_ids,
+                    tanium_client=client,
+                    vulnerable_products=vulnerable_products,
+                )
+            records = result.records
+
+            html_comment = format_exposure_for_azdo(cve_ids, result)
+            posted = add_comment_to_work_item(int(tipper_id), html_comment)
+            confirmed = sum(1 for r in records if r.confidence == "confirmed")
+            if posted:
+                logger.info(
+                    f"[exposure] Posted to tipper #{tipper_id}: "
+                    f"{confirmed} confirmed, {len(records)-confirmed} potential "
+                    f"(scanned={result.scanned}, skip_reason={result.skip_reason})"
+                )
+            else:
+                logger.error(f"[exposure] Failed to post AZDO comment on tipper #{tipper_id}")
+
+            # Loud Webex notification only on findings — reply-threaded to the
+            # tipper analysis room. Both Detection Engineering / Threat Hunting
+            # and Platform / Vulnerability Management teams read this room, so
+            # a single send reaches both audiences.
+            if records:
+                try:
+                    from webexpythonsdk import WebexAPI
+                    azdo_url = (
+                        f"https://dev.azure.com/{config.azdo_org}/"
+                        f"{config.azdo_de_project}/_workitems/edit/{tipper_id}"
+                    )
+                    webex_md = format_exposure_for_webex(cve_ids, records, tipper_id, azdo_url)
+                    if webex_md:
+                        tipper_room = getattr(config, "webex_room_id_threat_tipper_analysis", None)
+                        if tipper_room:
+                            kwargs = {"roomId": tipper_room, "markdown": webex_md}
+                            if parent_id:
+                                kwargs["parentId"] = parent_id
+                            WebexAPI(access_token=config.webex_bot_access_token_pokedex).messages.create(**kwargs)
+                            logger.info(
+                                f"[exposure] Sent to tipper analysis room "
+                                f"(reply={'yes' if parent_id else 'no'})"
+                            )
+                        else:
+                            logger.warning("[exposure] webex_room_id_threat_tipper_analysis not configured")
+                except Exception as wx_err:
+                    logger.warning(f"[exposure] Webex notification failed for #{tipper_id}: {wx_err}")
+
+            return posted
+        except Exception as e:
+            logger.error(f"[exposure] Correlation failed for tipper #{tipper_id}: {e}", exc_info=True)
+            return False
+
     # -------------------------------------------------------------------------
     # Full Analysis Flow (analyze + post + hunt + post)
     # -------------------------------------------------------------------------
@@ -1180,42 +1471,40 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
         if not azdo_ok:
             display_output += "\n⚠️ _Failed to post analysis to AZDO work item_\n"
 
+        # Send the primary analysis message to the tipper analysis room and
+        # capture its ID — used as parentId so follow-up exposure messages
+        # appear as a reply chain under the analysis instead of separate posts.
+        parent_msg_id = None
+        try:
+            from my_config import get_config as _get_config
+            from .utils import linkify_work_items_markdown
+            _cfg = _get_config()
+            tipper_room = getattr(_cfg, "webex_room_id_threat_tipper_analysis", None)
+            if tipper_room:
+                from webexpythonsdk import WebexAPI
+                webex_md = linkify_work_items_markdown(display_output)
+                msg = WebexAPI(access_token=_cfg.webex_bot_access_token_pokedex).messages.create(
+                    roomId=tipper_room, markdown=webex_md
+                )
+                parent_msg_id = getattr(msg, "id", None)
+                logger.info(f"Sent analysis to tipper analysis room (msg_id={parent_msg_id})")
+        except Exception as wx_err:
+            logger.warning(f"Failed to send analysis to tipper room: {wx_err}")
+
         # Launch IOC hunt in background thread
-        # Each tool posts its results as a SEPARATE AZDO comment when it completes
+        # Posts one combined comment after all tools complete
         rf_enrichment = analysis.rf_enrichment
 
         def _run_ioc_hunt():
-            from services.azdo import add_comment_to_work_item
-
-            def _post_tool_result(tool_result, tid, ttitle, hours, total_iocs, searched_iocs):
-                """Callback: post each tool's results immediately when it completes."""
-                try:
-                    html = format_single_tool_hunt_for_azdo(
-                        tool_result=tool_result,
-                        tipper_id=tid,
-                        tipper_title=ttitle,
-                        search_hours=hours,
-                        total_iocs_searched=total_iocs,
-                        searched_iocs=searched_iocs,
-                        rf_enrichment=rf_enrichment,
-                    )
-                    if add_comment_to_work_item(int(tid), html):
-                        logger.info(f"[bg] Posted {tool_result.tool_name} results ({tool_result.total_hits} hits) to #{tid}")
-                    else:
-                        logger.warning(f"[bg] Failed to post {tool_result.tool_name} results to #{tid}")
-                except Exception as e:
-                    logger.error(f"[bg] Error posting {tool_result.tool_name} results: {e}")
-
             try:
                 logger.info(f"[bg] Running IOC hunt for tipper #{tipper_id}...")
-                # Each tool's results are posted via _post_tool_result callback as they complete
-                hunt_result = self.hunt_iocs(
-                    tipper_id=tipper_id,
-                    on_tool_complete=_post_tool_result,
-                )
+                hunt_result = self.hunt_iocs(tipper_id=tipper_id)
 
                 if hunt_result.total_hits > 0:
                     logger.warning(f"[bg] IOC HITS FOUND for tipper #{tipper_id}: {hunt_result.total_hits} total hits")
+
+                # Post one combined comment to AZDO
+                self.post_hunt_results_to_tipper(hunt_result, rf_enrichment=rf_enrichment)
 
                 # Send Webex notification with combined summary after all hunts complete
                 if room_id:
@@ -1238,6 +1527,37 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
 
         hunt_thread = threading.Thread(target=_run_ioc_hunt, daemon=True, name=f"ioc-hunt-{tipper_id}")
         hunt_thread.start()
+
+        # CVE exposure correlation — independent of IOC hunt, runs in parallel.
+        # Always posts an AZDO comment (stub when there's nothing to check) so
+        # the story has a visible audit trail either way.
+        cve_ids = list(analysis.entities.cves) if analysis.entities else []
+        vp = list(getattr(analysis, "vulnerable_products", []) or [])
+
+        def _run_exposure():
+            try:
+                self.post_exposure_to_tipper(
+                    tipper_id, cve_ids, parent_id=parent_msg_id,
+                    vulnerable_products=vp,
+                )
+            except Exception as exp_err:
+                logger.error(f"[bg] CVE exposure failed for #{tipper_id}: {exp_err}")
+                try:
+                    from src.components.cve_exposure.alerts import notify_dev_space
+                    notify_dev_space(
+                        "exposure_thread_crashed",
+                        "Exposure background thread crashed",
+                        f"Tipper #{tipper_id} CVE exposure handler raised "
+                        f"`{type(exp_err).__name__}: {exp_err}`. The tipper still "
+                        f"got its main analysis + IOC hunt, but no exposure comment "
+                        f"was posted. Subsequent tippers will keep trying.",
+                    )
+                except Exception:
+                    pass
+        exposure_thread = threading.Thread(
+            target=_run_exposure, daemon=True, name=f"cve-exposure-{tipper_id}"
+        )
+        exposure_thread.start()
 
         return {
             'content': display_output,

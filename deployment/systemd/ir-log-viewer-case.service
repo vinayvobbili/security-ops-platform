@@ -7,16 +7,18 @@ Wants=network-online.target
 Type=simple
 User=user
 Group=user
-WorkingDirectory=/home/user/pub/IR
-EnvironmentFile=/home/user/pub/IR/.env
+WorkingDirectory=/home/user/IR
+EnvironmentFile=/home/user/IR/.env
 
 # Kill any orphan process using this port before starting
 ExecStartPre=-/bin/bash -c 'fuser -k 8041/tcp 2>/dev/null || true'
 
 # Start log viewer for CASE bot
-ExecStart=/home/user/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8041 --title "CASE Bot" --file /home/user/pub/IR/logs/case.log
+ExecStart=/home/user/IR/.venv/bin/python deployment/log_viewer.py --port 8041 --title "CASE Bot" --file /home/user/IR/logs/case.log
 
 Restart=on-failure
+KillMode=mixed
+TimeoutStopSec=10
 RestartSec=10
 
 StandardOutput=journal

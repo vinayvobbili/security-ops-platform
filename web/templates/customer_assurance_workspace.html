@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Assurance — {{ req.customer_name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/customer_assurance.css') }}">
+</head>
+<body class="ca-page" data-ca-tour="workspace">
+{% import 'title_macros.html' as titles %}
+{% set page_title = titles.build_title('Customer Assurance', '🛡️', '📝') %}
+{% include 'top_bar.html' %}
+
+<div class="ca-container">
+    <div style="margin-bottom:12px;">
+        <a href="/customer-assurance/requests" style="color:var(--ca-brand);text-decoration:none;font-size:13px;">← Back to Queue</a>
+    </div>
+
+    {% set total_q = questions|length %}
+    {% set pending_q = questions|selectattr('status','equalto','pending')|list|length %}
+    {% set drafted_q = questions|selectattr('status','equalto','drafted')|list|length %}
+    {% set approved_q = questions|selectattr('status','equalto','approved')|list|length %}
+    {% set needs_sme_q = questions|selectattr('status','equalto','needs_sme')|list|length %}
+    <div class="ca-tip-card">
+        <div class="ca-tip-card-icon">?</div>
+        <div>
+            <strong>Drafting workspace — this is where the real work happens.</strong> Three panes: <em>left</em> = all questions (click to switch), <em>center</em> = edit the draft, <em>right</em> = the policy chunks the AI used as evidence.
+            <br><br>
+            <span class="ca-next-ribbon">What to do next</span>&nbsp;
+            {% if total_q == 0 %}
+                No questions on this request yet — go back to the queue and add one.
+            {% elif pending_q == total_q %}
+                Click <strong>✨ AI Draft All</strong> to generate drafts for every question at once, or pick a single question on the left and hit <strong>✨ AI Draft</strong>.
+            {% elif pending_q > 0 %}
+                <strong>{{ pending_q }}</strong> question{{ 's' if pending_q != 1 else '' }} still pending. Click <strong>✨ AI Draft All</strong> to draft the rest, or pick one and hit <strong>✨ AI Draft</strong>.
+            {% elif needs_sme_q > 0 and approved_q + drafted_q < total_q %}
+                <strong>{{ needs_sme_q }}</strong> question{{ 's' if needs_sme_q != 1 else '' }} flagged for SME review. Click each one on the left to review the draft and decide approve or <strong>⚖ Flag Legal</strong>.
+            {% elif drafted_q > 0 %}
+                Review each draft in the center pane, edit if needed, then click <strong>✓ Approve</strong> per question — or <strong>✓ Approve All</strong> once you're confident.
+            {% elif approved_q == total_q %}
+                All {{ total_q }} answers approved. Click <strong>📄 Export .docx</strong> to generate the customer response, then <strong>Mark Delivered</strong>.
+            {% else %}
+                Work through the remaining {{ total_q - approved_q }} question{{ 's' if (total_q - approved_q) != 1 else '' }} in the left pane.
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Request header -->
+    <div class="ca-ws-header" id="ca-tour-ws-header">
+        <div class="ca-ws-header-info">
+            <h2>{{ req.customer_name }} — {{ req.title }}</h2>
+            <div class="ca-ws-header-meta">
+                <span>📁 {{ req.request_type }}</span>
+                <span>🏢 {{ req.customer_segment }}</span>
+                {% if req.due_date %}<span>📅 Due {{ req.due_date }}</span>{% endif %}
+                {% if req.priority %}<span class="ca-pill ca-pill-priority-{{ req.priority }}">{{ req.priority }}</span>{% endif %}
+                <span class="ca-pill ca-pill-{{ req.status }}" id="ca-status-pill">{{ req.status.replace('_', ' ') }}</span>
+            </div>
+        </div>
+        <div class="ca-ws-actions" id="ca-tour-ws-actions">
+            <button type="button" class="ca-btn ca-btn-primary" id="ca-draft-all" data-tip="Generate AI drafts for every question that doesn't have one yet. Each question gets its own evidence retrieval and the internal LLM gateway call. Takes ~2-3 seconds per question.">✨ AI Draft All</button>
+            <button type="button" class="ca-btn ca-btn-accent" id="ca-approve-all" data-tip="Mark every drafted answer as the final response and move this request to READY status. Use this after you've reviewed the drafts.">✓ Approve All</button>
+            <button type="button" class="ca-btn ca-btn-ghost" id="ca-flag-legal" data-tip="Route this request to Legal for review. Opens a dialog where you explain what Legal needs to look at. Sets status to NEEDS LEGAL.">⚖ Flag Legal</button>
+            <button type="button" class="ca-btn ca-btn-ghost" id="ca-copy-all" data-tip="Copy the full Q&amp;A as plain text to your clipboard. Handy for pasting into an email reply without formatting.">📋 Copy All</button>
+            <button type="button" class="ca-btn ca-btn-accent" id="ca-export" data-tip="Download the response as a .docx Word document — customer-name-stamped, with all questions, sections, and approved answers formatted for sending back.">📄 Export .docx</button>
+            <button type="button" class="ca-btn ca-btn-ghost ca-btn-sm" id="ca-mark-delivered" data-tip="Mark this request as complete. Use this after you've sent the response to the customer. Sets status to DELIVERED.">Mark Delivered</button>
+        </div>
+    </div>
+
+    {% if req.needs_legal_review %}
+    <div class="ca-banner ca-banner-warn">
+        ⚠ <strong>Legal review flagged.</strong> {{ req.legal_note or '' }}
+    </div>
+    {% endif %}
+
+    {% if mode == 'demo' %}
+        <div class="ca-mode-banner demo ca-demo-only">
+            <div>
+                <strong>Demo mode is ON.</strong> Synthetic data, full inline guidance, and canned drafts from a sample library. Use the toggle in the top-right to switch to <strong>Live</strong> — strips the hand-holding and shows real data only.
+            </div>
+        </div>
+    {% elif mode == 'live' and last_draft_source == 'fallback' %}
+        <div class="ca-mode-banner live-fallback">
+            <div>
+                <strong>Live mode — drafts fell back to canned.</strong> the internal LLM gateway or the KB couldn't be reached. Check <a href="/customer-assurance/kb" style="font-weight:800;color:#7a5800;">KB</a> contents and proxy connectivity.
+            </div>
+        </div>
+    {% elif mode == 'live' and not kb_has_docs %}
+        <div class="ca-mode-banner live-fallback">
+            <div>
+                <strong>Live mode — KB is empty.</strong> Until you upload real policies, Live drafting will produce weak answers or fall back to canned. Open the <a href="/customer-assurance/kb" style="font-weight:800;color:#7a5800;">Knowledge Base</a> page to add sources.
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- 3-pane workspace -->
+    <div class="ca-ws-grid">
+        <!-- LEFT: question list -->
+        <div class="ca-ws-pane" id="ca-tour-ws-left">
+            <h3>Questions ({{ questions|length }}) <span class="ca-tip" data-tip="Every question in this request. Click any to edit its draft. Status markers: ○ gray = pending, ● yellow = drafted, ✓ green = approved, ! red = needs SME review."></span></h3>
+            <div class="ca-q-list" id="ca-q-list">
+                {% for q in questions %}
+                <div class="ca-q-item {% if loop.first %}active{% endif %}"
+                     data-q-id="{{ q.id }}"
+                     data-seq="{{ q.seq }}"
+                     data-section="{{ q.section or '' }}"
+                     data-question="{{ q.question|e }}"
+                     data-draft="{{ (q.draft_answer or '')|e }}"
+                     data-final="{{ (q.final_answer or '')|e }}"
+                     data-confidence="{{ q.confidence or '' }}"
+                     data-status="{{ q.status }}">
+                    <div class="ca-q-marker {{ q.status }}" title="{{ q.status }}">
+                        {% if q.status == 'approved' %}✓{% elif q.status == 'drafted' %}●{% elif q.status == 'needs_sme' %}!{% else %}○{% endif %}
+                    </div>
+                    <div class="ca-q-text">
+                        {% if q.section %}<span class="ca-q-section">{{ q.section }}</span>{% endif %}
+                        {{ q.seq }}. {{ q.question[:80] }}{% if q.question|length > 80 %}…{% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- CENTER: editor -->
+        <div class="ca-ws-pane ca-ws-editor" id="ca-tour-ws-center">
+            <h3>Draft Answer <span class="ca-tip" data-tip="The AI-generated draft. You can edit it freely, then click Approve to mark it final. Or click Redraft to regenerate with the same evidence."></span></h3>
+            <div class="ca-ws-q-text">
+                <span class="sec" id="ca-center-section"></span>
+                <span id="ca-center-question"></span>
+            </div>
+            <textarea class="ca-ws-answer" id="ca-center-answer" placeholder="Draft appears here. Click 'Draft' to generate, or edit directly."></textarea>
+            <div class="ca-ws-meta">
+                <span id="ca-center-confidence"></span>
+                <span id="ca-center-status"></span>
+            </div>
+            <div class="ca-ws-btns">
+                <button type="button" class="ca-btn ca-btn-primary ca-btn-sm" id="ca-btn-draft" data-tip="Generate an AI draft for this single question. Retrieves the most relevant policy chunks and asks the internal LLM gateway to write a grounded answer.">✨ AI Draft</button>
+                <button type="button" class="ca-btn ca-btn-ghost ca-btn-sm" id="ca-btn-redraft" data-tip="Regenerate the draft. Your current edits will be overwritten. Use this if the first draft missed the mark.">↻ Redraft</button>
+                <button type="button" class="ca-btn ca-btn-accent ca-btn-sm" id="ca-btn-approve" data-tip="Save your edits and mark this answer as APPROVED. Ready for export.">✓ Approve</button>
+                <button type="button" class="ca-btn ca-btn-warn ca-btn-sm" id="ca-btn-sme" data-tip="Flag this answer as needing Subject Matter Expert review. Use for questions where the AI draft isn't trustworthy enough to release without a human expert's sign-off.">Needs SME</button>
+                <button type="button" class="ca-btn ca-btn-ghost ca-btn-sm" id="ca-btn-save" data-tip="Save your edits as a draft without approving yet. Status stays at DRAFTED.">💾 Save Edit</button>
+            </div>
+        </div>
+
+        <!-- RIGHT: evidence -->
+        <div class="ca-ws-pane" id="ca-tour-ws-right">
+            <h3>Evidence &amp; Citations <span class="ca-tip ca-tip-accent" data-tip="The exact policy chunks the AI used to ground this draft. Higher score = more relevant match. Click any source name to check the draft against the original document."></span></h3>
+            <div class="ca-evidence" id="ca-evidence-list">
+                <div class="ca-evidence-empty">Select a question to see retrieved policy chunks and source citations.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Audit timeline -->
+    <details class="ca-audit" id="ca-tour-ws-audit">
+        <summary>📜 Activity Timeline ({{ audit|length }} events) <span class="ca-tip" data-tip="Full audit history of this request — created, drafted, edited, flagged, exported, delivered. Used for compliance and handoffs between shifts."></span></summary>
+        <div class="ca-audit-timeline">
+            {% for entry in audit %}
+            <div class="ca-audit-entry">
+                <span class="ca-audit-action">{{ entry.action.replace('_', ' ') }}</span>
+                <span class="ca-audit-detail">{{ entry.detail or '' }}</span>
+                <span class="ca-audit-time">{{ entry.at }} · {{ entry.actor or 'system' }}</span>
+            </div>
+            {% else %}
+            <div class="ca-audit-entry"><span class="ca-audit-detail">No activity yet.</span></div>
+            {% endfor %}
+        </div>
+    </details>
+
+<!-- Legal flag modal -->
+<div class="ca-modal-backdrop" id="ca-legal-modal">
+    <div class="ca-modal">
+        <h3>⚖ Flag for Legal Review</h3>
+        <p>Explain what needs Legal's attention. This note will be attached to the request.</p>
+        <textarea id="ca-legal-note" placeholder="e.g. Breach notification timeline wording needs Legal approval before release."></textarea>
+        <div class="ca-modal-actions">
+            <button type="button" class="ca-btn ca-btn-ghost ca-btn-sm" onclick="document.getElementById('ca-legal-modal').classList.remove('active')">Cancel</button>
+            <button type="button" class="ca-btn ca-btn-warn ca-btn-sm" id="ca-legal-submit">Flag for Legal</button>
+        </div>
+    </div>
+</div>
+
+<!-- Pass citations as JSON for JS consumption -->
+<script id="ca-citations-data" type="application/json">
+{
+{% for q in questions %}"{{ q.id }}": [{% for c in q.citations %}{"source_path": {{ c.source_path|tojson }}, "chunk_text": {{ (c.chunk_text or '')|tojson }}, "score": {{ (c.score or 0) }}}{% if not loop.last %},{% endif %}{% endfor %}]{% if not loop.last %},{% endif %}
+{% endfor %}
+}
+</script>
+
+<script src="{{ url_for('static', filename='js/common.js') }}"></script>
+<script src="{{ url_for('static', filename='js/customer_assurance_tour.js') }}"></script>
+<script>
+const REQUEST_ID = {{ req.id }};
+const citationsData = JSON.parse(document.getElementById('ca-citations-data').textContent);
+
+// ---------- Question selection ----------
+let currentQuestionId = null;
+
+function escapeHtml(s) {
+    return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function selectQuestion(itemEl) {
+    document.querySelectorAll('.ca-q-item').forEach(i => i.classList.remove('active'));
+    itemEl.classList.add('active');
+    currentQuestionId = itemEl.dataset.qId;
+
+    document.getElementById('ca-center-section').textContent = itemEl.dataset.section || '';
+    document.getElementById('ca-center-question').textContent = itemEl.dataset.question;
+
+    const final = itemEl.dataset.final;
+    const draft = itemEl.dataset.draft;
+    document.getElementById('ca-center-answer').value = final || draft || '';
+
+    const conf = itemEl.dataset.confidence;
+    document.getElementById('ca-center-confidence').innerHTML =
+        conf ? `<span class="ca-ws-confidence">Confidence ${(parseFloat(conf)*100).toFixed(0)}%</span>` : '';
+
+    const status = itemEl.dataset.status;
+    document.getElementById('ca-center-status').textContent = `Status: ${status}`;
+
+    // Citations
+    const cites = citationsData[currentQuestionId] || [];
+    const evList = document.getElementById('ca-evidence-list');
+    if (cites.length === 0) {
+        evList.innerHTML = '<div class="ca-evidence-empty">No evidence retrieved yet. Click "Draft" to generate.</div>';
+    } else {
+        evList.innerHTML = cites.map(c => `
+            <div class="ca-evidence-item">
+                ${c.score ? `<span class="ca-evidence-score">${(c.score*100).toFixed(0)}%</span>` : ''}
+                <span class="ca-evidence-src">📄 ${escapeHtml(c.source_path)}</span>
+                <div class="ca-evidence-text">"${escapeHtml(c.chunk_text)}"</div>
+            </div>
+        `).join('');
+    }
+}
+
+document.querySelectorAll('.ca-q-item').forEach(item => {
+    item.addEventListener('click', () => selectQuestion(item));
+});
+// Auto-select first
+const firstItem = document.querySelector('.ca-q-item');
+if (firstItem) selectQuestion(firstItem);
+
+// ---------- Draft actions ----------
+async function callDraft(questionId) {
+    const resp = await fetch(`/customer-assurance/questions/${questionId}/draft`, {method: 'POST'});
+    return resp.json();
+}
+
+document.getElementById('ca-btn-draft').addEventListener('click', async () => {
+    if (!currentQuestionId) return;
+    const btn = document.getElementById('ca-btn-draft');
+    btn.disabled = true;
+    btn.textContent = 'Drafting…';
+    try {
+        const data = await callDraft(currentQuestionId);
+        if (data.status === 'success') {
+            location.reload();
+        } else {
+            alert('Draft failed: ' + (data.message || ''));
+            btn.disabled = false;
+            btn.textContent = '✨ AI Draft';
+        }
+    } catch (e) {
+        alert('Error: ' + e);
+        btn.disabled = false;
+        btn.textContent = '✨ AI Draft';
+    }
+});
+
+document.getElementById('ca-btn-redraft').addEventListener('click', async () => {
+    if (!currentQuestionId) return;
+    if (!confirm('Redraft this answer? Your current edits will be overwritten.')) return;
+    const btn = document.getElementById('ca-btn-redraft');
+    btn.disabled = true;
+    btn.textContent = 'Redrafting…';
+    try {
+        await callDraft(currentQuestionId);
+        location.reload();
+    } catch (e) {
+        alert('Error: ' + e);
+        btn.disabled = false;
+        btn.textContent = '↻ Redraft';
+    }
+});
+
+async function saveAnswer(status) {
+    const final = document.getElementById('ca-center-answer').value.trim();
+    if (!final) { alert('Draft is empty.'); return; }
+    const resp = await fetch(`/customer-assurance/questions/${currentQuestionId}/save`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({final_answer: final, status}),
+    });
+    const data = await resp.json();
+    if (data.status === 'success') {
+        location.reload();
+    } else {
+        alert('Save failed: ' + (data.message || ''));
+    }
+}
+
+document.getElementById('ca-btn-approve').addEventListener('click', () => saveAnswer('approved'));
+document.getElementById('ca-btn-sme').addEventListener('click', () => saveAnswer('needs_sme'));
+document.getElementById('ca-btn-save').addEventListener('click', () => saveAnswer('drafted'));
+
+// ---------- Draft all ----------
+document.getElementById('ca-draft-all').addEventListener('click', async () => {
+    const btn = document.getElementById('ca-draft-all');
+    btn.disabled = true;
+    btn.textContent = '✨ AI drafting all…';
+    try {
+        const resp = await fetch(`/customer-assurance/requests/${REQUEST_ID}/draft-all`, {method: 'POST'});
+        const data = await resp.json();
+        alert(`Drafted ${data.drafted} question(s). Reloading.`);
+        location.reload();
+    } catch (e) {
+        alert('Error: ' + e);
+        btn.disabled = false;
+        btn.textContent = '✨ AI Draft All';
+    }
+});
+
+// ---------- Flag legal ----------
+document.getElementById('ca-flag-legal').addEventListener('click', () => {
+    document.getElementById('ca-legal-modal').classList.add('active');
+});
+document.getElementById('ca-legal-submit').addEventListener('click', async () => {
+    const note = document.getElementById('ca-legal-note').value.trim();
+    if (!note) { alert('Please provide a note.'); return; }
+    const resp = await fetch(`/customer-assurance/requests/${REQUEST_ID}/flag-legal`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({note}),
+    });
+    const data = await resp.json();
+    if (data.status === 'success') location.reload();
+});
+
+// ---------- Export ----------
+document.getElementById('ca-export').addEventListener('click', async () => {
+    const resp = await fetch(`/customer-assurance/requests/${REQUEST_ID}/export`, {method: 'POST'});
+    if (resp.ok) {
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `customer_assurance_${REQUEST_ID}.docx`;
+        a.click();
+        URL.revokeObjectURL(url);
+    } else {
+        const data = await resp.json();
+        alert('Export failed: ' + (data.message || ''));
+    }
+});
+
+// ---------- Approve all ----------
+document.getElementById('ca-approve-all').addEventListener('click', async () => {
+    if (!confirm('Approve all drafted answers and mark this request as Ready?')) return;
+    const btn = document.getElementById('ca-approve-all');
+    btn.disabled = true;
+    btn.textContent = '✓ Approving…';
+    try {
+        const resp = await fetch(`/customer-assurance/requests/${REQUEST_ID}/approve-all`, {method: 'POST'});
+        const data = await resp.json();
+        alert(`Approved ${data.approved} answer(s). Request is now Ready to deliver.`);
+        location.reload();
+    } catch (e) {
+        alert('Error: ' + e);
+        btn.disabled = false;
+        btn.textContent = '✓ Approve All';
+    }
+});
+
+// ---------- Copy all ----------
+document.getElementById('ca-copy-all').addEventListener('click', async () => {
+    const btn = document.getElementById('ca-copy-all');
+    const orig = btn.textContent;
+    try {
+        const resp = await fetch(`/customer-assurance/requests/${REQUEST_ID}/answers`);
+        const data = await resp.json();
+        await navigator.clipboard.writeText(data.text);
+        btn.textContent = '✓ Copied!';
+        setTimeout(() => { btn.textContent = orig; }, 1600);
+    } catch (e) {
+        alert('Copy failed: ' + e);
+    }
+});
+
+// ---------- Mark delivered ----------
+document.getElementById('ca-mark-delivered').addEventListener('click', async () => {
+    if (!confirm('Mark this request as delivered?')) return;
+    const resp = await fetch(`/customer-assurance/requests/${REQUEST_ID}/status`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status: 'delivered'}),
+    });
+    if (resp.ok) location.reload();
+});
+
+// ---------- Tour ----------
+if (!localStorage.getItem('ca_tour_seen_workspace')) {
+    setTimeout(() => CATour.start('workspace'), 500);
+    localStorage.setItem('ca_tour_seen_workspace', '1');
+}
+</script>
+{% include '_ca_fab.html' %}
+{% if config.watermark_author %}<div style="position:fixed;bottom:8px;right:16px;font-size:11px;color:rgba(0,0,0,0.25);font-style:italic;pointer-events:none;z-index:9999;">By {{ config.watermark_author }}</div>{% endif %}
+</body>
+</html>

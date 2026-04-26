@@ -1,0 +1,5 @@
+{
+  "title": "IR Datasette",
+  "description": "IR Platform SQLite Browser",
+  "extra_js_urls": ["/static/datasette_sort_prefs.js"]
+}

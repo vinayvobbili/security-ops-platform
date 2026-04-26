@@ -15,7 +15,7 @@ from .models import DetectionRule, RuleSearchResult, RuleCatalogSearchResult
 logger = logging.getLogger(__name__)
 
 # Paths
-ROOT_DIRECTORY = Path(__file__).parent.parent.parent.parent
+ROOT_DIRECTORY = Path(__file__).parent.parent.parent.parent.parent
 CHROMA_PATH = ROOT_DIRECTORY / "data" / "transient" / "chroma_rules_catalog"
 COLLECTION_NAME = "detection_rules"
 
@@ -30,10 +30,10 @@ class RulesCatalog:
         self._embedding_fn = None
 
     def _get_embedding_fn(self):
-        """Lazy-load the embedding function (reuses OllamaEmbeddingFunction from tipper_indexer)."""
+        """Lazy-load the embedding function."""
         if self._embedding_fn is None:
-            from src.components.tipper_indexer import OllamaEmbeddingFunction
-            self._embedding_fn = OllamaEmbeddingFunction()
+            from src.components.embedding import get_embedding_function
+            self._embedding_fn = get_embedding_function()
         return self._embedding_fn
 
     @property

@@ -9,6 +9,25 @@ function generateSessionId() {
     return 'sess_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15);
 }
 
+// Security: escape HTML entities to prevent XSS from LLM output
+function escapeHtml(text) {
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+// Render markdown: escape first, then apply safe formatting
+function renderMarkdown(text) {
+    return escapeHtml(text)
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/`(.+?)`/g, '<code>$1</code>')
+        .replace(/\n/g, '<br>');
+}
+
 // Chat functionality
 const messagesContainer = document.getElementById('chatMessages');
 const messageInput = document.getElementById('messageInput');
@@ -63,7 +82,7 @@ async function checkBotStatus() {
 
             // Show instructions if available
             if (data.instructions && data.instructions.length > 0) {
-                const instructionsList = data.instructions.map(i => `<li>• ${i}</li>`).join('');
+                const instructionsList = data.instructions.map(i => `<li>• ${escapeHtml(i)}</li>`).join('');
                 statusDetails.innerHTML = `<ul>${instructionsList}</ul>`;
             } else {
                 statusDetails.innerHTML = '';
@@ -169,14 +188,7 @@ function appendMessage(role, content, save = true, timestamp = null) {
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
 
-    // Simple markdown rendering
-    let formattedContent = content
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')  // Bold
-        .replace(/\*(.+?)\*/g, '<em>$1</em>')  // Italic
-        .replace(/`(.+?)`/g, '<code>$1</code>')  // Inline code
-        .replace(/\n/g, '<br>');  // Line breaks
-
-    contentDiv.innerHTML = formattedContent;
+    contentDiv.innerHTML = renderMarkdown(content);
 
     const timeDiv = document.createElement('div');
     timeDiv.className = 'message-time';
@@ -231,6 +243,12 @@ async function sendMessage() {
     const message = messageInput.value.trim();
     if (!message) return;
 
+    // Enforce input length limit
+    if (message.length > 4000) {
+        showError('Message is too long (max 4,000 characters). Please shorten your message.');
+        return;
+    }
+
     // Check if bot is ready
     if (!isBotReady) {
         showError('Chat is not available. Please check the status banner above.');
@@ -277,6 +295,20 @@ async function sendMessage() {
             })
         });
 
+        if (response.status === 429) {
+            contentDiv.innerHTML = '';
+            showError('Rate limit reached — please wait a minute before sending more messages.');
+            return;
+        }
+
+        if (response.status === 400) {
+            const errData = await response.json().catch(() => null);
+            const errMsg = errData?.error || 'Invalid request';
+            contentDiv.innerHTML = '';
+            showError(errMsg);
+            return;
+        }
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -309,15 +341,42 @@ async function sendMessage() {
                             timeDiv.className = 'message-time';
                             timeDiv.textContent = new Date().toLocaleTimeString();
 
-                            // Format the final response with markdown
-                            let formattedContent = fullResponse
-                                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                                .replace(/\*(.+?)\*/g, '<em>$1</em>')
-                                .replace(/`(.+?)`/g, '<code>$1</code>')
-                                .replace(/\n/g, '<br>');
-
-                            contentDiv.innerHTML = formattedContent;
+                            contentDiv.innerHTML = renderMarkdown(fullResponse);
                             contentDiv.appendChild(timeDiv);
+
+                            // Render LLM metrics bar if available
+                            if (data.metrics) {
+                                const m = data.metrics;
+                                const parts = [];
+                                if (m.time != null) {
+                                    let timeStr = `${m.time}s`;
+                                    if (m.eval_time != null && m.gen_time != null) {
+                                        timeStr += ` (${m.eval_time}s eval + ${m.gen_time}s gen)`;
+                                    }
+                                    parts.push(timeStr);
+                                }
+                                if (m.input_tokens != null && m.output_tokens != null) {
+                                    parts.push(`${m.input_tokens}\u2192${m.output_tokens} tokens`);
+                                }
+                                if (m.speed != null && m.speed > 0) {
+                                    parts.push(`TPS: ${m.speed}`);
+                                }
+                                if (m.ttft != null) {
+                                    parts.push(`TTFT ${m.ttft}s`);
+                                }
+                                if (m.iterations != null && m.iterations > 1) {
+                                    parts.push(`Loops: ${m.iterations}`);
+                                }
+                                if (m.route) {
+                                    parts.push(`Route: ${m.route}`);
+                                }
+                                if (parts.length > 0) {
+                                    const metricsDiv = document.createElement('div');
+                                    metricsDiv.className = 'message-metrics';
+                                    metricsDiv.textContent = '\u26A1 ' + parts.join(' | ');
+                                    contentDiv.appendChild(metricsDiv);
+                                }
+                            }
 
                             // Save to history
                             saveChatHistory('assistant', fullResponse);
@@ -328,13 +387,7 @@ async function sendMessage() {
                             fullResponse += data.token;
 
                             // Update display with streaming cursor
-                            let displayContent = fullResponse
-                                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                                .replace(/\*(.+?)\*/g, '<em>$1</em>')
-                                .replace(/`(.+?)`/g, '<code>$1</code>')
-                                .replace(/\n/g, '<br>');
-
-                            contentDiv.innerHTML = displayContent + '<span class="streaming-cursor">▋</span>';
+                            contentDiv.innerHTML = renderMarkdown(fullResponse) + '<span class="streaming-cursor">▋</span>';
                             scrollToBottom();
                         }
                     } catch (e) {

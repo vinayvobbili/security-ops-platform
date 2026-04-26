@@ -14,6 +14,7 @@ from langchain_core.tools import tool
 
 from services.virustotal import VirusTotalClient
 from src.utils.tool_decorator import log_tool_call
+from src.utils.llm_decorators import validate_args, IP_ADDRESS_PATTERN, DOMAIN_PATTERN, HASH_PATTERN
 
 # Lazy-initialized VirusTotal client
 _vt_client: Optional[VirusTotalClient] = None
@@ -181,6 +182,7 @@ def _format_hash_result(data: dict) -> str:
 
 
 @tool
+@validate_args(ip_address=IP_ADDRESS_PATTERN)
 @log_tool_call
 def lookup_ip_virustotal(ip_address: str) -> str:
     """Look up an IP address in VirusTotal for threat intelligence.
@@ -204,6 +206,7 @@ def lookup_ip_virustotal(ip_address: str) -> str:
 
 
 @tool
+@validate_args(domain=DOMAIN_PATTERN)
 @log_tool_call
 def lookup_domain_virustotal(domain: str) -> str:
     """Look up a domain in VirusTotal for threat intelligence.
@@ -250,6 +253,7 @@ def lookup_url_virustotal(url: str) -> str:
 
 
 @tool
+@validate_args(file_hash=HASH_PATTERN)
 @log_tool_call
 def lookup_hash_virustotal(file_hash: str) -> str:
     """Look up a file hash in VirusTotal for malware analysis.

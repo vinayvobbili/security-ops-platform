@@ -1,0 +1,459 @@
+/* ===== Cyber Tool Inventory ===== */
+:root {
+    --cti-primary: #0046AD;
+    --cti-primary-dark: #003875;
+    --cti-accent: #00A651;
+    --cti-light: #4A8BC2;
+}
+
+/* Page background — subtle brand wash so the table doesn't sit on grey nothing */
+body {
+    background: linear-gradient(135deg, #f0f7ff 0%, #f0fdf4 50%, #eff6ff 100%);
+    min-height: 100vh;
+}
+
+.cti-container {
+    max-width: 1500px;
+    margin: 24px auto;
+    padding: 0 20px 40px;
+}
+
+/* Hero/intro panel — gradient bar with the brand colors */
+.cti-intro {
+    position: relative;
+    background: linear-gradient(135deg, #eff6ff 0%, #ecfdf5 100%);
+    border: 1px solid rgba(0, 70, 173, 0.15);
+    border-left: 5px solid;
+    border-image: linear-gradient(180deg, var(--cti-primary), var(--cti-accent)) 1;
+    border-radius: 14px;
+    padding: 18px 22px;
+    color: #1e293b;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    margin-bottom: 22px;
+    box-shadow: 0 4px 14px rgba(0, 70, 173, 0.08);
+}
+.cti-intro strong { color: var(--cti-primary); }
+
+/* Synthetic-data banner — purple/amber so it doesn't blend with the brand intro */
+.cti-synthetic-banner {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border: 1px solid #f59e0b;
+    border-left: 5px solid #d97706;
+    border-radius: 12px;
+    padding: 12px 18px;
+    margin-bottom: 18px;
+    color: #78350f;
+    font-size: 0.9rem;
+    line-height: 1.55;
+}
+.cti-synthetic-banner strong { color: #78350f; }
+.cti-synthetic-banner em { color: #92400e; font-style: italic; font-weight: 600; }
+
+/* Toolbar */
+.cti-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+
+.cti-search-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 280px;
+}
+.cti-search-wrap::before {
+    content: '🔎';
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1rem;
+    opacity: 0.7;
+    pointer-events: none;
+}
+.cti-search {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 16px 12px 42px;
+    border: 2px solid var(--cti-light);
+    border-radius: 999px;
+    background: linear-gradient(145deg, #ffffff, #f5f5f5);
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #1e293b;
+    outline: none;
+    transition: all 0.25s ease;
+    box-shadow: 0 2px 6px rgba(0, 70, 173, 0.06);
+}
+.cti-search::placeholder { color: #94a3b8; font-weight: 400; }
+.cti-search:focus {
+    border-color: var(--cti-primary);
+    box-shadow: 0 0 18px rgba(0, 70, 173, 0.25);
+    transform: translateY(-1px);
+}
+
+/* Count badge — pill with brand gradient */
+.cti-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: linear-gradient(135deg, var(--cti-primary) 0%, var(--cti-accent) 100%);
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 700;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    box-shadow: 0 3px 10px rgba(0, 70, 173, 0.25);
+    white-space: nowrap;
+}
+.cti-count::before { content: '🧰'; font-size: 0.95rem; }
+
+/* Table wrap — sticky header rides the page scroll */
+.cti-table-wrap {
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 50%, #f5fcf8 100%);
+    border: 1px solid rgba(0, 70, 173, 0.15);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 8px 28px rgba(0, 70, 173, 0.10);
+}
+
+.cti-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; background: transparent; }
+.cti-table thead {
+    background: linear-gradient(135deg, var(--cti-primary) 0%, var(--cti-accent) 100%);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    box-shadow: 0 2px 6px rgba(0, 70, 173, 0.18);
+}
+.cti-table th {
+    color: #fff;
+    text-align: left;
+    padding: 13px 18px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+}
+.cti-th-eai { width: 130px; }
+
+/* Sortable headers */
+.cti-table th.cti-sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease;
+}
+.cti-table th.cti-sortable:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+.cti-table th.cti-sortable.cti-sort-active {
+    background: rgba(255, 255, 255, 0.18);
+}
+.cti-sort-arrow {
+    display: inline-block;
+    margin-left: 4px;
+    font-size: 0.7rem;
+    opacity: 0.45;  /* faded for inactive headers so the ⇅ hint reads as "sortable" */
+}
+.cti-table th.cti-sort-active .cti-sort-arrow {
+    opacity: 1;
+    font-size: 0.78rem;  /* slightly bigger so the active direction stands out */
+}
+
+.cti-table td {
+    padding: 11px 18px;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
+    color: #1e293b;
+}
+.cti-table tbody tr:nth-child(odd) { background: rgba(255, 255, 255, 0.55); }
+.cti-table tbody tr:nth-child(even) { background: rgba(0, 70, 173, 0.045); }
+.cti-table tbody tr:hover {
+    background: linear-gradient(90deg, rgba(0, 70, 173, 0.12) 0%, rgba(0, 166, 81, 0.10) 100%);
+    transform: translateX(2px);
+    transition: all 0.15s ease;
+}
+.cti-table tbody tr:last-child td { border-bottom: none; }
+
+/* EAI ID — pill badge */
+.cti-td-eai {
+    font-variant-numeric: tabular-nums;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+}
+.cti-eai-pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, rgba(0, 70, 173, 0.10), rgba(0, 166, 81, 0.10));
+    border: 1px solid rgba(0, 70, 173, 0.20);
+    color: var(--cti-primary-dark);
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+.cti-eai-pill.cti-eai-missing {
+    background: rgba(148, 163, 184, 0.15);
+    border-color: rgba(148, 163, 184, 0.3);
+    color: #94a3b8;
+    font-style: italic;
+}
+
+.cti-app-name { font-weight: 600; color: var(--cti-primary-dark); }
+.cti-long-name { color: #475569; font-size: 0.88rem; }
+.cti-person { color: #1e293b; }
+.cti-team { color: #1e293b; font-size: 0.88rem; }
+
+/* Synthetic cells — italic + tiny lavender tint so demo data is obvious at a glance */
+.cti-synthetic {
+    font-style: italic;
+    color: #6b21a8;
+    background: rgba(168, 85, 247, 0.04);
+}
+
+.cti-empty {
+    text-align: center;
+    padding: 50px 20px;
+    color: #94a3b8;
+    font-style: italic;
+    font-size: 0.95rem;
+}
+
+/* Page-level brand scrollbar */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: rgba(0, 70, 173, 0.08); border-radius: 10px; }
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, var(--cti-primary), var(--cti-accent));
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, var(--cti-accent), var(--cti-light));
+}
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* ===== Dark mode ===== */
+body.dark-mode {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%) !important;
+    color: #e2e8f0;
+}
+body.dark-mode .cti-intro {
+    background: linear-gradient(135deg, #1e3a5f 0%, #1a3a2e 100%);
+    border-color: #334155;
+    color: #cbd5e1;
+}
+body.dark-mode .cti-intro strong { color: #60a5fa; }
+body.dark-mode .cti-search {
+    background: linear-gradient(145deg, #1e293b, #172033);
+    color: #e2e8f0;
+    border-color: #334155;
+}
+body.dark-mode .cti-search::placeholder { color: #64748b; }
+body.dark-mode .cti-search:focus {
+    border-color: #60a5fa;
+    box-shadow: 0 0 18px rgba(96, 165, 250, 0.3);
+}
+body.dark-mode .cti-table-wrap {
+    background: linear-gradient(160deg, #1e293b 0%, #172744 50%, #142e24 100%);
+    border-color: rgba(96, 165, 250, 0.18);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+}
+body.dark-mode .cti-table thead {
+    background: linear-gradient(135deg, #1d4ed8 0%, #059669 100%);
+}
+body.dark-mode .cti-table td {
+    color: #e2e8f0;
+    border-bottom-color: rgba(96, 165, 250, 0.10);
+}
+body.dark-mode .cti-table tbody tr:nth-child(odd) { background: rgba(15, 23, 42, 0.35); }
+body.dark-mode .cti-table tbody tr:nth-child(even) { background: rgba(96, 165, 250, 0.07); }
+body.dark-mode .cti-table tbody tr:hover {
+    background: linear-gradient(90deg, rgba(96, 165, 250, 0.18) 0%, rgba(52, 211, 153, 0.12) 100%);
+}
+body.dark-mode .cti-eai-pill {
+    background: linear-gradient(135deg, rgba(96, 165, 250, 0.18), rgba(52, 211, 153, 0.15));
+    border-color: rgba(96, 165, 250, 0.3);
+    color: #93c5fd;
+}
+body.dark-mode .cti-eai-pill.cti-eai-missing {
+    background: rgba(100, 116, 139, 0.2);
+    border-color: rgba(100, 116, 139, 0.4);
+    color: #64748b;
+}
+body.dark-mode .cti-synthetic-banner {
+    background: linear-gradient(135deg, #422006 0%, #44230b 100%);
+    border-color: #b45309;
+    color: #fde68a;
+}
+body.dark-mode .cti-synthetic-banner strong { color: #fef3c7; }
+body.dark-mode .cti-synthetic-banner em { color: #fcd34d; }
+body.dark-mode .cti-app-name { color: #93c5fd; }
+body.dark-mode .cti-long-name { color: #94a3b8; }
+body.dark-mode .cti-synthetic {
+    color: #d8b4fe;
+    background: rgba(168, 85, 247, 0.10);
+}
+body.dark-mode ::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); }
+body.dark-mode ::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #4dabf7, #34d399);
+}
+body.dark-mode ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #34d399, #4dabf7);
+}
+
+/* ===== "How does this work?" pill + modal ===== */
+.cti-info-strip {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    margin-bottom: 12px;
+}
+.cti-info-btn {
+    background: linear-gradient(135deg, rgba(0, 70, 173, 0.10), rgba(0, 166, 81, 0.12));
+    border: 1px solid rgba(0, 70, 173, 0.35);
+    border-radius: 10px;
+    padding: 8px 16px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: var(--cti-primary-dark);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.cti-info-btn:hover {
+    background: linear-gradient(135deg, rgba(0, 70, 173, 0.20), rgba(0, 166, 81, 0.22));
+    border-color: var(--cti-primary);
+    box-shadow: 0 0 16px rgba(0, 70, 173, 0.22), 0 0 32px rgba(0, 166, 81, 0.12);
+    transform: translateY(-1px);
+}
+.cti-info-btn-icon { font-size: 0.95rem; }
+
+.cti-info-backdrop {
+    position: fixed; inset: 0; z-index: 9500;
+    background: rgba(0, 0, 0, 0.55); backdrop-filter: blur(6px);
+    display: flex; align-items: center; justify-content: center;
+}
+.cti-info-modal {
+    width: 920px; max-width: 94vw; max-height: 90vh;
+    background: #ffffff; border-radius: 16px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
+    display: flex; flex-direction: column; overflow: hidden;
+}
+.cti-info-header {
+    padding: 18px 26px;
+    background: linear-gradient(135deg, var(--cti-primary-dark) 0%, var(--cti-primary) 60%, var(--cti-accent) 100%);
+    color: #fff;
+    display: flex; align-items: center; justify-content: space-between;
+}
+.cti-info-header h3 { margin: 0; font-size: 1.15rem; font-weight: 700; letter-spacing: 0.2px; }
+.cti-info-close {
+    color: rgba(255, 255, 255, 0.9); font-size: 1.4rem;
+    background: rgba(255, 255, 255, 0.18); border: none;
+    border-radius: 50%; width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: background 0.2s;
+}
+.cti-info-close:hover { background: rgba(255, 255, 255, 0.30); }
+.cti-info-body {
+    padding: 22px 26px;
+    overflow-y: auto; flex: 1;
+    display: flex; flex-direction: column; gap: 14px;
+    color: #1f2937;
+}
+
+/* Video wrap is a flex item — without flex-shrink:0 it collapses to nothing
+   while the <video> overflows. */
+.cti-info-video-wrap {
+    flex-shrink: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+    background: #000;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+.cti-info-video {
+    display: block;
+    width: 100%;
+    max-height: 56vh;
+    background: #000;
+}
+.cti-info-video-caption {
+    padding: 8px 14px;
+    background: #f8fafc;
+    font-size: 0.85rem;
+    color: #64748b;
+    border-top: 1px solid #e5e7eb;
+}
+body.dark-mode .cti-info-video-wrap { border-color: rgba(96, 165, 250, 0.18); }
+body.dark-mode .cti-info-video-caption {
+    background: #0f172a;
+    color: #94a3b8;
+    border-top-color: rgba(96, 165, 250, 0.18);
+}
+
+.cti-info-kpis {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+    margin: 2px 0 6px;
+}
+.cti-info-kpi {
+    background: linear-gradient(135deg, #f0f7ff 0%, #f0fdf4 100%);
+    border: 1px solid rgba(0, 70, 173, 0.18);
+    border-radius: 12px;
+    padding: 14px 16px; text-align: center;
+}
+.cti-info-kpi-value {
+    font-size: 1.45rem; font-weight: 800; color: var(--cti-primary-dark); line-height: 1.1;
+}
+.cti-info-kpi-label {
+    font-size: 0.76rem; color: #64748b; text-transform: uppercase;
+    letter-spacing: 0.5px; font-weight: 600; margin-top: 4px;
+}
+
+.cti-info-section {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 6px 0;
+}
+.cti-info-icon {
+    font-size: 1.55rem; flex-shrink: 0; width: 34px; text-align: center;
+}
+.cti-info-section h4 {
+    margin: 0 0 4px; font-size: 0.98rem; font-weight: 700; color: var(--cti-primary-dark);
+}
+.cti-info-section p {
+    margin: 0; font-size: 0.88rem; line-height: 1.55; color: #374151;
+}
+.cti-info-section p strong { color: var(--cti-primary-dark); }
+.cti-info-divider { height: 1px; background: #e5e7eb; margin: 4px 0; }
+
+/* Dark mode for the info pill + modal */
+body.dark-mode .cti-info-btn {
+    background: linear-gradient(135deg, rgba(96, 165, 250, 0.18), rgba(52, 211, 153, 0.18));
+    border-color: rgba(96, 165, 250, 0.35);
+    color: #cbd5e1;
+}
+body.dark-mode .cti-info-btn:hover {
+    background: linear-gradient(135deg, rgba(96, 165, 250, 0.30), rgba(52, 211, 153, 0.28));
+    border-color: #60a5fa;
+    box-shadow: 0 0 16px rgba(96, 165, 250, 0.30), 0 0 32px rgba(52, 211, 153, 0.18);
+}
+body.dark-mode .cti-info-modal {
+    background: #1e293b;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+}
+body.dark-mode .cti-info-header {
+    background: linear-gradient(135deg, #0b1f3a 0%, #1d4ed8 60%, #059669 100%);
+}
+body.dark-mode .cti-info-body { color: #e2e8f0; }
+body.dark-mode .cti-info-kpi {
+    background: linear-gradient(135deg, #1e3a5f 0%, #1a3a2e 100%);
+    border-color: rgba(96, 165, 250, 0.25);
+}
+body.dark-mode .cti-info-kpi-value { color: #93c5fd; }
+body.dark-mode .cti-info-kpi-label { color: #94a3b8; }
+body.dark-mode .cti-info-section h4 { color: #93c5fd; }
+body.dark-mode .cti-info-section p { color: #cbd5e1; }
+body.dark-mode .cti-info-section p strong { color: #93c5fd; }
+body.dark-mode .cti-info-divider { background: rgba(96, 165, 250, 0.18); }

@@ -52,13 +52,20 @@ import fasteners
 import pandas as pd
 from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
+from webex_bots.room_gated_bot import RoomGatedWebexBot
 from webexteamssdk import WebexTeamsAPI
+from webexpythonsdk.models.cards import (
+    AdaptiveCard, Column, ColumnSet, Container,
+    TextBlock, FactSet, Fact, options, HorizontalAlignment, VerticalContentAlignment
+)
+from webexpythonsdk.models.cards.actions import Submit
+from webexpythonsdk.models.cards.inputs import Text as TextInput
 
 from my_config import get_config
 from src.epp.tanium_hosts_without_ring_tag import create_processor
 from src.utils.logging_utils import log_activity
 from src.utils.webex_device_manager import cleanup_devices_on_startup
-from src.utils.webex_utils import send_message_with_retry, send_card_with_retry
+from src.utils.webex_utils import send_message_with_retry, send_card_with_retry, format_eta, clear_stale_lock, periodic_progress_pinger
 from src.utils.webex_pool_config import configure_webex_api_session
 
 # Import shared Tanium bot functionality
@@ -68,12 +75,10 @@ from webex_bots.tanium_bot_base import (
     seek_approval_to_ring_tag_tanium,
     apply_tags_to_hosts,
     create_bot_health_card,
+    is_recently_online,
     EASTERN_TZ,
     run_automated_ring_tagging_workflow as _run_automated_ring_tagging_workflow,
 )
-
-# Default batch size for the threat-intel service (Cloud) ring tagging
-DEFAULT_BATCH_SIZE = 1000
 
 # Data directory for transient files (flag files, etc.)
 DATA_DIR = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
@@ -113,7 +118,7 @@ def run_automated_ring_tagging_workflow():
         config=BOT_CONFIG,
         room_id=CONFIG.webex_room_id_epp_tanium_cloud_tagging,
         safety_window_minutes=SAFETY_WINDOW_MINUTES,
-        default_batch_size=DEFAULT_BATCH_SIZE
+        default_batch_size=None  # Tag all eligible hosts
     )
 
 
@@ -134,13 +139,14 @@ class GetTaniumHostsWithoutRingTag(Command):
                                 markdown=(
                                     f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n"
                                     "🔍 **Tanium Cloud Hosts Without Ring Tag Report** 🏷️\n"
-                                    "Estimated completion: ~15 minutes ⏰"
+                                    f"Estimated completion: {format_eta(15)} ⏰"
                                 )
                                 )
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "all_tanium_hosts.lock"
+        clear_stale_lock(lock_path)
         filepath = None
         try:
-            with fasteners.InterProcessLock(lock_path):
+            with periodic_progress_pinger(webex_api, room_id), fasteners.InterProcessLock(lock_path):
                 processor = create_processor(instance_filter="cloud")
                 report_path = processor.process_hosts_without_ring_tags(test_limit=None)
                 filepath = report_path
@@ -219,7 +225,7 @@ class GetTaniumHostsWithoutRingTag(Command):
         result = send_message_with_retry(webex_api, room_id=room_id, markdown=message, files=[str(filepath)])
 
         if result:
-            seek_approval_to_ring_tag_tanium(BOT_CONFIG, room_id, total_hosts=hosts_with_generated_tags_count, default_batch_size=DEFAULT_BATCH_SIZE)
+            seek_approval_to_ring_tag_tanium(BOT_CONFIG, room_id, total_hosts=hosts_with_generated_tags_count)
 
 
 class RingTagTaniumHosts(Command):
@@ -232,23 +238,19 @@ class RingTagTaniumHosts(Command):
     @log_activity(bot_access_token=CONFIG.webex_bot_access_token_tars, log_file_name="tars_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
-        batch_size = DEFAULT_BATCH_SIZE
 
         loading_msg = get_random_loading_message()
-        if batch_size is None:
-            batch_info = " (tagging ALL hosts)"
-        else:
-            batch_info = f" (batch of {batch_size:,} hosts)"
         send_message_with_retry(webex_api,
                                 room_id=room_id,
-                                markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🏷️**Starting ring tagging for Tanium Cloud hosts{batch_info}...**\nEstimated completion: ~5 minutes ⏰"
+                                markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🏷️**Starting ring tagging for Tanium Cloud hosts (tagging all online hosts)...**\nEstimated completion: {format_eta(5)} ⏰"
                                 )
 
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "ring_tag_tanium_hosts.lock"
+        clear_stale_lock(lock_path)
         user_name = activity['actor']['displayName']
         try:
-            with fasteners.InterProcessLock(lock_path):
-                apply_tags_to_hosts(BOT_CONFIG, room_id, batch_size=batch_size, run_by=user_name)
+            with periodic_progress_pinger(webex_api, room_id), fasteners.InterProcessLock(lock_path):
+                apply_tags_to_hosts(BOT_CONFIG, room_id, batch_size=None, run_by=user_name)
         except Exception as e:
             logger.error(f"Error in RingTagTaniumHosts execute: {e}")
             send_message_with_retry(webex_api,
@@ -320,15 +322,16 @@ class GetTaniumUnhealthyHosts(Command):
                                 markdown=(
                                     f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n"
                                     "🔍 **Tanium Cloud Unhealthy Hosts Report** 🤒\n"
-                                    "Checking unhealthy hosts (servers: >1 day, workstations: >3 days), enriching with ServiceNow & CrowdStrike...\n"
-                                    "Estimated completion: ~10-15 minutes ⏰"
+                                    "Checking unhealthy hosts (servers: >1 day, workstations: >3 days), cross-referencing with CrowdStrike (seen within 24h), enriching with ServiceNow...\n"
+                                    f"Estimated completion: {format_eta(5)} ⏰"
                                 )
                                 )
 
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "tanium_unhealthy_hosts.lock"
+        clear_stale_lock(lock_path)
         filepath = None
         try:
-            with fasteners.InterProcessLock(lock_path):
+            with periodic_progress_pinger(webex_api, room_id), fasteners.InterProcessLock(lock_path):
                 processor = create_unhealthy_processor(instance_filter="cloud")
                 filepath = processor.process(test_limit=None)
         except Exception as e:
@@ -360,24 +363,980 @@ class GetTaniumUnhealthyHosts(Command):
         if total_unhealthy == 0:
             send_message_with_retry(webex_api,
                                     room_id=room_id,
-                                    markdown=f"Hello {activity['actor']['displayName']}! 🎉 **Great news!** No unhealthy Tanium Cloud hosts found (servers seen within 1 day, workstations within 3 days)."
+                                    markdown=f"Hello {activity['actor']['displayName']}! 🎉 **Great news!** No truly unhealthy Tanium Cloud hosts found (servers: >1 day, workstations: >3 days in Tanium + seen in CrowdStrike within 24h)."
+                                    )
+            return
+
+        # Count statistics
+        cs_not_found = len(df[df['CS Status'] == 'Not Found'])
+        cs_online = len(df[df['CS Online State'] == 'online'])
+        snow_found = len(df[df['SNOW Status'] == 'Found'])
+        operational_or_pipeline = len(df[df['SNOW Lifecycle'].str.lower().isin(['operational', 'pipeline'])])
+        rtr_candidates = len(df[df['RTR Candidate'] == 'Yes'])
+        pingable = len(df[df['Pingable'] == 'Yes']) if 'Pingable' in df.columns else 0
+        not_pingable = len(df[df['Pingable'] == 'No']) if 'Pingable' in df.columns else 0
+
+        # Server vs workstation breakdown
+        workstations = df[df['OS Platform'].isin(['Windows', 'Mac'])]
+        servers = df[~df['OS Platform'].isin(['Windows', 'Mac'])]
+        prod_servers = servers[servers['SNOW Environment'].str.lower() == 'production']
+        non_prod_servers = servers[servers['SNOW Environment'].str.lower() != 'production']
+
+        message = f"Hello {activity['actor']['displayName']}! Here's the **Tanium Cloud Unhealthy Hosts Report** 🤒\n\n"
+        message += f"**Summary:**\n"
+        message += f"- Truly unhealthy hosts (Tanium last seen: servers >1 day, workstations >3 days + seen in CrowdStrike within 24h or not in CS): **{total_unhealthy:,}**\n"
+        message += f"  - Servers: {len(servers):,} (Prod: {len(prod_servers):,} | Non-Prod: {len(non_prod_servers):,}) | Workstations: {len(workstations):,}\n"
+        message += f"- Pingable: {pingable:,} | Not pingable: {not_pingable:,}\n"
+        if cs_not_found > 0:
+            message += f"- ⚠️ **Not found in CrowdStrike: {cs_not_found:,}** (no EDR visibility — risk)\n"
+        message += f"- Currently online in CrowdStrike: {cs_online:,}\n"
+        message += f"- Found in ServiceNow CMDB: {snow_found:,}\n"
+        message += f"- Lifecycle = Operational/Pipeline: {operational_or_pipeline:,}\n"
+        message += f"- **RTR Remediation Candidates: {rtr_candidates:,}** ✅\n\n"
+        message += "_RTR candidates are hosts that are operational/pipeline in SNOW and online in CrowdStrike — ready for automated Tanium agent reinstallation._"
+
+        send_message_with_retry(webex_api, room_id=room_id, markdown=message, files=[str(filepath)])
+
+
+class GetTaniumPMLIHosts(Command):
+    def __init__(self):
+        super().__init__(
+            command_keyword="tanium_pmli_hosts",
+            help_message="Get Tanium Cloud PMLI Hosts 🔍🇮🇳",
+            delete_previous_message=True,
+        )
+
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_tars, log_file_name="tars_activity_log.csv")
+    def execute(self, message, attachment_actions, activity):
+        from src.epp.tanium_pmli_hosts import create_processor as create_pmli_processor
+
+        room_id = attachment_actions.roomId
+        loading_msg = get_random_loading_message()
+        send_message_with_retry(webex_api,
+                                room_id=room_id,
+                                markdown=(
+                                    f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n"
+                                    "🔍 **Tanium Cloud PMLI Hosts Report** 🇮🇳\n"
+                                    "Fetching PMLI hosts and enriching with ServiceNow data...\n"
+                                    f"Estimated completion: {format_eta(15)} ⏰"
+                                )
+                                )
+
+        lock_path = ROOT_DIRECTORY / "src" / "epp" / "tanium_pmli_hosts.lock"
+        clear_stale_lock(lock_path)
+        filepath = None
+        try:
+            with periodic_progress_pinger(webex_api, room_id), fasteners.InterProcessLock(lock_path):
+                processor = create_pmli_processor(instance_filter="cloud")
+                filepath = processor.process(test_limit=None)
+        except Exception as e:
+            logger.error(f"Error in GetTaniumPMLIHosts execute: {e}")
+            send_message_with_retry(webex_api,
+                                    room_id=room_id,
+                                    markdown=f"❌ An error occurred while processing your request: {e}"
+                                    )
+            filepath = None
+        finally:
+            if lock_path.exists():
+                try:
+                    lock_path.unlink()
+                except Exception as e:
+                    logger.error(f"Failed to remove lock file {lock_path}: {e}")
+
+        if not filepath or not Path(filepath).exists():
+            error_msg = filepath if filepath else "Unknown error occurred during report generation"
+            send_message_with_retry(webex_api,
+                                    room_id=room_id,
+                                    markdown=f"Hello {activity['actor']['displayName']}! ❌ **Error generating PMLI hosts report**: {error_msg}"
+                                    )
+            return
+
+        # Read report and generate summary
+        df = pd.read_excel(filepath)
+        total_pmli = len(df)
+
+        if total_pmli == 0:
+            send_message_with_retry(webex_api,
+                                    room_id=room_id,
+                                    markdown=f"Hello {activity['actor']['displayName']}! 🎉 **Great news!** No PMLI hosts found in Tanium Cloud."
                                     )
             return
 
         # Count statistics
         snow_found = len(df[df['SNOW Status'] == 'Found'])
-        operational_or_pipeline = len(df[df['SNOW Lifecycle'].str.lower().isin(['operational', 'pipeline'])])
-        cs_online = len(df[df['CS Online State'] == 'online'])
-        rtr_candidates = len(df[df['RTR Candidate'] == 'Yes'])
+        by_reason = df['PMLI Match Reason'].str.split(' \\+ ').str[0].value_counts()
 
-        message = f"Hello {activity['actor']['displayName']}! Here's the **Tanium Cloud Unhealthy Hosts Report** 🤒\n\n"
+        message = f"Hello {activity['actor']['displayName']}! Here's the **Tanium Cloud PMLI Hosts Report** 🇮🇳\n\n"
         message += f"**Summary:**\n"
-        message += f"- Total unhealthy hosts (servers: >1 day, workstations: >3 days): **{total_unhealthy:,}**\n"
+        message += f"- Total PMLI hosts: **{total_pmli:,}**\n"
         message += f"- Found in ServiceNow CMDB: {snow_found:,}\n"
-        message += f"- Lifecycle = Operational/Pipeline: {operational_or_pipeline:,}\n"
-        message += f"- Online in CrowdStrike: {cs_online:,}\n"
-        message += f"- **RTR Remediation Candidates: {rtr_candidates:,}** ✅\n\n"
-        message += "_RTR candidates are hosts that are operational/pipeline in SNOW and online in CrowdStrike - ready for automated Tanium agent reinstallation._"
+        message += f"\n**Detection breakdown:**\n"
+        for reason, count in by_reason.items():
+            message += f"- {reason}: {count:,}\n"
+
+        report_msg = send_message_with_retry(webex_api, room_id=room_id, markdown=message, files=[str(filepath)])
+
+        # Check if any hosts have APAC ring tags — if so, offer to remove them
+        if report_msg and 'Current Tags' in df.columns:
+            apac_count = _count_apac_ring_tag_hosts(df)
+            if apac_count > 0:
+                # Reset progress tracker for new report
+                _reset_apac_removal_progress()
+                _send_apac_removal_card(room_id, apac_count, parent_id=report_msg.id)
+
+
+def _get_apac_removal_progress_path() -> Path:
+    """Path to the JSON file tracking which hosts have had APAC tags removed."""
+    today_date = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
+    return ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging" / today_date / "pmli_apac_removal_progress.json"
+
+
+def _load_apac_removal_progress() -> set:
+    """Load set of hostnames already processed."""
+    import json
+    progress_path = _get_apac_removal_progress_path()
+    if progress_path.exists():
+        try:
+            data = json.loads(progress_path.read_text())
+            return set(data.get('processed_hostnames', []))
+        except Exception:
+            return set()
+    return set()
+
+
+def _save_apac_removal_progress(processed_hostnames: set):
+    """Save the set of processed hostnames."""
+    import json
+    progress_path = _get_apac_removal_progress_path()
+    progress_path.parent.mkdir(parents=True, exist_ok=True)
+    progress_path.write_text(json.dumps({
+        'processed_hostnames': sorted(processed_hostnames),
+        'updated_at': datetime.now(EASTERN_TZ).isoformat()
+    }, indent=2))
+
+
+def _reset_apac_removal_progress():
+    """Reset progress when a new PMLI report is generated."""
+    progress_path = _get_apac_removal_progress_path()
+    if progress_path.exists():
+        progress_path.unlink()
+
+
+def _count_apac_ring_tag_hosts(df) -> int:
+    """Count hosts in a DataFrame that have an APAC ring tag."""
+    import re
+    pattern = re.compile(r'EPP_ECMTag_APAC_', re.IGNORECASE)
+    return int(df['Current Tags'].fillna('').astype(str).apply(lambda t: bool(pattern.search(t))).sum())
+
+
+def _send_apac_removal_card(room_id, remaining_count, parent_id=None):
+    """Send the APAC Ring tag removal approval card."""
+    card = AdaptiveCard(
+        body=[
+            Container(
+                items=[
+                    TextBlock(
+                        text="🇮🇳  PMLI Hosts — APAC Ring Tag Removal",
+                        size=options.FontSize.LARGE,
+                        weight=options.FontWeight.BOLDER,
+                        color=options.Colors.LIGHT,
+                        horizontalAlignment=HorizontalAlignment.CENTER,
+                    ),
+                ],
+                style=options.ContainerStyle.ACCENT,
+                bleed=True,
+            ),
+            ColumnSet(
+                columns=[
+                    Column(
+                        width="auto",
+                        items=[
+                            TextBlock(
+                                text=f"{remaining_count:,}",
+                                size=options.FontSize.EXTRA_LARGE,
+                                weight=options.FontWeight.BOLDER,
+                                color=options.Colors.ATTENTION,
+                                horizontalAlignment=HorizontalAlignment.CENTER,
+                            ),
+                            TextBlock(
+                                text="hosts remaining",
+                                size=options.FontSize.SMALL,
+                                isSubtle=True,
+                                horizontalAlignment=HorizontalAlignment.CENTER,
+                                spacing=options.Spacing.NONE,
+                            ),
+                        ],
+                        verticalContentAlignment=VerticalContentAlignment.CENTER,
+                    ),
+                    Column(
+                        width="stretch",
+                        items=[
+                            TextBlock(
+                                text="These PMLI hosts still have an **APAC Ring tag** that needs to be removed. Only hosts seen online in the last 2 hours will be targeted.",
+                                wrap=True,
+                            ),
+                        ],
+                        verticalContentAlignment=VerticalContentAlignment.CENTER,
+                    ),
+                ],
+                separator=True,
+                spacing=options.Spacing.MEDIUM,
+            ),
+            TextBlock(
+                text="Batch Size",
+                weight=options.FontWeight.BOLDER,
+                separator=True,
+                spacing=options.Spacing.MEDIUM,
+            ),
+            TextInput(
+                id="batch_size",
+                placeholder="Default: 100 (max 500)",
+                isRequired=False,
+            ),
+        ],
+        actions=[
+            Submit(title="Skip ✋", data={"callback_keyword": "dont_remove_apac_ring_tag"},
+                   style=options.ActionStyle.DESTRUCTIVE),
+            Submit(title="Remove Tags 🏷️", data={"callback_keyword": "remove_apac_ring_tag"},
+                   style=options.ActionStyle.POSITIVE),
+        ],
+    )
+
+    kwargs = {}
+    if parent_id:
+        kwargs['parentId'] = parent_id
+
+    send_card_with_retry(
+        webex_api,
+        room_id=room_id,
+        text="PMLI Hosts — APAC Ring Tag Removal",
+        attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": card.to_dict()}],
+        **kwargs
+    )
+
+
+class RemoveApacRingTag(Command):
+    """Remove APAC Ring tags from PMLI hosts per button click."""
+
+    DEFAULT_BATCH_SIZE = 100
+    MAX_BATCH_SIZE = 500
+
+    def __init__(self):
+        super().__init__(
+            command_keyword="remove_apac_ring_tag",
+            delete_previous_message=True,
+        )
+
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_tars, log_file_name="tars_activity_log.csv")
+    def execute(self, message, attachment_actions, activity):
+        import re
+        from services.tanium import TaniumClient
+
+        room_id = attachment_actions.roomId
+
+        # Parse batch size from card input
+        batch_size = self.DEFAULT_BATCH_SIZE
+        raw_input = (attachment_actions.inputs or {}).get('batch_size', '').strip()
+        if raw_input:
+            try:
+                batch_size = max(1, min(int(raw_input), self.MAX_BATCH_SIZE))
+            except ValueError:
+                send_message_with_retry(webex_api, room_id=room_id,
+                                        markdown=f"⚠️ Invalid batch size '{raw_input}'. Using default of {self.DEFAULT_BATCH_SIZE}.")
+
+        loading_msg = get_random_loading_message()
+        send_message_with_retry(webex_api, room_id=room_id,
+                                markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🏷️ **Removing APAC Ring tag from the next {batch_size} PMLI hosts...**")
+
+        # Find today's PMLI report
+        today_date = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
+        report_dir = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging" / today_date
+        report_path = report_dir / "Tanium_PMLI_Hosts_cloud.xlsx"
+
+        if not report_path.exists():
+            send_message_with_retry(webex_api, room_id=room_id,
+                                    markdown="❌ **Error**: PMLI report not found for today. Please run the PMLI hosts report first.")
+            return
+
+        try:
+            df = pd.read_excel(report_path)
+        except Exception as e:
+            send_message_with_retry(webex_api, room_id=room_id,
+                                    markdown=f"❌ **Error reading PMLI report**: {e}")
+            return
+
+        # Filter hosts with APAC ring tags that haven't been processed yet
+        apac_ring_pattern = re.compile(r'EPP_ECMTag_APAC_', re.IGNORECASE)
+        df['_has_apac_tag'] = df['Current Tags'].fillna('').astype(str).apply(lambda t: bool(apac_ring_pattern.search(t)))
+        all_apac_hosts = df[df['_has_apac_tag']].copy()
+
+        already_processed = _load_apac_removal_progress()
+        remaining_hosts = all_apac_hosts[~all_apac_hosts['Hostname'].isin(already_processed)]
+
+        if len(remaining_hosts) == 0:
+            send_message_with_retry(webex_api, room_id=room_id,
+                                    markdown="✅ All PMLI hosts with APAC Ring tags have already been processed. Nothing left to remove!")
+            return
+
+        # Filter for hosts seen within last 2 hours (likely online)
+        total_before_online_filter = len(remaining_hosts)
+        report_file_time = datetime.fromtimestamp(report_path.stat().st_mtime, tz=timezone.utc)
+        if 'Last Seen' in remaining_hosts.columns:
+            remaining_hosts = remaining_hosts[remaining_hosts['Last Seen'].apply(
+                lambda x: is_recently_online(x, report_file_time)
+            )]
+
+        if len(remaining_hosts) == 0:
+            offline_count = total_before_online_filter
+            send_message_with_retry(webex_api, room_id=room_id,
+                                    markdown=f"⚠️ **No online PMLI hosts available.** {offline_count:,} hosts have APAC Ring tags but none were seen within 2 hours of report generation. Try running a fresh PMLI report first.")
+            return
+
+        # Take the next batch
+        batch = remaining_hosts.head(batch_size)
+        total_remaining = len(remaining_hosts)
+
+        tanium_client = TaniumClient()
+        cloud_instance = tanium_client.get_instance_by_name("Cloud")
+        if not cloud_instance:
+            send_message_with_retry(webex_api, room_id=room_id,
+                                    markdown="❌ **Error**: Could not connect to Tanium Cloud instance.")
+            return
+
+        successful = []
+        failed = []
+        tanium_portal_url = CONFIG.tanium_cloud_ui_url or cloud_instance.server_url
+
+        for _, row in batch.iterrows():
+            hostname = str(row['Hostname'])
+            tanium_id = str(int(float(row['Tanium ID']))) if row.get('Tanium ID') not in (None, '', float('nan')) else ''
+            current_tags_str = str(row.get('Current Tags', ''))
+
+            # Find the specific APAC ring tag(s) on this host
+            apac_tags = [t.strip() for t in current_tags_str.split(',')
+                         if apac_ring_pattern.search(t.strip())]
+
+            host_ok = True
+            for tag in apac_tags:
+                try:
+                    result = cloud_instance.remove_tag_by_name(hostname, tag)
+                    action_data = result.get('action', {})
+                    action_id = action_data.get('id', '')
+                    scheduled_action_id = action_data.get('scheduledAction', {}).get('id', '')
+                    successful.append({'hostname': hostname, 'tag_removed': tag,
+                                       'tanium_id': tanium_id, 'action_id': action_id,
+                                       'scheduled_action_id': scheduled_action_id})
+                except Exception as e:
+                    failed.append({'hostname': hostname, 'tag': tag, 'error': str(e),
+                                   'tanium_id': tanium_id})
+                    logger.warning(f"Failed to remove tag '{tag}' from {hostname}: {e}")
+                    host_ok = False
+
+            # Mark host as processed regardless of success/failure (don't retry automatically)
+            already_processed.add(hostname)
+
+        _save_apac_removal_progress(already_processed)
+
+        # Build batch report
+        batch_count = len(batch)
+        new_remaining = total_remaining - batch_count
+
+        summary = f"**APAC Ring Tag Removal — Batch Results**\n\n"
+        summary += f"- Hosts in this batch: **{batch_count:,}**\n"
+        summary += f"- Tags successfully removed: **{len(successful):,}**\n"
+        if failed:
+            summary += f"- Failed removals: **{len(failed):,}** _(see attached Excel for details)_\n"
+        summary += f"\n- **Remaining online hosts with APAC Ring tag: {new_remaining:,}**"
+        if successful:
+            summary += "\n\n⏱️ Tag removal actions have been created. Allow ~5 minutes for Tanium to distribute and execute on endpoints before verifying."
+        if new_remaining == 0:
+            summary += "\n\n✅ **All done!** No more online PMLI hosts with APAC Ring tags."
+
+        # Generate Excel report of processed hosts for analyst verification
+        excel_file = None
+        try:
+            from src.utils.excel_formatting import apply_professional_formatting, add_tanium_hyperlinks
+
+            # Build a DataFrame of processed hosts with their status
+            report_rows = []
+            success_hostnames = {s['hostname'] for s in successful}
+            # Map hostname -> action IDs from successful removals
+            action_id_map = {}
+            scheduled_action_id_map = {}
+            for s in successful:
+                if s.get('action_id'):
+                    action_id_map[s['hostname']] = s['action_id']
+                if s.get('scheduled_action_id'):
+                    scheduled_action_id_map[s['hostname']] = s['scheduled_action_id']
+            fail_map = {}
+            for f_entry in failed:
+                fail_map.setdefault(f_entry['hostname'], []).append(f"{f_entry['tag']}: {f_entry['error']}")
+
+            report_cols = ['Hostname', 'Tanium ID', 'Action ID', 'Scheduled Action ID',
+                           'IP Address', 'OS Platform', 'Last Seen', 'APAC Tag Removed',
+                           'Status', 'Error']
+            for _, row in batch.iterrows():
+                hostname = str(row['Hostname'])
+                tanium_id = str(int(float(row['Tanium ID']))) if row.get('Tanium ID') not in (None, '', float('nan')) else ''
+                apac_tags = [t.strip() for t in str(row.get('Current Tags', '')).split(',')
+                             if apac_ring_pattern.search(t.strip())]
+                status = 'Success' if hostname in success_hostnames else 'Failed'
+                error = '; '.join(fail_map.get(hostname, []))
+                report_rows.append({
+                    'Hostname': hostname,
+                    'Tanium ID': tanium_id,
+                    'Action ID': action_id_map.get(hostname, ''),
+                    'Scheduled Action ID': scheduled_action_id_map.get(hostname, ''),
+                    'IP Address': row.get('IP Address', ''),
+                    'OS Platform': row.get('OS Platform', ''),
+                    'Last Seen': row.get('Last Seen', ''),
+                    'APAC Tag Removed': ', '.join(apac_tags),
+                    'Status': status,
+                    'Error': error,
+                })
+
+            report_df = pd.DataFrame(report_rows, columns=report_cols)
+            timestamp = datetime.now(EASTERN_TZ).strftime('%H%M%S')
+            excel_file = report_dir / f"apac_ring_removal_batch_{timestamp}.xlsx"
+            report_df.to_excel(str(excel_file), index=False, engine='openpyxl')
+            apply_professional_formatting(
+                str(excel_file),
+                column_widths={'tanium id': 18, 'action id': 18, 'scheduled action id': 20,
+                               'apac tag removed': 40, 'status': 12, 'error': 50},
+                wrap_columns={'apac tag removed', 'error'},
+            )
+            add_tanium_hyperlinks(str(excel_file), portal_url=tanium_portal_url)
+        except Exception as e:
+            logger.warning(f"Failed to generate APAC removal Excel report: {e}")
+            excel_file = None
+
+        files = [str(excel_file)] if excel_file and excel_file.exists() else []
+        report_msg = send_message_with_retry(webex_api, room_id=room_id, markdown=summary, files=files)
+
+        # If more hosts remain, show the card again
+        if new_remaining > 0 and report_msg:
+            _send_apac_removal_card(room_id, new_remaining)
+
+
+class DontRemoveApacRingTag(Command):
+    def __init__(self):
+        super().__init__(
+            command_keyword="dont_remove_apac_ring_tag",
+            delete_previous_message=True,
+        )
+
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_tars, log_file_name="tars_activity_log.csv")
+    def execute(self, message, attachment_actions, activity):
+        return f"Alright {activity['actor']['displayName']}, I won't remove the APAC Ring tags. 👋🏾"
+
+
+# ── MGCC Hosts — APAC Ring Tag Removal ──────────────────────────────────────
+
+class GetTaniumMGCCHosts(Command):
+    def __init__(self):
+        super().__init__(
+            command_keyword="tanium_mgcc_hosts",
+            help_message="Get Tanium Cloud MGCC Hosts 🔍🇮🇳",
+            delete_previous_message=True,
+        )
+
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_tars, log_file_name="tars_activity_log.csv")
+    def execute(self, message, attachment_actions, activity):
+        from src.epp.tanium_mgcc_hosts import create_processor as create_mgcc_processor
+
+        room_id = attachment_actions.roomId
+        loading_msg = get_random_loading_message()
+        send_message_with_retry(webex_api,
+                                room_id=room_id,
+                                markdown=(
+                                    f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n"
+                                    "🔍 **Tanium Cloud MGCC Hosts Report** 🇮🇳\n"
+                                    "Fetching APAC-tagged non-PMLI hosts and enriching with ServiceNow data...\n"
+                                    f"Estimated completion: {format_eta(15)} ⏰"
+                                )
+                                )
+
+        lock_path = ROOT_DIRECTORY / "src" / "epp" / "tanium_mgcc_hosts.lock"
+        clear_stale_lock(lock_path)
+        filepath = None
+        try:
+            with periodic_progress_pinger(webex_api, room_id), fasteners.InterProcessLock(lock_path):
+                processor = create_mgcc_processor(instance_filter="cloud")
+                filepath = processor.process(test_limit=None)
+        except Exception as e:
+            logger.error(f"Error in GetTaniumMGCCHosts execute: {e}")
+            send_message_with_retry(webex_api,
+                                    room_id=room_id,
+                                    markdown=f"❌ An error occurred while processing your request: {e}"
+                                    )
+            filepath = None
+        finally:
+            if lock_path.exists():
+                try:
+                    lock_path.unlink()
+                except Exception as e:
+                    logger.error(f"Failed to remove lock file {lock_path}: {e}")
+
+        if not filepath or not Path(filepath).exists():
+            error_msg = filepath if filepath else "Unknown error occurred during report generation"
+            send_message_with_retry(webex_api,
+                                    room_id=room_id,
+                                    markdown=f"Hello {activity['actor']['displayName']}! ❌ **Error generating MGCC hosts report**: {error_msg}"
+                                    )
+            return
+
+        # Read report and generate summary
+        df = pd.read_excel(filepath)
+        total_mgcc = len(df)
+
+        if total_mgcc == 0:
+            send_message_with_retry(webex_api,
+                                    room_id=room_id,
+                                    markdown=f"Hello {activity['actor']['displayName']}! 🎉 **Great news!** No MGCC hosts with APAC ring tags found in Tanium Cloud."
+                                    )
+            return
+
+        # Count statistics
+        import re as _re
+        snow_found = len(df[df['SNOW Status'] == 'Found'])
+        tags_col = df['Current Tags'].fillna('').astype(str)
+        apac_mask = tags_col.apply(lambda t: bool(_re.search(r'EPP_ECMTag_APAC_', t, _re.IGNORECASE)))
+        us_mask = tags_col.apply(lambda t: bool(_re.search(r'EPP_ECMTag_US_', t, _re.IGNORECASE)))
+
+        report_file_time = datetime.fromtimestamp(Path(filepath).stat().st_mtime, tz=timezone.utc)
+        online_mask = df['Last Seen'].apply(lambda x: is_recently_online(x, report_file_time)) if 'Last Seen' in df.columns else pd.Series([False] * len(df))
+
+        apac_count = int(apac_mask.sum())
+        apac_online = int((apac_mask & online_mask).sum())
+        us_count = int(us_mask.sum())
+        us_online = int((us_mask & online_mask).sum())
+
+        message = f"Hello {activity['actor']['displayName']}! Here's the **Tanium Cloud MGCC Hosts Report** 🇮🇳\n\n"
+        message += f"**Summary:**\n"
+        message += f"- Total MGCC hosts: **{total_mgcc:,}**\n"
+        message += f"  - APAC tagged: {apac_count:,} (online: {apac_online:,})\n"
+        message += f"  - US tagged: {us_count:,} (online: {us_online:,})\n"
+        message += f"- Found in ServiceNow CMDB: {snow_found:,}\n"
+
+        report_msg = send_message_with_retry(webex_api, room_id=room_id, markdown=message, files=[str(filepath)])
+
+        # All hosts in this report have APAC tags by definition — offer removal
+        if report_msg and total_mgcc > 0:
+            _reset_mgcc_apac_removal_progress()
+            _send_mgcc_apac_removal_card(room_id, total_mgcc, parent_id=report_msg.id)
+
+
+def _get_mgcc_apac_removal_progress_path() -> Path:
+    """Path to the JSON file tracking which MGCC hosts have had APAC tags removed."""
+    today_date = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
+    return ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging" / today_date / "mgcc_apac_removal_progress.json"
+
+
+def _load_mgcc_apac_removal_progress() -> set:
+    """Load set of MGCC hostnames already processed."""
+    import json
+    progress_path = _get_mgcc_apac_removal_progress_path()
+    if progress_path.exists():
+        try:
+            data = json.loads(progress_path.read_text())
+            return set(data.get('processed_hostnames', []))
+        except Exception:
+            return set()
+    return set()
+
+
+def _save_mgcc_apac_removal_progress(processed_hostnames: set):
+    """Save the set of processed MGCC hostnames."""
+    import json
+    progress_path = _get_mgcc_apac_removal_progress_path()
+    progress_path.parent.mkdir(parents=True, exist_ok=True)
+    progress_path.write_text(json.dumps({
+        'processed_hostnames': sorted(processed_hostnames),
+        'updated_at': datetime.now(EASTERN_TZ).isoformat()
+    }, indent=2))
+
+
+def _reset_mgcc_apac_removal_progress():
+    """Reset progress when a new MGCC report is generated."""
+    progress_path = _get_mgcc_apac_removal_progress_path()
+    if progress_path.exists():
+        progress_path.unlink()
+
+
+def _send_mgcc_apac_removal_card(room_id, remaining_count, parent_id=None):
+    """Send the MGCC old ring tag removal approval card."""
+    card = AdaptiveCard(
+        body=[
+            Container(
+                items=[
+                    TextBlock(
+                        text="🇮🇳  MGCC Hosts — Old Ring Tag Removal (APAC/US → MGCC)",
+                        size=options.FontSize.LARGE,
+                        weight=options.FontWeight.BOLDER,
+                        color=options.Colors.LIGHT,
+                        horizontalAlignment=HorizontalAlignment.CENTER,
+                    ),
+                ],
+                style=options.ContainerStyle.ACCENT,
+                bleed=True,
+            ),
+            ColumnSet(
+                columns=[
+                    Column(
+                        width="auto",
+                        items=[
+                            TextBlock(
+                                text=f"{remaining_count:,}",
+                                size=options.FontSize.EXTRA_LARGE,
+                                weight=options.FontWeight.BOLDER,
+                                color=options.Colors.ATTENTION,
+                                horizontalAlignment=HorizontalAlignment.CENTER,
+                            ),
+                            TextBlock(
+                                text="hosts remaining",
+                                size=options.FontSize.SMALL,
+                                isSubtle=True,
+                                horizontalAlignment=HorizontalAlignment.CENTER,
+                                spacing=options.Spacing.NONE,
+                            ),
+                        ],
+                        verticalContentAlignment=VerticalContentAlignment.CENTER,
+                    ),
+                    Column(
+                        width="stretch",
+                        items=[
+                            TextBlock(
+                                text="These MGCC hosts still have an **APAC or US Ring tag** that needs to be removed so the next ring tag job assigns MGCC tags. Only hosts seen online in the last 2 hours will be targeted.",
+                                wrap=True,
+                            ),
+                        ],
+                        verticalContentAlignment=VerticalContentAlignment.CENTER,
+                    ),
+                ],
+                separator=True,
+                spacing=options.Spacing.MEDIUM,
+            ),
+            TextBlock(
+                text="Batch Size",
+                weight=options.FontWeight.BOLDER,
+                separator=True,
+                spacing=options.Spacing.MEDIUM,
+            ),
+            TextInput(
+                id="batch_size",
+                placeholder="Default: 100 (max 500)",
+                isRequired=False,
+            ),
+        ],
+        actions=[
+            Submit(title="Skip ✋", data={"callback_keyword": "dont_remove_mgcc_apac_ring_tag"},
+                   style=options.ActionStyle.DESTRUCTIVE),
+            Submit(title="Remove Tags 🏷️", data={"callback_keyword": "remove_mgcc_apac_ring_tag"},
+                   style=options.ActionStyle.POSITIVE),
+        ],
+    )
+
+    kwargs = {}
+    if parent_id:
+        kwargs['parentId'] = parent_id
+
+    send_card_with_retry(
+        webex_api,
+        room_id=room_id,
+        text="MGCC Hosts — APAC Ring Tag Removal",
+        attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": card.to_dict()}],
+        **kwargs
+    )
+
+
+class RemoveApacRingTagMGCC(Command):
+    """Remove APAC Ring tags from MGCC hosts per button click."""
+
+    DEFAULT_BATCH_SIZE = 100
+    MAX_BATCH_SIZE = 500
+
+    def __init__(self):
+        super().__init__(
+            command_keyword="remove_mgcc_apac_ring_tag",
+            delete_previous_message=True,
+        )
+
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_tars, log_file_name="tars_activity_log.csv")
+    def execute(self, message, attachment_actions, activity):
+        import re
+        from services.tanium import TaniumClient
+
+        room_id = attachment_actions.roomId
+
+        # Parse batch size from card input
+        batch_size = self.DEFAULT_BATCH_SIZE
+        raw_input = (attachment_actions.inputs or {}).get('batch_size', '').strip()
+        if raw_input:
+            try:
+                batch_size = max(1, min(int(raw_input), self.MAX_BATCH_SIZE))
+            except ValueError:
+                send_message_with_retry(webex_api, room_id=room_id,
+                                        markdown=f"⚠️ Invalid batch size '{raw_input}'. Using default of {self.DEFAULT_BATCH_SIZE}.")
+
+        loading_msg = get_random_loading_message()
+        send_message_with_retry(webex_api, room_id=room_id,
+                                markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🏷️ **Removing old ring tags (APAC/US) from the next {batch_size} MGCC hosts...**")
+
+        # Find today's MGCC report
+        today_date = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
+        report_dir = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging" / today_date
+        report_path = report_dir / "Tanium_MGCC_Hosts_cloud.xlsx"
+
+        if not report_path.exists():
+            send_message_with_retry(webex_api, room_id=room_id,
+                                    markdown="❌ **Error**: MGCC report not found for today. Please run the MGCC hosts report first.")
+            return
+
+        try:
+            df = pd.read_excel(report_path)
+        except Exception as e:
+            send_message_with_retry(webex_api, room_id=room_id,
+                                    markdown=f"❌ **Error reading MGCC report**: {e}")
+            return
+
+        # Filter hosts with APAC or US ring tags that haven't been processed yet
+        old_tag_pattern = re.compile(r'EPP_ECMTag_(APAC|US)_', re.IGNORECASE)
+        df['_has_old_tag'] = df['Current Tags'].fillna('').astype(str).apply(lambda t: bool(old_tag_pattern.search(t)))
+        all_old_tag_hosts = df[df['_has_old_tag']].copy()
+
+        already_processed = _load_mgcc_apac_removal_progress()
+        remaining_hosts = all_old_tag_hosts[~all_old_tag_hosts['Hostname'].isin(already_processed)]
+
+        if len(remaining_hosts) == 0:
+            send_message_with_retry(webex_api, room_id=room_id,
+                                    markdown="✅ All MGCC hosts with old ring tags have already been processed. Nothing left to remove!")
+            return
+
+        # Filter for hosts seen within last 2 hours (likely online)
+        total_before_online_filter = len(remaining_hosts)
+        report_file_time = datetime.fromtimestamp(report_path.stat().st_mtime, tz=timezone.utc)
+        if 'Last Seen' in remaining_hosts.columns:
+            remaining_hosts = remaining_hosts[remaining_hosts['Last Seen'].apply(
+                lambda x: is_recently_online(x, report_file_time)
+            )]
+
+        if len(remaining_hosts) == 0:
+            offline_count = total_before_online_filter
+            send_message_with_retry(webex_api, room_id=room_id,
+                                    markdown=f"⚠️ **No online MGCC hosts available.** {offline_count:,} hosts have old ring tags but none were seen within 2 hours of report generation. Try running a fresh MGCC report first.")
+            return
+
+        # Take the next batch
+        batch = remaining_hosts.head(batch_size)
+        total_remaining = len(remaining_hosts)
+
+        tanium_client = TaniumClient()
+        cloud_instance = tanium_client.get_instance_by_name("Cloud")
+        if not cloud_instance:
+            send_message_with_retry(webex_api, room_id=room_id,
+                                    markdown="❌ **Error**: Could not connect to Tanium Cloud instance.")
+            return
+
+        successful = []
+        failed = []
+        tanium_portal_url = CONFIG.tanium_cloud_ui_url or cloud_instance.server_url
+
+        for _, row in batch.iterrows():
+            hostname = str(row['Hostname'])
+            tanium_id = str(int(float(row['Tanium ID']))) if row.get('Tanium ID') not in (None, '', float('nan')) else ''
+            current_tags_str = str(row.get('Current Tags', ''))
+
+            # Find the specific APAC/US ring tag(s) on this host
+            old_tags = [t.strip() for t in current_tags_str.split(',')
+                        if old_tag_pattern.search(t.strip())]
+
+            host_ok = True
+            for tag in old_tags:
+                try:
+                    result = cloud_instance.remove_tag_by_name(hostname, tag)
+                    action_data = result.get('action', {})
+                    action_id = action_data.get('id', '')
+                    scheduled_action_id = action_data.get('scheduledAction', {}).get('id', '')
+                    successful.append({'hostname': hostname, 'tag_removed': tag,
+                                       'tanium_id': tanium_id, 'action_id': action_id,
+                                       'scheduled_action_id': scheduled_action_id})
+                except Exception as e:
+                    failed.append({'hostname': hostname, 'tag': tag, 'error': str(e),
+                                   'tanium_id': tanium_id})
+                    logger.warning(f"Failed to remove tag '{tag}' from {hostname}: {e}")
+                    host_ok = False
+
+            # Mark host as processed regardless of success/failure (don't retry automatically)
+            already_processed.add(hostname)
+
+        _save_mgcc_apac_removal_progress(already_processed)
+
+        # Build batch report
+        batch_count = len(batch)
+        new_remaining = total_remaining - batch_count
+
+        summary = f"**MGCC — Old Ring Tag Removal — Batch Results**\n\n"
+        summary += f"- Hosts in this batch: **{batch_count:,}**\n"
+        summary += f"- Tags successfully removed: **{len(successful):,}**\n"
+        if failed:
+            summary += f"- Failed removals: **{len(failed):,}** _(see attached Excel for details)_\n"
+        summary += f"\n- **Remaining online hosts with old ring tags: {new_remaining:,}**"
+        if successful:
+            summary += "\n\n⏱️ Tag removal actions have been created. Allow ~5 minutes for Tanium to distribute and execute on endpoints before verifying."
+        if new_remaining == 0:
+            summary += "\n\n✅ **All done!** No more online MGCC hosts with old ring tags."
+
+        # Generate Excel report of processed hosts for analyst verification
+        excel_file = None
+        try:
+            from src.utils.excel_formatting import apply_professional_formatting, add_tanium_hyperlinks
+
+            report_rows = []
+            success_hostnames = {s['hostname'] for s in successful}
+            action_id_map = {}
+            scheduled_action_id_map = {}
+            for s in successful:
+                if s.get('action_id'):
+                    action_id_map[s['hostname']] = s['action_id']
+                if s.get('scheduled_action_id'):
+                    scheduled_action_id_map[s['hostname']] = s['scheduled_action_id']
+            fail_map = {}
+            for f_entry in failed:
+                fail_map.setdefault(f_entry['hostname'], []).append(f"{f_entry['tag']}: {f_entry['error']}")
+
+            report_cols = ['Hostname', 'Tanium ID', 'Action ID', 'Scheduled Action ID',
+                           'IP Address', 'OS Platform', 'Last Seen', 'Old Tag Removed',
+                           'Status', 'Error']
+            for _, row in batch.iterrows():
+                hostname = str(row['Hostname'])
+                tanium_id = str(int(float(row['Tanium ID']))) if row.get('Tanium ID') not in (None, '', float('nan')) else ''
+                old_tags = [t.strip() for t in str(row.get('Current Tags', '')).split(',')
+                            if old_tag_pattern.search(t.strip())]
+                status = 'Success' if hostname in success_hostnames else 'Failed'
+                error = '; '.join(fail_map.get(hostname, []))
+                report_rows.append({
+                    'Hostname': hostname,
+                    'Tanium ID': tanium_id,
+                    'Action ID': action_id_map.get(hostname, ''),
+                    'Scheduled Action ID': scheduled_action_id_map.get(hostname, ''),
+                    'IP Address': row.get('IP Address', ''),
+                    'OS Platform': row.get('OS Platform', ''),
+                    'Last Seen': row.get('Last Seen', ''),
+                    'Old Tag Removed': ', '.join(old_tags),
+                    'Status': status,
+                    'Error': error,
+                })
+
+            report_df = pd.DataFrame(report_rows, columns=report_cols)
+            timestamp = datetime.now(EASTERN_TZ).strftime('%H%M%S')
+            excel_file = report_dir / f"mgcc_old_ring_removal_batch_{timestamp}.xlsx"
+            report_df.to_excel(str(excel_file), index=False, engine='openpyxl')
+            apply_professional_formatting(
+                str(excel_file),
+                column_widths={'tanium id': 18, 'action id': 18, 'scheduled action id': 20,
+                               'old tag removed': 40, 'status': 12, 'error': 50},
+                wrap_columns={'old tag removed', 'error'},
+            )
+            add_tanium_hyperlinks(str(excel_file), portal_url=tanium_portal_url)
+        except Exception as e:
+            logger.warning(f"Failed to generate MGCC tag removal Excel report: {e}")
+            excel_file = None
+
+        files = [str(excel_file)] if excel_file and excel_file.exists() else []
+        report_msg = send_message_with_retry(webex_api, room_id=room_id, markdown=summary, files=files)
+
+        # If more hosts remain, show the card again
+        if new_remaining > 0 and report_msg:
+            _send_mgcc_apac_removal_card(room_id, new_remaining)
+
+
+class DontRemoveApacRingTagMGCC(Command):
+    def __init__(self):
+        super().__init__(
+            command_keyword="dont_remove_mgcc_apac_ring_tag",
+            delete_previous_message=True,
+        )
+
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_tars, log_file_name="tars_activity_log.csv")
+    def execute(self, message, attachment_actions, activity):
+        return f"Alright {activity['actor']['displayName']}, I won't remove the MGCC APAC Ring tags. 👋🏾"
+
+
+class GetTaniumHostsWithInvalidRingTags(Command):
+    def __init__(self):
+        super().__init__(
+            command_keyword="tanium_invalid_ring_tag",
+            help_message="Get Tanium Cloud Hosts with Invalid Ring Tags 🛡️❌💍",
+            delete_previous_message=True,
+        )
+
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_tars, log_file_name="tars_activity_log.csv")
+    def execute(self, message, attachment_actions, activity):
+        from src.epp.tanium_hosts_with_invalid_ring_tags import generate_report
+
+        room_id = attachment_actions.roomId
+        loading_msg = get_random_loading_message()
+        send_message_with_retry(webex_api,
+                                room_id=room_id,
+                                markdown=(
+                                    f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n"
+                                    "🛡️ **Tanium Cloud Hosts with Invalid Ring Tags Report** ❌💍\n"
+                                    "Fetching all hosts, enriching with ServiceNow, validating ring tags (environment + region)...\n"
+                                    f"Estimated completion: {format_eta(60)} ⏰ (ServiceNow enrichment dominates — "
+                                    "I'll ping you at each stage)"
+                                )
+                                )
+
+        def _send_progress(msg):
+            send_message_with_retry(webex_api, room_id=room_id, markdown=f"⏳ {msg}")
+
+        lock_path = ROOT_DIRECTORY / "src" / "epp" / "tanium_invalid_ring_tags.lock"
+        clear_stale_lock(lock_path)
+        filepath = None
+        try:
+            with periodic_progress_pinger(webex_api, room_id), fasteners.InterProcessLock(lock_path):
+                filepath = generate_report(
+                    instance_filter="cloud",
+                    progress_callback=_send_progress,
+                )
+        except Exception as e:
+            logger.error(f"Error in GetTaniumHostsWithInvalidRingTags execute: {e}")
+            send_message_with_retry(webex_api,
+                                    room_id=room_id,
+                                    markdown=f"❌ An error occurred while processing your request: {e}"
+                                    )
+            filepath = None
+        finally:
+            if lock_path.exists():
+                try:
+                    lock_path.unlink()
+                except Exception as e:
+                    logger.error(f"Failed to remove lock file {lock_path}: {e}")
+
+        if not filepath or not Path(filepath).exists():
+            send_message_with_retry(webex_api,
+                                    room_id=room_id,
+                                    markdown=f"Hello {activity['actor']['displayName']}! 🎉 **Great news!** No Tanium Cloud hosts with invalid ring tags found."
+                                    )
+            return
+
+        df = pd.read_excel(filepath)
+        total_invalid = len(df)
+
+        comment_col = df['comment'].fillna('').astype(str)
+        env_mismatch = int(comment_col.str.contains('should be Ring', case=False).sum())
+        region_mismatch = int(comment_col.str.contains('region', case=False).sum())
+        multiple_tags = int(comment_col.str.contains('multiple', case=False).sum())
+
+        message = f"Hello {activity['actor']['displayName']}! Here's the **Tanium Cloud Hosts with Invalid Ring Tags Report** 🛡️❌💍\n\n"
+        message += f"**Summary:**\n"
+        message += f"- Total hosts with invalid ring tags: **{total_invalid:,}**\n"
+        if env_mismatch > 0:
+            message += f"  - Environment-ring mismatch (servers): {env_mismatch:,}\n"
+        if region_mismatch > 0:
+            message += f"  - Country-region mismatch: {region_mismatch:,}\n"
+        if multiple_tags > 0:
+            message += f"  - Multiple ring tags: {multiple_tags:,}\n"
 
         send_message_with_retry(webex_api, room_id=room_id, markdown=message, files=[str(filepath)])
 
@@ -439,10 +1398,15 @@ def tars_bot_factory():
         CONFIG.webex_bot_email_case,  # CASE bot (On-Prem counterpart)
     ]
 
-    return WebexBot(
+    return RoomGatedWebexBot(
         CONFIG.webex_bot_access_token_tars,
         approved_domains=[CONFIG.my_web_domain],
         approved_users=approved_bot_emails,
+        allowed_room_ids=[
+            CONFIG.webex_room_id_epp_tanium_cloud_tagging,
+            CONFIG.webex_room_id_epp_tanium_onprem_tagging,
+            CONFIG.webex_room_id_dev_test_space,
+        ],
         bot_name="the threat-intel service - The Tanium Cloud Assistant",
         threads=True,
         log_level="ERROR",
@@ -459,6 +1423,14 @@ def tars_initialization(bot):
         bot.add_command(DontRingTagTaniumHosts())  # Hidden - triggered via adaptive card
         bot.add_command(StopAutomatedTaniumRingTagging())  # Hidden - triggered via adaptive card
         bot.add_command(GetTaniumUnhealthyHosts())
+        bot.add_command(GetTaniumPMLIHosts())
+        bot.add_command(RemoveApacRingTag())  # Hidden - triggered via adaptive card
+        bot.add_command(DontRemoveApacRingTag())  # Hidden - triggered via adaptive card
+        bot.add_command(GetTaniumMGCCHosts())
+        bot.add_command(RemoveApacRingTagMGCC())  # Hidden - triggered via adaptive card
+        bot.add_command(DontRemoveApacRingTagMGCC())  # Hidden - triggered via adaptive card
+        bot.add_command(GetTaniumHostsWithInvalidRingTags())
+        bot.add_command(Hi())
         return True
     return False
 

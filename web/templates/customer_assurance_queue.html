@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Assurance — Queue</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/customer_assurance.css') }}">
+</head>
+<body class="ca-page" data-ca-tour="queue">
+{% import 'title_macros.html' as titles %}
+{% set page_title = titles.build_title('Customer Assurance', '🛡️', '📋') %}
+{% include 'top_bar.html' %}
+
+<div class="ca-container">
+    <div style="margin-bottom:18px;">
+        <a href="/customer-assurance" style="color:var(--ca-brand);text-decoration:none;font-size:13px;">← Back to Customer Assurance</a>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+        <div>
+            <h1 class="ca-h1">Request Queue</h1>
+            <p class="ca-subtitle">All in-flight customer security requests. Click a row to open the drafting workspace.</p>
+        </div>
+        <a href="/customer-assurance/new" class="ca-btn ca-btn-primary">+ New Request</a>
+    </div>
+
+    <div class="ca-tip-card">
+        <div class="ca-tip-card-icon">?</div>
+        <div>
+            <strong>What am I looking at?</strong> Every customer security request in the system, sorted by due date. Status pills show where each one is in the workflow. Progress bars show how many questions are drafted out of the total.
+            <br><br>
+            <span class="ca-next-ribbon">What to do next</span>
+            &nbsp;Click any row to open the <strong>drafting workspace</strong>. Use filters below to narrow by status or customer segment.
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="ca-filters" id="ca-tour-filters">
+        <span class="ca-filter-label">Status: <span class="ca-tip" data-tip="Filter by workflow stage. NEW = not started. DRAFTING = AI drafts done, analyst reviewing. NEEDS LEGAL = flagged for legal review. READY = all answers approved. DELIVERED = response sent."></span></span>
+        <a class="ca-chip {% if not active_status %}active{% endif %}" href="/customer-assurance/requests{% if active_segment %}?segment={{ active_segment }}{% endif %}">All</a>
+        {% for s in statuses %}
+            <a class="ca-chip {% if active_status == s %}active{% endif %}"
+               href="/customer-assurance/requests?status={{ s }}{% if active_segment %}&segment={{ active_segment }}{% endif %}">
+                {{ s.replace('_', ' ').title() }}
+            </a>
+        {% endfor %}
+    </div>
+    <div class="ca-filters">
+        <span class="ca-filter-label">Segment: <span class="ca-tip" data-tip="Filter by the customer's account team segment. Combine with a status filter to narrow down further."></span></span>
+        <a class="ca-chip {% if not active_segment %}active{% endif %}" href="/customer-assurance/requests{% if active_status %}?status={{ active_status }}{% endif %}">All</a>
+        {% for s in segments %}
+            <a class="ca-chip {% if active_segment == s %}active{% endif %}"
+               href="/customer-assurance/requests?segment={{ s }}{% if active_status %}&status={{ active_status }}{% endif %}">
+                {{ s }}
+            </a>
+        {% endfor %}
+    </div>
+
+    <!-- Table -->
+    {% if requests %}
+    <table class="ca-table" id="ca-tour-table">
+        <thead>
+            <tr>
+                <th>Customer</th>
+                <th>Title</th>
+                <th>Type</th>
+                <th>Segment</th>
+                <th>Due</th>
+                <th>Priority</th>
+                <th>Progress <span class="ca-tip" data-tip="How many questions have AI drafts. Full bar = every question has been drafted. Doesn't mean approved — just drafted."></span></th>
+                <th>Status <span class="ca-tip" data-tip="Where the request is in the workflow. Click a row to open the workspace and advance it."></span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in requests %}
+            <tr onclick="window.location='/customer-assurance/requests/{{ r.id }}'">
+                <td><strong>{{ r.customer_name }}</strong></td>
+                <td style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ r.title }}</td>
+                <td style="font-size:12px;color:var(--ca-text-muted);">{{ r.request_type }}</td>
+                <td style="font-size:12px;">{{ r.customer_segment }}</td>
+                <td style="font-size:12px;">{{ r.due_date or '—' }}</td>
+                <td>
+                    {% if r.priority %}
+                    <span class="ca-pill ca-pill-priority-{{ r.priority }}">{{ r.priority }}</span>
+                    {% else %}—{% endif %}
+                </td>
+                <td>
+                    {% if r.question_count %}
+                    <div class="ca-progress" title="{{ r.drafted_count }} drafted / {{ r.question_count }} total">
+                        <div class="ca-progress-bar" style="width:{{ (r.drafted_count / r.question_count * 100) | int }}%"></div>
+                    </div>
+                    <span style="font-size:11px;color:var(--ca-text-muted);margin-left:6px;">{{ r.drafted_count }}/{{ r.question_count }}</span>
+                    {% else %}
+                    <span style="font-size:11px;color:var(--ca-text-muted);">No questions</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="ca-pill ca-pill-{{ r.status }}">{{ r.status.replace('_', ' ') }}</span>
+                    {% if r.needs_legal_review %}<span style="color:var(--ca-purple);font-size:11px;margin-left:4px;" title="Legal review flagged">⚖</span>{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="ca-card ca-empty">
+        <div class="ca-empty-icon">📭</div>
+        <h3>No requests match these filters</h3>
+        <p>Try clearing a filter, or create a new request.</p>
+        <a href="/customer-assurance/new" class="ca-btn ca-btn-primary">+ New Request</a>
+    </div>
+    {% endif %}
+</div>
+
+<script src="{{ url_for('static', filename='js/common.js') }}"></script>
+<script src="{{ url_for('static', filename='js/customer_assurance_tour.js') }}"></script>
+<script>
+if (!localStorage.getItem('ca_tour_seen_queue')) {
+    setTimeout(() => CATour.start('queue'), 400);
+    localStorage.setItem('ca_tour_seen_queue', '1');
+}
+</script>
+{% include '_ca_fab.html' %}
+{% if config.watermark_author %}<div style="position:fixed;bottom:8px;right:16px;font-size:11px;color:rgba(0,0,0,0.25);font-style:italic;pointer-events:none;z-index:9999;">By {{ config.watermark_author }}</div>{% endif %}
+</body>
+</html>

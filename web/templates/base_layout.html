@@ -6,8 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block page_title_plain %}{{ page_title_text|default('') }}{% endblock %}</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='icons/favicon.png') }}">
-    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/favicon.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/pwa/dashboard-192.png') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest-dashboard.json') }}">
+    <meta name="theme-color" content="#4f46e5">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
+    <script>if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/static/sw.js'); }</script>
     {% block extra_css %}{% endblock %}
     {% block head_scripts %}{% endblock %}
 </head>
@@ -19,5 +22,6 @@
 {% block extra_js %}{% endblock %}
 <script>if (typeof initRandomMusic === 'function') initRandomMusic();
 if (typeof initBurgerMenu === 'function') initBurgerMenu();</script>
+{% if config.watermark_author %}<div style="position:fixed;bottom:8px;right:16px;font-size:11px;color:rgba(0,0,0,0.25);font-style:italic;pointer-events:none;z-index:9999;">By {{ config.watermark_author }}</div>{% endif %}
 </body>
 </html>

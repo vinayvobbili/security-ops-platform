@@ -9,14 +9,11 @@
 
 body {
     font-family: 'Inter', Arial, sans-serif;
-    max-width: 800px;
-    margin: 2rem auto;
     padding: 0 1rem 2rem 1rem;
     min-height: auto;
     background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-light) 50%, var(--brand-accent) 100%);
     position: relative;
     overflow-x: hidden; /* Only hide horizontal overflow */
-    padding-top: 56px;
 }
 
 body::before,
@@ -48,7 +45,7 @@ body::after {
     padding: 1.5rem 2.5rem 1.5rem 2.5rem;
     border-radius: 12px;
     box-shadow: 0 2px 16px rgba(0,0,0,0.07);
-    margin: 1rem auto 0 auto;
+    margin: 2rem auto 0 auto;
     max-width: 520px;
 }
 

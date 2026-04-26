@@ -1,0 +1,1591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PIR Management Platform</title>
+<style>
+/* ─── Reset & base ─────────────────────────────────────────────────────── */
+*,::before,::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--surface:#161b22;--surface2:#21262d;--border:#30363d;
+  --text:#e6edf3;--text2:#8b949e;--primary:#58a6ff;--primary-dark:#1f6feb;
+  --success:#3fb950;--warning:#d29922;--danger:#f85149;--info:#79c0ff;
+  --critical:#f85149;--high:#d29922;--medium:#e3b341;--low:#3fb950;
+  --osint:#58a6ff;--fintel:#bc8cff;--techint:#4fc1e9;--sharing:#a8ff78;
+  --sidebar-w:220px;--header-h:56px;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;line-height:1.5}
+a{color:var(--primary);text-decoration:none}
+button{cursor:pointer;font-family:inherit;font-size:inherit}
+input,select,textarea{font-family:inherit;font-size:inherit}
+
+/* ─── Layout ────────────────────────────────────────────────────────────── */
+#shell{display:flex;height:100vh;overflow:hidden}
+#sidebar{width:var(--sidebar-w);background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;z-index:10}
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#topbar{height:var(--header-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:12px;flex-shrink:0}
+#content{flex:1;overflow:auto;padding:20px}
+
+/* ─── Sidebar ───────────────────────────────────────────────────────────── */
+.sidebar-brand{padding:16px;border-bottom:1px solid var(--border)}
+.sidebar-brand .brand-title{font-size:13px;font-weight:700;color:var(--primary);letter-spacing:.5px;text-transform:uppercase}
+.sidebar-brand .brand-sub{font-size:11px;color:var(--text2);margin-top:2px}
+.sidebar-nav{flex:1;overflow-y:auto;padding:8px 0}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;color:var(--text2);cursor:pointer;border-left:3px solid transparent;transition:all .15s}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{color:var(--primary);background:rgba(88,166,255,.07);border-left-color:var(--primary)}
+.nav-item svg{width:16px;height:16px;flex-shrink:0}
+.sidebar-footer{padding:12px 16px;border-top:1px solid var(--border)}
+.user-chip{display:flex;align-items:center;gap:8px}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--primary-dark);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+.user-info{flex:1;overflow:hidden}
+.user-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.user-role{font-size:11px;color:var(--text2);text-transform:capitalize}
+.btn-logout{background:none;border:none;color:var(--text2);padding:4px;border-radius:4px}
+.btn-logout:hover{color:var(--danger)}
+
+/* ─── Top bar ───────────────────────────────────────────────────────────── */
+#topbar h1{font-size:16px;font-weight:600;flex:1}
+.search-wrap{position:relative;display:flex;align-items:center}
+.search-wrap input{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 10px 6px 32px;border-radius:6px;width:280px;outline:none}
+.search-wrap input:focus{border-color:var(--primary)}
+.search-icon{position:absolute;left:9px;color:var(--text2);pointer-events:none}
+
+/* ─── Cards / containers ────────────────────────────────────────────────── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px}
+.card-title{font-size:13px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+@media(max-width:900px){.grid-4{grid-template-columns:repeat(2,1fr)}.grid-3{grid-template-columns:1fr 1fr}}
+
+/* ─── Stat card ─────────────────────────────────────────────────────────── */
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px}
+.stat-label{font-size:12px;color:var(--text2);margin-bottom:4px}
+.stat-value{font-size:28px;font-weight:700;color:var(--text)}
+.stat-sub{font-size:12px;color:var(--text2);margin-top:2px}
+
+/* ─── Badges ────────────────────────────────────────────────────────────── */
+.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+.badge-critical{background:rgba(248,81,73,.15);color:var(--critical)}
+.badge-high{background:rgba(210,153,34,.15);color:var(--high)}
+.badge-medium{background:rgba(227,179,65,.15);color:var(--medium)}
+.badge-low{background:rgba(63,185,80,.15);color:var(--low)}
+.badge-active{background:rgba(63,185,80,.12);color:var(--success)}
+.badge-inactive{background:rgba(139,148,158,.12);color:var(--text2)}
+.badge-pir{background:rgba(88,166,255,.12);color:var(--primary)}
+.badge-eei{background:rgba(188,140,255,.12);color:#bc8cff}
+.badge-sir{background:rgba(79,193,233,.12);color:var(--techint)}
+.badge-osint{background:rgba(88,166,255,.1);color:var(--osint)}
+.badge-fintel{background:rgba(188,140,255,.1);color:var(--fintel)}
+.badge-techint{background:rgba(79,193,233,.1);color:var(--techint)}
+.badge-sharing{background:rgba(168,255,120,.1);color:var(--sharing)}
+
+/* ─── Buttons ────────────────────────────────────────────────────────────── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:6px;font-size:13px;font-weight:500;border:1px solid transparent;transition:all .15s;white-space:nowrap}
+.btn-primary{background:var(--primary-dark);color:#fff;border-color:var(--primary)}
+.btn-primary:hover{background:#388bfd}
+.btn-secondary{background:var(--surface2);color:var(--text);border-color:var(--border)}
+.btn-secondary:hover{border-color:var(--text2)}
+.btn-danger{background:rgba(248,81,73,.15);color:var(--danger);border-color:rgba(248,81,73,.3)}
+.btn-danger:hover{background:rgba(248,81,73,.25)}
+.btn-sm{padding:4px 10px;font-size:12px}
+.btn-icon{background:none;border:none;color:var(--text2);padding:4px 6px;border-radius:4px}
+.btn-icon:hover{background:var(--surface2);color:var(--text)}
+
+/* ─── Filter bar ────────────────────────────────────────────────────────── */
+.filter-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+.filter-bar select{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:6px 28px 6px 10px;border-radius:6px;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;cursor:pointer;outline:none}
+.filter-bar select:focus{border-color:var(--primary)}
+.filter-count{font-size:12px;color:var(--text2);margin-left:auto}
+
+/* ─── Requirements table ─────────────────────────────────────────────────── */
+.req-table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.req-table{width:100%;border-collapse:collapse;font-size:13px}
+.req-table th{background:var(--surface2);padding:10px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border);white-space:nowrap}
+.req-table td{padding:9px 12px;border-bottom:1px solid rgba(48,54,61,.6);vertical-align:middle}
+.req-table tr:last-child td{border-bottom:none}
+.req-table tr:hover td{background:rgba(255,255,255,.025);cursor:pointer}
+.req-row-pir td{background:rgba(88,166,255,.04)}
+.req-row-eei td{background:rgba(188,140,255,.025)}
+.req-text-cell{max-width:560px}
+.req-text{overflow:hidden;text-overflow:ellipsis;white-space:normal;word-break:break-word}
+.req-id-badge{font-size:11px;font-weight:600;color:var(--text2);white-space:nowrap}
+.indent-1{padding-left:28px!important}
+.indent-2{padding-left:52px!important}
+.expand-btn{background:none;border:none;color:var(--text2);padding:0 4px;font-size:11px;cursor:pointer;transition:transform .15s;flex-shrink:0}
+.expand-btn.open{transform:rotate(90deg)}
+
+/* ─── Matrix view ───────────────────────────────────────────────────────── */
+.matrix-container{display:flex;flex-direction:column;height:100%;gap:16px}
+.matrix-wrap{overflow:auto;flex:1;min-height:0}
+.matrix-table{border-collapse:collapse;font-size:12px;white-space:nowrap}
+.matrix-table th,.matrix-table td{border:1px solid var(--border);padding:6px 10px}
+.matrix-table th{background:var(--surface2);color:var(--text2);font-weight:600;text-align:center;position:sticky;top:0;z-index:2}
+.matrix-table th.cat-header{font-size:11px;letter-spacing:.4px;text-transform:uppercase}
+.matrix-table td.req-col{position:sticky;left:0;background:var(--surface);z-index:1;width:var(--req-col-w,475px);min-width:var(--req-col-w,475px);max-width:none}
+.req-col-resize{position:absolute;right:0;top:0;bottom:0;width:6px;cursor:col-resize;background:transparent;z-index:4}
+.req-col-resize:hover,.req-col-resize.dragging{background:var(--primary);opacity:.5}
+.matrix-table tr:hover td{background:rgba(255,255,255,.02)}
+.cov-cell{text-align:center;cursor:default}
+.cov-yes{background:rgba(63,185,80,.12);color:var(--success)}
+.cov-no{color:rgba(139,148,158,.3)}
+.cov-osint{background:rgba(88,166,255,.1)}
+.cov-fintel{background:rgba(188,140,255,.1)}
+.cov-techint{background:rgba(79,193,233,.1)}
+.cov-sharing{background:rgba(168,255,120,.1)}
+.col-osint{border-top:2px solid var(--osint)!important}
+.col-fintel{border-top:2px solid var(--fintel)!important}
+.col-techint{border-top:2px solid var(--techint)!important}
+.col-sharing{border-top:2px solid var(--sharing)!important}
+
+/* ─── Modal (detail drawer) ──────────────────────────────────────────────── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;display:flex;justify-content:flex-end}
+.drawer{width:min(600px,95vw);background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;animation:slideIn .2s ease}
+@keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+.drawer-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0}
+.drawer-header h2{flex:1;font-size:15px;font-weight:600}
+.drawer-body{flex:1;overflow-y:auto;padding:20px}
+.drawer-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;flex-shrink:0}
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:12px;color:var(--text2);margin-bottom:6px;font-weight:500;text-transform:uppercase;letter-spacing:.3px}
+.form-control{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:6px;outline:none}
+.form-control:focus{border-color:var(--primary)}
+textarea.form-control{resize:vertical;min-height:80px}
+.section-title{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin:20px 0 12px;display:flex;align-items:center;gap:8px}
+.section-title::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* ─── Source coverage grid in drawer ────────────────────────────────────── */
+.sources-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.source-item{display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;cursor:pointer;transition:border-color .15s}
+.source-item.covered{border-color:rgba(63,185,80,.4);background:rgba(63,185,80,.06)}
+.source-item:hover{border-color:var(--primary)}
+.source-dot{width:8px;height:8px;border-radius:50%;background:var(--border);flex-shrink:0}
+.source-item.covered .source-dot{background:var(--success)}
+.source-name{font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.source-val{font-size:11px;color:var(--text2);flex-shrink:0;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ─── Sources category separators ─────────────────────────────────────── */
+.cat-sep{grid-column:1/-1;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-top:8px;padding-bottom:4px;border-bottom:1px solid var(--border)}
+
+/* ─── Coverage modal ─────────────────────────────────────────────────────── */
+.cov-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;display:flex;align-items:center;justify-content:center}
+.cov-modal{background:var(--surface);border:1px solid var(--border);border-radius:10px;width:min(480px,95vw);padding:0;overflow:hidden}
+.cov-modal-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.cov-modal-header h3{flex:1;font-size:14px;font-weight:600}
+.cov-modal-body{padding:18px}
+.cov-modal-footer{padding:12px 18px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+
+/* ─── Admin panels ───────────────────────────────────────────────────────── */
+.user-table{width:100%;border-collapse:collapse;font-size:13px}
+.user-table th{background:var(--surface2);padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border)}
+.user-table td{padding:9px 12px;border-bottom:1px solid rgba(48,54,61,.6)}
+.user-table tr:last-child td{border-bottom:none}
+
+/* ─── Toast ──────────────────────────────────────────────────────────────── */
+#toast-container{position:fixed;top:16px;right:16px;z-index:999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 16px;font-size:13px;display:flex;align-items:center;gap:10px;min-width:240px;max-width:360px;pointer-events:all;animation:toastIn .2s ease}
+.toast-success{border-left:3px solid var(--success)}
+.toast-error{border-left:3px solid var(--danger)}
+.toast-info{border-left:3px solid var(--primary)}
+@keyframes toastIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+
+/* ─── Progress bar ──────────────────────────────────────────────────────── */
+.progress{height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;margin-top:6px}
+.progress-bar{height:100%;border-radius:3px;transition:width .4s}
+
+/* ─── Empty state ───────────────────────────────────────────────────────── */
+.empty-state{text-align:center;padding:60px 20px;color:var(--text2)}
+.empty-state svg{opacity:.3;margin-bottom:12px}
+.empty-state p{font-size:15px;margin-bottom:4px;color:var(--text)}
+.empty-state small{font-size:13px}
+
+/* ─── Loading ────────────────────────────────────────────────────────────── */
+.spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-overlay{display:flex;align-items:center;justify-content:center;padding:60px}
+
+/* ─── Utility ────────────────────────────────────────────────────────────── */
+.hidden{display:none!important}
+.text-muted{color:var(--text2)}
+.text-danger{color:var(--danger)}
+.text-success{color:var(--success)}
+.mt-4{margin-top:16px}
+.mb-2{margin-bottom:8px}
+.flex{display:flex}.gap-2{gap:8px}.items-center{align-items:center}.justify-between{justify-content:space-between}
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════
+     SHELL
+═══════════════════════════════════════════════════════ -->
+<div id="shell">
+
+  <!-- SIDEBAR -->
+  <aside id="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-title">&#9679; PIR Management</div>
+      <div class="brand-sub">Collection Requirements</div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-item active" data-view="dashboard" onclick="navigate('dashboard')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </div>
+      <div class="nav-item" data-view="matrix" onclick="navigate('matrix')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+        Coverage Matrix
+      </div>
+      <div class="nav-item" data-view="requirements" onclick="navigate('requirements')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+        Requirements
+      </div>
+      <div class="nav-item" data-view="gaps" onclick="navigate('gaps')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        Coverage Gaps
+      </div>
+      <div class="nav-item hidden" data-view="audit" id="nav-audit" onclick="navigate('audit')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Audit Log
+      </div>
+      <div class="nav-item hidden" data-view="admin" id="nav-admin" onclick="navigate('admin')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+        User Admin
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-chip">
+        <div class="avatar" id="user-avatar">?</div>
+        <div class="user-info">
+          <div class="user-name" id="user-name">Loading…</div>
+          <div class="user-role" id="user-role"></div>
+        </div>
+        <button class="btn-icon" title="Change Password" onclick="openChangePasswordModal()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        </button>
+        <button class="btn-logout" title="Logout" onclick="logout()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div id="main">
+    <div id="topbar">
+      <h1 id="page-title">Dashboard</h1>
+      <div class="search-wrap" id="search-wrap">
+        <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="global-search" placeholder="Search requirements…" oninput="onSearch(this.value)">
+      </div>
+    </div>
+    <div id="content">
+      <div class="loading-overlay"><div class="spinner"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL DRAWER -->
+<div id="drawer-overlay" class="overlay hidden" onclick="closeDrawer(event)">
+  <div class="drawer" onclick="event.stopPropagation()">
+    <div class="drawer-header">
+      <span id="drawer-type-badge"></span>
+      <h2 id="drawer-title">Loading…</h2>
+      <button class="btn-icon" onclick="closeDrawer()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="drawer-body" id="drawer-body"></div>
+    <div class="drawer-footer">
+      <button class="btn btn-secondary btn-sm" onclick="closeDrawer()">Close</button>
+      <button class="btn btn-primary btn-sm" id="drawer-save-btn" onclick="saveDrawer()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- COVERAGE EDIT MODAL -->
+<div id="cov-modal-overlay" class="cov-modal-overlay hidden">
+  <div class="cov-modal" style="width:min(540px,95vw)">
+    <div class="cov-modal-header">
+      <h3 id="cov-modal-title">Edit Coverage</h3>
+      <button class="btn-icon" onclick="closeCovModal()">✕</button>
+    </div>
+    <div class="cov-modal-body">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:14px" id="cov-modal-subtitle"></div>
+      <div class="form-group">
+        <label>Coverage Status / Notes</label>
+        <input type="text" id="cov-modal-input" class="form-control" placeholder="e.g. Confirmed, Partial — or leave empty to clear">
+      </div>
+      <div class="form-group">
+        <label>Detection Logic</label>
+        <textarea id="cov-modal-logic" class="form-control" rows="6"
+          placeholder="Describe the specific query, rule, or detection logic used to collect against this requirement from this source…"></textarea>
+      </div>
+    </div>
+    <div class="cov-modal-footer">
+      <button class="btn btn-danger btn-sm" onclick="saveCovModal(null)">Clear Coverage</button>
+      <button class="btn btn-secondary btn-sm" onclick="closeCovModal()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveCovModal()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD REQUIREMENT MODAL -->
+<div id="req-modal-overlay" class="cov-modal-overlay hidden">
+  <div class="cov-modal" style="width:min(500px,95vw)">
+    <div class="cov-modal-header">
+      <span id="req-modal-type-badge" class="badge badge-pir">PIR</span>
+      <h3 id="req-modal-title" style="margin-left:8px">Add New PIR</h3>
+      <button class="btn-icon" onclick="closeReqModal()" style="margin-left:auto">&#10005;</button>
+    </div>
+    <div class="cov-modal-body">
+      <div class="form-group hidden" id="req-modal-parent-group">
+        <label id="req-modal-parent-label">Parent PIR</label>
+        <select id="req-modal-parent" class="form-control"></select>
+      </div>
+      <div class="form-group">
+        <label>Requirement ID <span style="font-weight:400;color:var(--text2)">(auto-generated, editable)</span></label>
+        <input id="req-modal-id" class="form-control" placeholder="e.g. PIR-015">
+      </div>
+      <div class="form-group">
+        <label>Requirement Text</label>
+        <textarea id="req-modal-text" class="form-control" rows="4"
+          placeholder="Describe the requirement&#8230; (Ctrl+Enter to submit)"
+          onkeydown="if(event.ctrlKey&&event.key==='Enter')submitReqModal()"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <select id="req-modal-status" class="form-control">
+          <option value="Active">Active</option>
+          <option value="Inactive">Inactive</option>
+        </select>
+      </div>
+    </div>
+    <div class="cov-modal-footer">
+      <button class="btn btn-secondary btn-sm" onclick="closeReqModal()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="submitReqModal()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- PASSWORD CHANGE MODAL -->
+<div id="password-modal-overlay" class="cov-modal-overlay hidden">
+  <div class="cov-modal" style="width:min(420px,95vw)">
+    <div class="cov-modal-header">
+      <h3>Change Password</h3>
+      <button class="btn-icon" onclick="closeChangePasswordModal()">✕</button>
+    </div>
+    <div class="cov-modal-body">
+      <div class="error-msg" id="password-error-msg" style="display:none;background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:var(--danger);padding:9px 12px;border-radius:6px;font-size:13px;margin-bottom:14px"></div>
+      <div class="form-group">
+        <label>Current Password</label>
+        <input type="password" id="old-password" class="form-control" placeholder="Enter current password">
+      </div>
+      <div class="form-group">
+        <label>New Password</label>
+        <input type="password" id="new-password" class="form-control" placeholder="At least 8 characters">
+      </div>
+      <div class="form-group">
+        <label>Confirm New Password</label>
+        <input type="password" id="confirm-password" class="form-control" placeholder="Re-enter new password" onkeydown="if(event.key==='Enter')changePassword()">
+      </div>
+    </div>
+    <div class="cov-modal-footer">
+      <button class="btn btn-secondary btn-sm" onclick="closeChangePasswordModal()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="changePassword()">Change Password</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div id="toast-container"></div>
+
+<!-- ════════════════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════════════════ -->
+<script>
+// ─── State ──────────────────────────────────────────────────────────────────
+const state = {
+  user:     null,
+  view:     'dashboard',
+  stats:    null,
+  matrix:   null,
+  reqs:     [],
+  sources:  [],
+  filters:  { type: '', status: '', priority: '', owner: '' },
+  search:   '',
+  drawerReq:  null,
+  drawerDirty: false,
+  covModal: { reqId: null, sourceName: null },
+  covCellData: {},  // key: 'reqId:sourceName' → {coverage_value, detection_logic}
+  expandedPirs: new Set(),
+  expandedEeis: new Set(),
+  matrixExpandedPirs: new Set(),
+  matrixExpandedEeis: new Set(),
+  expandedEeis: new Set(),
+  matrixExpandedPirs: new Set(),
+  matrixExpandedEeis: new Set(),
+  matrixSearch: '',
+  matrixFilters: { priority: '', status: '' },
+  csrfToken: '',  // CSRF token for state-changing operations
+};
+
+// ─── API helpers ────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  // Add CSRF token for state-changing operations
+  if (method !== 'GET' && state.csrfToken) {
+    opts.headers['X-CSRF-Token'] = state.csrfToken;
+  }
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(path, opts);
+  if (res.status === 401) { window.location.href = '/login'; return null; }
+  if (res.status === 403) {
+    const data = await res.json().catch(() => ({}));
+    if (data.error && data.error.includes('security token')) {
+      toast('Session expired. Please login again.', 'error');
+      window.location.href = '/login';
+      return null;
+    }
+  }
+  const ct = res.headers.get('Content-Type') || '';
+  if (ct.includes('application/json')) return res.json();
+  return null;
+}
+const GET    = (p)    => api('GET',    p);
+const POST   = (p, b) => api('POST',   p, b);
+const PUT    = (p, b) => api('PUT',    p, b);
+const DELETE = (p)    => api('DELETE', p);
+
+// ─── Toast notifications ────────────────────────────────────────────────────
+function toast(msg, type = 'info') {
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ─── Navigation ─────────────────────────────────────────────────────────────
+function navigate(view) {
+  state.view = view;
+  document.querySelectorAll('.nav-item').forEach(n =>
+    n.classList.toggle('active', n.dataset.view === view));
+  const titles = { dashboard: 'Dashboard', matrix: 'Coverage Matrix',
+                   requirements: 'Requirements', admin: 'User Administration' };
+  document.getElementById('page-title').textContent = titles[view] || view;
+  document.getElementById('search-wrap').classList.toggle('hidden', view !== 'requirements');
+  renderView(view);
+}
+
+// ─── Init ────────────────────────────────────────────────────────────────────
+async function init() {
+  const me = await GET('/api/auth/me');
+  if (!me) return;
+  state.user = me;
+  state.csrfToken = me.csrf_token || '';  // Store CSRF token
+  document.getElementById('user-name').textContent = me.username;
+  document.getElementById('user-role').textContent = me.role;
+  document.getElementById('user-avatar').textContent = me.username[0].toUpperCase();
+  if (me.role === 'admin') {
+    document.getElementById('nav-admin').classList.remove('hidden');
+    document.getElementById('nav-audit').classList.remove('hidden');
+  }
+  // Load sources metadata
+  const srcData = await GET('/api/sources');
+  if (srcData) state.sources = normaliseSources(srcData.sources);
+  navigate('dashboard');
+}
+
+async function logout() {
+  await POST('/api/auth/logout');
+  window.location.href = '/login';
+}
+
+function openChangePasswordModal() {
+  document.getElementById('password-modal-overlay').classList.remove('hidden');
+  document.getElementById('old-password').value = '';
+  document.getElementById('new-password').value = '';
+  document.getElementById('confirm-password').value = '';
+  document.getElementById('password-error-msg').style.display = 'none';
+  setTimeout(() => document.getElementById('old-password').focus(), 100);
+}
+
+function closeChangePasswordModal() {
+  document.getElementById('password-modal-overlay').classList.add('hidden');
+}
+
+async function changePassword() {
+  const oldPassword = document.getElementById('old-password').value;
+  const newPassword = document.getElementById('new-password').value;
+  const confirmPassword = document.getElementById('confirm-password').value;
+  const errEl = document.getElementById('password-error-msg');
+  
+  errEl.style.display = 'none';
+  
+  if (!oldPassword || !newPassword || !confirmPassword) {
+    errEl.textContent = 'All fields are required';
+    errEl.style.display = 'block';
+    return;
+  }
+  
+  if (newPassword !== confirmPassword) {
+    errEl.textContent = 'New passwords do not match';
+    errEl.style.display = 'block';
+    return;
+  }
+  
+  if (newPassword.length < 8) {
+    errEl.textContent = 'Password must be at least 8 characters';
+    errEl.style.display = 'block';
+    return;
+  }
+  
+  const result = await POST('/api/auth/change-password', {
+    old_password: oldPassword,
+    new_password: newPassword
+  });
+  
+  if (result && result.ok) {
+    toast('Password changed successfully', 'success');
+    closeChangePasswordModal();
+  } else {
+    errEl.textContent = result?.error || 'Failed to change password';
+    errEl.style.display = 'block';
+  }
+}
+
+// ─── View dispatcher ─────────────────────────────────────────────────────────
+async function renderView(view) {
+  const content = document.getElementById('content');
+  content.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
+  if (view === 'dashboard')    await renderDashboard();
+  else if (view === 'matrix')  await renderMatrix();
+  else if (view === 'requirements') await renderRequirements();
+  else if (view === 'gaps')    await renderGaps();
+  else if (view === 'audit')   await renderAudit();
+  else if (view === 'admin')   await renderAdmin();
+}
+
+// ─── DASHBOARD ───────────────────────────────────────────────────────────────
+async function renderDashboard() {
+  const [stats, gapData] = await Promise.all([GET('/api/stats'), GET('/api/gaps')]);
+  if (!stats) return;
+  state.stats = stats;
+  const total = stats.total_requirements || 1;
+  const gapCount = gapData ? gapData.gaps.length : 0;
+  const uncovSirs = gapData ? gapData.uncovered_sirs : 0;
+  const totSirs   = gapData ? gapData.total_sirs : 0;
+  const covPct    = totSirs > 0 ? Math.round((gapData.covered_sirs / totSirs) * 100) : 0;
+  document.getElementById('content').innerHTML = `
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px">
+      <a href="/api/export/requirements" class="btn btn-secondary btn-sm" download>⬇ Export Requirements CSV</a>
+      <a href="/api/export/matrix" class="btn btn-secondary btn-sm" download>⬇ Export Matrix CSV</a>
+    </div>
+    <div class="grid-4 mb-2" style="margin-bottom:16px">
+      ${statCard('PIRs', stats.pir_count,'Priority Intelligence Requirements','badge-pir')}
+      ${statCard('EEIs', stats.eei_count,'Essential Elements of Information','badge-eei')}
+      ${statCard('SIRs', stats.sir_count,'Specific Intelligence Requirements','badge-sir')}
+      ${statCard('Covered', stats.covered_count,'Requirements with source coverage','badge-active')}
+    </div>
+    <div class="grid-2" style="margin-bottom:16px">
+      <div class="card">
+        <div class="card-title">Status Distribution</div>
+        ${progressRow('Active', stats.active_count, total, 'var(--success)')}
+        ${progressRow('Inactive', stats.inactive_count, total, 'var(--text2)')}
+      </div>
+      <div class="card">
+        <div class="card-title">Priority Breakdown</div>
+        ${progressRow('Critical', stats.priority_critical, total, 'var(--critical)')}
+        ${progressRow('High',     stats.priority_high,     total, 'var(--high)')}
+        ${progressRow('Medium',   stats.priority_medium,   total, 'var(--medium)')}
+        ${progressRow('Low',      stats.priority_low,      total, 'var(--low)')}
+      </div>
+    </div>
+    <div class="grid-2" style="margin-bottom:16px">
+      <div class="card">
+        <div class="card-title">SIR Coverage</div>
+        ${progressRow('Covered', gapData ? gapData.covered_sirs : 0, totSirs || 1, 'var(--success)')}
+        ${progressRow('Uncovered', uncovSirs, totSirs || 1, 'var(--critical)')}
+        <div style="margin-top:8px;font-size:13px;color:var(--text2)">${covPct}% of SIRs have at least one source mapped</div>
+      </div>
+      <div class="card" style="cursor:pointer" onclick="navigate('gaps')">
+        <div class="card-title">Coverage Gaps <span style="float:right;font-size:11px;color:var(--primary)">View all →</span></div>
+        <div style="font-size:32px;font-weight:700;color:${gapCount>0?'var(--critical)':'var(--success)'};margin:8px 0">${gapCount}</div>
+        <div style="font-size:13px;color:var(--text2)">EEI${gapCount!==1?'s':''} with uncovered SIRs or no source mapped</div>
+        ${gapCount > 0 ? `<div style="margin-top:8px;font-size:12px;color:var(--warning)">${uncovSirs} SIR${uncovSirs!==1?'s':''} with zero coverage</div>` : '<div style="margin-top:8px;font-size:12px;color:var(--success)">✓ All requirements have coverage</div>'}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Collection Owners</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">
+        ${(stats.owners||[]).map(o=>`<span class="badge" style="background:var(--surface2);color:var(--text)">${e(o)}</span>`).join('')}
+      </div>
+    </div>`;
+}
+
+function statCard(label, value, sub, badgeClass) {
+  return `<div class="stat-card">
+    <div class="stat-label">${label}</div>
+    <div class="stat-value">${value}</div>
+    <div class="stat-sub">${sub}</div>
+  </div>`;
+}
+function progressRow(label, val, total, color) {
+  const pct = total > 0 ? Math.round(val/total*100) : 0;
+  return `<div style="margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+      <span>${label}</span><span style="color:var(--text2)">${val} (${pct}%)</span>
+    </div>
+    <div class="progress"><div class="progress-bar" style="width:${pct}%;background:${color}"></div></div>
+  </div>`;
+}
+
+// ─── REQUIREMENTS LIST ────────────────────────────────────────────────────────
+async function renderRequirements() {
+  await loadRequirements();
+}
+
+async function loadRequirements() {
+  const f = state.filters;
+  const q = state.search;
+  let url = '/api/requirements?';
+  const parts = [];
+  if (f.type)     parts.push('type='     + encodeURIComponent(f.type));
+  if (f.status)   parts.push('status='   + encodeURIComponent(f.status));
+  if (f.priority) parts.push('priority=' + encodeURIComponent(f.priority));
+  if (f.owner)    parts.push('owner='    + encodeURIComponent(f.owner));
+  if (q)          parts.push('q='        + encodeURIComponent(q));
+  url += parts.join('&');
+
+  const reqs = await GET(url);
+  if (!reqs) return;
+  state.reqs = reqs;
+
+  // Build filter options
+  const owners = [...new Set(reqs.map(r=>r.primary_owner).filter(Boolean))].sort();
+
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <div class="filter-bar">
+      <select onchange="setFilter('type',this.value)">
+        <option value="">All Types</option>
+        <option value="PIR" ${f.type==='PIR'?'selected':''}>PIR</option>
+        <option value="EEI" ${f.type==='EEI'?'selected':''}>EEI</option>
+        <option value="SIR" ${f.type==='SIR'?'selected':''}>SIR</option>
+      </select>
+      <select onchange="setFilter('priority',this.value)">
+        <option value="">All Priorities</option>
+        ${['Critical','High','Medium','Low'].map(p=>`<option value="${p}" ${f.priority===p?'selected':''}>${p}</option>`).join('')}
+      </select>
+      <select onchange="setFilter('status',this.value)">
+        <option value="">All Statuses</option>
+        <option value="Active"   ${f.status==='Active'  ?'selected':''}>Active</option>
+        <option value="Inactive" ${f.status==='Inactive'?'selected':''}>Inactive</option>
+      </select>
+      <select onchange="setFilter('owner',this.value)">
+        <option value="">All Owners</option>
+        ${owners.map(o=>`<option value="${o}" ${f.owner===o?'selected':''}>${e(o)}</option>`).join('')}
+      </select>
+      <span class="filter-count">${reqs.length} requirement${reqs.length!==1?'s':''}</span>
+      ${state.user && state.user.role !== 'viewer' ? `<button class="btn btn-primary btn-sm" style="margin-left:8px" onclick="openAddReqModal('PIR',null)">+ New PIR</button>` : ''}
+    </div>
+    ${buildReqTable(reqs)}`;
+}
+
+function buildReqTable(reqs) {
+  if (!reqs.length) return `<div class="empty-state">
+    <p>No requirements found</p><small>Try adjusting your filters</small></div>`;
+
+  // Group: PIRs → EEIs → SIRs (if not filtered by type)
+  const flat = state.filters.type ? reqs : null;
+
+  if (flat) {
+    // Flat view for filtered results
+    return `<div class="req-table-wrap"><table class="req-table">
+      <thead><tr>
+        <th>ID</th><th>Requirement</th><th>Priority</th>
+        <th>Owner</th><th>Frequency</th><th>Status</th>
+      </tr></thead>
+      <tbody>${reqs.map(r => reqRow(r, 0)).join('')}</tbody>
+    </table></div>`;
+  }
+
+  // Hierarchical view
+  const pirMap = {}, eeiMap = {}, pirList = [];
+  const canEdit = state.user && state.user.role !== 'viewer';
+  const isAdmin = state.user && state.user.role === 'admin';
+  reqs.forEach(r => {
+    if (r.req_type === 'PIR') { pirMap[r.req_id] = r; pirList.push(r.req_id); }
+    else if (r.req_type === 'EEI') {
+      if (!eeiMap[r.parent_id]) eeiMap[r.parent_id] = [];
+      eeiMap[r.parent_id].push(r);
+    }
+  });
+  const sirByEei = {};
+  reqs.forEach(r => {
+    if (r.req_type === 'SIR') {
+      if (!sirByEei[r.parent_id]) sirByEei[r.parent_id] = [];
+      sirByEei[r.parent_id].push(r);
+    }
+  });
+
+  let rows = '';
+  pirList.forEach(pirId => {
+    const pir = pirMap[pirId];
+    const pirOpen = state.expandedPirs.has(pirId);
+    rows += `<tr class="req-row-pir" onclick="togglePir('${pirId}')">
+      <td style="width:32px"><button class="expand-btn ${pirOpen?'open':''}" id="pir-btn-${pirId}">&#9654;</button></td>
+      <td colspan="5">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="badge badge-pir">${e(pir.req_id)}</span>
+          <span style="font-weight:600;flex:1;overflow:hidden;word-break:break-word;white-space:normal">${e(pir.req_text.replace(/^PIR-\w+:\s*/,''))}</span>
+          ${priorityBadge(pir.priority)}
+          <span class="badge badge-${(pir.status||'active').toLowerCase()}">${e(pir.status||'')}</span>
+          ${canEdit ? `<button class="btn btn-secondary btn-sm" title="Add EEI under ${e(pirId)}" onclick="event.stopPropagation();openAddReqModal('EEI','${esc(pirId)}')">+ EEI</button>` : ''}
+          ${isAdmin  ? `<button class="btn btn-danger btn-sm"    title="Delete ${e(pirId)}"          onclick="deleteReq('${esc(pirId)}',event)">&#10005;</button>` : ''}
+        </div>
+      </td>
+    </tr>`;
+    if (pirOpen) {
+      const eeisForPir = eeiMap[pirId] || [];
+      eeisForPir.forEach(eei => {
+        const eeiId   = eei.req_id;
+        const eeiOpen = state.expandedEeis.has(eeiId);
+        rows += `<tr class="req-row-eei" onclick="openDrawer('${esc(eeiId)}')">
+          <td style="width:32px" onclick="event.stopPropagation();toggleEei('${esc(eeiId)}')"><button class="expand-btn ${eeiOpen?'open':''}" id="eei-btn-${eeiId}">&#9654;</button></td>
+          <td class="indent-1" colspan="4">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="badge badge-eei">${e(eei.req_id)}</span>
+              <span style="word-break:break-word;white-space:normal">${e(eei.req_text.replace(/^EEI-[\d.]+:\s*/,''))}</span>
+              ${priorityBadge(eei.priority)}
+              ${canEdit ? `<button class="btn btn-secondary btn-sm" title="Add SIR under ${e(eeiId)}" onclick="event.stopPropagation();openAddReqModal('SIR','${esc(eeiId)}')" style="margin-left:4px">+ SIR</button>` : ''}
+            </div>
+          </td>
+          <td style="white-space:nowrap" onclick="event.stopPropagation()">
+            ${e(eei.primary_owner||'')}
+            ${isAdmin ? `<button class="btn btn-danger btn-sm" style="margin-left:6px" title="Delete ${e(eeiId)}" onclick="deleteReq('${esc(eeiId)}',event)">&#10005;</button>` : ''}
+          </td>
+        </tr>`;
+        if (eeiOpen) {
+          (sirByEei[eeiId] || []).forEach(sir => {
+            rows += `<tr onclick="openDrawer('${sir.req_id}')">
+              <td></td>
+              <td class="indent-2 req-text-cell" colspan="2">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span class="req-id-badge">${e(sir.req_id)}</span>
+                  <span class="req-text">${e(sir.req_text.replace(/^SIR-[\d.]+:\s*/,''))}</span>
+                </div>
+              </td>
+              <td>${priorityBadge(sir.priority)}</td>
+              <td style="white-space:nowrap">${e(sir.primary_owner||'')} ${isAdmin ? `<button class="btn btn-danger btn-sm" style="margin-left:4px" title="Delete ${e(sir.req_id)}" onclick="deleteReq('${esc(sir.req_id)}',event)">&#10005;</button>` : ''}</td>
+              <td>${e(sir.collection_frequency||'')}</td>
+              <td><span class="badge badge-${(sir.status||'active').toLowerCase()}">${e(sir.status||'')}</span></td>
+            </tr>`;
+          });
+        }
+      });
+    }
+  });
+
+  return `<div class="req-table-wrap"><table class="req-table">
+    <thead><tr>
+      <th style="width:32px"></th><th>Requirement</th>
+      <th>Priority</th><th>Owner</th><th>Frequency</th><th>Status</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+function reqRow(r, indent) {
+  return `<tr onclick="openDrawer('${r.req_id}')">
+    <td><span class="req-id-badge">${e(r.req_id)}</span></td>
+    <td class="req-text-cell"><span class="req-text" style="padding-left:${indent*24}px">${e(r.req_text)}</span></td>
+    <td>${priorityBadge(r.priority)}</td>
+    <td>${e(r.primary_owner||'')}</td>
+    <td>${e(r.collection_frequency||'')}</td>
+    <td><span class="badge badge-${(r.status||'active').toLowerCase()}">${e(r.status||'')}</span></td>
+  </tr>`;
+}
+
+function togglePir(pirId) {
+  if (state.expandedPirs.has(pirId)) state.expandedPirs.delete(pirId);
+  else state.expandedPirs.add(pirId);
+  loadRequirements();
+}
+function toggleEei(eeiId) {
+  if (state.expandedEeis.has(eeiId)) state.expandedEeis.delete(eeiId);
+  else state.expandedEeis.add(eeiId);
+  loadRequirements();
+}
+function setFilter(key, val) {
+  state.filters[key] = val;
+  loadRequirements();
+}
+let searchTimer;
+function onSearch(val) {
+  state.search = val;
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(loadRequirements, 300);
+}
+
+// ─── COVERAGE MATRIX ─────────────────────────────────────────────────────────
+async function renderMatrix() {
+  const data = await GET('/api/matrix');
+  if (!data) return;
+  state.matrix = data;
+  // Default: all PIRs expanded, all EEIs collapsed, no filters
+  state.matrixExpandedPirs = new Set(
+    data.requirements.filter(r => r.req_type === 'PIR').map(r => r.req_id)
+  );
+  state.matrixExpandedEeis = new Set();
+  state.matrixSearch = '';
+  state.matrixFilters = { priority: '', status: '' };
+
+  document.getElementById('content').innerHTML = `
+    <div class="matrix-container">
+      <div class="filter-bar">
+        <div style="position:relative;display:flex;align-items:center">
+          <svg style="position:absolute;left:9px;color:var(--text2);pointer-events:none" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="matrix-search" placeholder="Search requirements…"
+            style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:6px 10px 6px 30px;border-radius:6px;width:240px;outline:none;font-size:13px"
+            oninput="onMatrixSearch(this.value)">
+        </div>
+        <select id="matrix-filter-priority" onchange="setMatrixFilter('priority',this.value)">
+          <option value="">All Priorities</option>
+          ${['Critical','High','Medium','Low'].map(p=>`<option value="${p}">${p}</option>`).join('')}
+        </select>
+        <select id="matrix-filter-status" onchange="setMatrixFilter('status',this.value)">
+          <option value="">All Statuses</option>
+          <option value="Active">Active</option>
+          <option value="Inactive">Inactive</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" id="matrix-expand-btn" onclick="toggleAllMatrixPirs()">Collapse All</button>
+        <span class="filter-count" id="matrix-count"></span>
+      </div>
+      <div id="matrix-content"></div>
+    </div>`;
+
+  _drawMatrix();
+}
+
+// Normalise sources: handles both plain-string list (new) and
+// legacy tuple/array format [[col, name, cat], ...] (old server).
+function normaliseSources(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.map(s => Array.isArray(s) ? s[1] : s);
+}
+
+async function _reloadMatrixData() {
+  const data = await GET('/api/matrix');
+  if (!data) return;
+  state.matrix = data;
+  _drawMatrix();
+}
+
+function _covCell(reqId, srcName, cellData) {
+  // cellData may be {coverage_value, detection_logic} object or null/undefined
+  const val   = (cellData && typeof cellData === 'object') ? cellData.coverage_value : cellData;
+  const logic = (cellData && typeof cellData === 'object') ? cellData.detection_logic : null;
+  const cls   = val ? 'cov-yes' : 'cov-no';
+  const tip   = [val, logic ? `Logic: ${logic}` : ''].filter(Boolean).join('\n');
+  const ta    = tip ? `title="${e(tip)}"` : '';
+  // Store data in state so onclick doesn't need embedded JSON
+  state.covCellData[`${reqId}:${srcName}`] = cellData || null;
+  const dot   = val ? (logic ? '&#9632;' : '&#9679;') : '&#9675;';
+  return `<td class="cov-cell ${cls}" ${ta} onclick="openCovModal('${esc(reqId)}','${esc(srcName)}')">${dot}</td>`;
+}
+
+function _drawMatrix() {
+  if (!state.matrix) return;
+  const el = document.getElementById('matrix-content');
+  if (!el) return;
+
+  const { requirements } = state.matrix;
+  const sources = normaliseSources(state.matrix.sources);
+  const hasFilter = !!(state.matrixSearch || state.matrixFilters.priority || state.matrixFilters.status);
+
+  const pirList=[], pirMap={}, eeiMap={}, eeisByPir={}, sirsByEei={};
+  requirements.forEach(r => {
+    if      (r.req_type==='PIR') { pirMap[r.req_id]=r; pirList.push(r.req_id); }
+    else if (r.req_type==='EEI') { eeiMap[r.req_id]=r; (eeisByPir[r.parent_id]=eeisByPir[r.parent_id]||[]).push(r.req_id); }
+    else if (r.req_type==='SIR') { (sirsByEei[r.parent_id]=sirsByEei[r.parent_id]||[]).push(r); }
+  });
+
+  function matches(r) {
+    const {priority,status} = state.matrixFilters;
+    if (priority && r.priority!==priority) return false;
+    if (status   && r.status  !==status)   return false;
+    if (state.matrixSearch) {
+      const q = state.matrixSearch.toLowerCase();
+      if (!r.req_id.toLowerCase().includes(q) && !r.req_text.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  }
+
+  let rows = '', visibleCount = 0;
+  pirList.forEach(pirId => {
+    const pir = pirMap[pirId];
+    const pirEeis = eeisByPir[pirId] || [];
+    if (hasFilter) {
+      const any = matches(pir) || pirEeis.some(eid => matches(eeiMap[eid]) || (sirsByEei[eid]||[]).some(s=>matches(s)));
+      if (!any) return;
+    }
+    const pirOpen = hasFilter || state.matrixExpandedPirs.has(pirId);
+    const pArrow = `style="background:none;border:none;cursor:pointer;padding:0 4px;font-size:11px;transition:transform .15s;transform:rotate(${pirOpen?90:0}deg);color:var(--primary);flex-shrink:0"`;
+    visibleCount++;
+    rows += `<tr style="background:rgba(88,166,255,.07)">
+      <td class="req-col" style="padding:7px 12px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <button ${pArrow} onclick="event.stopPropagation();toggleMatrixPir('${esc(pirId)}')">&#9654;</button>
+          <span class="badge badge-pir" style="cursor:pointer;flex-shrink:0" onclick="openDrawer('${esc(pirId)}')">${e(pirId)}</span>
+          <span style="font-size:12px;font-weight:600;white-space:normal;word-break:break-word;cursor:pointer;flex:1"
+                onclick="openDrawer('${esc(pirId)}')">${e(pir.req_text)}</span>
+          ${priorityBadge(pir.priority)}
+        </div>
+      </td>${sources.map(s=>_covCell(pir.req_id,s,(pir.coverage||{})[s])).join('')}</tr>`;
+
+    if (!pirOpen) return;
+    pirEeis.forEach(eeiId => {
+      const eei = eeiMap[eeiId];
+      const eeiSirs = sirsByEei[eeiId] || [];
+      if (hasFilter && !matches(eei) && !eeiSirs.some(s=>matches(s))) return;
+      const eeiOpen = hasFilter || state.matrixExpandedEeis.has(eeiId);
+      const eArrow = `style="background:none;border:none;cursor:pointer;padding:0 4px;font-size:10px;transition:transform .15s;transform:rotate(${eeiOpen?90:0}deg);color:var(--text2);flex-shrink:0"`;
+      visibleCount++;
+      rows += `<tr style="background:rgba(188,140,255,.04)">
+        <td class="req-col" style="padding:5px 12px 5px 30px">
+          <div style="display:flex;align-items:center;gap:6px">
+            <button ${eArrow} onclick="event.stopPropagation();toggleMatrixEei('${esc(eeiId)}')">&#9654;</button>
+            <span class="badge badge-eei" style="cursor:pointer;font-size:10px;flex-shrink:0" onclick="openDrawer('${esc(eeiId)}')">${e(eeiId)}</span>
+            <span style="font-size:12px;white-space:normal;word-break:break-word;cursor:pointer;flex:1"
+                  onclick="openDrawer('${esc(eeiId)}')">${e(eei.req_text)}</span>
+          </div>
+        </td>${sources.map(s=>_covCell(eei.req_id,s,(eei.coverage||{})[s])).join('')}</tr>`;
+
+      if (!eeiOpen) return;
+      eeiSirs.forEach(sir => {
+        if (hasFilter && !matches(sir)) return;
+        visibleCount++;
+        rows += `<tr>
+          <td class="req-col" style="padding:4px 12px 4px 56px">
+            <div style="display:flex;align-items:center;gap:6px">
+              <span class="badge badge-sir" style="cursor:pointer;font-size:10px;flex-shrink:0" onclick="openDrawer('${esc(sir.req_id)}')">${e(sir.req_id)}</span>
+              <span style="font-size:11px;white-space:normal;word-break:break-word;cursor:pointer;color:var(--text2);flex:1"
+                    onclick="openDrawer('${esc(sir.req_id)}')">${e(sir.req_text)}</span>
+            </div>
+          </td>${sources.map(s=>_covCell(sir.req_id,s,(sir.coverage||{})[s])).join('')}</tr>`;
+      });
+    });
+  });
+
+  const allExpanded = pirList.every(id => state.matrixExpandedPirs.has(id));
+  const expandBtn = document.getElementById('matrix-expand-btn');
+  if (expandBtn) expandBtn.textContent = allExpanded ? 'Collapse All' : 'Expand All';
+  const countEl = document.getElementById('matrix-count');
+  if (countEl) countEl.textContent = `${visibleCount} row${visibleCount!==1?'s':''} • ${sources.length} sources`;
+
+  const srcHdr = sources.map(s =>
+    `<th style="min-width:90px;max-width:110px;font-size:11px;white-space:normal;word-break:break-word;text-align:center;background:var(--surface2);position:sticky;top:0;border:1px solid var(--border);padding:6px 4px">${e(s)}</th>`
+  ).join('');
+  el.innerHTML = `<div class="matrix-wrap">
+    <table class="matrix-table">
+      <thead><tr>
+        <th class="req-col" style="background:var(--surface2);position:sticky;top:0;left:0;z-index:3;border:1px solid var(--border);position:relative">
+          Requirement
+          <div class="req-col-resize" id="req-col-resize" title="Drag to resize"></div>
+        </th>
+        ${srcHdr}
+      </tr></thead>
+      <tbody>${rows||`<tr><td colspan="${sources.length+1}" style="text-align:center;padding:40px;color:var(--text2)">No requirements match the current filters.</td></tr>`}</tbody>
+    </table>
+  </div>`;
+  initColResize();
+}
+
+function toggleMatrixPir(pirId) {
+  if (state.matrixExpandedPirs.has(pirId)) state.matrixExpandedPirs.delete(pirId);
+  else state.matrixExpandedPirs.add(pirId);
+  _drawMatrix();
+}
+function toggleMatrixEei(eeiId) {
+  if (state.matrixExpandedEeis.has(eeiId)) state.matrixExpandedEeis.delete(eeiId);
+  else state.matrixExpandedEeis.add(eeiId);
+  _drawMatrix();
+}
+function toggleAllMatrixPirs() {
+  if (!state.matrix) return;
+  const all = state.matrix.requirements.filter(r=>r.req_type==='PIR').map(r=>r.req_id);
+  const allExp = all.every(id=>state.matrixExpandedPirs.has(id));
+  if (allExp) { state.matrixExpandedPirs=new Set(); state.matrixExpandedEeis=new Set(); }
+  else { all.forEach(id=>state.matrixExpandedPirs.add(id)); }
+  _drawMatrix();
+}
+function initColResize() {
+  const handle = document.getElementById('req-col-resize');
+  if (!handle) return;
+  let startX, startW;
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    handle.classList.add('dragging');
+    startX = e.clientX;
+    startW = parseInt(getComputedStyle(document.documentElement)
+               .getPropertyValue('--req-col-w')) || 475;
+    function onMove(e) {
+      const w = Math.max(180, startW + (e.clientX - startX));
+      document.documentElement.style.setProperty('--req-col-w', w + 'px');
+    }
+    function onUp() {
+      handle.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+let matrixSearchTimer;
+function onMatrixSearch(val) {
+  state.matrixSearch = val;
+  clearTimeout(matrixSearchTimer);
+  matrixSearchTimer = setTimeout(_drawMatrix, 250);
+}
+function setMatrixFilter(key, val) {
+  state.matrixFilters[key] = val;
+  _drawMatrix();
+}
+
+function openCovModal(reqId, sourceName) {
+  if (state.user && state.user.role === 'viewer') {
+    toast('Viewers cannot edit coverage', 'error'); return;
+  }
+  // Look up pre-stored cell data (avoids JSON in onclick attributes)
+  const cellData = state.covCellData[`${reqId}:${sourceName}`] || null;
+  const currentVal   = (cellData && typeof cellData === 'object') ? (cellData.coverage_value || '') : '';
+  const currentLogic = (cellData && typeof cellData === 'object') ? (cellData.detection_logic || '') : '';
+  state.covModal = { reqId, sourceName };
+  document.getElementById('cov-modal-title').textContent = sourceName;
+  document.getElementById('cov-modal-subtitle').textContent = `Requirement: ${reqId}`;
+  document.getElementById('cov-modal-input').value  = currentVal;
+  document.getElementById('cov-modal-logic').value  = currentLogic;
+  document.getElementById('cov-modal-overlay').classList.remove('hidden');
+  setTimeout(() => document.getElementById('cov-modal-input').focus(), 60);
+}
+function closeCovModal() {
+  document.getElementById('cov-modal-overlay').classList.add('hidden');
+}
+async function saveCovModal(value) {
+  const { reqId, sourceName } = state.covModal;
+  const isClearing = value === null;
+  const covVal   = isClearing ? null : (document.getElementById('cov-modal-input').value.trim() || null);
+  const logicVal = isClearing ? null : (document.getElementById('cov-modal-logic').value.trim() || null);
+  const coverage = {};
+  coverage[sourceName] = { coverage_value: covVal, detection_logic: logicVal };
+  const result = await PUT(`/api/requirements/${encodeURIComponent(reqId)}`, { coverage });
+  if (result) {
+    toast('Coverage updated', 'success');
+    closeCovModal();
+    if (state.view === 'matrix') await _reloadMatrixData();
+    else if (state.view === 'requirements') await loadRequirements();
+  } else {
+    toast('Failed to save', 'error');
+  }
+}
+
+// ─── DETAIL DRAWER ────────────────────────────────────────────────────────────
+async function openDrawer(reqId) {
+  const req = await GET(`/api/requirements/${encodeURIComponent(reqId)}`);
+  if (!req) { toast('Could not load requirement', 'error'); return; }
+  state.drawerReq = req;
+  state.drawerDirty = false;
+  const isReadOnly = state.user && state.user.role === 'viewer';
+  const typeCls = req.req_type.toLowerCase();
+
+  // Build coverage section — covMap stores full {coverage_value, detection_logic} objects
+  const covMap = {};
+  (req.coverage || []).forEach(c => {
+    covMap[c.source_name] = { coverage_value: c.coverage_value, detection_logic: c.detection_logic };
+  });
+
+  let covHtml = '';
+  state.sources.forEach(srcName => {
+    const cellData = covMap[srcName] || null;
+    const val   = cellData ? cellData.coverage_value : null;
+    const logic = cellData ? cellData.detection_logic : null;
+    const covered = !!val;
+    const tip   = [val, logic ? `Logic: ${logic}` : ''].filter(Boolean).join('\n');
+    // Store in state map so openCovModal can look it up without inline JSON
+    state.covCellData[`${req.req_id}:${srcName}`] = cellData;
+    covHtml += `<div class="source-item ${covered?'covered':''}"
+      onclick="${isReadOnly?'':`openCovModal('${esc(req.req_id)}','${esc(srcName)}');closeDrawer()`}"
+      title="${tip?e(tip):'Not covered'}">
+      <div class="source-dot"></div>
+      <span class="source-name">${e(srcName)}</span>
+      ${val?`<span class="source-val" title="${e(val)}">${e(val)}</span>`:''}
+      ${logic?`<span style="font-size:10px;color:var(--text2);margin-left:auto" title="Has detection logic">&#128196;</span>`:''}
+    </div>`;
+  });
+
+  const disabled = isReadOnly ? 'disabled' : '';
+  document.getElementById('drawer-type-badge').innerHTML = `<span class="badge badge-${typeCls}">${req.req_type}</span>`;
+  document.getElementById('drawer-title').textContent = req.req_id;
+  document.getElementById('drawer-save-btn').classList.toggle('hidden', isReadOnly);
+  document.getElementById('drawer-body').innerHTML = `
+    <div class="form-group">
+      <label>Requirement Text</label>
+      <textarea id="d-req-text" class="form-control" rows="4" ${disabled}>${e(req.req_text)}</textarea>
+    </div>
+    <div class="grid-2" style="gap:12px">
+      <div class="form-group">
+        <label>Priority</label>
+        <select id="d-priority" class="form-control" ${disabled}>
+          <option value="">—</option>
+          ${['Critical','High','Medium','Low'].map(p=>`<option value="${p}" ${req.priority===p?'selected':''}>${p}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <select id="d-status" class="form-control" ${disabled}>
+          ${['Active','Inactive'].map(s=>`<option value="${s}" ${req.status===s?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Primary Owner</label>
+        <input id="d-owner" class="form-control" value="${e(req.primary_owner||'')}" ${disabled}>
+      </div>
+      <div class="form-group">
+        <label>Collection Frequency</label>
+        <select id="d-frequency" class="form-control" ${disabled}>
+          <option value="">—</option>
+          ${['Real-time','Hourly','Daily','Weekly','Monthly'].map(f=>`<option value="${f}" ${req.collection_frequency===f?'selected':''}>${f}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Notes</label>
+      <textarea id="d-notes" class="form-control" rows="3" ${disabled}>${e(req.notes||'')}</textarea>
+    </div>
+    <div class="section-title">Source Coverage (${Object.values(covMap).filter(Boolean).length} / ${state.sources.length} sources)</div>
+    <div class="sources-grid">${covHtml}</div>`;
+
+  document.getElementById('drawer-overlay').classList.remove('hidden');
+}
+
+function closeDrawer(e) {
+  if (e && e.target !== document.getElementById('drawer-overlay')) return;
+  document.getElementById('drawer-overlay').classList.add('hidden');
+  state.drawerReq = null;
+}
+
+async function saveDrawer() {
+  const req = state.drawerReq;
+  if (!req) return;
+  const data = {
+    req_text:             document.getElementById('d-req-text').value.trim(),
+    priority:             document.getElementById('d-priority').value,
+    status:               document.getElementById('d-status').value,
+    primary_owner:        document.getElementById('d-owner').value.trim(),
+    collection_frequency: document.getElementById('d-frequency').value,
+    notes:                document.getElementById('d-notes').value.trim(),
+  };
+  const result = await PUT(`/api/requirements/${encodeURIComponent(req.req_id)}`, data);
+  if (result) {
+    toast('Saved successfully', 'success');
+    closeDrawer();
+    if (state.view === 'requirements') await loadRequirements();
+    else if (state.view === 'matrix') await _reloadMatrixData();
+  } else {
+    toast('Save failed', 'error');
+  }
+}
+
+// ─── COVERAGE GAPS ───────────────────────────────────────────────────────────
+async function renderGaps() {
+  const data = await GET('/api/gaps');
+  if (!data) return;
+  const { gaps, source_count, total_sirs, covered_sirs, uncovered_sirs } = data;
+  const covPct = total_sirs > 0 ? Math.round(covered_sirs / total_sirs * 100) : 0;
+
+  let rows = '';
+  if (gaps.length === 0) {
+    rows = `<tr><td colspan="6" style="text-align:center;color:var(--success);padding:32px">
+      ✓ No coverage gaps — all EEIs and SIRs have at least one source mapped.
+    </td></tr>`;
+  } else {
+    gaps.forEach(g => {
+      const sirBadges = g.uncovered_sirs.map(s =>
+        `<span class="req-id-badge" style="cursor:pointer" onclick="openDrawer('${esc(s.req_id)}')" title="${e(s.req_text)}">${e(s.req_id)}</span>`
+      ).join(' ');
+      rows += `<tr>
+        <td><span class="badge badge-pir" style="cursor:pointer" onclick="openDrawer('${esc(g.pir_id)}')">${e(g.pir_id)}</span></td>
+        <td><span class="badge badge-eei" style="cursor:pointer" onclick="openDrawer('${esc(g.eei_id)}')">${e(g.eei_id)}</span>
+          <span style="font-size:12px;color:var(--text2);margin-left:6px">${e(g.eei_text.replace(/^EEI-[\d.]+:\s*/,'').substring(0,60))}${g.eei_text.length>60?'…':''}</span>
+        </td>
+        <td style="text-align:center">
+          ${g.eei_covered
+            ? '<span style="color:var(--success)">✓</span>'
+            : '<span style="color:var(--critical)">✗</span>'}
+        </td>
+        <td style="text-align:center;color:${g.sir_uncovered>0?'var(--critical)':'var(--success)'}">
+          ${g.sir_uncovered} / ${g.sir_total}
+        </td>
+        <td>${sirBadges}</td>
+      </tr>`;
+    });
+  }
+
+  document.getElementById('content').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div>
+        <div style="font-size:15px;font-weight:600">Coverage Gaps</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">
+          ${covered_sirs} of ${total_sirs} SIRs covered (${covPct}%) &nbsp;·&nbsp;
+          ${gaps.length} EEI${gaps.length!==1?'s':''} with gaps
+        </div>
+      </div>
+      <a href="/api/export/requirements" class="btn btn-secondary btn-sm" download>⬇ Export CSV</a>
+    </div>
+    <div class="req-table-wrap">
+      <table class="req-table">
+        <thead><tr>
+          <th>PIR</th><th>EEI</th>
+          <th style="text-align:center">EEI Covered</th>
+          <th style="text-align:center">SIRs Uncovered</th>
+          <th>Uncovered SIRs</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+// ─── AUDIT LOG ────────────────────────────────────────────────────────────────
+async function renderAudit() {
+  const [logs, users] = await Promise.all([
+    GET('/api/audit?limit=500'),
+    GET('/api/users'),
+  ]);
+  if (!logs) return;
+
+  const actionColor = { CREATE:'var(--success)', UPDATE:'var(--primary)', DELETE:'var(--critical)' };
+
+  const rows = logs.map(l => `<tr>
+    <td style="color:var(--text2);font-size:11px;white-space:nowrap">${(l.timestamp||'').replace('T',' ').substring(0,16)}</td>
+    <td><strong>${e(l.username||'')}</strong></td>
+    <td><span class="badge" style="background:${actionColor[l.action]||'var(--surface2)'};color:#fff;font-size:10px">${e(l.action||'')}</span></td>
+    <td style="font-size:12px;color:var(--text2)">${e(l.table_name||'')}</td>
+    <td><span class="req-id-badge">${e(l.record_id||'')}</span></td>
+    <td style="font-size:11px;color:var(--text2);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${e(l.new_value||'')}">${e((l.new_value||'').substring(0,80))}</td>
+  </tr>`).join('');
+
+  document.getElementById('content').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-size:15px;font-weight:600">Audit Log <span style="font-size:12px;font-weight:400;color:var(--text2)">(last 500 events)</span></div>
+    </div>
+    <div class="req-table-wrap">
+      <table class="req-table">
+        <thead><tr>
+          <th>Timestamp</th><th>User</th><th>Action</th>
+          <th>Table</th><th>Record</th><th>New Value</th>
+        </tr></thead>
+        <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:var(--text2);padding:24px">No audit events yet.</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+// ─── ADMIN ────────────────────────────────────────────────────────────────────
+async function renderAdmin() {
+  const [users, srcData] = await Promise.all([GET('/api/users'), GET('/api/sources')]);
+  if (!users) return;
+  const adminSources = normaliseSources(srcData ? srcData.sources : []);
+  document.getElementById('content').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-size:15px;font-weight:600">User Management</div>
+      <button class="btn btn-primary btn-sm" onclick="showCreateUser()">+ Add User</button>
+    </div>
+    <div class="req-table-wrap">
+      <table class="user-table">
+        <thead><tr><th>Username</th><th>Full Name</th><th>Role</th><th>Created</th><th>Actions</th></tr></thead>
+        <tbody id="user-tbody">
+          ${users.map(u => `<tr>
+            <td><strong>${e(u.username)}</strong></td>
+            <td>${e(u.full_name||'')}</td>
+            <td><span class="badge" style="background:var(--surface2);color:var(--text)">${e(u.role)}</span></td>
+            <td style="color:var(--text2);font-size:12px">${u.created_at||''}</td>
+            <td>
+              <button class="btn btn-secondary btn-sm" onclick="showEditUser(${u.id},'${esc(u.username)}','${esc(u.full_name||'')}','${esc(u.role)}')">Edit</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id},'${esc(u.username)}')">Delete</button>
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div id="user-form-wrap" class="hidden" style="margin-top:20px">
+      <div class="card" style="max-width:460px">
+        <div class="card-title" id="user-form-title">Add User</div>
+        <input type="hidden" id="edit-user-id">
+        <div class="form-group"><label>Username</label><input id="new-username" class="form-control" placeholder="username"></div>
+        <div class="form-group"><label>Full Name</label><input id="new-fullname" class="form-control" placeholder="Full Name"></div>
+        <div class="form-group"><label>Password${document.getElementById('edit-user-id')?.value?'  (leave blank to keep)':''}</label><input id="new-password" class="form-control" type="password" placeholder="password"></div>
+        <div class="form-group">
+          <label>Role</label>
+          <select id="new-role" class="form-control">
+            <option value="viewer">Viewer — read only</option>
+            <option value="analyst">Analyst — edit assigned</option>
+            <option value="admin">Admin — full access</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn btn-primary" onclick="submitUserForm()">Save</button>
+          <button class="btn btn-secondary" onclick="document.getElementById('user-form-wrap').classList.add('hidden')">Cancel</button>
+        </div>
+      </div>
+    </div>
+    <!-- Sources Management -->
+    <div style="border-top:1px solid var(--border);margin-top:32px;padding-top:28px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div style="font-size:15px;font-weight:600">Source Management</div>
+        <button class="btn btn-primary btn-sm" onclick="showAddSource()">+ Add Source</button>
+      </div>
+      <div class="req-table-wrap">
+        <table class="user-table">
+          <thead><tr><th>#</th><th>Source Name</th><th>Actions</th></tr></thead>
+          <tbody>
+            ${adminSources.map((s, i) => `<tr>
+              <td style="color:var(--text2);font-size:12px">${i+1}</td>
+              <td><strong>${e(s)}</strong></td>
+              <td><button class="btn btn-danger btn-sm" onclick="removeSource('${esc(s)}')">Remove</button></td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div id="source-form-wrap" class="hidden" style="margin-top:16px">
+        <div class="card" style="max-width:360px">
+          <div class="card-title">Add Source</div>
+          <div class="form-group">
+            <label>Source Name</label>
+            <input id="new-source-name" class="form-control" placeholder="e.g. VirusTotal" onkeydown="if(event.key==='Enter')submitAddSource()">
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" onclick="submitAddSource()">Add</button>
+            <button class="btn btn-secondary" onclick="document.getElementById('source-form-wrap').classList.add('hidden')">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function showCreateUser() {
+  document.getElementById('user-form-wrap').classList.remove('hidden');
+  document.getElementById('user-form-title').textContent = 'Add User';
+  document.getElementById('edit-user-id').value = '';
+  document.getElementById('new-username').value = '';
+  document.getElementById('new-fullname').value = '';
+  document.getElementById('new-password').value = '';
+  document.getElementById('new-role').value = 'viewer';
+  document.getElementById('new-username').disabled = false;
+}
+function showEditUser(id, username, fullName, role) {
+  document.getElementById('user-form-wrap').classList.remove('hidden');
+  document.getElementById('user-form-title').textContent = `Edit: ${username}`;
+  document.getElementById('edit-user-id').value = id;
+  document.getElementById('new-username').value = username;
+  document.getElementById('new-username').disabled = true;
+  document.getElementById('new-fullname').value = fullName;
+  document.getElementById('new-password').value = '';
+  document.getElementById('new-role').value = role;
+}
+async function submitUserForm() {
+  const id       = document.getElementById('edit-user-id').value;
+  const username = document.getElementById('new-username').value.trim();
+  const fullname = document.getElementById('new-fullname').value.trim();
+  const password = document.getElementById('new-password').value;
+  const role     = document.getElementById('new-role').value;
+  if (!id && (!username || !password)) { toast('Username and password required', 'error'); return; }
+  let result;
+  if (id) {
+    result = await PUT(`/api/users/${id}`, { full_name: fullname, role, password: password || undefined });
+  } else {
+    result = await POST('/api/users', { username, password, full_name: fullname, role });
+  }
+  if (result && result.ok !== false) {
+    toast(id ? 'User updated' : 'User created', 'success');
+    await renderAdmin();
+  } else {
+    toast((result && result.error) || 'Error saving user', 'error');
+  }
+}
+async function deleteUser(id, username) {
+  if (!confirm(`Delete user "${username}"?`)) return;
+  const result = await DELETE(`/api/users/${id}`);
+  if (result) { toast('User deleted', 'success'); await renderAdmin(); }
+}
+
+function showAddSource() {
+  document.getElementById('source-form-wrap').classList.remove('hidden');
+  document.getElementById('new-source-name').value = '';
+  document.getElementById('new-source-name').focus();
+}
+async function submitAddSource() {
+  const name = document.getElementById('new-source-name').value.trim();
+  if (!name) { toast('Source name required', 'error'); return; }
+  const result = await POST('/api/sources', { name });
+  if (result && !result.error) {
+    toast(`Source "${name}" added`, 'success');
+    const srcData = await GET('/api/sources');
+    if (srcData) state.sources = normaliseSources(srcData.sources);
+    await renderAdmin();
+  } else {
+    toast((result && result.error) || 'Error adding source', 'error');
+  }
+}
+async function removeSource(name) {
+  if (!confirm(`Remove source "${name}"?\n\nThis will also delete all coverage data for this source.`)) return;
+  const result = await DELETE(`/api/sources/${encodeURIComponent(name)}`);
+  if (result && result.ok) {
+    toast(`Source removed`, 'success');
+    const srcData = await GET('/api/sources');
+    if (srcData) state.sources = normaliseSources(srcData.sources);
+    await renderAdmin();
+  } else {
+    toast('Error removing source', 'error');
+  }
+}
+
+// ─── ADD / DELETE REQUIREMENTS ───────────────────────────────────────────────
+async function openAddReqModal(type, parentId) {
+  if (!state.user || state.user.role === 'viewer') {
+    toast('Viewers cannot add requirements', 'error'); return;
+  }
+  const badge = document.getElementById('req-modal-type-badge');
+  badge.textContent = type;
+  badge.className   = `badge badge-${type.toLowerCase()}`;
+  document.getElementById('req-modal-title').textContent =
+    type === 'PIR' ? 'Add New PIR' :
+    type === 'EEI' ? `Add EEI under ${parentId}` :
+                     `Add SIR under ${parentId}`;
+
+  const parentGroup = document.getElementById('req-modal-parent-group');
+  if (type === 'EEI') {
+    parentGroup.classList.remove('hidden');
+    document.getElementById('req-modal-parent-label').textContent = 'Parent PIR';
+    const pirs = state.reqs.filter(r => r.req_type === 'PIR');
+    document.getElementById('req-modal-parent').innerHTML = pirs.map(p =>
+      `<option value="${e(p.req_id)}" ${p.req_id===parentId?'selected':''}>`+
+      `${e(p.req_id)} \u2014 ${e(shortText(p.req_text, 45))}</option>`
+    ).join('');
+  } else if (type === 'SIR') {
+    parentGroup.classList.remove('hidden');
+    document.getElementById('req-modal-parent-label').textContent = 'Parent EEI';
+    const eeis = state.reqs.filter(r => r.req_type === 'EEI');
+    document.getElementById('req-modal-parent').innerHTML = eeis.map(ee =>
+      `<option value="${e(ee.req_id)}" ${ee.req_id===parentId?'selected':''}>`+
+      `${e(ee.req_id)} \u2014 ${e(shortText(ee.req_text, 45))}</option>`
+    ).join('');
+  } else {
+    parentGroup.classList.add('hidden');
+  }
+
+  document.getElementById('req-modal-id').value   = '';
+  document.getElementById('req-modal-text').value  = '';
+  document.getElementById('req-modal-status').value = 'Active';
+  document.getElementById('req-modal-overlay').classList.remove('hidden');
+  setTimeout(() => document.getElementById('req-modal-text').focus(), 60);
+
+  // Fetch suggested ID from server
+  const parent = (type === 'EEI' || type === 'SIR') ? parentId : null;
+  const url = `/api/requirements/next-id?type=${type}` +
+              (parent ? `&parent_id=${encodeURIComponent(parent)}` : '');
+  const data = await GET(url);
+  if (data && data.req_id) document.getElementById('req-modal-id').value = data.req_id;
+}
+
+function closeReqModal() {
+  document.getElementById('req-modal-overlay').classList.add('hidden');
+}
+
+async function submitReqModal() {
+  const req_id  = document.getElementById('req-modal-id').value.trim();
+  const text    = document.getElementById('req-modal-text').value.trim();
+  const status  = document.getElementById('req-modal-status').value;
+  const badge   = document.getElementById('req-modal-type-badge');
+  const type    = badge.textContent.trim();
+  const parentGroup = document.getElementById('req-modal-parent-group');
+  const parent_id   = parentGroup.classList.contains('hidden')
+                      ? null : document.getElementById('req-modal-parent').value;
+
+  if (!req_id) { toast('ID is required', 'error'); return; }
+  if (!text)   { toast('Requirement text is required', 'error'); return; }
+
+  const req_text = `${req_id}: ${text}`;
+  const result   = await POST('/api/requirements',
+    { req_id, req_type: type, req_text, parent_id, status });
+
+  if (result && result.req_id) {
+    toast(`${req_id} created`, 'success');
+    closeReqModal();
+    await loadRequirements();
+  } else {
+    toast((result && result.error) || 'Failed to create requirement', 'error');
+  }
+}
+
+async function deleteReq(reqId, event) {
+  event.stopPropagation();
+  if (!state.user || state.user.role !== 'admin') {
+    toast('Only admins can delete requirements', 'error'); return;
+  }
+  const req = state.reqs.find(r => r.req_id === reqId);
+  if (!req) return;
+
+  let msg = `Delete ${reqId}?`;
+  if (req.req_type === 'PIR') {
+    const childEeis = state.reqs.filter(r => r.req_type === 'EEI' && r.parent_id === reqId);
+    const childSirs = state.reqs.filter(r =>
+      r.req_type === 'SIR' && childEeis.some(ee => ee.req_id === r.parent_id));
+    msg += `\n\nThis will permanently delete ${childEeis.length} EEI` +
+           `${childEeis.length!==1?'s':''} and ${childSirs.length} SIR` +
+           `${childSirs.length!==1?'s':''} along with all their coverage data.`;
+  } else if (req.req_type === 'EEI') {
+    const childSirs = state.reqs.filter(r =>
+      r.req_type === 'SIR' && r.parent_id === reqId);
+    if (childSirs.length)
+      msg += `\n\nThis will permanently delete ${childSirs.length} SIR` +
+             `${childSirs.length!==1?'s':''} and all their coverage data.`;
+  }
+
+  if (!confirm(msg)) return;
+  const result = await DELETE(`/api/requirements/${encodeURIComponent(reqId)}`);
+  if (result && result.ok) {
+    toast(`${reqId} deleted (${result.deleted} record${result.deleted!==1?'s':''} removed)`, 'success');
+    await loadRequirements();
+  } else {
+    toast((result && result.error) || 'Delete failed', 'error');
+  }
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function e(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function esc(str) {
+  if (!str) return '';
+  return String(str).replace(/'/g,"\\'").replace(/\n/g,' ');
+}
+function shortText(text, max=50) {
+  if (!text) return '';
+  const clean = text.replace(/^(PIR|EEI|SIR)-[\w.]+:\s*/,'');
+  return clean.length > max ? clean.substring(0,max)+'…' : clean;
+}
+function priorityBadge(priority) {
+  if (!priority) return '';
+  return `<span class="badge badge-${priority.toLowerCase()}">${priority}</span>`;
+}
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

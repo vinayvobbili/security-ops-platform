@@ -23,6 +23,7 @@ from langchain_core.tools import tool
 
 from services.abusech import AbuseCHClient
 from src.utils.tool_decorator import log_tool_call
+from src.utils.llm_decorators import validate_args, DOMAIN_PATTERN, IP_ADDRESS_PATTERN
 
 logger = logging.getLogger(__name__)
 
@@ -205,6 +206,7 @@ def _format_ip_result(data: dict) -> str:
 
 
 @tool
+@validate_args(domain=DOMAIN_PATTERN)
 @log_tool_call
 def check_domain_abusech(domain: str) -> str:
     """Check if a domain is associated with malware distribution or malicious activity.
@@ -241,6 +243,7 @@ def check_domain_abusech(domain: str) -> str:
 
 
 @tool
+@validate_args(ip_address=IP_ADDRESS_PATTERN)
 @log_tool_call
 def check_ip_abusech(ip_address: str) -> str:
     """Check if an IP address is a known malware C2 server or malicious host.

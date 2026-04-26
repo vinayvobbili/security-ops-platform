@@ -1,0 +1,225 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'Silencers and Suppressors' %}
+{% set page_title_left_icon = '🔇' %}
+{% set page_title_right_icon = '💥' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ticket_cannon.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="tc-container">
+
+    <!-- Toolbar -->
+    <div class="tc-toolbar">
+        <div class="tc-toolbar-left">
+            <span class="tc-count" id="activeCount"></span>
+        </div>
+        <div class="tc-toolbar-right">
+            <button class="tc-btn tc-btn-new" onclick="openNewModal()">+ New Entry</button>
+        </div>
+    </div>
+
+    <!-- Category Tabs -->
+    <div class="tc-tabs">
+        {% for cat_key, cat_data in categories.items() %}
+        <button class="tc-tab{% if loop.first %} tc-tab-active{% endif %}" data-cat="{{ cat_key }}" onclick="switchCat('{{ cat_key }}')">{{ cat_data.label }}</button>
+        {% endfor %}
+    </div>
+
+    <!-- Per-category content (one hidden div per category, JS toggles visibility) -->
+    {% for cat_key, cat_data in categories.items() %}
+    <div class="tc-cat-panel{% if loop.first %} tc-cat-panel--visible{% endif %}" data-cat-panel="{{ cat_key }}">
+
+        <!-- Active -->
+        <div class="tc-section">
+            <h2 class="tc-section-title tc-section-title--active">Active</h2>
+            {% if cat_data.active %}
+            <div class="tc-table-wrap">
+                <table class="tc-table">
+                    <thead>
+                        <tr>
+                            <th>Description</th>
+                            <th>Filter Fields</th>
+                            <th>Created By</th>
+                            <th>Expiry</th>
+                            <th class="tc-th-center">Matches</th>
+                            <th class="tc-th-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in cat_data.active %}
+                        <tr data-id="{{ s.id }}" id="row-{{ s.id }}">
+                            <td class="tc-desc">{{ s.description }}</td>
+                            <td class="tc-fields-cell">
+                                {% for label, val in s.field_labels.items() %}
+                                <span class="tc-field-pill">{{ label }}: <strong>{{ val }}</strong></span>
+                                {% endfor %}
+                            </td>
+                            <td>{{ s.created_by }}</td>
+                            <td>{{ s.expiry_date }}</td>
+                            <td class="tc-th-center">
+                                <span class="tc-match-count">{{ s.match_count }}</span>
+                            </td>
+                            <td class="tc-th-center">
+                                <button class="tc-btn tc-btn-deactivate" onclick="toggleEntry('{{ s.id }}', false, '{{ cat_key }}')">Deactivate</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="tc-empty">No active entries.</div>
+            {% endif %}
+        </div>
+
+        <!-- Deactivated -->
+        <div class="tc-section tc-section--inactive">
+            <h2 class="tc-section-title tc-section-title--inactive" onclick="toggleInactiveSection('{{ cat_key }}')">
+                <span class="tc-collapse-arrow" id="inactiveArrow-{{ cat_key }}">&#9654;</span>
+                Deactivated
+                <span class="tc-inactive-count">({{ cat_data.inactive|length }})</span>
+            </h2>
+            <div id="inactiveBody-{{ cat_key }}" style="display:none;">
+                {% if cat_data.inactive %}
+                <div class="tc-table-wrap">
+                    <table class="tc-table tc-table--inactive">
+                        <thead>
+                            <tr>
+                                <th>Description</th>
+                                <th>Filter Fields</th>
+                                <th>Created By</th>
+                                <th>Expiry</th>
+                                <th class="tc-th-center">Matches</th>
+                                <th class="tc-th-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for s in cat_data.inactive %}
+                            <tr data-id="{{ s.id }}" id="row-{{ s.id }}">
+                                <td class="tc-desc">{{ s.description }}</td>
+                                <td class="tc-fields-cell">
+                                    {% for label, val in s.field_labels.items() %}
+                                    <span class="tc-field-pill tc-field-pill--inactive">{{ label }}: <strong>{{ val }}</strong></span>
+                                    {% endfor %}
+                                </td>
+                                <td>{{ s.created_by }}</td>
+                                <td>{{ s.expiry_date }}</td>
+                                <td class="tc-th-center">
+                                    <span class="tc-match-count">{{ s.match_count }}</span>
+                                </td>
+                                <td class="tc-th-center">
+                                    <button class="tc-btn tc-btn-activate" onclick="toggleEntry('{{ s.id }}', true, '{{ cat_key }}')">Activate</button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="tc-empty">No deactivated entries.</div>
+                {% endif %}
+            </div>
+        </div>
+
+    </div>
+    {% endfor %}
+
+</div>
+
+<!-- New Entry Modal -->
+<div class="tc-modal-overlay" id="newModal" style="display:none;" onclick="closeNewModal(event)">
+    <div class="tc-modal" onclick="event.stopPropagation()">
+        <div class="tc-modal-header">
+            <h3 id="modalTitle">New Entry</h3>
+            <button class="tc-modal-close" onclick="closeNewModal()">&times;</button>
+        </div>
+        <form id="newSilencerForm" onsubmit="submitSilencer(event)">
+            <div class="tc-modal-body">
+                <!-- Description -->
+                <div class="tc-form-group">
+                    <label>Description <span class="tc-required">*</span></label>
+                    <input type="text" id="silencerDesc" required placeholder="e.g. CrowdStrike GitHub blocklist FPs">
+                </div>
+
+                <!-- Category (hidden, auto-set from active tab) -->
+                <input type="hidden" id="silencerCat">
+
+                <!-- Expiry -->
+                <div class="tc-form-group">
+                    <label>Expiry <span class="tc-required">*</span></label>
+                    <select id="silencerExpiry" required>
+                        {% for opt in expiry_options %}
+                        <option value="{{ opt.days }}" {% if opt.days == 1 %}selected{% endif %}>{{ opt.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Field Builder -->
+                <div class="tc-form-group">
+                    <label>Filter Fields <span class="tc-required">*</span></label>
+                    <div class="tc-field-builder">
+                        <select id="fieldKey" onchange="onFieldKeyChange()">
+                            <option value="">-- Select field --</option>
+                            {% for key, label in fields.items() %}
+                            <option value="{{ key }}">{{ label }}</option>
+                            {% endfor %}
+                            <option value="__custom__">Custom field...</option>
+                        </select>
+                        <input type="text" id="customFieldKey" placeholder="Custom field name (e.g. ioc_value)" style="display:none;">
+                        <input type="text" id="fieldValue" placeholder="Exact value (copy-paste from ticket)">
+                        <button type="button" class="tc-btn tc-btn-add-field" onclick="addField()">Add Field</button>
+                    </div>
+                </div>
+
+                <!-- Added Fields List -->
+                <div id="fieldsList" class="tc-fields-list"></div>
+            </div>
+
+            <div class="tc-modal-footer">
+                <button type="button" class="tc-btn tc-btn-cancel" onclick="closeNewModal()">Cancel</button>
+                <button type="submit" class="tc-btn tc-btn-new" id="submitBtn">Create</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Password Modal -->
+<div class="tc-modal-overlay" id="pwModal" style="display:none;" onclick="cancelPassword(event)">
+    <div class="tc-modal" onclick="event.stopPropagation()" style="max-width:360px;">
+        <div class="tc-modal-header">
+            <h3 id="pwTitle">Enter Password</h3>
+            <button class="tc-modal-close" onclick="cancelPassword()">&times;</button>
+        </div>
+        <div class="tc-modal-body">
+            <div class="tc-form-group">
+                <input type="password" id="pwInput" placeholder="Password" onkeydown="if(event.key==='Enter')confirmPassword()">
+            </div>
+        </div>
+        <div class="tc-modal-footer">
+            <button type="button" class="tc-btn tc-btn-cancel" onclick="cancelPassword()">Cancel</button>
+            <button type="button" class="tc-btn tc-btn-new" onclick="confirmPassword()">OK</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="tc-toast" id="tcToast"></div>
+
+<!-- Pass field definitions to JS -->
+<script id="silencer-fields-data" type="application/json">{{ fields | tojson }}</script>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/ticket_cannon.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof initTheme === 'function') initTheme();
+    var firstTab = document.querySelector('.tc-tab-active');
+    if (firstTab) switchCat(firstTab.getAttribute('data-cat'));
+    else updateActiveCount();
+});
+</script>
+{% endblock %}

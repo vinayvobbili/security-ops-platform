@@ -2,7 +2,7 @@
 Remediation Suggestion Tools Module
 
 Tools for suggesting incident remediation actions based on XSOAR ticket
-details and local runbook/playbook documentation (team guides).
+details and local runbook/playbook documentation (GDnR guides).
 """
 
 import logging
@@ -47,7 +47,7 @@ def _build_search_queries(context: Dict[str, str]) -> List[str]:
     Generate search queries to find relevant playbooks.
 
     Creates multiple queries based on incident attributes to maximize
-    the chance of finding relevant team documentation.
+    the chance of finding relevant GDnR documentation.
 
     Args:
         context: Incident context dictionary
@@ -96,7 +96,7 @@ def _search_playbooks(queries: List[str]) -> str:
     Search local documents for relevant playbook content.
 
     Uses the existing document processor's hybrid retriever (65% semantic + 35% BM25)
-    to find relevant team runbook content.
+    to find relevant GDnR runbook content.
 
     Args:
         queries: List of search queries
@@ -141,7 +141,7 @@ def _search_playbooks(queries: List[str]) -> str:
         source_name = source.split('/')[-1] if '/' in source else source
         results.append(f"[Source: {source_name}]\n{doc.page_content.strip()}")
 
-    return "\n\n---\n\n".join(results)
+    return "\n---\n".join(results)
 
 
 def _generate_remediation_with_llm(context: Dict[str, str], playbook_content: str) -> str:
@@ -241,7 +241,7 @@ def suggest_remediation(ticket_id: str, environment: str = "prod") -> str:
     - "What are the remediation steps for XSOAR case 123456?"
     - "Suggest response actions for XSOAR incident 456789"
 
-    This tool fetches XSOAR incident details and searches team runbooks to provide
+    This tool fetches XSOAR incident details and searches GDnR runbooks to provide
     tailored remediation guidance.
 
     Args:
@@ -293,11 +293,13 @@ def suggest_remediation(ticket_id: str, environment: str = "prod") -> str:
         result += remediation
 
         logger.info(f"Successfully generated remediation guidance for ticket {ticket_id}")
-        return result
+        from my_bot.core.state_manager import FINAL_RESPONSE_PREFIX
+        return FINAL_RESPONSE_PREFIX + result
 
     except Exception as e:
         logger.error(f"Error suggesting remediation for {ticket_id}: {e}", exc_info=True)
-        return f"Error generating remediation suggestions: {str(e)}\n\nPlease verify:\n- Ticket ID is correct\n- You have access to the XSOAR environment\n- Network connectivity is available"
+        from my_bot.core.state_manager import FINAL_RESPONSE_PREFIX
+        return FINAL_RESPONSE_PREFIX + f"Error generating remediation suggestions: {str(e)}\n\nPlease verify:\n- Ticket ID is correct\n- You have access to the XSOAR environment\n- Network connectivity is available"
 
 
 # =============================================================================

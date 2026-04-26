@@ -1,5 +1,8 @@
 # Transient data - block all except templates/docs
 data/transient/*
+!data/transient/.secrets.age
+# Validation run artifacts — large, reproducible, don't track
+data/validation/
 src/data/
 
 .idea
@@ -10,6 +13,13 @@ web/static/charts/*
 web/static/logos/*.png
 scheduler.pid
 web/static/audio
+web/static/videos/
+# Demo video build artifacts — track only .py scripts under demos/videos/
+demos/videos/*/audio/
+demos/videos/*/video/
+demos/videos/*/output/
+demos/videos/*/work/
+demos/videos/*/work_teaser/
 local_pdfs_docs
 debug/*
 data/certs*
@@ -38,7 +48,7 @@ performance_data.json
 *.lock
 tests
 
-.env
+data/transient/.env
 certs/*
 
 node_modules
@@ -55,6 +65,46 @@ data/certs/
 package-lock.json
 ..bfg-report/
 chroma_documents/
+chroma_win_ai/
 data/chroma_contacts/
 data/epp_tagging/*.db
+data/escalation_contacts/
+data/ruai_screening/
 data/rules_cache/
+data/recaps/
+
+# Teams app package build artifact
+teams_bots/toodles-bot.zip
+
+# Claude Code
+.claude/
+!.claude/commands/
+.mcp.json
+
+# Data — generated/runtime (keep reference files like data/metrics/, data/samples/, data_maps.py)
+data/threat_intel/
+data/xsoar_timeline/
+data/logs/
+data/ai_intake/
+data/oe_detection/
+data/customer_assurance/
+models/
+*.db
+
+# CTI Tipper remote/local LLM variants (contain API keys in .env)
+src/components/the internal LLM gateway_RemoteVersion/
+src/components/CyberIQ_RemoteVersion/
+src/components/CyberIQ_RemoteVersion.zip
+src/components/cti_tipper_assistant/
+
+# Misc one-off scripts
+misc_scripts/fix_claude_code_zscaler.py
+
+# Certificates and private keys
+*.csr
+*.key
+
+# Vendor sidecar apps (delivered as zip drops, not source-of-truth in our repo)
+external/
+data/AISPM_Package*.zip
+data/DBSec_Package*.zip

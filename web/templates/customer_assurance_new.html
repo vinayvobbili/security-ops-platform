@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Customer Assurance Request</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/customer_assurance.css') }}">
+</head>
+<body class="ca-page" data-ca-tour="new">
+{% import 'title_macros.html' as titles %}
+{% set page_title = titles.build_title('Customer Assurance', '🛡️', '✏️') %}
+{% include 'top_bar.html' %}
+
+<div class="ca-container ca-narrow">
+    <div style="margin-bottom:18px;">
+        <a href="/customer-assurance" style="color:var(--ca-brand);text-decoration:none;font-size:13px;">← Back to Customer Assurance</a>
+    </div>
+
+    <h1 class="ca-h1">New Customer Request</h1>
+    <p class="ca-subtitle">Log a customer security questionnaire. Questions will be auto-extracted for drafting.</p>
+
+    <div class="ca-tip-card">
+        <div class="ca-tip-card-icon">?</div>
+        <div>
+            <strong>How this works:</strong> fill in the customer info, then paste the questionnaire text below (or upload the file). As you type, the system auto-splits the text into individual questions and shows a live preview. On submit, you'll land in the drafting workspace where you can generate AI drafts for each question.
+            <br><br>
+            <span class="ca-next-ribbon">What to do next</span>
+            &nbsp;Start with the <strong>Customer</strong> and <strong>Segment</strong> fields. Hover any <span class="ca-tip" style="pointer-events:none;" data-tip=""></span> icon for field-specific help.
+        </div>
+    </div>
+
+    <form id="ca-new-form" class="ca-card ca-form" enctype="multipart/form-data">
+        <!-- Customer info -->
+        <div class="ca-row">
+            <div class="ca-field" id="ca-tour-customer">
+                <label>Customer <span class="required">*</span> <span class="ca-tip" data-tip="The customer or prospect making the request. Used in the queue, exports, and audit log."></span></label>
+                <div class="hint">The requesting customer / prospect</div>
+                <input type="text" name="customer_name" placeholder="e.g. Globex Industries" required>
+            </div>
+            <div class="ca-field">
+                <label>Customer Segment <span class="required">*</span> <span class="ca-tip" data-tip="Which account team segment owns this customer? Used for filtering the queue and reporting metrics by segment."></span></label>
+                <div class="hint">Account team segment</div>
+                <select name="customer_segment" required>
+                    <option value="" disabled selected>Select segment</option>
+                    {% for s in segments %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="ca-row">
+            <div class="ca-field">
+                <label>Request Type <span class="required">*</span> <span class="ca-tip" data-tip="Questionnaire = list of security questions. RFP = proposal with security questions embedded. Meeting Request = a call with the customer. Vulnerability Request = CVE/finding follow-up. On-Site Assessment = prep for a site visit."></span></label>
+                <select name="request_type" required>
+                    <option value="" disabled selected>Select type</option>
+                    {% for t in request_types %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="ca-field">
+                <label>Source Format <span class="ca-tip" data-tip="How did this come in? Helps us track which channel customer questionnaires arrive through, so we can prioritize integrations later."></span></label>
+                <div class="hint">How was this received?</div>
+                <select name="source_format">
+                    <option value="">—</option>
+                    {% for f in source_formats %}<option value="{{ f }}">{{ f }}</option>{% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="ca-row-3">
+            <div class="ca-field">
+                <label>Account Team Contact <span class="ca-tip" data-tip="Who on the account team submitted this request? They'll be the point of contact when the response is ready."></span></label>
+                <input type="text" name="account_team_contact" placeholder="Jane Smith">
+            </div>
+            <div class="ca-field">
+                <label>Due Date <span class="ca-tip" data-tip="When does the customer expect the response? The queue is sorted by this date ascending."></span></label>
+                <input type="date" name="due_date">
+            </div>
+            <div class="ca-field">
+                <label>Priority <span class="ca-tip" data-tip="How urgent? Urgent items pulse red in the queue to get attention. High items are highlighted. Low/Medium sort by due date only."></span></label>
+                <select name="priority">
+                    <option value="">—</option>
+                    {% for p in priorities %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="ca-field">
+            <label>Title <span class="required">*</span> <span class="ca-tip" data-tip="A short label that shows everywhere this request appears. Make it scannable — include the customer name and the year or type of review."></span></label>
+            <div class="hint">Short summary, e.g. "Globex 2026 Vendor Security Review"</div>
+            <input type="text" name="title" placeholder="Title of the request" required>
+        </div>
+
+        <!-- Questions -->
+        <div class="ca-field" id="ca-tour-questions">
+            <label>Questions <span class="ca-tip" data-tip="Paste the questionnaire text as-is. The system auto-detects numbered lists (1. 2.), lettered lists (a. b.), bullets (- *), or blank-line separated paragraphs. No need to clean up the formatting first."></span></label>
+            <div class="hint">Paste the questionnaire text. Numbered lists (1. 2. 3.), bullets, or blank-line separated paragraphs all work. You can also upload a file below.</div>
+            <textarea name="raw_text" id="raw_text" placeholder="1. Do you encrypt customer data at rest?&#10;2. Describe your MFA policy.&#10;3. What is your incident response SLA?"></textarea>
+        </div>
+
+        <!-- Live split preview -->
+        <div class="ca-preview" id="ca-tour-preview">
+            <h4>Split Preview — <span id="ca-split-count">0</span> question(s) <span class="ca-tip ca-tip-accent" data-tip="Each numbered item here becomes an independent draft in the workspace. The AI drafts each one separately with its own evidence and confidence score."></span></h4>
+            <ol id="ca-split-list"><li class="empty">Start typing questions above to see how they'll be split.</li></ol>
+        </div>
+
+        <!-- Upload -->
+        <div class="ca-field">
+            <label>Or upload a file <span class="ca-tip" data-tip="Attach the original questionnaire (PDF / Word / Excel / text). We store it alongside the request but today you still need to paste the text above for auto-splitting. In v2 we'll auto-extract from uploads."></span></label>
+            <div class="hint">PDF, Word, or Excel. The original file is saved alongside the request.</div>
+            <input type="file" name="documents" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt">
+        </div>
+
+        <div class="ca-field">
+            <label>Notes <span class="ca-tip" data-tip="Any context the drafter should know — e.g. 'annual renewal, they ask the same questions every year', 'customer moved to a new datacenter region', 'flag anything about contract commitments to Legal'."></span></label>
+            <input type="text" name="notes" placeholder="Any context the drafter should know">
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px;">
+            <a href="/customer-assurance" class="ca-btn ca-btn-ghost">Cancel</a>
+            <button type="submit" class="ca-btn ca-btn-primary" id="ca-submit-btn">Create Request →</button>
+        </div>
+    </form>
+</div>
+
+<script src="{{ url_for('static', filename='js/common.js') }}"></script>
+<script src="{{ url_for('static', filename='js/customer_assurance_tour.js') }}"></script>
+<script>
+// --- Live split preview ---
+const textarea = document.getElementById('raw_text');
+const splitCount = document.getElementById('ca-split-count');
+const splitList = document.getElementById('ca-split-list');
+let debounce;
+
+function updatePreview() {
+    const raw = textarea.value;
+    if (!raw.trim()) {
+        splitCount.textContent = '0';
+        splitList.innerHTML = '<li class="empty">Start typing questions above to see how they\'ll be split.</li>';
+        return;
+    }
+    clearTimeout(debounce);
+    debounce = setTimeout(async () => {
+        try {
+            const resp = await fetch('/customer-assurance/preview-split', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({raw_text: raw}),
+            });
+            const data = await resp.json();
+            splitCount.textContent = data.count;
+            if (data.count === 0) {
+                splitList.innerHTML = '<li class="empty">Start typing questions above.</li>';
+            } else {
+                splitList.innerHTML = data.questions.map(q => `<li>${escapeHtml(q)}</li>`).join('');
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    }, 250);
+}
+
+function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+textarea.addEventListener('input', updatePreview);
+
+// --- Submit ---
+document.getElementById('ca-new-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('ca-submit-btn');
+    btn.disabled = true;
+    btn.textContent = 'Creating…';
+    const formData = new FormData(e.target);
+    try {
+        const resp = await fetch('/customer-assurance/submit', {method: 'POST', body: formData});
+        const data = await resp.json();
+        if (data.status === 'success') {
+            window.location = data.redirect;
+        } else {
+            alert('Error: ' + (data.message || 'Unknown'));
+            btn.disabled = false;
+            btn.textContent = 'Create Request →';
+        }
+    } catch (err) {
+        alert('Error: ' + err);
+        btn.disabled = false;
+        btn.textContent = 'Create Request →';
+    }
+});
+
+// --- Tour: auto-start on first visit to this page ---
+if (!localStorage.getItem('ca_tour_seen_new')) {
+    setTimeout(() => CATour.start('new'), 400);
+    localStorage.setItem('ca_tour_seen_new', '1');
+}
+</script>
+{% include '_ca_fab.html' %}
+{% if config.watermark_author %}<div style="position:fixed;bottom:8px;right:16px;font-size:11px;color:rgba(0,0,0,0.25);font-style:italic;pointer-events:none;z-index:9999;">By {{ config.watermark_author }}</div>{% endif %}
+</body>
+</html>

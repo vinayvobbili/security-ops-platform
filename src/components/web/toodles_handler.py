@@ -1,5 +1,6 @@
 """the notification service Handler for Web Dashboard."""
 
+import hmac
 import logging
 from typing import Dict, Any, Tuple
 
@@ -27,7 +28,7 @@ def authenticate_toodles(password: str, configured_password: str) -> Tuple[bool,
         logger.error("TOODLES_PASSWORD not configured in .env file")
         return False, 'Authentication system not configured'
 
-    if password == configured_password:
+    if hmac.compare_digest(password, configured_password):
         return True, ''
     else:
         return False, 'Invalid password'

@@ -20,7 +20,7 @@ def check_pokedex_status(get_state_manager_func) -> Dict[str, Any]:
     try:
         state_manager = get_state_manager_func()
 
-        if not state_manager or not state_manager.is_initialized:
+        if not state_manager:
             return {
                 'ready': False,
                 'status': 'not_initialized',
@@ -29,6 +29,19 @@ def check_pokedex_status(get_state_manager_func) -> Dict[str, Any]:
                     'Restart the web server with ENABLE_POKEDEX_CHAT = True'
                 ]
             }
+
+        # Lazy-initialize if startup was skipped (SKIP_POKEDEX_WARMUP)
+        if not state_manager.is_initialized:
+            logger.info("Lazy-initializing the security assistant bot on first status check...")
+            if not state_manager.initialize_all_components():
+                return {
+                    'ready': False,
+                    'status': 'init_failed',
+                    'message': 'the security assistant bot initialization failed. Check Ollama connectivity.',
+                    'instructions': [
+                        'Ensure Ollama is running and accessible'
+                    ]
+                }
 
         # Perform health check
         health = state_manager.health_check()

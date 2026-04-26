@@ -1,0 +1,581 @@
+{% extends 'base_layout.html' %}
+
+{% block page_title_plain %}AI SPM — Deploy{% endblock %}
+
+{% set page_title_text = 'AI SPM — Deploy Portal' %}
+{% set page_title_left_icon = '🚀' %}
+{% set page_title_right_icon = '🤖' %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --deploy-bg: #f8fafc;
+        --deploy-card: #ffffff;
+        --deploy-border: #e2e8f0;
+        --deploy-text: #1e293b;
+        --deploy-muted: #64748b;
+        --deploy-accent: #002F6C;
+        --deploy-accent-lite: #e6f0ff;
+        --deploy-green: #0d7a2e;
+        --deploy-green-lite: #dcfce7;
+        --deploy-amber: #b45309;
+        --deploy-amber-lite: #fef3c7;
+        --deploy-red: #991b1b;
+        --deploy-red-lite: #fee2e2;
+    }
+    .deploy-wrap {
+        max-width: 1100px;
+        margin: calc(var(--nav-height) + 24px) auto 60px;
+        padding: 0 20px;
+        color: var(--deploy-text);
+        font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    .deploy-intro {
+        background: var(--deploy-accent-lite);
+        border-left: 4px solid var(--deploy-accent);
+        padding: 16px 20px;
+        border-radius: 6px;
+        margin-bottom: 24px;
+        font-size: 14px;
+        line-height: 1.55;
+    }
+    .deploy-intro strong { color: var(--deploy-accent); }
+    .deploy-intro code {
+        background: rgba(0,47,108,.08);
+        padding: 1px 6px;
+        border-radius: 3px;
+        font-size: 13px;
+    }
+
+    .deploy-back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 14px;
+        padding: 6px 12px;
+        background: #fff;
+        border: 1px solid var(--deploy-border);
+        border-radius: 6px;
+        color: var(--deploy-accent);
+        text-decoration: none;
+        font-size: 13px;
+        font-weight: 600;
+        transition: background .12s;
+    }
+    .deploy-back-link:hover { background: var(--deploy-accent-lite); }
+
+    .token-row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 24px;
+        padding: 12px 16px;
+        background: var(--deploy-card);
+        border: 1px solid var(--deploy-border);
+        border-radius: 8px;
+    }
+    .token-row label { font-weight: 600; font-size: 13px; min-width: 120px; }
+    .token-row input {
+        flex: 1;
+        padding: 8px 12px;
+        border: 1px solid var(--deploy-border);
+        border-radius: 6px;
+        font-size: 14px;
+        font-family: ui-monospace, "SF Mono", Monaco, monospace;
+    }
+    .token-pill {
+        padding: 4px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .token-pill.ok { background: var(--deploy-green-lite); color: var(--deploy-green); }
+    .token-pill.bad { background: var(--deploy-red-lite); color: var(--deploy-red); }
+    .token-pill.unset { background: #f1f5f9; color: var(--deploy-muted); }
+
+    .card {
+        background: var(--deploy-card);
+        border: 1px solid var(--deploy-border);
+        border-radius: 10px;
+        padding: 20px 22px;
+        margin-bottom: 20px;
+    }
+    .card h2 {
+        font-size: 15px;
+        font-weight: 700;
+        margin: 0 0 14px;
+        text-transform: uppercase;
+        letter-spacing: .5px;
+        color: var(--deploy-accent);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .card h2 .count {
+        background: #f1f5f9;
+        color: var(--deploy-muted);
+        font-size: 12px;
+        font-weight: 700;
+        padding: 2px 10px;
+        border-radius: 999px;
+    }
+
+    .service-row {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        font-size: 14px;
+    }
+    .health-pill {
+        padding: 4px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+    }
+    .health-pill.up { background: var(--deploy-green-lite); color: var(--deploy-green); }
+    .health-pill.down { background: var(--deploy-red-lite); color: var(--deploy-red); }
+
+    .drop-zone {
+        border: 2px dashed var(--deploy-border);
+        border-radius: 10px;
+        padding: 40px 20px;
+        text-align: center;
+        background: #fafbfc;
+        cursor: pointer;
+        transition: all .15s;
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+        border-color: var(--deploy-accent);
+        background: var(--deploy-accent-lite);
+    }
+    .drop-zone .drop-icon { font-size: 42px; margin-bottom: 8px; }
+    .drop-zone .drop-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+    .drop-zone .drop-sub { font-size: 13px; color: var(--deploy-muted); }
+    .drop-zone input[type=file] { display: none; }
+
+    .upload-progress {
+        margin-top: 14px;
+        font-size: 13px;
+        color: var(--deploy-muted);
+    }
+    .upload-progress.error { color: var(--deploy-red); }
+    .upload-progress.success { color: var(--deploy-green); font-weight: 600; }
+
+    .version-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 0;
+        border-top: 1px solid var(--deploy-border);
+        gap: 16px;
+    }
+    .version-item:first-of-type { border-top: 0; }
+    .version-meta { flex: 1; }
+    .version-id { font-family: ui-monospace, monospace; font-weight: 600; font-size: 13px; }
+    .version-sub { font-size: 12px; color: var(--deploy-muted); margin-top: 2px; }
+    .version-actions { display: flex; gap: 8px; }
+
+    .btn {
+        padding: 7px 14px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        border: 1px solid transparent;
+        cursor: pointer;
+        transition: all .12s;
+    }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-primary { background: var(--deploy-accent); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: #001f4c; }
+    .btn-ghost { background: #fff; color: var(--deploy-text); border-color: var(--deploy-border); }
+    .btn-ghost:hover:not(:disabled) { background: #f8fafc; }
+    .btn-danger { background: #fff; color: var(--deploy-red); border-color: var(--deploy-red-lite); }
+    .btn-danger:hover:not(:disabled) { background: var(--deploy-red-lite); }
+
+    .empty-state {
+        padding: 20px 0;
+        text-align: center;
+        color: var(--deploy-muted);
+        font-size: 13px;
+        font-style: italic;
+    }
+
+    .audit-toggle { cursor: pointer; user-select: none; font-weight: 600; font-size: 13px; color: var(--deploy-muted); }
+    .audit-list { margin-top: 12px; font-family: ui-monospace, monospace; font-size: 12px; color: var(--deploy-muted); }
+    .audit-entry { padding: 4px 0; border-top: 1px dashed var(--deploy-border); }
+    .audit-entry:first-of-type { border-top: 0; }
+    .audit-action { display: inline-block; min-width: 120px; color: var(--deploy-accent); font-weight: 600; }
+
+    .active-version-banner {
+        background: linear-gradient(135deg, #002F6C 0%, #1a4a8c 100%);
+        color: #fff;
+        padding: 16px 20px;
+        border-radius: 8px;
+        margin-bottom: 10px;
+    }
+    .active-version-banner .label { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #78BE20; margin-bottom: 2px; }
+    .active-version-banner .vid { font-family: ui-monospace, monospace; font-size: 18px; font-weight: 700; }
+    .active-version-banner .meta { font-size: 12px; color: rgba(255,255,255,.75); margin-top: 4px; }
+
+    .toast {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        padding: 14px 18px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        box-shadow: 0 8px 24px rgba(0,0,0,.15);
+        z-index: 10000;
+        opacity: 0;
+        transform: translateY(10px);
+        transition: all .2s;
+        pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.ok { background: var(--deploy-green); color: #fff; }
+    .toast.err { background: var(--deploy-red); color: #fff; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="deploy-wrap">
+
+    <a href="/ai-spm" class="deploy-back-link" title="Back to AI SPM dashboard">← Back to AI SPM</a>
+
+    <div class="deploy-intro">
+        <strong>Vendor deploy portal.</strong> Upload an AISPM code zip, review the staged version, then click <strong>Activate</strong> to swap it into production and restart the service. If something goes wrong after activation, use <strong>Rollback</strong> to restore a previous version. Uploads do <em>not</em> auto-deploy — you control when the swap happens.
+    </div>
+
+    <div class="token-row">
+        <label for="tokenInput">Deploy token</label>
+        <input type="password" id="tokenInput" placeholder="Enter shared token" autocomplete="off">
+        <span id="tokenPill" class="token-pill unset">Not checked</span>
+    </div>
+
+    <div class="card" id="activeCard">
+        <h2>🟢 Currently live</h2>
+        <div id="activeContent"></div>
+    </div>
+
+    <div class="card">
+        <h2>⬆️ Upload new version</h2>
+        <div class="drop-zone" id="dropZone">
+            <input type="file" id="fileInput" accept=".zip">
+            <div class="drop-icon">📦</div>
+            <div class="drop-title">Drop a .zip file here, or click to browse</div>
+            <div class="drop-sub">Package should contain <code style="font-family:ui-monospace,monospace">main.py</code>, <code style="font-family:ui-monospace,monospace">aispm/</code>, <code style="font-family:ui-monospace,monospace">frontend/</code>, <code style="font-family:ui-monospace,monospace">requirements.txt</code></div>
+            <div class="upload-progress" id="uploadStatus"></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>📋 Staged — ready to activate <span class="count" id="stagedCount">0</span></h2>
+        <div id="stagedList"></div>
+    </div>
+
+    <div class="card">
+        <h2>🕓 Backups — rollback targets <span class="count" id="backupsCount">0</span></h2>
+        <div id="backupsList"></div>
+    </div>
+
+    <div class="card">
+        <div class="audit-toggle" id="auditToggle">▸ Recent activity</div>
+        <div class="audit-list" id="auditList" style="display:none"></div>
+    </div>
+
+</div>
+
+<div id="toast" class="toast"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const API_BASE = '/api/ai-spm';
+    const TOKEN_KEY = 'aispm_deploy_token';
+
+    const tokenInput = document.getElementById('tokenInput');
+    const tokenPill = document.getElementById('tokenPill');
+    const activeContent = document.getElementById('activeContent');
+    const stagedList = document.getElementById('stagedList');
+    const stagedCount = document.getElementById('stagedCount');
+    const backupsList = document.getElementById('backupsList');
+    const backupsCount = document.getElementById('backupsCount');
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const uploadStatus = document.getElementById('uploadStatus');
+    const auditToggle = document.getElementById('auditToggle');
+    const auditList = document.getElementById('auditList');
+    const toast = document.getElementById('toast');
+
+    tokenInput.value = sessionStorage.getItem(TOKEN_KEY) || '';
+
+    function showToast(msg, kind) {
+        toast.textContent = msg;
+        toast.className = 'toast show ' + (kind || 'ok');
+        setTimeout(() => { toast.className = 'toast ' + (kind || 'ok'); }, 3500);
+    }
+
+    function fmtBytes(n) {
+        if (!n && n !== 0) return '—';
+        if (n < 1024) return n + ' B';
+        if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+        return (n / 1024 / 1024).toFixed(1) + ' MB';
+    }
+
+    function fmtTs(iso) {
+        if (!iso) return '—';
+        try {
+            const d = new Date(iso);
+            return d.toLocaleString();
+        } catch { return iso; }
+    }
+
+    function token() { return tokenInput.value.trim(); }
+
+    async function apiGet(path) {
+        const res = await fetch(API_BASE + path, {
+            headers: { 'X-Upload-Token': token() },
+        });
+        if (res.status === 401) { setTokenPill(false); throw new Error('Bad token'); }
+        setTokenPill(true);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+    }
+
+    async function apiJson(method, path, body) {
+        const res = await fetch(API_BASE + path, {
+            method,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Upload-Token': token(),
+            },
+            body: body ? JSON.stringify(body) : undefined,
+        });
+        if (res.status === 401) { setTokenPill(false); throw new Error('Bad token'); }
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+        return json;
+    }
+
+    function setTokenPill(ok) {
+        if (!token()) { tokenPill.className = 'token-pill unset'; tokenPill.textContent = 'Not checked'; return; }
+        if (ok) { tokenPill.className = 'token-pill ok'; tokenPill.textContent = 'Valid'; }
+        else    { tokenPill.className = 'token-pill bad'; tokenPill.textContent = 'Invalid'; }
+    }
+
+    function renderActive(state) {
+        activeContent.replaceChildren();
+        const a = state.active;
+        const s = state.service || {};
+
+        const banner = document.createElement('div');
+        banner.className = 'active-version-banner';
+        const lbl = document.createElement('div'); lbl.className = 'label'; lbl.textContent = 'Active version';
+        const vid = document.createElement('div'); vid.className = 'vid'; vid.textContent = a ? a.id : '(none)';
+        const meta = document.createElement('div'); meta.className = 'meta';
+        meta.textContent = a ? `Deployed ${fmtTs(a.created_at)} · ${fmtBytes(a.size_bytes)}` : 'No active deployment';
+        banner.append(lbl, vid, meta);
+
+        const svcRow = document.createElement('div');
+        svcRow.className = 'service-row';
+        const svcLabel = document.createElement('span'); svcLabel.textContent = 'Service health:';
+        const pill = document.createElement('span');
+        pill.className = 'health-pill ' + (s.healthy ? 'up' : 'down');
+        pill.textContent = s.healthy ? 'UP' : 'DOWN';
+        const detail = document.createElement('span');
+        detail.style.color = 'var(--deploy-muted)';
+        detail.style.fontSize = '13px';
+        if (s.healthy) {
+            detail.textContent = `${s.asset_count || 0} assets · source: ${s.source || '—'} · state: ${s.state || '—'}`;
+        } else {
+            detail.textContent = s.error || (s.http_status ? `HTTP ${s.http_status}` : 'Unreachable');
+        }
+        svcRow.append(svcLabel, pill, detail);
+
+        activeContent.append(banner, svcRow);
+    }
+
+    function renderVersionList(container, items, action) {
+        container.replaceChildren();
+        if (!items || items.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'empty-state';
+            empty.textContent = action === 'activate'
+                ? 'No staged versions. Upload a zip above.'
+                : 'No previous versions yet.';
+            container.appendChild(empty);
+            return;
+        }
+        for (const item of items) {
+            if (!item) continue;
+            const row = document.createElement('div');
+            row.className = 'version-item';
+
+            const meta = document.createElement('div');
+            meta.className = 'version-meta';
+            const vid = document.createElement('div'); vid.className = 'version-id'; vid.textContent = item.id;
+            const sub = document.createElement('div'); sub.className = 'version-sub';
+            sub.textContent = `${fmtTs(item.created_at)} · ${fmtBytes(item.size_bytes)}`;
+            meta.append(vid, sub);
+
+            const actions = document.createElement('div');
+            actions.className = 'version-actions';
+
+            if (action === 'activate') {
+                const btn = document.createElement('button');
+                btn.className = 'btn btn-primary';
+                btn.textContent = 'Activate';
+                btn.addEventListener('click', () => activateVersion(item.id, btn));
+                const del = document.createElement('button');
+                del.className = 'btn btn-ghost';
+                del.textContent = 'Discard';
+                del.addEventListener('click', () => deleteStaged(item.id));
+                actions.append(btn, del);
+            } else {
+                const btn = document.createElement('button');
+                btn.className = 'btn btn-danger';
+                btn.textContent = 'Rollback';
+                btn.addEventListener('click', () => rollbackVersion(item.id, btn));
+                actions.appendChild(btn);
+            }
+
+            row.append(meta, actions);
+            container.appendChild(row);
+        }
+    }
+
+    function renderAudit(entries) {
+        auditList.replaceChildren();
+        if (!entries || entries.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'empty-state';
+            empty.textContent = 'No activity yet.';
+            auditList.appendChild(empty);
+            return;
+        }
+        for (const e of entries) {
+            const row = document.createElement('div');
+            row.className = 'audit-entry';
+            const t = new Date(e.ts).toLocaleString();
+            const act = document.createElement('span'); act.className = 'audit-action'; act.textContent = e.action;
+            row.appendChild(act);
+            row.append(document.createTextNode(` ${t} · ${e.version_id || '—'} · ${e.client_ip || ''}`));
+            auditList.appendChild(row);
+        }
+    }
+
+    async function refresh() {
+        if (!token()) { setTokenPill(null); return; }
+        try {
+            const state = await apiGet('/versions');
+            renderActive(state);
+            renderVersionList(stagedList, state.staged, 'activate');
+            renderVersionList(backupsList, state.backups, 'rollback');
+            stagedCount.textContent = (state.staged || []).filter(Boolean).length;
+            backupsCount.textContent = (state.backups || []).filter(Boolean).length;
+            renderAudit(state.audit_recent || []);
+        } catch (err) {
+            if (err.message !== 'Bad token') showToast('Refresh failed: ' + err.message, 'err');
+        }
+    }
+
+    async function activateVersion(id, btn) {
+        if (!confirm(`Activate ${id}?\n\nThis will swap the running service to this version and restart it. The current version will be moved to backups.`)) return;
+        btn.disabled = true; btn.textContent = 'Activating…';
+        try {
+            const res = await apiJson('POST', '/activate', { version_id: id });
+            if (res.ok) showToast(`Activated ${id}`, 'ok');
+            else showToast(`Activation had issues: ${res.restart && res.restart.error || 'service did not come up'}`, 'err');
+        } catch (err) {
+            showToast('Activate failed: ' + err.message, 'err');
+        } finally {
+            btn.disabled = false; btn.textContent = 'Activate';
+            refresh();
+        }
+    }
+
+    async function rollbackVersion(id, btn) {
+        if (!confirm(`Rollback to ${id}?\n\nThis will restore the previous version and restart the service.`)) return;
+        btn.disabled = true; btn.textContent = 'Rolling back…';
+        try {
+            const res = await apiJson('POST', '/rollback', { backup_id: id });
+            if (res.ok) showToast(`Rolled back to ${id}`, 'ok');
+            else showToast('Rollback had issues', 'err');
+        } catch (err) {
+            showToast('Rollback failed: ' + err.message, 'err');
+        } finally {
+            btn.disabled = false; btn.textContent = 'Rollback';
+            refresh();
+        }
+    }
+
+    async function deleteStaged(id) {
+        if (!confirm(`Discard staged version ${id}?`)) return;
+        try {
+            await apiJson('DELETE', '/staged/' + id);
+            showToast('Discarded', 'ok');
+        } catch (err) {
+            showToast('Discard failed: ' + err.message, 'err');
+        }
+        refresh();
+    }
+
+    async function uploadFile(file) {
+        if (!token()) { showToast('Enter the deploy token first', 'err'); return; }
+        uploadStatus.className = 'upload-progress';
+        uploadStatus.textContent = `Uploading ${file.name} (${fmtBytes(file.size)})…`;
+
+        const form = new FormData();
+        form.append('zip', file);
+        try {
+            const res = await fetch(API_BASE + '/upload', {
+                method: 'POST',
+                headers: { 'X-Upload-Token': token() },
+                body: form,
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+            uploadStatus.className = 'upload-progress success';
+            uploadStatus.textContent = `Staged as ${json.version_id}. Click Activate below when ready.`;
+            showToast('Upload staged', 'ok');
+            refresh();
+        } catch (err) {
+            uploadStatus.className = 'upload-progress error';
+            uploadStatus.textContent = 'Upload failed: ' + err.message;
+            showToast('Upload failed', 'err');
+        }
+    }
+
+    tokenInput.addEventListener('input', () => {
+        sessionStorage.setItem(TOKEN_KEY, tokenInput.value);
+        refresh();
+    });
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) uploadFile(file);
+        fileInput.value = '';
+    });
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('drag-over');
+        const file = e.dataTransfer.files[0];
+        if (file) uploadFile(file);
+    });
+
+    auditToggle.addEventListener('click', () => {
+        const open = auditList.style.display !== 'none';
+        auditList.style.display = open ? 'none' : 'block';
+        auditToggle.textContent = (open ? '▸' : '▾') + ' Recent activity';
+    });
+
+    refresh();
+    setInterval(refresh, 15000);
+})();
+</script>
+{% endblock %}

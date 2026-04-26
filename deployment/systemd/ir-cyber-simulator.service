@@ -1,0 +1,36 @@
+[Unit]
+Description=Cyber Simulator Sidecar (containerized nginx serving static index.html) at :8029
+After=network.target
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=60
+TimeoutStopSec=20
+
+ExecStartPre=-/usr/bin/docker stop ir-cyber-simulator
+ExecStartPre=-/usr/bin/docker rm ir-cyber-simulator
+
+# Static HTML served by nginx:alpine on port 80 inside the container.
+# nginx needs /var/cache/nginx + /var/run writable, so we grant tmpfs for those
+# rather than --read-only. Only 127.0.0.1 is exposed — external access is via
+# the Flask reverse proxy at /cyber-simulator-app/*.
+ExecStart=/usr/bin/docker run --rm --name ir-cyber-simulator \
+  -p 127.0.0.1:8029:80 \
+  --tmpfs /var/cache/nginx:rw,size=32M \
+  --tmpfs /var/run:rw,size=8M \
+  --tmpfs /tmp:rw,size=16M \
+  --memory=256m --cpus=0.5 --pids-limit=64 \
+  --security-opt no-new-privileges \
+  --cap-drop=ALL \
+  --cap-add=CHOWN \
+  --cap-add=SETGID \
+  --cap-add=SETUID \
+  --cap-add=NET_BIND_SERVICE \
+  ir-cyber-simulator:current
+
+ExecStop=/usr/bin/docker stop ir-cyber-simulator
+
+[Install]
+WantedBy=default.target

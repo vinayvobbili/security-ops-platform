@@ -12,6 +12,7 @@ from langchain_core.tools import tool
 
 from services.vectra import VectraClient
 from src.utils.tool_decorator import log_tool_call
+from src.utils.llm_decorators import validate_args, HOSTNAME_PATTERN, IP_ADDRESS_PATTERN
 
 # Lazy-initialized Vectra client
 _vectra_client: Optional[VectraClient] = None
@@ -297,6 +298,7 @@ def get_high_threat_detections(min_threat: int = 50, limit: int = 10) -> str:
 
 
 @tool
+@validate_args(hostname=HOSTNAME_PATTERN)
 @log_tool_call
 def search_vectra_entity_by_hostname(hostname: str) -> str:
     """Search for a host entity in Vectra by hostname.
@@ -326,6 +328,7 @@ def search_vectra_entity_by_hostname(hostname: str) -> str:
 
 
 @tool
+@validate_args(ip_address=IP_ADDRESS_PATTERN)
 @log_tool_call
 def search_vectra_entity_by_ip(ip_address: str) -> str:
     """Search for an entity in Vectra by IP address.

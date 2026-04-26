@@ -167,8 +167,8 @@ def start(room_id):
     logger.debug(f"[SCHEDULER DEBUG] response_sla_risk_tickets.start() called with room_id={room_id}")
     try:
         ticket_handler = TicketHandler(XsoarEnvironment.PROD)
-        query = f'-category:job -status:closed type:{CONFIG.team_name} -owner:"" timetorespond.runStatus:running (timetorespond.slaStatus:risk or timetorespond.slaStatus:2)'
-        tickets = ticket_handler.get_tickets(query)
+        query = f'-category:job -status:closed type:{CONFIG.team_name} timetorespond.runStatus:running (timetorespond.slaStatus:risk or timetorespond.slaStatus:2)'
+        tickets = ticket_handler.get_tickets(query, paginate=False, test_connection=False, read_timeout=15)
 
         if not tickets:
             return  # Silent when no tickets at risk

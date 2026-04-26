@@ -1,0 +1,64 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'AI Intake Submissions' %}
+{% set page_title_left_icon = '🤖' %}
+{% set page_title_right_icon = '📋' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ai_intake_submissions.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="ais-container">
+    <a href="/ai-intake" class="ais-new-btn">+ New Request</a>
+    <div class="ais-count">{{ submissions|length }} submission{{ 's' if submissions|length != 1 else '' }}</div>
+
+    {% if submissions %}
+    <div class="ais-table-wrap">
+        <table class="ais-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Submitted</th>
+                    <th>Requester</th>
+                    <th>Team</th>
+                    <th>Project</th>
+                    <th>Category</th>
+                    <th>Priority</th>
+                    <th>Timeline</th>
+                    <th>Problem Statement</th>
+                    <th>Expected Outcome</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in submissions %}
+                <tr onclick="window.location='/ai-intake-submissions/{{ s.id }}'">
+                    <td>{{ s.id }}</td>
+                    <td style="white-space:nowrap">{{ s.submitted_at[:16] if s.submitted_at else '' }}</td>
+                    <td>{{ s.requester_name }}<br><small style="color:#64748b">{{ s.email }}</small></td>
+                    <td>{{ s.team }}</td>
+                    <td>{{ s.project_name }}</td>
+                    <td>{{ s.use_case }}</td>
+                    <td>
+                        <span class="ais-priority ais-priority-{{ s.priority|lower }}">{{ s.priority }}</span>
+                    </td>
+                    <td>{{ s.timeline }}</td>
+                    <td class="truncate" title="{{ s.problem_statement }}">{{ s.problem_statement }}</td>
+                    <td class="truncate" title="{{ s.expected_outcome }}">{{ s.expected_outcome }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="ais-empty">No submissions yet. Be the first to submit an AI project request!</div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof initTheme === 'function') initTheme();
+});
+</script>
+{% endblock %}

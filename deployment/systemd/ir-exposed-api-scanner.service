@@ -1,0 +1,36 @@
+[Unit]
+Description=Exposed API Scanner Sidecar (containerized) — serves scanner UI at :8028
+After=network.target
+# docker.service is a system-level unit; user-level systemd can't Requires= it,
+# but docker is enabled at boot so it's always up by the time user services start.
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=60
+TimeoutStopSec=20
+
+ExecStartPre=-/usr/bin/docker stop ir-exposed-api-scanner
+ExecStartPre=-/usr/bin/docker rm ir-exposed-api-scanner
+
+# Run the current image. The :current tag is updated by the deploy portal on
+# activate/rollback. Container is read-only except for /app/backup (bind mount
+# for persistent state) and tmpfs for /tmp and /run. Only 127.0.0.1 is exposed —
+# external access is via the Flask reverse proxy at /exposed-api-scanner-app/*.
+ExecStart=/usr/bin/docker run --rm --name ir-exposed-api-scanner \
+  -p 127.0.0.1:8028:8000 \
+  --user 1001:1001 \
+  --read-only \
+  --tmpfs /tmp:rw,size=64M \
+  --tmpfs /run:rw,size=16M \
+  --memory=1g --cpus=1.0 --pids-limit=128 \
+  --security-opt no-new-privileges \
+  --cap-drop=ALL \
+  -v /home/vinay/security-ops-platform/external/exposed_api_scanner/backup:/app/backup \
+  ir-exposed-api-scanner:current
+
+ExecStop=/usr/bin/docker stop ir-exposed-api-scanner
+
+[Install]
+WantedBy=default.target

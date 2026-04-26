@@ -224,6 +224,16 @@ body {
     text-align: right;
 }
 
+.message-metrics {
+    font-size: 0.7em;
+    opacity: 0.55;
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid rgba(128, 128, 128, 0.2);
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    word-break: break-word;
+}
+
 .typing-indicator {
     display: none;
     padding: 15px 20px;
@@ -456,21 +466,13 @@ body {
 ::-webkit-scrollbar-thumb {
     background: linear-gradient(135deg, #f093fb, #f5576c);
     border-radius: 10px;
-    border: 2px solid transparent;
-    background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
     background: linear-gradient(135deg, #667eea, #764ba2);
-    border: 2px solid transparent;
-    background-clip: padding-box;
+    border-radius: 10px;
 }
 
 ::-webkit-scrollbar-corner {
     background: transparent;
-}
-
-* {
-    scrollbar-width: thin;
-    scrollbar-color: #f093fb rgba(102, 126, 234, 0.1);
 }

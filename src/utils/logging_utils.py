@@ -18,6 +18,11 @@ from src.utils.webex_utils import get_room_name
 eastern = timezone('US/Eastern')
 config = get_config()
 
+
+def get_client_ip():
+    """Get real client IP, accounting for reverse proxy (nginx X-Forwarded-For)."""
+    return request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
+
 # Setup logger for this module
 logger = logging.getLogger(__name__)
 
@@ -313,22 +318,23 @@ def log_activity(bot_access_token, log_file_name):
         def wrapper(*args, **kwargs):
             attachment_actions = args[2]
             activity = args[3]
-            now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M:%S %p %Z')
+            now_eastern = datetime.now(eastern).strftime('%Y-%m-%d %H:%M:%S')
             try:
                 actor = activity["actor"]["displayName"]
-                if actor != config.my_name:
-                    success = _append_csv_with_header(
-                        LOG_FILE_DIR / log_file_name,
-                        headers=["actor", "command_keyword", "room_name", "timestamp_eastern"],
-                        row=[
-                            actor,
-                            attachment_actions.json_data.get('inputs', {}).get('command_keyword'),
-                            get_room_name_cached(attachment_actions.json_data['roomId'], bot_access_token),
-                            now_eastern
-                        ]
+                if actor != config.my_name and actor != 'Ping Bot':
+                    bot_name = log_file_name.replace("_activity_log.csv", "").replace("_conversations.csv", "")
+                    from src.utils.bot_logs_db import log_activity as _db_log_activity
+                    # Try card inputs first, fall back to the Command class attribute
+                    cmd_kw = attachment_actions.json_data.get('inputs', {}).get('command_keyword')
+                    if not cmd_kw and args and hasattr(args[0], 'command_keyword'):
+                        cmd_kw = args[0].command_keyword
+                    _db_log_activity(
+                        bot=bot_name,
+                        actor=actor,
+                        command_keyword=cmd_kw,
+                        room_name=get_room_name_cached(attachment_actions.json_data['roomId'], bot_access_token),
+                        timestamp_eastern=now_eastern,
                     )
-                    if not success:
-                        logger.warning(f"⚠️ Failed to log activity for {log_file_name}, but continuing...")
 
             except KeyError as e:
                 logger.warning(f"⚠️ Missing expected data in activity log: {e}")
@@ -349,7 +355,7 @@ def is_scanner_request():
     Returns True if it matches scanner patterns, False otherwise.
     """
     # Check if the IP is a known scanner
-    if request.remote_addr in SCANNER_IPS:
+    if get_client_ip() in SCANNER_IPS:
         return True
 
     # Check if the request path matches known scanner patterns
@@ -374,25 +380,22 @@ def log_web_activity(func):
 
     @wraps(func)
     def wrapper(*args, **kwargs):
-        # Skip logging if this is a scanner request
+        # Skip logging if this is a scanner request or admin user
         if is_scanner_request():
             return func(*args, **kwargs)
+        if request.cookies.get('traffic_log_exclude') == 'true':
+            return func(*args, **kwargs)
 
-        now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M:%S %p %Z')
+        now_eastern = datetime.now(eastern).strftime('%Y-%m-%d %H:%M:%S')
         log_file_name = "web_server_activity_log.csv"
         try:
-            success = _append_csv_with_header(
-                LOG_FILE_DIR / log_file_name,
-                headers=["remote_addr", "method", "path", "timestamp_eastern"],
-                row=[
-                    request.remote_addr,
-                    request.method,
-                    request.path,
-                    now_eastern
-                ]
+            from src.utils.bot_logs_db import log_web_activity as _db_log_web
+            _db_log_web(
+                remote_addr=get_client_ip(),
+                method=request.method,
+                path=request.path,
+                timestamp_eastern=now_eastern,
             )
-            if not success:
-                logger.warning(f"⚠️ Failed to log web activity for {log_file_name}, but continuing...")
 
         except Exception as e:
             logger.error(f"❌ Unexpected error logging web activity: {e}", exc_info=True)

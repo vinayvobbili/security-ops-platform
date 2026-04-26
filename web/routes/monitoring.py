@@ -66,7 +66,7 @@ def api_domain_monitoring_results(date_str=None):
 
     except Exception as exc:
         logger.error(f"Error fetching monitoring results: {exc}", exc_info=True)
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return jsonify({'success': False, 'error': 'An internal error occurred'}), 500
 
 
 @monitoring_bp.route('/api/domain-monitoring/history')
@@ -95,7 +95,7 @@ def api_domain_monitoring_history():
 
     except Exception as exc:
         logger.error(f"Error listing monitoring history: {exc}", exc_info=True)
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return jsonify({'success': False, 'error': 'An internal error occurred'}), 500
 
 
 @monitoring_bp.route('/api/domain-monitoring/threats')
@@ -107,7 +107,7 @@ def api_outstanding_threats():
         return jsonify({'success': True, 'threats': threats, 'count': len(threats)})
     except Exception as exc:
         logger.error(f"Error fetching outstanding threats: {exc}", exc_info=True)
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return jsonify({'success': False, 'error': 'An internal error occurred'}), 500
 
 
 @monitoring_bp.route('/api/domain-monitoring/threats/acknowledge', methods=['POST'])
@@ -138,4 +138,4 @@ def api_acknowledge_threat():
 
     except Exception as exc:
         logger.error(f"Error acknowledging threat: {exc}", exc_info=True)
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return jsonify({'success': False, 'error': 'An internal error occurred'}), 500

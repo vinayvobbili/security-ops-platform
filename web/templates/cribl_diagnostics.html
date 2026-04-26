@@ -1,0 +1,195 @@
+{% extends 'base_layout.html' %}
+
+{% block page_title_plain %}Cribl Edge Diagnostics{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/cribl_diagnostics.css') }}">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+{% endblock %}
+
+{% block body_classes %}cribl-diag-page{% endblock %}
+
+{% set page_title_text = 'Cribl Edge Diagnostics' %}
+{% set page_title_left_icon = '📡' %}
+{% set page_title_right_icon = '🔍' %}
+
+{% block content %}
+<div class="cd-shell">
+
+    {# ── Upload Zone ─────────────────────────────────── #}
+    <div id="cdUploadZone" class="cd-upload-zone">
+        <div class="cd-upload-inner">
+            <div class="cd-upload-icon">
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+            </div>
+            <div class="cd-upload-label">Drop your Cribl edgeNodes CSV file here</div>
+            <div class="cd-upload-sub">or click anywhere in this box to browse for the file</div>
+            <input type="file" id="cdFileInput" accept=".csv" hidden>
+            <div class="cd-upload-hint">Export from Cribl &rarr; Edge Nodes &rarr; download as CSV</div>
+        </div>
+    </div>
+
+    {# ── Workbench (hidden until upload) ─────────────── #}
+    <div id="cdWorkbench" class="cd-workbench" style="display:none;">
+
+        {# ── Run All Button ──────────────────────────── #}
+        <div class="cd-run-all-banner">
+            <div class="cd-run-all-text">
+                <div class="cd-run-all-title">Quick Start</div>
+                <div class="cd-run-all-desc">Runs all steps automatically: removes duplicates, filters to disconnected hosts, pings them, looks up ServiceNow, and diagnoses each one. Takes 2-3 minutes.</div>
+            </div>
+            <button class="cd-btn cd-btn--run-all" id="cdBtnRunAll">Run Full Diagnostics</button>
+        </div>
+
+        {# ── Summary Cards ───────────────────────────── #}
+        <div class="cd-summary-row">
+            <div class="cd-card cd-card--total">
+                <div class="cd-card-value" id="cdTotalRows">--</div>
+                <div class="cd-card-label">Total Rows</div>
+            </div>
+            <div class="cd-card cd-card--hosts">
+                <div class="cd-card-value" id="cdUniqueHosts">--</div>
+                <div class="cd-card-label">Unique Hosts</div>
+            </div>
+            <div class="cd-card cd-card--online">
+                <div class="cd-card-value" id="cdConnected">--</div>
+                <div class="cd-card-label">Connected</div>
+            </div>
+            <div class="cd-card cd-card--offline">
+                <div class="cd-card-value" id="cdDisconnected">--</div>
+                <div class="cd-card-label">Disconnected</div>
+            </div>
+            <div class="cd-card cd-card--dupes">
+                <div class="cd-card-value" id="cdDuplicates">--</div>
+                <div class="cd-card-label">Duplicate Hosts</div>
+            </div>
+        </div>
+
+        {# ── Step-by-step guide ──────────────────────── #}
+        <div class="cd-steps">
+            <div class="cd-step" id="cdStep1" data-step="1">
+                <div class="cd-step-num">1</div>
+                <div class="cd-step-body">
+                    <div class="cd-step-title">Remove Duplicates</div>
+                    <div class="cd-step-desc">A host can appear many times in the CSV. This keeps only the latest entry per host.</div>
+                </div>
+                <button class="cd-btn cd-btn--dedup cd-step-btn" id="cdBtnDedup">Deduplicate</button>
+            </div>
+
+            <div class="cd-step" id="cdStep2" data-step="2">
+                <div class="cd-step-num">2</div>
+                <div class="cd-step-body">
+                    <div class="cd-step-title">Show Disconnected Only</div>
+                    <div class="cd-step-desc">Removes hosts that are currently online, leaving only the ones that need attention.</div>
+                </div>
+                <button class="cd-btn cd-btn--filter cd-step-btn" id="cdBtnFilterDisc">Filter Disconnected</button>
+            </div>
+
+            <div class="cd-step" id="cdStep3" data-step="3">
+                <div class="cd-step-num">3</div>
+                <div class="cd-step-body">
+                    <div class="cd-step-title">Ping Hosts</div>
+                    <div class="cd-step-desc">Sends a network ping to each host to check if the machine is reachable. This tells you if the host is down or just the Cribl agent.</div>
+                </div>
+                <button class="cd-btn cd-btn--ping cd-step-btn" id="cdBtnPing">Ping Hosts</button>
+            </div>
+
+            <div class="cd-step" id="cdStep4" data-step="4">
+                <div class="cd-step-num">4</div>
+                <div class="cd-step-body">
+                    <div class="cd-step-title">Look Up in ServiceNow</div>
+                    <div class="cd-step-desc">Checks each host in the CMDB to find decommissioned or retired machines that can be safely removed from Cribl.</div>
+                </div>
+                <button class="cd-btn cd-btn--snow cd-step-btn" id="cdBtnSnow">SNOW Lookup</button>
+            </div>
+
+            <div class="cd-step" id="cdStep5" data-step="5">
+                <div class="cd-step-num">5</div>
+                <div class="cd-step-body">
+                    <div class="cd-step-title">Diagnose</div>
+                    <div class="cd-step-desc">Labels each host: "Agent Down" (host is up but Cribl isn't), "Host Down", or "Decommissioned".</div>
+                </div>
+                <button class="cd-btn cd-btn--diagnose cd-step-btn" id="cdBtnDiagnose">Diagnose</button>
+            </div>
+
+            <div class="cd-step" id="cdStep6" data-step="6">
+                <div class="cd-step-num">6</div>
+                <div class="cd-step-body">
+                    <div class="cd-step-title">Download Report</div>
+                    <div class="cd-step-desc">Downloads everything as a formatted Excel spreadsheet you can share or work with.</div>
+                </div>
+                <button class="cd-btn cd-btn--export cd-step-btn" id="cdBtnExport">Export Excel</button>
+            </div>
+
+            <div class="cd-step cd-step--reset">
+                <div class="cd-step-num">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                </div>
+                <div class="cd-step-body">
+                    <div class="cd-step-title">Start Over</div>
+                    <div class="cd-step-desc">Undo all changes and go back to the original uploaded data.</div>
+                </div>
+                <button class="cd-btn cd-btn--reset cd-step-btn" id="cdBtnReset">Reset</button>
+            </div>
+        </div>
+
+        {# ── Progress Bar ────────────────────────────── #}
+        <div id="cdProgress" class="cd-progress" style="display:none;">
+            <div class="cd-progress-header">
+                <span class="cd-progress-label" id="cdProgressLabel">Processing...</span>
+                <span class="cd-progress-count" id="cdProgressCount"></span>
+            </div>
+            <div class="cd-progress-track">
+                <div class="cd-progress-fill" id="cdProgressFill" style="width:0%"></div>
+            </div>
+            <div class="cd-progress-wait">Please wait, this may take a couple of minutes...</div>
+        </div>
+
+        {# ── Action Log ──────────────────────────────── #}
+        <div id="cdActionLog" class="cd-action-log"></div>
+
+        {# ── Quick Filter Presets ─────────────────────── #}
+        <div class="cd-presets" id="cdPresets" style="display:none;">
+            <span class="cd-presets-label">Quick Filters:</span>
+            <button class="cd-preset" data-preset="all">Show All</button>
+            <button class="cd-preset cd-preset--red" data-preset="host-down">Host Down</button>
+            <button class="cd-preset cd-preset--amber" data-preset="agent-down">Agent Down</button>
+            <button class="cd-preset cd-preset--cyan" data-preset="decommissioned">Decommissioned</button>
+            <button class="cd-preset cd-preset--green" data-preset="online">Online</button>
+            <button class="cd-preset cd-preset--dim" data-preset="unknown">Unknown</button>
+        </div>
+
+        {# ── Data Table ──────────────────────────────── #}
+        <div class="cd-table-wrap">
+            <div class="cd-table-header">
+                <span class="cd-table-title">Edge Node Data</span>
+                <div class="cd-table-pager">
+                    <button class="cd-pager-btn" id="cdPagerPrev" disabled>&laquo; Prev</button>
+                    <span class="cd-pager-info" id="cdPagerInfo">--</span>
+                    <button class="cd-pager-btn" id="cdPagerNext" disabled>Next &raquo;</button>
+                </div>
+            </div>
+            <div class="cd-table-scroll">
+                <table class="cd-table" id="cdTable">
+                    <thead id="cdTableHead"></thead>
+                    <tbody id="cdTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        {# ── Upload New File ─────────────────────────── #}
+        <div class="cd-upload-new">
+            <button class="cd-btn cd-btn--new-upload" id="cdBtnNewUpload">Upload a Different File</button>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/cribl_diagnostics.js') }}"></script>
+{% endblock %}

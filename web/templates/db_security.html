@@ -1,0 +1,152 @@
+{% extends 'base_layout.html' %}
+
+{% block page_title_plain %}Database Security{% endblock %}
+
+{% set page_title_text = 'Database Security' %}
+{% set page_title_left_icon = '🛢️' %}
+{% set page_title_right_icon = '🔒' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/db_security.css') }}">
+{% endblock %}
+
+{% block body_classes %}db-security-page{% endblock %}
+
+{% block content %}
+<div class="dbs-container">
+
+    <!-- Demo banner -->
+    <div class="dbs-demo-banner" id="demoBanner" style="display:none;">
+        Demo data — wire up real sources to replace
+    </div>
+
+    <!-- KPI row -->
+    <div class="dbs-kpis" id="kpiRow">
+        <div class="dbs-kpi-card accent-blue">
+            <div class="dbs-kpi-value" id="kpiTotal">--</div>
+            <div class="dbs-kpi-label">Databases</div>
+        </div>
+        <div class="dbs-kpi-card accent-green">
+            <div class="dbs-kpi-value" id="kpiCompliant">--%</div>
+            <div class="dbs-kpi-label">Compliant</div>
+        </div>
+        <div class="dbs-kpi-card accent-amber">
+            <div class="dbs-kpi-value" id="kpiFindings">--</div>
+            <div class="dbs-kpi-label">Total Findings</div>
+        </div>
+        <div class="dbs-kpi-card accent-red">
+            <div class="dbs-kpi-value" id="kpiCritical">--</div>
+            <div class="dbs-kpi-label">Critical Findings</div>
+        </div>
+        <div class="dbs-kpi-card accent-purple">
+            <div class="dbs-kpi-value" id="kpiScore">--</div>
+            <div class="dbs-kpi-label">Avg Score</div>
+        </div>
+    </div>
+
+    <!-- Risk indicators -->
+    <div class="dbs-risk-row" id="riskRow">
+        <div class="dbs-risk-badge risk-red" id="riskUnencrypted" title="Databases with no encryption">
+            <span class="dbs-risk-icon">🔓</span>
+            <span class="dbs-risk-count">--</span>
+            <span class="dbs-risk-label">Unencrypted</span>
+        </div>
+        <div class="dbs-risk-badge risk-amber" id="riskNoAudit" title="Databases without audit logging">
+            <span class="dbs-risk-icon">📝</span>
+            <span class="dbs-risk-count">--</span>
+            <span class="dbs-risk-label">No Audit Log</span>
+        </div>
+        <div class="dbs-risk-badge risk-red" id="riskPublic" title="Databases with public/open access">
+            <span class="dbs-risk-icon">🌐</span>
+            <span class="dbs-risk-count">--</span>
+            <span class="dbs-risk-label">Public Access</span>
+        </div>
+    </div>
+
+    <!-- Tab navigation -->
+    <div class="dbs-tabs">
+        <button class="dbs-tab active" data-tab="inventory">Database Inventory</button>
+        <button class="dbs-tab" data-tab="audit">Audit Activity</button>
+        <button class="dbs-tab" data-tab="access">Privileged Access</button>
+    </div>
+
+    <!-- Tab: Database Inventory -->
+    <div class="dbs-tab-content active" id="tab-inventory">
+        <div class="dbs-table-controls">
+            <div class="dbs-search-wrap">
+                <input type="text" id="dbSearch" class="dbs-search" placeholder="Filter databases...">
+            </div>
+            <div class="dbs-filter-group">
+                <select id="envFilter">
+                    <option value="">All Environments</option>
+                    <option value="Production">Production</option>
+                    <option value="Staging">Staging</option>
+                    <option value="Development">Development</option>
+                </select>
+                <select id="scoreFilter">
+                    <option value="">All Scores</option>
+                    <option value="high">Good (80+)</option>
+                    <option value="mid">Moderate (50-79)</option>
+                    <option value="low">Critical (&lt;50)</option>
+                </select>
+            </div>
+        </div>
+        <div class="dbs-table-wrapper">
+            <table class="dbs-table">
+                <thead>
+                    <tr>
+                        <th>Database</th>
+                        <th>Engine</th>
+                        <th>Env</th>
+                        <th>Owner</th>
+                        <th>Encryption</th>
+                        <th>Last Patched</th>
+                        <th>Audit</th>
+                        <th>Public</th>
+                        <th>Findings</th>
+                        <th>Score</th>
+                    </tr>
+                </thead>
+                <tbody id="dbTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Tab: Audit Activity -->
+    <div class="dbs-tab-content" id="tab-audit">
+        <div class="dbs-timeline" id="auditTimeline"></div>
+    </div>
+
+    <!-- Tab: Privileged Access -->
+    <div class="dbs-tab-content" id="tab-access">
+        <div class="dbs-table-wrapper">
+            <table class="dbs-table">
+                <thead>
+                    <tr>
+                        <th>Account</th>
+                        <th>Role</th>
+                        <th>Databases</th>
+                        <th>MFA</th>
+                        <th>Last Review</th>
+                        <th>Last Login</th>
+                    </tr>
+                </thead>
+                <tbody id="accessTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Loading overlay -->
+    <div id="loadingState" class="dbs-loading">
+        <div class="dbs-spinner"></div>
+        <div>Loading dashboard...</div>
+    </div>
+
+    <!-- Error state -->
+    <div id="errorState" class="dbs-error" style="display:none;"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/db_security.js') }}"></script>
+{% endblock %}

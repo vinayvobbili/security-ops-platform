@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.ir.ollama-serializer</string>
+
+    <key>Comment</key>
+    <string>Serializing reverse proxy for Ollama — prevents concurrent inference deadlocks</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/vvobbilichetty/PycharmProjects/IR/.venv/bin/python3</string>
+        <string>/Users/vvobbilichetty/PycharmProjects/IR/misc_scripts/ollama_serializer.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/vvobbilichetty/PycharmProjects/IR</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/vvobbilichetty/PycharmProjects/IR/logs/ollama_serializer.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/vvobbilichetty/PycharmProjects/IR/logs/ollama_serializer.log</string>
+</dict>
+</plist>

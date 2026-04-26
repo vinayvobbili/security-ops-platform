@@ -15,15 +15,16 @@ logger = logging.getLogger(__name__)
 # tldextract for proper TLD validation (uses Mozilla Public Suffix List)
 import tldextract
 
-# Minimal benign domains to exclude during extraction (reduces unnecessary VT API calls)
-# VT filtering in analyzer.py handles the rest - this is just a fast first-pass filter
+# Benign domains to exclude during extraction.
+# IOC hunt flow bypasses VT filtering, so this list must be comprehensive.
 BENIGN_DOMAINS = {
     # Test/placeholder domains
     'example.com', 'localhost', 'test.com', 'company.com',
     # Common email providers (email addresses still extracted, just not as domain IOCs)
     'gmail.com', 'hotmail.com', 'yahoo.com', 'outlook.com', 'live.com',
-    # Internal domains - never hunt for these
+    # Internal/company domains - never hunt for these
     'acme.com', 'internal.local', 'acmecorp.com',
+    'the company.com',
     # Package registries - legitimate infrastructure, not IOCs
     'npmjs.org', 'registry.npmjs.org', 'yarn.npmjs.org',
     'yarnpkg.com', 'registry.yarnpkg.com',
@@ -32,6 +33,73 @@ BENIGN_DOMAINS = {
     'rubygems.org', 'nuget.org', 'crates.io',
     'packagist.org', 'mvnrepository.com', 'maven.org',
     'docker.io', 'docker.com', 'hub.docker.com',
+    # Cybersecurity vendors - appear as references in tippers, not IOCs
+    'paloaltonetworks.com', 'unit42.paloaltonetworks.com',
+    'crowdstrike.com', 'falcon.crowdstrike.com',
+    'mandiant.com', 'cloud.google.com',
+    'microsoft.com', 'learn.microsoft.com', 'security.microsoft.com',
+    'cisco.com', 'talosintelligence.com',
+    'fortinet.com', 'fortiguard.com',
+    'sentinelone.com', 'sentinellabs.com',
+    'trendmicro.com',
+    'sophos.com', 'news.sophos.com',
+    'symantec.com', 'broadcom.com',
+    'mcafee.com', 'trellix.com',
+    'fireeye.com',
+    'elastic.co', 'elastic.github.io',
+    'zscaler.com',
+    'proofpoint.com',
+    'checkpoint.com', 'research.checkpoint.com',
+    'recordedfuture.com',
+    'sekoia.io',
+    'group-ib.com',
+    'kaspersky.com', 'securelist.com',
+    'eset.com', 'welivesecurity.com',
+    'bitdefender.com',
+    'malwarebytes.com',
+    'cybereason.com',
+    'rapid7.com',
+    'qualys.com',
+    'tenable.com',
+    'dragos.com',
+    'volexity.com',
+    'huntress.com',
+    'infoblox.com',
+    # Threat intel / research references
+    'mitre.org', 'attack.mitre.org', 'cve.mitre.org',
+    'krebsonsecurity.com',
+    'bleepingcomputer.com',
+    'thehackernews.com',
+    'therecord.media',
+    'darkreading.com',
+    'securityweek.com',
+    'threatpost.com',
+    'cyberscoop.com',
+    'schneier.com',
+    'nist.gov', 'nvd.nist.gov',
+    'cisa.gov', 'us-cert.cisa.gov',
+    'cert.org',
+    'virustotal.com',
+    'shodan.io',
+    'abuse.ch', 'bazaar.abuse.ch', 'urlhaus.abuse.ch', 'threatfox.abuse.ch',
+    'otx.alienvault.com', 'alienvault.com',
+    'hybrid-analysis.com',
+    'any.run',
+    'joesandbox.com', 'joesecurity.org',
+    'app.any.run',
+    'urlscan.io',
+    'whois.domaintools.com', 'domaintools.com',
+    'abuseipdb.com',
+    # Cloud / CDN infrastructure
+    'amazonaws.com', 'azure.com', 'azureedge.net',
+    'cloudflare.com', 'cloudfront.net',
+    'akamai.com', 'akamaitechnologies.com',
+    'googleapis.com',
+    'windows.net', 'office365.com', 'office.com',
+    'sharepoint.com', 'onedrive.com',
+    'google.com', 'gstatic.com',
+    'linkedin.com', 'twitter.com', 'x.com',
+    'wikipedia.org', 'medium.com',
 }
 
 # Known benign IPs to exclude
@@ -198,6 +266,9 @@ def extract_domains(text: str) -> List[str]:
     for candidate in candidates:
         if candidate in seen or candidate in BENIGN_DOMAINS:
             continue
+        # Also skip subdomains of benign domains (e.g., portal.the company.com)
+        if any(candidate.endswith('.' + bd) for bd in BENIGN_DOMAINS):
+            continue
 
         # Skip if it looks like a version number (e.g., 1.2.3)
         if re.match(r'^\d+\.\d+\.\d+$', candidate):
@@ -229,6 +300,23 @@ def extract_domains(text: str) -> List[str]:
     return domains
 
 
+def _url_has_benign_domain(url: str) -> bool:
+    """Check if a URL's domain is in the benign domains list."""
+    # Strip protocol
+    domain_part = re.sub(r'^https?://', '', url.lower())
+    # Strip path
+    domain_part = domain_part.split('/')[0]
+    # Strip port
+    domain_part = domain_part.split(':')[0]
+
+    if domain_part in BENIGN_DOMAINS:
+        return True
+    # Check if it's a subdomain of a benign domain (e.g., www.paloaltonetworks.com)
+    if any(domain_part.endswith('.' + bd) for bd in BENIGN_DOMAINS):
+        return True
+    return False
+
+
 def extract_urls(text: str) -> List[str]:
     """Extract URLs from text, including paths without protocol.
 
@@ -246,7 +334,7 @@ def extract_urls(text: str) -> List[str]:
     # Pattern 1: Full URLs with protocol
     full_url_pattern = r'https?://[^\s<>"\')\]]+[^\s<>"\')\].,;:!?]'
     for match in re.findall(full_url_pattern, text, re.IGNORECASE):
-        if match.lower() not in seen:
+        if match.lower() not in seen and not _url_has_benign_domain(match):
             urls.append(match)
             seen.add(match.lower())
 
@@ -265,7 +353,7 @@ def extract_urls(text: str) -> List[str]:
         if '/' in url_path and len(url_path.split('/', 1)[1]) > 0:
             # Add https:// prefix for consistency
             full_url = f"https://{url_path}"
-            if full_url.lower() not in seen:
+            if full_url.lower() not in seen and not _url_has_benign_domain(full_url):
                 urls.append(full_url)
                 seen.add(full_url.lower())
 
@@ -407,6 +495,30 @@ def extract_cves(text: str) -> List[str]:
     return cves
 
 
+def extract_mitre_procedures(text: str) -> dict:
+    """Extract MITRE technique procedure summaries from tipper text.
+
+    Parses the tipper MITRE section format:
+        T1005: Data from Local System - File manager plugin enables browsing...
+        T1552.003: Unsecured Credentials: Bash History - Environment-variable scanner...
+
+    Returns:
+        {technique_id: "Technique Name - Procedure description"}
+    """
+    procedures = {}
+    # Match: T1xxx[.xxx]: Technique Name - Procedure text
+    # The technique name may contain colons (e.g., "Unsecured Credentials: Bash History")
+    pattern = re.compile(r'(T1\d{3}(?:\.\d{3})?)\s*:\s*(.+?)\s*-\s*(.+)')
+    for line in text.split('\n'):
+        m = pattern.search(line.strip())
+        if m:
+            tech_id = m.group(1).upper()
+            tech_name = m.group(2).strip()
+            proc_text = m.group(3).strip()
+            procedures[tech_id] = f"{tech_name} - {proc_text}"
+    return procedures
+
+
 def extract_mitre_techniques(text: str) -> List[str]:
     """Extract MITRE ATT&CK technique IDs from text.
 
@@ -442,11 +554,16 @@ def extract_threat_actors(text: str, known_apt_names: Set[str] = None) -> List[s
     """
     actors = set()
 
+    # Common English words that are real APT names but cause too many false positives
+    apt_name_blocklist = {'lead'}
+
     # Strategy 1: Match known APT names (with word boundaries to avoid partial matches)
     if known_apt_names:
         for apt_name in known_apt_names:
             # Skip very short names (3 chars or less) to avoid false positives
             if len(apt_name) <= 3:
+                continue
+            if apt_name.lower() in apt_name_blocklist:
                 continue
             # Use word boundaries to match whole words only
             pattern = re.compile(r'\b' + re.escape(apt_name) + r'\b', re.IGNORECASE)
@@ -517,142 +634,102 @@ def extract_threat_actors(text: str, known_apt_names: Set[str] = None) -> List[s
     return list(actors)
 
 
-def extract_malware_families(text: str, hashes: dict = None) -> List[str]:
-    """
-    Extract malware family names from text.
-
-    NOTE: This function is intentionally disabled. Malware family matching
-    is handled by vector similarity in ChromaDB - if two tippers both mention
-    "ClawdBot", the embeddings will be similar and they'll be matched as related.
-
-    Regex/list-based extraction was removed because:
-    - Too many false positives ("Assistant", "Banking", etc.)
-    - Requires maintaining a known malware list (flaky)
-    - Vector similarity handles this better
-
-    Args:
-        text: Text to extract from (unused)
-        hashes: Optional hashes (unused)
+def load_known_malware_names() -> tuple:
+    """Load known malware/tool names from MITRE ATT&CK dataset.
 
     Returns:
-        Empty list - malware matching is done via vector similarity
+        (all_names: Set[str], alias_map: dict) where alias_map maps
+        lowercase name -> canonical MITRE name.
     """
-    return []  # Let vector similarity handle malware name matching
+    global _malware_names_cache, _malware_alias_map_cache
 
-    # --- DISABLED: Old extraction logic below ---
-    malware = set()
+    if _malware_names_cache is not None:
+        return _malware_names_cache, _malware_alias_map_cache
 
-    # --- Method 1: Pattern matching for malware mentions ---
-    # Catches: "ClawdBot malware", "OpenClaw RAT", "XYZ backdoor", etc.
-    # Name must start with uppercase (proper noun), keyword is case-insensitive
-    malware_patterns = [
-        r'\b([A-Z][a-zA-Z0-9_-]+)\s+(?i:malware|family)\b',
-        r'\b([A-Z][a-zA-Z0-9_-]+)\s+(?i:RAT|R\.A\.T\.)\b',
-        r'\b([A-Z][a-zA-Z0-9_-]+)\s+(?i:backdoor)\b',
-        r'\b([A-Z][a-zA-Z0-9_-]+)\s+(?i:trojan)\b',
-        r'\b([A-Z][a-zA-Z0-9_-]+)\s+(?i:stealer|infostealer)\b',
-        r'\b([A-Z][a-zA-Z0-9_-]+)\s+(?i:loader)\b',
-        r'\b([A-Z][a-zA-Z0-9_-]+)\s+(?i:botnet)\b',
-        r'\b([A-Z][a-zA-Z0-9_-]+)\s+(?i:ransomware)\b',
-        r'\b([A-Z][a-zA-Z0-9_-]+)\s+(?i:worm)\b',
-        r'\b([A-Z][a-zA-Z0-9_-]+)\s+(?i:rootkit)\b',
-        # Also match "the X malware" pattern
-        r'\b[Tt]he\s+([A-Z][a-zA-Z0-9_-]+)\s+(?i:malware|RAT|backdoor|trojan)\b',
-    ]
+    try:
+        from services.mitre_attack_data import get_attack_malware_names
+        entries = get_attack_malware_names()
+    except Exception as e:
+        logger.debug(f"Could not load MITRE malware names: {e}")
+        _malware_names_cache = set()
+        _malware_alias_map_cache = {}
+        return _malware_names_cache, _malware_alias_map_cache
 
-    # Common words to skip - these appear before "malware" but aren't malware names
-    skip_words = {
-        'The', 'This', 'That', 'New', 'Old', 'Some', 'Any', 'Our', 'Their',
-        'Remote', 'Access', 'Advanced', 'Persistent', 'Common', 'Generic',
-        'Unknown', 'Unnamed', 'Unidentified', 'Suspected', 'Alleged',
-        'Multiple', 'Various', 'Several', 'Custom', 'Novel', 'Emerging',
-        # Common false positives from titles/descriptions
-        'Assistant', 'Banking', 'Mobile', 'Android', 'Windows', 'Linux',
-        'Fake', 'Rogue', 'Targeted', 'Sophisticated', 'Modular',
-    }
+    all_names = set()
+    alias_map = {}  # lowercase -> canonical name
+    for entry in entries:
+        canonical = entry['name']
+        for alias in entry.get('aliases', []):
+            all_names.add(alias)
+            alias_map[alias.lower()] = canonical
 
-    for pattern in malware_patterns:
-        # Don't use IGNORECASE - we want proper noun malware names (uppercase first letter)
-        for match in re.finditer(pattern, text):
-            name = match.group(1)
-            if name not in skip_words and len(name) >= 3:
-                malware.add(name)
+    _malware_names_cache = all_names
+    _malware_alias_map_cache = alias_map
+    logger.debug(f"Loaded {len(all_names)} MITRE malware/tool names")
+    return all_names, alias_map
 
-    # --- Method 2: Known malware family list (common/well-known ones) ---
-    known_malware = [
-        # RATs and backdoors
-        'Cobalt Strike', 'CobaltStrike', 'Beacon',
-        'Mimikatz', 'Meterpreter', 'Metasploit',
-        'AsyncRAT', 'QuasarRAT', 'Quasar', 'NjRAT', 'njRAT',
-        'DarkComet', 'Remcos', 'RemcosRAT', 'NanoCore',
-        'Poison Ivy', 'PoisonIvy', 'Gh0st', 'Gh0stRAT',
-        'PlugX', 'ShadowPad', 'Winnti',
-        'InvisibleFerret', 'BeaverTail',  # North Korea tools
-        'AppleJeus', 'TraderTraitor',
-        'KEYMARBLE', 'HARDRAIN', 'BADCALL',
-        # AI assistant impersonation malware
-        'ClawdBot', 'Clawdbot', 'MoltBot', 'Moltbot', 'OpenClaw', 'Openclaw',
-        'ScreenConnect',  # Legitimate RAT often abused
-        # Infostealers
-        'RedLine', 'Redline Stealer', 'Raccoon', 'Raccoon Stealer',
-        'Vidar', 'Lumma', 'LummaC2', 'Lumma Stealer',
-        'StealC', 'Rhadamanthys', 'Stealc',
-        'FormBook', 'Formbook', 'XLoader',
-        'AgentTesla', 'Agent Tesla', 'SnakeKeylogger', 'Snake Keylogger',
-        'Pony', 'Lokibot', 'LokiBot', 'AZORult', 'Azorult',
-        # Loaders and droppers
-        'Emotet', 'TrickBot', 'Trickbot', 'BazarLoader', 'Bazar',
-        'IcedID', 'QakBot', 'Qakbot', 'QBot', 'Qbot',
-        'BumbleBee', 'Bumblebee', 'PikaBot', 'Pikabot',
-        'SmokeLoader', 'Smokeloader', 'GuLoader', 'Guloader',
-        'SocGholish', 'FakeUpdates',
-        # Other malware families
-        'SystemBC', 'Sliver', 'Brute Ratel', 'BruteRatel',
-        'Havoc', 'Nighthawk', 'Mythic',
-        'PyLangGhost', 'GolangGhost',  # North Korea tools
-        'KANDYKORN', 'SugarLoader', 'SUGARLOADER',
-        'RustBucket', 'KandyKorn',
-        # Additional tools and frameworks
-        'Empire', 'PowerShell Empire',
-        'BloodHound', 'SharpHound',
-        'Rubeus', 'Certify', 'Seatbelt',
-        'LaZagne', 'SharpDPAPI',
-        'Impacket', 'PsExec', 'WMIExec',
-        # Windows-based backdoors and frameworks
-        'Winos4.0', 'Winos', 'WinosStager',
-    ]
 
-    for malware_name in known_malware:
-        # Use word boundaries to match whole words only
-        pattern = re.compile(r'\b' + re.escape(malware_name) + r'\b', re.IGNORECASE)
-        match = pattern.search(text)
-        if match:
-            # Normalize the name (use the matched case or standardize)
-            malware.add(match.group())
+# Common English words that happen to be MITRE malware/tool names
+MALWARE_BLOCKLIST = {
+    'anchor', 'chaos', 'empire', 'expand', 'flame', 'havoc',
+    'james', 'kevin', 'milan', 'mango', 'meteor', 'net', 'ninja',
+    'ping', 'rover', 'royal', 'ruler', 'shark', 'snake', 'spark',
+    'solar', 'page', 'play',
+}
 
-    # --- Method 3: VT hash lookup (most accurate, but requires API calls) ---
-    if hashes:
-        try:
-            from services.virustotal import VirusTotalClient
-            vt_client = VirusTotalClient()
+# Windows/system utilities that MITRE tracks as "tools" but aren't malware families.
+# These are LOLBins — legitimate tools abused by attackers.
+SYSTEM_TOOL_BLOCKLIST = {
+    'arp', 'at', 'attrib', 'bitsadmin', 'certutil', 'cipher.exe',
+    'cmd', 'dsquery', 'esentutl', 'forfiles', 'ftp', 'ifconfig',
+    'ipconfig', 'nbtstat', 'nbtscan', 'net', 'netsh', 'netstat',
+    'nltest', 'ping', 'psexec', 'pwdump', 'rclone', 'reg', 'route',
+    'schtasks', 'sdelete', 'systeminfo', 'tasklist', 'tor', 'wevtutil',
+    # Legitimate remote access tools
+    'connectwise', 'quick assist',
+}
 
-            if vt_client.is_configured():
-                all_hashes = (
-                    hashes.get('sha256', [])[:5] +  # Prefer SHA256
-                    hashes.get('md5', [])[:3] +
-                    hashes.get('sha1', [])[:2]
-                )
-                if all_hashes:
-                    logger.info(f"Extracting malware families from {len(all_hashes)} hashes via VT...")
-                    vt_families = vt_client.extract_malware_families_from_hashes(all_hashes)
-                    for family in vt_families:
-                        malware.add(family)
-                    if vt_families:
-                        logger.info(f"VT identified malware families: {', '.join(vt_families)}")
-        except Exception as e:
-            logger.debug(f"VT malware extraction failed (continuing without): {e}")
 
-    return list(malware)
+def extract_malware_families(text: str, hashes: dict = None) -> List[str]:
+    """Extract malware family names from text using MITRE ATT&CK dataset.
+
+    Uses MITRE's curated malware and tool names (~784 entries, ~1060 names+aliases).
+    Three-layer false-positive defense:
+    1. Skip names <= 3 chars (e.g. 'at', 'cmd', 'ftp')
+    2. Case-sensitive matching for single-word names; case-insensitive for multi-word
+    3. Blocklist for common English words that are also MITRE names
+
+    When an alias matches, normalizes to the canonical MITRE name.
+    """
+    all_names, alias_map = load_known_malware_names()
+    if not all_names:
+        return []
+
+    matched = set()
+
+    for name in all_names:
+        # Layer 1: skip short names
+        if len(name) <= 3:
+            continue
+
+        # Layer 3: blocklist (common words + system utilities)
+        name_lower = name.lower()
+        if name_lower in MALWARE_BLOCKLIST or name_lower in SYSTEM_TOOL_BLOCKLIST:
+            continue
+
+        # Layer 2: case sensitivity based on word count
+        is_multi_word = ' ' in name
+        flags = re.IGNORECASE if is_multi_word else 0
+        pattern = re.compile(r'\b' + re.escape(name) + r'\b', flags)
+        if pattern.search(text):
+            canonical = alias_map.get(name_lower, name)
+            # Also check canonical name against blocklists
+            canon_lower = canonical.lower()
+            if canon_lower in MALWARE_BLOCKLIST or canon_lower in SYSTEM_TOOL_BLOCKLIST:
+                continue
+            matched.add(canonical)
+
+    return sorted(matched)
 
 
 def _get_apt_database_path() -> str:
@@ -687,6 +764,10 @@ def load_known_apt_names() -> Set[str]:
 
 # Cache for APT alias index to avoid reloading
 _apt_alias_index_cache: dict = None
+
+# Cache for MITRE malware/tool names
+_malware_names_cache: Set[str] = None
+_malware_alias_map_cache: dict = None
 
 
 def load_apt_alias_index() -> dict:
@@ -798,7 +879,7 @@ def extract_entities(text: str, include_apt_database: bool = True) -> ExtractedE
         emails=extract_emails(clean_text),
         threat_actors=raw_actors,
         threat_actors_enriched=threat_actors_enriched,
-        malware_families=extract_malware_families(clean_text, hashes=extracted_hashes),
+        malware_families=extract_malware_families(clean_text),
         mitre_techniques=extract_mitre_techniques(clean_text),
     )
 

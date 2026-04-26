@@ -325,6 +325,8 @@ export function showError(message) {
 export function showDashboard() {
     document.getElementById('metricsGrid').style.display = 'grid';
     document.getElementById('chartsGrid').style.display = 'grid';
+    const sankeySection = document.getElementById('sankeySection');
+    if (sankeySection) sankeySection.style.display = 'block';
     document.getElementById('dataTableSection').style.display = 'block';
 }
 

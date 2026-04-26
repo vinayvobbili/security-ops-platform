@@ -50,7 +50,7 @@ RING_3_ENVS = {"dr", "qa/dr"}
 # Ring 4 is for production or unknown environments
 
 # Load region mappings from JSON file for country-based validation
-REGIONS_FILE = ROOT_DIRECTORY / "data" / "regions_by_country.json"
+REGIONS_FILE = ROOT_DIRECTORY / "data" / "regions_by_country_crowdstrike.json"
 with open(REGIONS_FILE, 'r') as f:
     REGIONS_BY_COUNTRY = json.load(f)
 
@@ -78,7 +78,7 @@ def extract_region_from_ring_tag(ring_tag):
     """
     match = re.search(r'FalconGroupingTags/([A-Z]+)SRVRing\d+', ring_tag, re.IGNORECASE)
     if match:
-        return match.group(1).upper()
+        return match.group(1)
     return None
 
 
@@ -97,6 +97,8 @@ def adjust_column_widths(file_path):
             'last_seen': 20,
             'status': 15,
             'cs_host_category': 20,
+            'SNOW_id': 36,
+            'SNOW_ciClass': 28,
             'SNOW_environment': 15,
             'SNOW_country': 20,
             'SNOW_lifecycleStatus': 20,
@@ -197,8 +199,16 @@ def analyze_ring_tags(servers_df):
             percent_complete = (idx / total_servers) * 100
             logger.info(f"Progress: {idx}/{total_servers} servers analyzed ({percent_complete:.1f}%)")
 
-        env = str(server.get('SNOW_environment', '')).lower()
+        # SNOW_environment may be NaN or empty when the SNOW wrapper API doesn't
+        # expose the field for a given host. In that case we skip the env-based
+        # ring check (it would otherwise default to "expected Ring 4" and produce
+        # false positives). The country/region check below still runs.
+        snow_env_raw = server.get('SNOW_environment', '')
+        env = '' if pd.isna(snow_env_raw) else str(snow_env_raw).strip().lower()
         current_tags = server.get('current_tags', '')
+        if pd.isna(current_tags):
+            continue
+        current_tags = str(current_tags)
 
         # Extract all ring numbers first
         all_ring_numbers = re.findall(r'FalconGroupingTags/[^,]*?SRVRing(\d+)', current_tags, re.IGNORECASE)
@@ -227,13 +237,15 @@ def analyze_ring_tags(servers_df):
             servers_df.loc[index, 'has_invalid_ring_tag'] = True
             servers_df.loc[index, 'comment'] = 'multiple ring tags found'
             logger.debug(f"Multiple non-Citrix ring tags found for host {server.get('hostname', 'Unknown')}: {ring_numbers}")
-            continue
 
-        expected_ring = get_expected_ring(env)
-        if any(num != expected_ring for num in ring_numbers):
-            servers_df.loc[index, 'has_invalid_ring_tag'] = True
-            servers_df.loc[index, 'comment'] = f'{env} server should not be in Ring {ring_numbers}, expected Ring {expected_ring}'
-            logger.debug(f"Invalid ring tag found for host {server.get('hostname', 'Unknown')}: Ring {ring_numbers}, expected Ring {expected_ring}")
+        if env:
+            expected_ring = get_expected_ring(env)
+            if any(num != expected_ring for num in ring_numbers):
+                servers_df.loc[index, 'has_invalid_ring_tag'] = True
+                existing_comment = servers_df.loc[index, 'comment']
+                env_comment = f'{env} server should not be in Ring {ring_numbers}, expected Ring {expected_ring}'
+                servers_df.loc[index, 'comment'] = f"{existing_comment}; {env_comment}" if existing_comment else env_comment
+                logger.debug(f"Invalid ring tag found for host {server.get('hostname', 'Unknown')}: Ring {ring_numbers}, expected Ring {expected_ring}")
 
         # Country-based validation (additive to environment validation)
         # This checks if the region in the ring tag matches the expected region for the host's country
@@ -258,7 +270,7 @@ def analyze_ring_tags(servers_df):
                 # Extract region from the ring tag
                 actual_region = extract_region_from_ring_tag(ring_tag)
 
-                if actual_region and actual_region != expected_region:
+                if actual_region and actual_region.casefold() != expected_region.casefold():
                     # Region mismatch detected
                     servers_df.loc[index, 'has_invalid_ring_tag'] = True
 
@@ -327,6 +339,9 @@ def generate_report():
         # Add invalid_tags column
         def extract_invalid_tags(row):
             current_tags = row.get('current_tags', '')
+            if pd.isna(current_tags):
+                return ''
+            current_tags = str(current_tags)
             # Extract all non-Citrix ring tags
             all_ring_numbers = re.findall(r'FalconGroupingTags/[^,]*?SRVRing(\d+)', current_tags, re.IGNORECASE)
             complete_ring_tag_matches = re.findall(r'(FalconGroupingTags/[^,]*?SRVRing\d+)', current_tags, re.IGNORECASE)
@@ -347,6 +362,8 @@ def generate_report():
             'last_seen',
             'status',
             'cs_host_category',
+            'SNOW_id',
+            'SNOW_ciClass',
             'SNOW_environment',
             'SNOW_country',
             'SNOW_lifecycleStatus',

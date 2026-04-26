@@ -1,0 +1,131 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'Favorite URLs' %}
+{% set page_title_left_icon = '🔗' %}
+{% set page_title_right_icon = '⭐' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/favorite_urls.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="fu-container">
+
+    <!-- Toolbar -->
+    <div class="fu-toolbar">
+        <div class="fu-toolbar-left">
+            <span class="fu-count" id="urlCount"></span>
+        </div>
+        <div class="fu-toolbar-right">
+            <button class="fu-btn fu-btn-add" onclick="openAddModal()">+ Add URL</button>
+        </div>
+    </div>
+
+    <!-- Category Tabs -->
+    <div class="fu-tabs" id="categoryTabs">
+        {% for category in categories %}
+        <button class="fu-tab{% if loop.first %} fu-tab-active{% endif %}" data-category="{{ category }}" onclick="switchTab('{{ category }}')">{{ category }}</button>
+        {% endfor %}
+    </div>
+
+    <!-- Tab Content -->
+    {% for category in categories %}
+    <div class="fu-tab-content{% if loop.first %} fu-tab-content-active{% endif %}" id="tab-{{ category }}">
+        {% if urls.get(category) %}
+        <div class="fu-table-wrap">
+            <table class="fu-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>URL / Phone</th>
+                        <th class="fu-th-actions">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in urls[category] %}
+                    <tr data-id="{{ item.id }}" id="row-{{ item.id }}">
+                        <td data-field="name">{{ item.name }}</td>
+                        <td data-field="value">
+                            {% if item.url is defined and item.url %}
+                                <a href="{{ item.url }}" target="_blank" rel="noopener" class="fu-url-link">{{ item.url }}</a>
+                            {% elif item.phone_number is defined and item.phone_number %}
+                                <span class="fu-phone">{{ item.phone_number }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="fu-actions">
+                            <button class="fu-btn-icon fu-btn-edit" onclick="startEdit({{ item.id }}, '{{ 'url' if item.url is defined and item.url else 'phone' }}')" title="Edit">&#9998;</button>
+                            <button class="fu-btn-icon fu-btn-delete" onclick="deleteUrl({{ item.id }})" title="Delete">&times;</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="fu-empty">No items in this category.</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    {% if not categories %}
+    <div class="fu-empty">No favorite URLs yet. Click "+ Add URL" to get started.</div>
+    {% endif %}
+
+</div>
+
+<!-- Add URL Modal -->
+<div class="fu-modal-overlay" id="addModal" style="display:none;" onclick="closeAddModal(event)">
+    <div class="fu-modal" onclick="event.stopPropagation()">
+        <div class="fu-modal-header">
+            <h3>Add Favorite URL</h3>
+            <button class="fu-modal-close" onclick="closeAddModal()">&times;</button>
+        </div>
+        <form id="addUrlForm" onsubmit="submitAddUrl(event)">
+            <div class="fu-form-grid">
+                <div class="fu-form-group">
+                    <label>Name <span class="fu-required">*</span></label>
+                    <input type="text" id="addName" required placeholder="e.g. SIEM Dashboard">
+                </div>
+                <div class="fu-form-group">
+                    <label>Type <span class="fu-required">*</span></label>
+                    <select id="addType">
+                        <option value="url">URL</option>
+                        <option value="phone">Phone Number</option>
+                    </select>
+                </div>
+                <div class="fu-form-group fu-form-full">
+                    <label id="addValueLabel">URL <span class="fu-required">*</span></label>
+                    <input type="text" id="addValue" required placeholder="https://...">
+                </div>
+                <div class="fu-form-group">
+                    <label>Category</label>
+                    <select id="addCategory">
+                        {% for category in categories %}
+                        <option value="{{ category }}">{{ category }}</option>
+                        {% endfor %}
+                        <option value="__new__">+ New Category...</option>
+                    </select>
+                    <input type="text" id="addCategoryCustom" placeholder="New category name" style="display:none; margin-top:6px;">
+                </div>
+            </div>
+            <div class="fu-modal-footer">
+                <button type="button" class="fu-btn fu-btn-cancel" onclick="closeAddModal()">Cancel</button>
+                <button type="submit" class="fu-btn fu-btn-add">Add</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="fu-toast" id="fuToast"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/favorite_urls.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof initTheme === 'function') initTheme();
+    updateCount();
+});
+</script>
+{% endblock %}

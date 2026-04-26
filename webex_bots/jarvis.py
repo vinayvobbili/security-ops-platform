@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 # Import datetime early for startup logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from src.utils.webex_utils import format_eta, clear_stale_lock, periodic_progress_pinger
 
 # Log clear startup marker for visual separation in logs
 logger.warning("=" * 100)
@@ -54,6 +55,7 @@ import fasteners
 import pandas as pd
 from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
+from webex_bots.room_gated_bot import RoomGatedWebexBot
 from webexpythonsdk.models.cards import (
     AdaptiveCard, Column, ColumnSet,
     TextBlock, options, HorizontalAlignment, VerticalContentAlignment
@@ -407,6 +409,7 @@ def run_automated_ring_tagging_workflow():
     # Step 1: Generate report
     logger.info("Step 1: Generating CS hosts without ring tag report...")
     lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_hosts_without_ring_tag.lock"
+    clear_stale_lock(lock_path)
 
     try:
         with fasteners.InterProcessLock(lock_path):
@@ -514,6 +517,7 @@ def run_automated_ring_tagging_workflow():
     )
 
     ring_tag_lock_path = ROOT_DIRECTORY / "src" / "epp" / "ring_tag_cs_hosts.lock"
+    clear_stale_lock(ring_tag_lock_path)
     try:
         with fasteners.InterProcessLock(ring_tag_lock_path):
             ring_tag_cs_hosts.run_workflow(room_id, run_by='scheduled job')
@@ -586,12 +590,13 @@ class GetCSHostsWithoutRingTag(Command):
             markdown=(
                 f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n"
                 "🛡️ **CrowdStrike Hosts Without Ring Tag Report** 🏷️\n"
-                "Estimated completion: ~5 minutes ⏰"
+                f"Estimated completion: {format_eta(5)} ⏰"
             )
         )
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_hosts_without_ring_tag.lock"
+        clear_stale_lock(lock_path)
         try:
-            with fasteners.InterProcessLock(lock_path):
+            with periodic_progress_pinger(webex_api, room_id), fasteners.InterProcessLock(lock_path):
                 cs_hosts_without_ring_tag.generate_report()
                 filename = "cs_hosts_last_seen_without_ring_tag.xlsx"
                 message = 'Unique CS hosts without Ring tags'
@@ -625,12 +630,13 @@ class RingTagCSHosts(Command):
         loading_msg = get_random_loading_message()
         webex_api.messages.create(
             roomId=room_id,
-            markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🏷️**I've started ring tagging the CS Hosts and it is running in the background**\nEstimated completion: ~15 minutes ⏰"
+            markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🏷️**I've started ring tagging the CS Hosts and it is running in the background**\nEstimated completion: {format_eta(15)} ⏰"
         )
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "ring_tag_cs_hosts.lock"
+        clear_stale_lock(lock_path)
         user_name = activity['actor']['displayName']
         try:
-            with fasteners.InterProcessLock(lock_path):
+            with periodic_progress_pinger(webex_api, room_id), fasteners.InterProcessLock(lock_path):
                 ring_tag_cs_hosts.run_workflow(room_id, run_by=user_name)
         except Exception as e:
             logger.error(f"Error in RingTagCSHosts execute: {e}")
@@ -675,11 +681,12 @@ class GetCSHostsWithInvalidRingTags(Command):
 
         webex_api.messages.create(
             roomId=room_id,
-            markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process for CS hosts with Invalid Ring Tags (environment + country validation). It is running in the background and will complete in about 15 mins."
+            markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process for CS hosts with Invalid Ring Tags (environment + country validation). It is running in the background and will complete in about 40 mins."
         )
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_hosts_with_invalid_ring_tags.lock"
+        clear_stale_lock(lock_path)
         try:
-            with fasteners.InterProcessLock(lock_path):
+            with periodic_progress_pinger(webex_api, room_id), fasteners.InterProcessLock(lock_path):
                 cs_hosts_with_invalid_ring_tags.generate_report()
                 send_report_with_progress(room_id, filename, report_message)
                 seek_approval_to_delete_invalid_ring_tags(room_id)
@@ -729,8 +736,9 @@ class RemoveInvalidRings(Command):
             markdown=f"Hello {activity['actor']['displayName']}! Starting removal of invalid ring tags. This may take a few minutes."
         )
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "drop_invalid_ring_tag_cs_hosts.lock"
+        clear_stale_lock(lock_path)
         try:
-            with fasteners.InterProcessLock(lock_path):
+            with periodic_progress_pinger(webex_api, room_id), fasteners.InterProcessLock(lock_path):
                 try:
                     df = pd.read_excel(report_path)
                     hosts_with_tags_to_remove = []
@@ -879,12 +887,14 @@ def jarvis_bot_factory():
         CONFIG.webex_bot_email_tars,  # the threat-intel service bot for Tanium operations
     ]
 
-    return WebexBot(
+    return RoomGatedWebexBot(
         CONFIG.webex_bot_access_token_jarvis,
         approved_domains=[CONFIG.my_web_domain],
         approved_users=approved_bot_emails,  # Allow other bots for peer ping
-        # approved_rooms disabled - bot lacks spark:memberships_read scope for validation
-        # Security: Only add this bot to authorized rooms to control access
+        allowed_room_ids=[
+            CONFIG.webex_room_id_epp_crowdstrike_tagging,
+            CONFIG.webex_room_id_dev_test_space,
+        ],
         bot_name="the orchestration service - The Ring Tagging Assistant",
         threads=True,
         log_level="ERROR",

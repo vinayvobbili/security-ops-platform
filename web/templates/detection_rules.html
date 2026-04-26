@@ -2,7 +2,14 @@
 
 {% block page_title_plain %}Detection Rules Catalog{% endblock %}
 
-{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/detection_rules.css') }}">{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/detection_rules.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/chat_widget.css') }}">
+{% endblock %}
+
+{% block head_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+{% endblock %}
 
 {% block body_classes %}detection-rules-page{% endblock %}
 
@@ -11,11 +18,6 @@
 {% set page_title_right_icon = '📡' %}
 
 {% block content %}
-    <!-- Dark Mode Toggle -->
-    <div class="theme-toggle" id="themeToggleWrapper">
-        <button id="themeToggleBtn" aria-label="Toggle dark mode" title="Toggle dark mode">🌙</button>
-    </div>
-
     <div class="container">
         <!-- Loading State -->
         <div id="loadingState" class="loading-state">
@@ -148,6 +150,63 @@
                 </button>
             </div>
 
+            <!-- ATT&CK Coverage Matrix -->
+            <div class="attack-matrix-section" id="attackMatrixSection">
+                <div class="matrix-section-header">
+                    <h2 class="matrix-section-title">ATT&CK Detection Coverage Matrix</h2>
+                    <div class="matrix-controls-row">
+                        <div class="matrix-legend">
+                            <span class="matrix-legend-label">0</span>
+                            <div class="matrix-legend-bar"></div>
+                            <span class="matrix-legend-label" id="matrixMaxCount">-</span>
+                            <span class="matrix-legend-text">rules</span>
+                        </div>
+                        <div class="matrix-platform-legend">
+                            <span class="platform-dot cs"></span> CrowdStrike
+                            <span class="platform-dot tn"></span> Tanium
+                            <span class="platform-dot qr"></span> QRadar
+                        </div>
+                        <button class="download-btn chain-mode-btn" id="chainModeBtn" onclick="toggleChainMode()">
+                            <span class="btn-icon">🔗</span>
+                            <span class="btn-text">Chain Builder</span>
+                        </button>
+                        <button class="download-btn matrix-export-btn" onclick="exportDetectionNavigatorLayer()">
+                            <span class="btn-icon">🗺️</span>
+                            <span class="btn-text">Export Navigator Layer</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="matrix-scroll">
+                    <div class="matrix-columns" id="detectionMatrixGrid">
+                        <div class="matrix-loading">Loading ATT&CK matrix...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Attack Chain Flowchart -->
+            <div class="attack-chain-section" id="attackChainSection" style="display: none;">
+                <div class="chain-section-header">
+                    <h2 class="chain-section-title">Attack Chain Flowchart</h2>
+                    <div class="chain-controls">
+                        <span class="chain-count" id="chainCount">0 techniques selected</span>
+                        <button class="export-chain-btn" id="copySvgBtn" onclick="copyChainSvg()" style="display:none">Copy SVG</button>
+                        <button class="export-chain-btn" id="savePngBtn" onclick="saveChainPng()" style="display:none">Save PNG</button>
+                        <button class="clear-chain-btn" id="clearChainBtn" onclick="clearChain()">Clear Chain</button>
+                    </div>
+                </div>
+                <div class="chain-description">
+                    Maps selected ATT&CK techniques across kill-chain phases left to right. Technique nodes are color-coded by detection strength: <strong style="color:#16a34a">green</strong> = 5+ rules, <strong style="color:#ca8a04">yellow</strong> = 1-4 rules, <strong style="color:#ef4444">red</strong> = 0 rules. Unselected tactics between your first and last phase appear as dashed gap nodes to highlight blind spots. Use Copy SVG or Save PNG to export for IR reports.
+                </div>
+                <div class="chain-body">
+                    <div class="chain-placeholder" id="chainPlaceholder">
+                        <div class="placeholder-icon">🔗</div>
+                        <div class="placeholder-text">Click technique cells in the matrix above to build an attack chain</div>
+                        <div class="placeholder-hint">Selected techniques will be grouped by tactic and connected left-to-right</div>
+                    </div>
+                    <div class="chain-diagram" id="chainDiagram"></div>
+                </div>
+            </div>
+
             <!-- Data Freshness Footer -->
             <div class="data-freshness">
                 <span class="freshness-icon">🔄</span>
@@ -178,9 +237,12 @@
             </div>
         </div>
     </div>
+{% include '_chat_widget.html' %}
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="{{ url_for('static', filename='js/chat_widget.js') }}"></script>
 <script>
     let allRules = [];
     let filteredRules = [];
@@ -281,6 +343,10 @@
 
             loadingState.style.display = 'none';
             mainContent.style.display = 'block';
+
+            // Load the ATT&CK matrix after rules are rendered
+            loadDetectionMatrix();
+            initMermaid();
 
         } catch (error) {
             console.error('Error loading rules:', error);
@@ -708,6 +774,667 @@
         }
     }
 
+    // ===== ATT&CK Detection Coverage Matrix =====
+    let detectionMatrixRef = null;  // cached reference data
+    let detectionPlatformCounts = null;  // {techId: {crowdstrike, tanium, qradar, total}}
+
+    function computePlatformTechniqueCounts() {
+        const counts = {};
+        for (const rule of allRules) {
+            const techs = rule.mitre_techniques || [];
+            const plat = rule.platform;  // 'crowdstrike', 'tanium', 'qradar'
+            for (const techId of techs) {
+                if (!counts[techId]) counts[techId] = {crowdstrike: 0, tanium: 0, qradar: 0, total: 0};
+                if (plat in counts[techId]) counts[techId][plat]++;
+                counts[techId].total++;
+            }
+        }
+        return counts;
+    }
+
+    async function loadDetectionMatrix() {
+        const grid = document.getElementById('detectionMatrixGrid');
+        grid.innerHTML = '<div class="matrix-loading">Loading ATT&CK matrix...</div>';
+
+        try {
+            detectionPlatformCounts = computePlatformTechniqueCounts();
+            const resp = await fetch('/api/attack-reference');
+            const result = await resp.json();
+            if (!result.success) throw new Error(result.error || 'Failed to load ATT&CK reference');
+            detectionMatrixRef = result;
+            renderDetectionMatrix(result, detectionPlatformCounts);
+        } catch (err) {
+            grid.innerHTML = `<div class="matrix-loading">Error loading matrix: ${escapeHtml(err.message)}</div>`;
+        }
+    }
+
+    function renderDetectionMatrix(refData, platformCounts) {
+        const grid = document.getElementById('detectionMatrixGrid');
+        grid.innerHTML = '';
+
+        // Find max total count for color scaling
+        let maxCount = 0;
+        for (const c of Object.values(platformCounts)) {
+            if (c.total > maxCount) maxCount = c.total;
+        }
+        document.getElementById('matrixMaxCount').textContent = maxCount;
+
+        // Index sub-techniques by parent
+        const subsByParent = {};
+        for (const tech of refData.techniques) {
+            if (tech.is_subtechnique && tech.parent_id) {
+                if (!subsByParent[tech.parent_id]) subsByParent[tech.parent_id] = [];
+                subsByParent[tech.parent_id].push(tech);
+            }
+        }
+        for (const pid of Object.keys(subsByParent)) {
+            subsByParent[pid].sort((a, b) => a.id.localeCompare(b.id));
+        }
+
+        for (const tactic of refData.tactics) {
+            // Get parent techniques in this tactic
+            const techs = refData.techniques
+                .filter(t => !t.is_subtechnique && t.tactics.includes(tactic.id))
+                .sort((a, b) => {
+                    const ca = (platformCounts[a.id] || {total: 0}).total;
+                    const cb = (platformCounts[b.id] || {total: 0}).total;
+                    return cb - ca || a.id.localeCompare(b.id);
+                });
+
+            const col = document.createElement('div');
+            col.className = 'matrix-column';
+
+            const header = document.createElement('div');
+            header.className = 'matrix-tactic-header';
+            header.textContent = tactic.name;
+            header.title = `${tactic.name} (${techs.length} techniques)`;
+            col.appendChild(header);
+
+            for (const tech of techs) {
+                const counts = platformCounts[tech.id] || {crowdstrike: 0, tanium: 0, qradar: 0, total: 0};
+                const subs = subsByParent[tech.id] || [];
+                const hasSubs = subs.length > 0;
+                const cell = createDetectionCell(tech, counts, maxCount, hasSubs, false);
+                col.appendChild(cell);
+
+                if (hasSubs) {
+                    const subContainer = document.createElement('div');
+                    subContainer.className = 'matrix-subs';
+                    subContainer.id = `dr-subs-${tech.id}`;
+                    subContainer.style.display = 'none';
+                    for (const sub of subs) {
+                        const subCounts = platformCounts[sub.id] || {crowdstrike: 0, tanium: 0, qradar: 0, total: 0};
+                        const subCell = createDetectionCell(sub, subCounts, maxCount, false, true);
+                        subContainer.appendChild(subCell);
+                    }
+                    col.appendChild(subContainer);
+                }
+            }
+
+            grid.appendChild(col);
+        }
+    }
+
+    function createDetectionCell(tech, counts, maxCount, expandable, isSub) {
+        const cell = document.createElement('div');
+        cell.className = 'matrix-cell' + (isSub ? ' sub' : '');
+        cell.dataset.techId = tech.id;
+        if (counts.total === 0) cell.classList.add('zero');
+
+        const bg = getDetectionCellColor(counts.total, maxCount);
+        const fg = getDetectionCellTextColor(counts.total, maxCount);
+        cell.style.background = bg;
+        cell.style.color = fg;
+
+        const displayId = isSub ? '.' + tech.id.split('.')[1] : tech.id;
+        let label = '';
+        if (expandable) label += '<span class="matrix-expand-icon">&#9654;</span> ';
+        label += displayId;
+
+        // Platform indicator bars
+        let barsHtml = '';
+        if (counts.total > 0) {
+            barsHtml = '<div class="platform-bars">';
+            if (counts.crowdstrike > 0) barsHtml += '<span class="pbar cs" title="CrowdStrike: ' + counts.crowdstrike + '"></span>';
+            if (counts.tanium > 0) barsHtml += '<span class="pbar tn" title="Tanium: ' + counts.tanium + '"></span>';
+            if (counts.qradar > 0) barsHtml += '<span class="pbar qr" title="QRadar: ' + counts.qradar + '"></span>';
+            barsHtml += '</div>';
+        }
+
+        cell.innerHTML = '<div class="matrix-cell-id">' + label + '</div>' + barsHtml;
+
+        // Tooltip
+        const parts = [];
+        if (counts.crowdstrike > 0) parts.push('CS: ' + counts.crowdstrike);
+        if (counts.tanium > 0) parts.push('Tanium: ' + counts.tanium);
+        if (counts.qradar > 0) parts.push('QRadar: ' + counts.qradar);
+        const platformSummary = parts.length > 0 ? ' — ' + parts.join(', ') : '';
+        cell.title = `${tech.id}: ${tech.name}${platformSummary}`;
+
+        cell.addEventListener('click', (e) => handleDetectionCellClick(e, tech, expandable));
+        return cell;
+    }
+
+    function getDetectionCellColor(count, maxCount) {
+        if (count === 0 || maxCount === 0) {
+            return isDark() ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)';
+        }
+        const t = Math.log1p(count) / Math.log1p(maxCount);
+        if (isDark()) {
+            const r = Math.round(8 + (30 - 8) * (1 - t));
+            const g = Math.round(48 + (80 - 48) * (1 - t) * 0.5);
+            const b = Math.round(107 + (180 - 107) * (1 - t) * 0.3);
+            const alpha = 0.25 + t * 0.7;
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        } else {
+            const r = Math.round(8 + (198 - 8) * (1 - t));
+            const g = Math.round(48 + (219 - 48) * (1 - t));
+            const b = Math.round(107 + (239 - 107) * (1 - t));
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+    }
+
+    function getDetectionCellTextColor(count, maxCount) {
+        if (count === 0) return isDark() ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.25)';
+        const t = Math.log1p(count) / Math.log1p(maxCount);
+        if (isDark()) return t > 0.3 ? '#e2e8f0' : 'rgba(226,232,240,0.7)';
+        return t > 0.4 ? '#ffffff' : '#1e293b';
+    }
+
+    function isDark() {
+        return document.body.classList.contains('dark-mode');
+    }
+
+    function handleDetectionCellClick(e, tech, expandable) {
+        if (chainSelectMode) {
+            const cell = e.currentTarget;
+            if (cell.classList.contains('zero')) return;
+            toggleChainTechnique(tech);
+            return;
+        }
+        if (expandable) {
+            const subsEl = document.getElementById(`dr-subs-${tech.id}`);
+            const parentCell = e.currentTarget;
+            const icon = parentCell.querySelector('.matrix-expand-icon');
+            if (subsEl) {
+                const isOpen = subsEl.style.display !== 'none';
+                subsEl.style.display = isOpen ? 'none' : 'block';
+                if (icon) icon.classList.toggle('expanded', !isOpen);
+            }
+        }
+    }
+
+    async function exportDetectionNavigatorLayer() {
+        if (!detectionPlatformCounts) return;
+
+        const techniqueCounts = {};
+        const platCounts = {};
+        for (const [techId, c] of Object.entries(detectionPlatformCounts)) {
+            techniqueCounts[techId] = c.total;
+            platCounts[techId] = {crowdstrike: c.crowdstrike, tanium: c.tanium, qradar: c.qradar};
+        }
+
+        try {
+            const resp = await fetch('/api/detection-rules/navigator-layer', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({technique_counts: techniqueCounts, platform_counts: platCounts})
+            });
+            if (!resp.ok) throw new Error('Export failed');
+            const blob = await resp.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const cd = resp.headers.get('Content-Disposition');
+            let filename = 'detection_rules_navigator.json';
+            if (cd) {
+                const match = cd.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                if (match && match[1]) filename = match[1].replace(/['"]/g, '');
+            }
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            alert('Navigator export failed: ' + err.message);
+        }
+    }
+
+    // Re-render matrix on theme change
+    window.addEventListener('themechange', () => {
+        if (detectionMatrixRef && detectionPlatformCounts) {
+            renderDetectionMatrix(detectionMatrixRef, detectionPlatformCounts);
+            updateChainCellHighlights();
+            renderChainDiagram();
+        }
+    });
+
+    // ===== Attack Chain Builder =====
+    let chainSelectMode = false;
+    const selectedChainTechniques = new Map(); // techId -> {id, name, tactics}
+    let mermaidRenderCounter = 0;
+
+    const TACTIC_ORDER = [
+        'reconnaissance', 'resource-development', 'initial-access',
+        'execution', 'persistence', 'privilege-escalation',
+        'defense-evasion', 'credential-access', 'discovery',
+        'lateral-movement', 'collection', 'command-and-control',
+        'exfiltration', 'impact'
+    ];
+
+    const TACTIC_DISPLAY_NAMES = {
+        'reconnaissance': 'Reconnaissance',
+        'resource-development': 'Resource Development',
+        'initial-access': 'Initial Access',
+        'execution': 'Execution',
+        'persistence': 'Persistence',
+        'privilege-escalation': 'Privilege Escalation',
+        'defense-evasion': 'Defense Evasion',
+        'credential-access': 'Credential Access',
+        'discovery': 'Discovery',
+        'lateral-movement': 'Lateral Movement',
+        'collection': 'Collection',
+        'command-and-control': 'Command & Control',
+        'exfiltration': 'Exfiltration',
+        'impact': 'Impact'
+    };
+
+    function initMermaid() {
+        const theme = isDark() ? 'dark' : 'default';
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: theme,
+            securityLevel: 'loose',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+    }
+
+    function toggleChainMode() {
+        chainSelectMode = !chainSelectMode;
+        const btn = document.getElementById('chainModeBtn');
+        const grid = document.getElementById('detectionMatrixGrid');
+        const section = document.getElementById('attackChainSection');
+
+        btn.classList.toggle('active', chainSelectMode);
+        grid.classList.toggle('chain-select-active', chainSelectMode);
+
+        if (chainSelectMode) {
+            section.style.display = 'block';
+        } else if (selectedChainTechniques.size === 0) {
+            section.style.display = 'none';
+        }
+    }
+
+    function toggleChainTechnique(tech) {
+        if (selectedChainTechniques.has(tech.id)) {
+            selectedChainTechniques.delete(tech.id);
+        } else {
+            selectedChainTechniques.set(tech.id, {
+                id: tech.id,
+                name: tech.name,
+                tactics: tech.tactics || []
+            });
+        }
+        updateChainCellHighlights();
+        updateChainCount();
+        renderChainDiagram();
+    }
+
+    function updateChainCellHighlights() {
+        document.querySelectorAll('.matrix-cell[data-tech-id]').forEach(cell => {
+            const techId = cell.dataset.techId;
+            cell.classList.toggle('chain-selected', selectedChainTechniques.has(techId));
+        });
+    }
+
+    function updateChainCount() {
+        const count = selectedChainTechniques.size;
+        document.getElementById('chainCount').textContent =
+            count + ' technique' + (count !== 1 ? 's' : '') + ' selected';
+    }
+
+    function buildMermaidDefinition() {
+        if (selectedChainTechniques.size === 0) return '';
+
+        const dark = isDark();
+
+        // Group techniques by their earliest canonical tactic
+        const tacticGroups = new Map();
+        for (const tech of selectedChainTechniques.values()) {
+            let earliestIdx = TACTIC_ORDER.length;
+            let earliestTactic = TACTIC_ORDER[0];
+            for (const tactic of tech.tactics) {
+                const idx = TACTIC_ORDER.indexOf(tactic);
+                if (idx !== -1 && idx < earliestIdx) {
+                    earliestIdx = idx;
+                    earliestTactic = tactic;
+                }
+            }
+            if (!tacticGroups.has(earliestTactic)) {
+                tacticGroups.set(earliestTactic, []);
+            }
+            tacticGroups.get(earliestTactic).push(tech);
+        }
+
+        // Find min/max tactic indices from selected techniques
+        let minIdx = TACTIC_ORDER.length, maxIdx = -1;
+        for (const tactic of tacticGroups.keys()) {
+            const idx = TACTIC_ORDER.indexOf(tactic);
+            if (idx < minIdx) minIdx = idx;
+            if (idx > maxIdx) maxIdx = idx;
+        }
+
+        let def = 'graph LR\n';
+        const subgraphIds = [];
+
+        // Loop through ALL tactics in the range, inserting gaps for empty ones
+        for (let i = minIdx; i <= maxIdx; i++) {
+            const tactic = TACTIC_ORDER[i];
+            const sgId = tactic.replace(/-/g, '_');
+            const sgLabel = TACTIC_DISPLAY_NAMES[tactic] || tactic;
+            subgraphIds.push(sgId);
+
+            const techs = tacticGroups.get(tactic);
+            if (!techs || techs.length === 0) {
+                // Gap node for empty tactic
+                def += `    subgraph ${sgId}["⚠ ${sgLabel}"]\n`;
+                def += `        ${sgId}_gap["No techniques selected"]:::gap\n`;
+                def += '    end\n';
+            } else {
+                def += `    subgraph ${sgId}["${sgLabel}"]\n`;
+                for (const tech of techs) {
+                    const nodeId = tech.id.replace(/\./g, '_');
+                    // Look up rule count
+                    const counts = detectionPlatformCounts ? detectionPlatformCounts[tech.id] : null;
+                    const ruleCount = counts ? counts.total : 0;
+                    let tier, suffix;
+                    if (ruleCount >= 5) {
+                        tier = 'strong';
+                        suffix = `✓ ${ruleCount} rules`;
+                    } else if (ruleCount >= 1) {
+                        tier = 'moderate';
+                        suffix = `⚡ ${ruleCount} rule${ruleCount > 1 ? 's' : ''}`;
+                    } else {
+                        tier = 'weak';
+                        suffix = '✗ 0 rules';
+                    }
+                    const nodeLabel = `${tech.id}<br/>${tech.name}<br/><i>${suffix}</i>`;
+                    def += `        ${nodeId}["${nodeLabel}"]:::${tier}\n`;
+                }
+                def += '    end\n';
+            }
+        }
+
+        // Connect subgraphs left to right
+        if (subgraphIds.length > 1) {
+            def += '    ' + subgraphIds.join(' --> ') + '\n';
+        }
+
+        // classDef definitions (theme-aware)
+        if (dark) {
+            def += '    classDef strong fill:#14532d,stroke:#4ade80,color:#bbf7d0\n';
+            def += '    classDef moderate fill:#422006,stroke:#facc15,color:#fef08a\n';
+            def += '    classDef weak fill:#451a1a,stroke:#f87171,color:#fecaca\n';
+            def += '    classDef gap fill:#1a1a2e,stroke:#f87171,stroke-dasharray:5 5,color:#fca5a5\n';
+        } else {
+            def += '    classDef strong fill:#dcfce7,stroke:#16a34a,color:#14532d\n';
+            def += '    classDef moderate fill:#fef9c3,stroke:#ca8a04,color:#422006\n';
+            def += '    classDef weak fill:#fef2f2,stroke:#ef4444,color:#dc2626\n';
+            def += '    classDef gap fill:#fef2f2,stroke:#ef4444,stroke-dasharray:5 5,color:#dc2626\n';
+        }
+
+        return def;
+    }
+
+    async function renderChainDiagram() {
+        const placeholder = document.getElementById('chainPlaceholder');
+        const diagramEl = document.getElementById('chainDiagram');
+        const copySvgBtn = document.getElementById('copySvgBtn');
+        const savePngBtn = document.getElementById('savePngBtn');
+
+        if (selectedChainTechniques.size === 0) {
+            placeholder.style.display = 'flex';
+            diagramEl.innerHTML = '';
+            copySvgBtn.style.display = 'none';
+            savePngBtn.style.display = 'none';
+            return;
+        }
+
+        placeholder.style.display = 'none';
+        const definition = buildMermaidDefinition();
+
+        try {
+            // Re-init mermaid with current theme
+            const theme = isDark() ? 'dark' : 'default';
+            mermaid.initialize({
+                startOnLoad: false,
+                theme: theme,
+                securityLevel: 'loose',
+                flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
+            });
+
+            mermaidRenderCounter++;
+            const renderId = 'chain-diagram-' + mermaidRenderCounter;
+            const { svg } = await mermaid.render(renderId, definition);
+            diagramEl.innerHTML = svg;
+            copySvgBtn.style.display = '';
+            savePngBtn.style.display = '';
+        } catch (err) {
+            console.error('Mermaid render error:', err);
+            diagramEl.innerHTML = '<div class="chain-render-error">Failed to render diagram. Try adjusting your selection.</div>';
+            copySvgBtn.style.display = 'none';
+            savePngBtn.style.display = 'none';
+        }
+    }
+
+    function clearChain() {
+        selectedChainTechniques.clear();
+        updateChainCellHighlights();
+        updateChainCount();
+        renderChainDiagram();
+        if (!chainSelectMode) {
+            document.getElementById('attackChainSection').style.display = 'none';
+        }
+    }
+
+    async function copyChainSvg() {
+        const diagramEl = document.getElementById('chainDiagram');
+        const svgContent = diagramEl.innerHTML;
+        if (!svgContent) return;
+
+        const btn = document.getElementById('copySvgBtn');
+        try {
+            // Try clipboard API with text/plain fallback
+            await navigator.clipboard.writeText(svgContent);
+            const orig = btn.textContent;
+            btn.textContent = 'Copied!';
+            setTimeout(() => { btn.textContent = orig; }, 1500);
+        } catch (err) {
+            // Fallback: textarea select
+            const ta = document.createElement('textarea');
+            ta.value = svgContent;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            const orig = btn.textContent;
+            btn.textContent = 'Copied!';
+            setTimeout(() => { btn.textContent = orig; }, 1500);
+        }
+    }
+
+    function saveChainPng() {
+        const diagramEl = document.getElementById('chainDiagram');
+        const svgEl = diagramEl.querySelector('svg');
+        if (!svgEl) return;
+
+        const title = 'Attack Chain Flowchart';
+        const description = 'Maps selected ATT\u0026CK techniques across kill-chain phases left to right. Technique nodes are color-coded by detection strength.';
+        const countEl = document.getElementById('chainCount');
+        const subtitle = countEl ? countEl.textContent.trim() : '';
+        const legendItems = [
+            { color: '#16a34a', label: 'Green = 5+ rules (strong)' },
+            { color: '#ca8a04', label: 'Yellow = 1-4 rules (moderate)' },
+            { color: '#ef4444', label: 'Red = 0 rules (gap)' },
+        ];
+
+        const clone = svgEl.cloneNode(true);
+        const bbox = svgEl.getBoundingClientRect();
+        clone.setAttribute('width', bbox.width);
+        clone.setAttribute('height', bbox.height);
+
+        const svgData = new XMLSerializer().serializeToString(clone);
+        const svgBase64 = btoa(unescape(encodeURIComponent(svgData)));
+        const dataUri = 'data:image/svg+xml;base64,' + svgBase64;
+
+        const img = new Image();
+        img.onload = function() {
+            const scale = 2;
+            const pad = 48;
+            const headerH = 72;
+            const descH = 56;
+            const legendH = 52;
+            const footerH = 44;
+            const diagramW = bbox.width;
+            const diagramH = bbox.height;
+            const totalW = Math.max(diagramW + pad * 2, 700);
+            const totalH = headerH + descH + pad + diagramH + pad + legendH + footerH;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = totalW * scale;
+            canvas.height = totalH * scale;
+            const ctx = canvas.getContext('2d');
+            ctx.scale(scale, scale);
+
+            // Background
+            ctx.fillStyle = '#f0f4f8';
+            ctx.fillRect(0, 0, totalW, totalH);
+
+            // Header gradient bar
+            const hGrad = ctx.createLinearGradient(0, 0, totalW, 0);
+            hGrad.addColorStop(0, '#1e3a5f');
+            hGrad.addColorStop(1, '#2563eb');
+            ctx.fillStyle = hGrad;
+            ctx.fillRect(0, 0, totalW, headerH);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 24px -apple-system, "Segoe UI", Roboto, sans-serif';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(title, pad, headerH / 2);
+
+            // Badge right side
+            ctx.font = '13px -apple-system, "Segoe UI", Roboto, sans-serif';
+            ctx.fillStyle = 'rgba(255,255,255,0.7)';
+            const badge = 'Detection Rules \u2022 ' + subtitle;
+            const badgeW = ctx.measureText(badge).width;
+            ctx.fillText(badge, totalW - pad - badgeW, headerH / 2);
+
+            // Description
+            let y = headerH + 16;
+            ctx.fillStyle = '#475569';
+            ctx.font = '13px -apple-system, "Segoe UI", Roboto, sans-serif';
+            const maxLineW = totalW - pad * 2;
+            const words = description.split(' ');
+            let line = '';
+            for (const word of words) {
+                const test = line ? line + ' ' + word : word;
+                if (ctx.measureText(test).width > maxLineW && line) {
+                    ctx.fillText(line, pad, y);
+                    line = word;
+                    y += 18;
+                } else {
+                    line = test;
+                }
+            }
+            if (line) { ctx.fillText(line, pad, y); y += 18; }
+            y += 10;
+
+            // White card behind diagram
+            const cardX = pad - 12;
+            const cardY = y - 8;
+            const cardW = diagramW + 24;
+            const cardH = diagramH + 16;
+            ctx.fillStyle = '#ffffff';
+            ctx.shadowColor = 'rgba(0,0,0,0.08)';
+            ctx.shadowBlur = 12;
+            ctx.shadowOffsetY = 2;
+            _chainRoundRect(ctx, cardX, cardY, cardW, cardH, 8);
+            ctx.fill();
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetY = 0;
+
+            ctx.drawImage(img, pad, y, diagramW, diagramH);
+            y += diagramH + pad;
+
+            // Legend
+            let lx = pad;
+            ctx.font = '12px -apple-system, "Segoe UI", Roboto, sans-serif';
+            ctx.fillStyle = '#64748b';
+            ctx.fillText('Legend:', lx, y + 4);
+            lx += ctx.measureText('Legend:').width + 14;
+            for (const item of legendItems) {
+                ctx.fillStyle = item.color;
+                _chainRoundRect(ctx, lx, y - 5, 12, 12, 2);
+                ctx.fill();
+                lx += 18;
+                ctx.fillStyle = '#334155';
+                ctx.fillText(item.label, lx, y + 4);
+                lx += ctx.measureText(item.label).width + 24;
+            }
+            y += legendH;
+
+            // Footer
+            const footGrad = ctx.createLinearGradient(0, totalH - footerH, totalW, totalH - footerH);
+            footGrad.addColorStop(0, '#e2e8f0');
+            footGrad.addColorStop(1, '#cbd5e1');
+            ctx.fillStyle = footGrad;
+            ctx.fillRect(0, totalH - footerH, totalW, footerH);
+
+            ctx.font = '11px -apple-system, "Segoe UI", Roboto, sans-serif';
+            ctx.fillStyle = '#64748b';
+            ctx.textBaseline = 'middle';
+            const footY = totalH - footerH / 2;
+            const now = new Date();
+            const ts = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                     + ' ' + now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            ctx.fillText('Generated ' + ts, pad, footY);
+
+            canvas.toBlob(function(blob) {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'attack_chain.png';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 'image/png');
+        };
+        img.src = dataUri;
+    }
+
+    function _chainRoundRect(ctx, x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+    }
+
     async function downloadFilteredRules() {
         const downloadBtn = document.getElementById('downloadBtn');
         const originalText = downloadBtn.innerHTML;
@@ -765,5 +1492,89 @@
             downloadBtn.disabled = false;
         }
     }
+
+    // ── Chat Widget ──
+    initChatWidget({
+        title: 'Ask about detection rules',
+        greeting: 'Hi! Ask me anything about the detection rules on this page.',
+        loadingMessages: [
+            'Scanning detection rules\u2026',
+            'Checking MITRE coverage\u2026',
+            'Comparing platform rules\u2026',
+            'Analyzing severity levels\u2026',
+            'Reviewing rule metadata\u2026'
+        ],
+        chips: [
+            {label: 'Coverage gaps', q: 'Which MITRE techniques have no detection rules?'},
+            {label: 'Platform comparison', q: 'Compare rule counts across CrowdStrike, QRadar, and Tanium.'},
+            {label: 'Critical rules', q: 'List the critical severity rules and what they detect.'},
+            {label: 'Rule types', q: 'What types of rules do we have and how many of each?'}
+        ],
+        getContext: function() {
+            if (!allRules.length) return '';
+            var lines = ['# Detection Rules Catalog\n'];
+
+            // Stats
+            var total = allRules.length;
+            var cs = allRules.filter(function(r){return r.platform==='crowdstrike';}).length;
+            var qr = allRules.filter(function(r){return r.platform==='qradar';}).length;
+            var tn = allRules.filter(function(r){return r.platform==='tanium';}).length;
+            lines.push('## Summary');
+            lines.push('- Total rules: ' + total);
+            lines.push('- CrowdStrike: ' + cs + ', QRadar: ' + qr + ', Tanium: ' + tn);
+
+            // Severity breakdown
+            var sevs = {};
+            allRules.forEach(function(r) { sevs[r.severity] = (sevs[r.severity]||0) + 1; });
+            lines.push('- Severities: ' + Object.keys(sevs).map(function(k){return k+': '+sevs[k];}).join(', '));
+
+            // Rule type breakdown
+            var types = {};
+            allRules.forEach(function(r) { types[r.rule_type] = (types[r.rule_type]||0) + 1; });
+            lines.push('- Rule types: ' + Object.keys(types).map(function(k){return k+': '+types[k];}).join(', '));
+
+            // Enabled/disabled
+            var enabled = allRules.filter(function(r){return r.enabled;}).length;
+            lines.push('- Enabled: ' + enabled + ', Disabled: ' + (total - enabled));
+            lines.push('');
+
+            // MITRE coverage
+            var techMap = {};
+            allRules.forEach(function(r) {
+                (r.mitre_techniques || []).forEach(function(t) {
+                    if (!techMap[t]) techMap[t] = {cs:0, qr:0, tn:0};
+                    if (r.platform==='crowdstrike') techMap[t].cs++;
+                    else if (r.platform==='qradar') techMap[t].qr++;
+                    else if (r.platform==='tanium') techMap[t].tn++;
+                });
+            });
+            var techKeys = Object.keys(techMap).sort();
+            if (techKeys.length) {
+                lines.push('## MITRE Technique Coverage (' + techKeys.length + ' techniques)');
+                lines.push('| Technique | CrowdStrike | QRadar | Tanium | Total |');
+                lines.push('| --- | --- | --- | --- | --- |');
+                techKeys.forEach(function(t) {
+                    var c = techMap[t];
+                    lines.push('| ' + t + ' | ' + c.cs + ' | ' + c.qr + ' | ' + c.tn + ' | ' + (c.cs+c.qr+c.tn) + ' |');
+                });
+                lines.push('');
+            }
+
+            // Sample of rules (send first 100 to keep context manageable for LLM)
+            var RULE_CAP = 100;
+            var sample = allRules.slice(0, RULE_CAP);
+            lines.push('## Rules (showing ' + sample.length + ' of ' + allRules.length + ')');
+            lines.push('| Name | Platform | Severity | Type | MITRE |');
+            lines.push('| --- | --- | --- | --- | --- |');
+            sample.forEach(function(r) {
+                lines.push('| ' + (r.name||'-') + ' | ' + (r.platformName||r.platform) + ' | ' + (r.severity||'-') + ' | ' + (r.rule_type||'-') + ' | ' + (r.mitre_techniques||[]).join(', ') + ' |');
+            });
+            if (allRules.length > RULE_CAP) {
+                lines.push('\n*(' + (allRules.length - RULE_CAP) + ' more rules not shown — use the summary stats and MITRE table above for aggregate questions.)*');
+            }
+
+            return lines.join('\n');
+        }
+    });
 </script>
 {% endblock %}

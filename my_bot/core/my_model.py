@@ -27,6 +27,24 @@ from my_bot.core.state_manager import get_state_manager
 
 logging.basicConfig(level=logging.ERROR)
 
+logger = logging.getLogger(__name__)
+
+
+def _metrics(content="", **overrides):
+    """Build a standard metrics response dict. Use overrides for non-zero values."""
+    result = {
+        'content': content,
+        'input_tokens': 0,
+        'output_tokens': 0,
+        'total_tokens': 0,
+        'prompt_time': 0.0,
+        'generation_time': 0.0,
+        'tokens_per_sec': 0.0,
+        'first_token_time': 0.0,
+    }
+    result.update(overrides)
+    return result
+
 
 def is_help_command(query_text: str) -> bool:
     """
@@ -68,6 +86,7 @@ def get_help_response() -> str:
 - `contacts EMEA` - Look up escalation contacts
 - `execsum 929947` - Generate XSOAR ticket executive summary
 - `falcon get browser history from HOST123` - Collect browser history via RTR
+- `block url <domain>` - Block a URL via XSOAR (restricted rooms only)
 - `clear my session` - Reset conversation memory
 
 ### 🔄 Workflow (multi-step investigations)
@@ -153,115 +172,6 @@ workflow help
 `Search docs for phishing`"""
 
 
-def is_tipper_command(query_text: str) -> tuple:
-    """
-    Detect if user is requesting tipper analysis with a simple command.
-
-    Supports patterns like:
-    - "tipper 12345"
-    - "tipper #12345"
-    - "analyze tipper 12345"
-
-    Args:
-        query_text: The user's query string
-
-    Returns:
-        tuple: (is_tipper_command: bool, tipper_id: str or None)
-    """
-    import re
-    query_lower = query_text.lower().strip()
-
-    # Pattern: "tipper <id>" or "tipper #<id>" or "analyze tipper <id>"
-    patterns = [
-        r'^(?:analyze\s+)?tipper\s+#?(\d+)$',  # tipper 12345, tipper #12345, analyze tipper 12345
-    ]
-
-    for pattern in patterns:
-        match = re.match(pattern, query_lower)
-        if match:
-            tipper_id = match.group(1)
-            return (True, tipper_id)
-
-    return (False, None)
-
-
-def handle_tipper_command_with_metrics(tipper_id: str, room_id: str = None) -> dict:
-    """
-    Handle the tipper analysis command with token metrics.
-
-    Delegates to analyze_and_post_to_azdo in tipper_analysis_tools for the full flow.
-
-    Args:
-        tipper_id: The AZDO tipper work item ID
-        room_id: Optional Webex room ID for context
-
-    Returns:
-        dict with 'content' and token metrics
-    """
-    import logging
-    import re
-    logger = logging.getLogger(__name__)
-
-    # Default metrics for error cases
-    default_metrics = {
-        'content': '',
-        'input_tokens': 0,
-        'output_tokens': 0,
-        'total_tokens': 0,
-        'prompt_time': 0.0,
-        'generation_time': 0.0,
-        'tokens_per_sec': 0.0
-    }
-
-    try:
-        from src.components.tipper_analyzer import TipperAnalyzer
-        from my_config import get_config
-
-        logger.info(f"Running tipper analysis for #{tipper_id} via command")
-
-        # Run the full analysis flow (analyze + post analysis + IOC hunt + post hunt results)
-        analyzer = TipperAnalyzer()
-        result = analyzer.analyze_and_post(tipper_id, source="command", room_id=room_id)
-
-        # Linkify work item references for Webex markdown
-        config = get_config()
-
-        def linkify_markdown(text: str) -> str:
-            def replace_match(match):
-                work_item_id = match.group(1)
-                url = f"https://dev.azure.com/{config.azdo_org}/{config.azdo_de_project}/_workitems/edit/{work_item_id}"
-                return f'[#{work_item_id}]({url})'
-            return re.sub(r'#(\d+)', replace_match, text)
-
-        result['content'] = linkify_markdown(result['content'])
-        return result
-
-    except ValueError as e:
-        logger.error(f"Tipper command error: {e}")
-        default_metrics['content'] = f"❌ **Tipper Analysis Failed**\n\n{str(e)}"
-        return default_metrics
-    except Exception as e:
-        logger.error(f"Tipper command error: {e}", exc_info=True)
-        default_metrics['content'] = f"❌ **Tipper Analysis Failed**\n\nAn error occurred while analyzing tipper #{tipper_id}. Please try again."
-        return default_metrics
-
-
-def handle_tipper_command(tipper_id: str, room_id: str = None) -> str:
-    """
-    Handle the tipper analysis command.
-
-    Runs analysis, posts to AZDO, and returns Webex-formatted output.
-
-    Args:
-        tipper_id: The AZDO tipper work item ID
-        room_id: Optional Webex room ID for context
-
-    Returns:
-        str: Formatted analysis for Webex display
-    """
-    result = handle_tipper_command_with_metrics(tipper_id, room_id)
-    return result['content']
-
 
 def is_rules_command(query_text: str) -> tuple:
     """
@@ -310,32 +220,17 @@ def handle_rules_command(query: str) -> dict:
     Returns:
         dict with 'content' and token metrics (all zeros since no LLM used)
     """
-    import logging
-    logger = logging.getLogger(__name__)
-
-    default_metrics = {
-        'content': '',
-        'input_tokens': 0,
-        'output_tokens': 0,
-        'total_tokens': 0,
-        'prompt_time': 0.0,
-        'generation_time': 0.0,
-        'tokens_per_sec': 0.0
-    }
-
     try:
         from src.components.tipper_analyzer.rules import search_rules
         from src.components.tipper_analyzer.rules.formatters import format_rules_for_display
 
         logger.info(f"Searching detection rules for: {query}")
         result = search_rules(query, k=10)
-        default_metrics['content'] = format_rules_for_display(result)
-        return default_metrics
+        return _metrics(format_rules_for_display(result))
 
     except Exception as e:
         logger.error(f"Rules command error: {e}", exc_info=True)
-        default_metrics['content'] = f"Failed to search detection rules: {e}"
-        return default_metrics
+        return _metrics(f"Failed to search detection rules: {e}")
 
 
 def is_falcon_command(query_text: str) -> tuple:
@@ -389,9 +284,6 @@ def handle_falcon_command(query: str, room_id: str = None) -> dict:
     Returns:
         dict with 'content', 'file_path' (optional), and token metrics
     """
-    import logging
-    logger = logging.getLogger(__name__)
-
     # Simple tool-calling approach: LLM picks the tool, we execute it once
     try:
         import time
@@ -429,12 +321,7 @@ def handle_falcon_command(query: str, room_id: str = None) -> dict:
         # Get the LLM from state manager
         state_manager = get_state_manager()
         if not state_manager or not state_manager.llm:
-            return {
-                'content': "❌ LLM not initialized. Please try again.",
-                'file_path': None,
-                'input_tokens': 0, 'output_tokens': 0, 'total_tokens': 0,
-                'prompt_time': 0.0, 'generation_time': 0.0, 'tokens_per_sec': 0.0
-            }
+            return _metrics("❌ LLM not initialized. Please try again.", file_path=None)
 
         # Bind tools to the LLM
         llm_with_tools = state_manager.llm.bind_tools(cs_tools)
@@ -480,29 +367,13 @@ Call exactly one tool to fulfill the request."""
         # Check if a file was generated (e.g., browser history Excel)
         file_path = get_and_clear_generated_file_path()
 
-        return {
-            'content': output or 'No response from CrowdStrike agent',
-            'file_path': file_path,
-            'input_tokens': 0,
-            'output_tokens': 0,
-            'total_tokens': 0,
-            'prompt_time': execution_time,
-            'generation_time': 0.0,
-            'tokens_per_sec': 0.0
-        }
+        return _metrics(output or 'No response from CrowdStrike agent',
+                        file_path=file_path, prompt_time=execution_time)
 
     except Exception as e:
         logger.error(f"Falcon command error: {e}", exc_info=True)
-        return {
-            'content': f"❌ **Falcon Command Failed**\n\nError processing CrowdStrike request: {e}",
-            'file_path': None,
-            'input_tokens': 0,
-            'output_tokens': 0,
-            'total_tokens': 0,
-            'prompt_time': 0.0,
-            'generation_time': 0.0,
-            'tokens_per_sec': 0.0
-        }
+        return _metrics(f"❌ **Falcon Command Failed**\n\nError processing CrowdStrike request: {e}",
+                        file_path=None)
 
 
 def _is_clear_session_command(query_text: str) -> bool:
@@ -625,7 +496,7 @@ def initialize_model_and_agent():
     return success
 
 
-def ask(user_message: str, user_id: str = "default", room_id: str = "default") -> dict:
+def ask(user_message: str, user_id: str = "default", room_id: str = "default", progress_callback=None) -> dict:
     """
     SOC Q&A function with persistent sessions and enhanced error recovery:
 
@@ -656,7 +527,8 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
             'total_tokens': int,        # Total tokens used
             'prompt_time': float,       # Seconds spent processing prompt
             'generation_time': float,   # Seconds spent generating response
-            'tokens_per_sec': float     # Output tokens per second
+            'tokens_per_sec': float,    # Output tokens per second
+            'first_token_time': float   # Seconds until first token generated
         }
     """
 
@@ -665,15 +537,7 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
     try:
         # Basic validation
         if not user_message or not user_message.strip():
-            return {
-                'content': "Please ask me a question!",
-                'input_tokens': 0,
-                'output_tokens': 0,
-                'total_tokens': 0,
-                'prompt_time': 0.0,
-                'generation_time': 0.0,
-                'tokens_per_sec': 0.0
-            }
+            return _metrics("Please ask me a question!")
 
         import re
 
@@ -681,7 +545,7 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
         original_query = query
 
         # Remove bot name mentions from anywhere in the message (common in group chats)
-        bot_names = ['SecOps_the security assistant bot', 'the security assistant bot', 'pokedex', 'secops_pokedex',
+        bot_names = ['DnR_the security assistant bot', 'the security assistant bot', 'pokedex', 'dnr_pokedex',
                      'HAL9000', 'hal9000', 'the orchestration service', 'jarvis',
                      'the notification service', 'toodles', 'the alert triage service', 'barnacles']
 
@@ -708,16 +572,10 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
         # Get session manager for context
         state_manager = get_state_manager()
         if state_manager and not state_manager.is_initialized:
-            logging.error("State manager not initialized. Bot must be initialized before use.")
-            return {
-                'content': "❌ Bot not ready. Please try again in a moment.",
-                'input_tokens': 0,
-                'output_tokens': 0,
-                'total_tokens': 0,
-                'prompt_time': 0.0,
-                'generation_time': 0.0,
-                'tokens_per_sec': 0.0
-            }
+            logging.info("Lazy-initializing the security assistant bot components on first request...")
+            if not state_manager.initialize_all_components():
+                logging.error("Lazy initialization failed.")
+                return _metrics("❌ Bot not ready. Initialization failed — check Ollama connectivity.")
 
         # Get session manager for persistent sessions
         session_manager = get_session_manager()
@@ -738,16 +596,7 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
             else:
                 final_response = "✅ Starting a new session! (No previous context found)"
 
-            elapsed = time.time() - start_time
-            return {
-                'content': final_response,
-                'input_tokens': 0,
-                'output_tokens': 0,
-                'total_tokens': 0,
-                'prompt_time': 0.0,
-                'generation_time': 0.0,
-                'tokens_per_sec': 0.0
-            }
+            return _metrics(final_response)
 
         # Check for explicit 'workflow' command (before help check to handle 'workflow help')
         try:
@@ -765,11 +614,7 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
                     help_text = get_workflow_help()
                     session_manager.add_message(session_key, "user", query)
                     session_manager.add_message(session_key, "assistant", help_text)
-                    return {
-                        'content': help_text,
-                        'input_tokens': 0, 'output_tokens': 0, 'total_tokens': 0,
-                        'prompt_time': 0.0, 'generation_time': 0.0, 'tokens_per_sec': 0.0
-                    }
+                    return _metrics(help_text)
 
                 if workflow_type == "ioc_investigation":
                     logging.info(f"Routing to IOC investigation workflow for: {parsed['ioc_value']}")
@@ -792,11 +637,7 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
                     error_msg = f"Could not determine workflow type. Use `workflow help` for usage.\n\nParsed: IOC={parsed['ioc_value']}, Ticket={parsed['ticket_id']}"
                     session_manager.add_message(session_key, "user", query)
                     session_manager.add_message(session_key, "assistant", error_msg)
-                    return {
-                        'content': error_msg,
-                        'input_tokens': 0, 'output_tokens': 0, 'total_tokens': 0,
-                        'prompt_time': 0.0, 'generation_time': 0.0, 'tokens_per_sec': 0.0
-                    }
+                    return _metrics(error_msg)
 
         except ImportError as e:
             logging.warning(f"LangGraph workflows not available: {e}")
@@ -805,29 +646,7 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
 
         # Check for help command
         if is_help_command(query):
-            return {
-                'content': get_help_response(),
-                'input_tokens': 0,
-                'output_tokens': 0,
-                'total_tokens': 0,
-                'prompt_time': 0.0,
-                'generation_time': 0.0,
-                'tokens_per_sec': 0.0
-            }
-
-        # Check for tipper command (e.g., "tipper 12345")
-        is_tipper, tipper_id = is_tipper_command(query)
-        if is_tipper:
-            response = handle_tipper_command(tipper_id, room_id)
-            return {
-                'content': response,
-                'input_tokens': 0,
-                'output_tokens': 0,
-                'total_tokens': 0,
-                'prompt_time': 0.0,
-                'generation_time': 0.0,
-                'tokens_per_sec': 0.0
-            }
+            return _metrics(get_help_response())
 
         # Check for rules command (e.g., "rules emotet")
         is_rules, rules_query = is_rules_command(query)
@@ -837,7 +656,7 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
         # Quick responses for simple queries (performance optimization)
         simple_query = query.lower().strip()
         if simple_query in ['hi', 'status', 'health', 'are you working']:
-            final_response = "✅ System online and ready"
+            final_response = "Hi 👋🏾"
 
             # Store simple interaction in session
             session_manager.add_message(session_key, "user", query)
@@ -846,15 +665,7 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
             elapsed = time.time() - start_time
             if elapsed > 25:
                 logging.warning(f"Response took {elapsed:.1f}s")
-            return {
-                'content': final_response,
-                'input_tokens': 0,
-                'output_tokens': 0,
-                'total_tokens': 0,
-                'prompt_time': 0.0,
-                'generation_time': 0.0,
-                'tokens_per_sec': 0.0
-            }
+            return _metrics(final_response)
 
         # STEP 1: For complex queries, pass to LLM agent - let it decide everything
         try:
@@ -883,54 +694,25 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
             set_logging_context(session_key)
 
             # execute_query now returns a dict with content, token counts, and timing data
-            result = state_manager.execute_query(agent_input)
-            final_response = result['content']
-            input_tokens = result['input_tokens']
-            output_tokens = result['output_tokens']
-            total_tokens = result['total_tokens']
-            prompt_time = result['prompt_time']
-            generation_time = result['generation_time']
-            tokens_per_sec = result['tokens_per_sec']
+            result = state_manager.execute_routed_query(agent_input, progress_callback=progress_callback)
 
         except Exception as e:
             logging.error(f"Failed to invoke agent: {e}")
-            final_response = "❌ An error occurred. Please try again or contact support."
-            input_tokens = 0
-            output_tokens = 0
-            total_tokens = 0
-            prompt_time = 0.0
-            generation_time = 0.0
-            tokens_per_sec = 0.0
+            result = _metrics("❌ An error occurred. Please try again or contact support.")
 
         # Store user message and bot response in session
         session_manager.add_message(session_key, "user", query)
-        session_manager.add_message(session_key, "assistant", final_response)
+        session_manager.add_message(session_key, "assistant", result['content'])
 
         elapsed = time.time() - start_time
         if elapsed > 25:
             logging.warning(f"Response took {elapsed:.1f}s")
 
-        return {
-            'content': final_response,
-            'input_tokens': input_tokens,
-            'output_tokens': output_tokens,
-            'total_tokens': total_tokens,
-            'prompt_time': prompt_time,
-            'generation_time': generation_time,
-            'tokens_per_sec': tokens_per_sec
-        }
+        return result
 
     except Exception as e:
         logging.error(f"Ask function failed: {e}")
-        return {
-            'content': "❌ An error occurred. Please try again or contact support.",
-            'input_tokens': 0,
-            'output_tokens': 0,
-            'total_tokens': 0,
-            'prompt_time': 0.0,
-            'generation_time': 0.0,
-            'tokens_per_sec': 0.0
-        }
+        return _metrics("❌ An error occurred. Please try again or contact support.")
 
 
 def ask_stream(user_message: str, user_id: str = "default", room_id: str = "default"):
@@ -959,7 +741,7 @@ def ask_stream(user_message: str, user_id: str = "default", room_id: str = "defa
         query = user_message.strip()
 
         # Remove bot name mentions
-        bot_names = ['SecOps_the security assistant bot', 'the security assistant bot', 'pokedex', 'secops_pokedex',
+        bot_names = ['DnR_the security assistant bot', 'the security assistant bot', 'pokedex', 'dnr_pokedex',
                      'HAL9000', 'hal9000', 'the orchestration service', 'jarvis',
                      'the notification service', 'toodles', 'the alert triage service', 'barnacles']
 
@@ -979,8 +761,11 @@ def ask_stream(user_message: str, user_id: str = "default", room_id: str = "defa
         # Get state manager
         state_manager = get_state_manager()
         if state_manager and not state_manager.is_initialized:
-            yield "❌ Bot not ready. Please try again in a moment."
-            return
+            logging.info("Lazy-initializing the security assistant bot components on first request (stream)...")
+            if not state_manager.initialize_all_components():
+                logging.error("Lazy initialization failed.")
+                yield "❌ Bot not ready. Initialization failed — check Ollama connectivity."
+                return
 
         # Get session manager
         session_manager = get_session_manager()
@@ -1008,7 +793,7 @@ def ask_stream(user_message: str, user_id: str = "default", room_id: str = "defa
         # Quick responses for simple queries
         simple_query = query.lower().strip()
         if simple_query in ['hi', 'status', 'health', 'are you working']:
-            response = "✅ System online and ready"
+            response = "Hi 👋🏾"
             session_manager.add_message(session_key, "user", query)
             session_manager.add_message(session_key, "assistant", response)
             yield response
@@ -1026,6 +811,10 @@ def ask_stream(user_message: str, user_id: str = "default", room_id: str = "defa
         # Stream response
         full_response = ""
         for token in state_manager.execute_query_stream(agent_input):
+            if isinstance(token, dict):
+                # Metrics dict from state_manager — pass through without adding to response
+                yield token
+                continue
             full_response += token
             yield token
 

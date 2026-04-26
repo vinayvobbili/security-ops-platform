@@ -1,0 +1,1226 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'RUAI Review' %}
+{% set page_title_left_icon = '🔍' %}
+{% set page_title_right_icon = '📋' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ruai.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/chat_widget.css') }}">
+<style>
+@media print {
+    .ruai-page-bg, .chat-widget-container, .ruai-action-buttons, .ruai-canned-templates,
+    .ruai-assign-input, .ruai-assignment-remove, .ruai-btn-ghost { display: none !important; }
+    .ruai-container { max-width: 100%; padding: 0; }
+    .ruai-detail-grid { grid-template-columns: 1fr; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ruai-page-bg">
+    <div class="ruai-orb ruai-orb-1"></div>
+    <div class="ruai-orb ruai-orb-2"></div>
+    <div class="ruai-orb ruai-orb-3"></div>
+</div>
+<div class="ruai-container">
+    <a href="/ruai-dashboard" class="ruai-back-link">&larr; Back to Dashboard</a>
+
+    <!-- Header -->
+    <div class="ruai-detail-header">
+        <div>
+            <div class="ruai-detail-title">{{ s.use_case_name }}</div>
+            <div class="ruai-detail-meta">
+                {{ s.use_case_id or '#' ~ s.id }} &middot;
+                {{ s.owner_name }} ({{ s.owner_email }}) &middot;
+                {{ s.lob }} &middot;
+                {{ s.use_case_stage }} &middot;
+                Submitted {{ s.submitted_at[:16] if s.submitted_at else '' }}
+            </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <span class="ruai-status ruai-status-{{ s.status }}">{{ s.status|replace('_', ' ')|title }}</span>
+            {% if s.ai_review and s.ai_review.overall_risk_score %}
+            <span class="ruai-risk-badge ruai-risk-{{ s.ai_review.overall_risk_score|lower }}" style="font-size:0.9rem; padding:4px 14px;">{{ s.ai_review.overall_risk_score }} Risk</span>
+            {% endif %}
+            <button class="ruai-btn ruai-btn-ghost" onclick="exportReviewPdf()">📄 Export PDF</button>
+            {% if s.ai_review_count is defined and s.ai_review_count > 1 %}
+            <button class="ruai-btn ruai-btn-ghost" onclick="openCompareModal()">📊 Compare ({{ s.ai_review_count }} reviews)</button>
+            {% endif %}
+            {% if s.status in ['submitted', 'ai_reviewed', 'pending_review'] %}
+            <button class="ruai-btn ruai-btn-ghost" onclick="rerunAiReview({{ s.id }})">🔄 Re-run AI Review</button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Main grid: submission + AI review -->
+    <div class="ruai-detail-grid">
+        <!-- Left: Submission Data -->
+        <div class="ruai-detail-panel">
+            <h3>Submission Responses</h3>
+
+            <!-- Structured fields -->
+            <div class="ruai-detail-section">
+                <h4>Use Case Information</h4>
+                <div class="ruai-qa-item"><div class="ruai-qa-label">Use Case Name</div><div class="ruai-qa-value">{{ s.use_case_name }}</div></div>
+                <div class="ruai-qa-item"><div class="ruai-qa-label">Description</div><div class="ruai-qa-value">{{ s.use_case_description }}</div></div>
+                <div class="ruai-qa-item"><div class="ruai-qa-label">Stage</div><div class="ruai-qa-value">{{ s.use_case_stage }}</div></div>
+                <div class="ruai-qa-item"><div class="ruai-qa-label">Owner</div><div class="ruai-qa-value">{{ s.owner_name }} ({{ s.owner_email }})</div></div>
+                <div class="ruai-qa-item"><div class="ruai-qa-label">LOB</div><div class="ruai-qa-value">{{ s.lob }}</div></div>
+                {% if s.region %}<div class="ruai-qa-item"><div class="ruai-qa-label">Region</div><div class="ruai-qa-value">{{ s.region }}</div></div>{% endif %}
+                <div class="ruai-qa-item"><div class="ruai-qa-label">Development Approach</div><div class="ruai-qa-value">{{ s.vendor_or_inhouse }}{% if s.vendor_name %} — {{ s.vendor_name }}{% endif %}</div></div>
+            </div>
+
+            <!-- All Q&A responses from JSON -->
+            {% if s.responses %}
+            {% if s.responses.get('_source') == 'upload' %}
+            {# Upload submission: raw Q&A from XLSX survey #}
+            <div class="ruai-detail-section">
+                <h4>Survey Responses</h4>
+                {% for q, a in s.responses.items() %}
+                {% if not q.startswith('_') and a is string %}
+                <div class="ruai-qa-item">
+                    <div class="ruai-qa-label">{{ q }}</div>
+                    <div class="ruai-qa-value">{{ a }}</div>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+
+            {% if s.responses.get('_gt_questions') %}
+            <div class="ruai-detail-section">
+                <h4>Follow-up Questions (Governance & Technology)</h4>
+                {% for item in s.responses['_gt_questions'] %}
+                <div class="ruai-qa-item">
+                    <div class="ruai-qa-label">{{ item.q }}</div>
+                    <div class="ruai-qa-value">{{ item.a }}
+                        {% for fu in item.get('follow_ups', []) %}
+                        <div style="margin-top:4px; padding-left:12px; border-left:2px solid var(--ruai-aurora-1, #0891b2); font-size:0.88rem; color:var(--ruai-card-text-secondary, #475569);"><em>Follow-up:</em> {{ fu }}</div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if s.responses.get('_cp_questions') %}
+            <div class="ruai-detail-section">
+                <h4>Control Partner Questions</h4>
+                {% for item in s.responses['_cp_questions'] %}
+                <div class="ruai-qa-item">
+                    <div class="ruai-qa-label">{% if item.get('area') %}<span style="font-weight:600; color:var(--ruai-aurora-2, #7c3aed);">[{{ item.area }}]</span> {% endif %}{{ item.q }}</div>
+                    <div class="ruai-qa-value">{{ item.a }}
+                        {% for fu in item.get('follow_ups', []) %}
+                        <div style="margin-top:4px; padding-left:12px; border-left:2px solid var(--ruai-aurora-1, #0891b2); font-size:0.88rem; color:var(--ruai-card-text-secondary, #475569);"><em>Follow-up:</em> {{ fu }}</div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% else %}
+            {# Standard form submission: use form_config field names #}
+            {% for section in form_config %}
+            {% set section_has_data = [] %}
+            {% for field in section.fields %}
+                {% if s.responses.get(field.name) %}
+                    {% if section_has_data.append(1) %}{% endif %}
+                {% endif %}
+            {% endfor %}
+            {% if section_has_data %}
+            <div class="ruai-detail-section">
+                <h4>{{ section.title }}</h4>
+                {% for field in section.fields %}
+                {% set val = s.responses.get(field.name) %}
+                {% if val %}
+                <div class="ruai-qa-item">
+                    <div class="ruai-qa-label">{{ field.label }}</div>
+                    <div class="ruai-qa-value">
+                        {% if val is iterable and val is not string %}{{ val|join(', ') }}{% else %}{{ val }}{% endif %}
+                    </div>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endfor %}
+            {% endif %}
+            {% endif %}
+
+            {% if s.documents %}
+            <div class="ruai-detail-section">
+                <h4>Uploaded Documents</h4>
+                <div class="ruai-doc-list">
+                    {% for doc_name in s.documents.split(',') %}
+                    {% set dn = doc_name.strip() %}
+                    {% if dn %}
+                    <div class="ruai-doc-item">
+                        <span class="ruai-doc-name" onclick="toggleDocPreview(this, {{ s.id }}, '{{ dn }}')">📎 {{ dn }}</span>
+                        <div class="ruai-doc-preview" style="display:none;"></div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Right: AI Security Review -->
+        <div class="ruai-detail-panel ruai-ai-panel">
+            <h3>AI Security Review</h3>
+
+            {# Tracker — always in DOM, hidden unless actively reviewing #}
+            <div id="ruai-tracker-container" style="display:none;">
+                <div id="ruai-tracker" class="ruai-tracker">
+                    <div class="ruai-tracker-step" data-phase="loading_submission" id="tracker-step-load">
+                        <div class="ruai-tracker-icon"><span class="ruai-tracker-num">1</span></div>
+                        <div class="ruai-tracker-label">Loading Case</div>
+                    </div>
+                    <div class="ruai-tracker-line" id="tracker-line-1"></div>
+                    <div class="ruai-tracker-step" data-phase="connecting_llm" id="tracker-step-llm">
+                        <div class="ruai-tracker-icon"><span class="ruai-tracker-num">2</span></div>
+                        <div class="ruai-tracker-label">Connecting to AI reviewer</div>
+                    </div>
+                    <div class="ruai-tracker-line" id="tracker-line-2"></div>
+                    <div class="ruai-tracker-step" data-phase="analyzing" id="tracker-step-analyze">
+                        <div class="ruai-tracker-icon"><span class="ruai-tracker-num">3</span></div>
+                        <div class="ruai-tracker-label">Analyzing Risks</div>
+                    </div>
+                    <div class="ruai-tracker-line" id="tracker-line-3"></div>
+                    <div class="ruai-tracker-step" data-phase="saving_results" id="tracker-step-save">
+                        <div class="ruai-tracker-icon"><span class="ruai-tracker-num">4</span></div>
+                        <div class="ruai-tracker-label">Saving Results</div>
+                    </div>
+                    <div class="ruai-tracker-line" id="tracker-line-4"></div>
+                    <div class="ruai-tracker-step" data-phase="done" id="tracker-step-done">
+                        <div class="ruai-tracker-icon"><span class="ruai-tracker-num">5</span></div>
+                        <div class="ruai-tracker-label">Review Complete</div>
+                    </div>
+                </div>
+                <div id="ruai-tracker-status" class="ruai-tracker-status">Starting AI review...</div>
+            </div>
+
+            {% if s.ai_review %}
+            {% set ai = s.ai_review %}
+
+            <div id="ruai-ai-content">
+            {% if ai.review_meta %}
+            {% set meta = ai.review_meta %}
+            <div class="ruai-review-stats">
+                <div class="ruai-stats-header">AI Review Stats</div>
+                <div class="ruai-stats-chips">
+                    {% if meta.duration_s %}
+                    <div class="ruai-stat-chip ruai-stat-time">
+                        <span class="ruai-stat-icon">&#9201;</span>
+                        <span class="ruai-stat-value">{{ '%d:%02d'|format(meta.duration_s // 60, meta.duration_s % 60) }}</span>
+                        <span class="ruai-stat-label">analysis time</span>
+                    </div>
+                    {% endif %}
+                    {% if meta.total_tokens or meta.output_tokens %}
+                    <div class="ruai-stat-chip ruai-stat-tokens">
+                        <span class="ruai-stat-icon">&#9889;</span>
+                        <span class="ruai-stat-value">{{ '{:,}'.format(meta.total_tokens or meta.output_tokens) }}</span>
+                        <span class="ruai-stat-label">tokens used</span>
+                    </div>
+                    {% endif %}
+                    {% if meta.model %}
+                    <div class="ruai-stat-chip ruai-stat-model">
+                        <span class="ruai-stat-icon">&#129302;</span>
+                        <span class="ruai-stat-value">
+                            {%- if meta.model.startswith('metiq-') -%}
+                                {{ meta.model.replace('metiq-', 'the internal LLM gateway · ') }}
+                            {%- else -%}
+                                Local LLM
+                            {%- endif -%}
+                        </span>
+                        <span class="ruai-stat-label">model</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            <!-- Overall Risk Score -->
+            {% if ai.overall_risk_score %}
+            <div class="ruai-detail-section" style="text-align:center; padding:16px 0;">
+                <div style="font-size:0.82rem; color:#64748b; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">Overall Risk Score</div>
+                <span class="ruai-risk-badge ruai-risk-{{ ai.overall_risk_score|lower }}" style="font-size:1.2rem; padding:8px 24px;">{{ ai.overall_risk_score }}</span>
+            </div>
+            {% endif %}
+
+            <!-- Per-Area Security Risk Assessment (compact) -->
+            {% if ai.preliminary_risk_assessment %}
+            <div class="ruai-detail-section">
+                <h4>Security Risk by Domain</h4>
+                <div class="ruai-risk-grid">
+                    {% for area, level in ai.preliminary_risk_assessment.items() %}
+                    <div class="ruai-risk-cell">
+                        <div class="ruai-risk-cell-label">{{ area|replace('_', ' ')|title }}</div>
+                        <span class="ruai-risk-badge ruai-risk-{{ level|lower }}">{{ level }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- AI-Specific Threat Surface -->
+            {% if ai.ai_threat_surface %}
+            <div class="ruai-detail-section">
+                <h4>AI Threat Surface</h4>
+                {% for ts in ai.ai_threat_surface %}
+                <div class="ruai-tb-card">
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                        <strong>{{ ts.threat }}</strong>
+                        <span class="ruai-risk-badge ruai-risk-{{ ts.impact|lower|default('medium') }}" style="font-size:0.75rem; padding:2px 8px;">Impact: {{ ts.impact }}</span>
+                        <span style="font-size:0.78rem; color:var(--ruai-card-text-secondary, #64748b);">Likelihood: {{ ts.likelihood }}</span>
+                    </div>
+                    {% if ts.details %}<div style="font-size:0.88rem;">{{ ts.details }}</div>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Control Coverage Map -->
+            {% if ai.control_coverage_map %}
+            <div class="ruai-detail-section">
+                <h4>Control Coverage Map</h4>
+                <table class="ruai-control-table">
+                    <thead>
+                        <tr>
+                            <th>Boundary</th>
+                            <th>Control</th>
+                            <th>Status</th>
+                            <th>Gap Detail</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cm in ai.control_coverage_map %}
+                        <tr class="ruai-control-row ruai-control-{{ cm.status|lower|replace(' ', '-') }}">
+                            <td>{{ cm.boundary }}</td>
+                            <td>{{ cm.control }}</td>
+                            <td>
+                                {% if cm.status == 'Present' %}
+                                <span class="ruai-control-status status-present">Present</span>
+                                {% elif cm.status == 'Partial' %}
+                                <span class="ruai-control-status status-partial">Partial</span>
+                                {% else %}
+                                <span class="ruai-control-status status-missing">Missing</span>
+                                {% endif %}
+                            </td>
+                            <td style="font-size:0.85rem;">{{ cm.gap_detail or '' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+
+            <!-- Completeness Issues -->
+            {% if ai.completeness_issues %}
+            <div class="ruai-detail-section">
+                <h4>Completeness Issues</h4>
+                {% for issue in ai.completeness_issues %}
+                <div class="ruai-ai-issue">{{ issue }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Security Risk Flags -->
+            {% if ai.risk_flags %}
+            <div class="ruai-detail-section">
+                <h4>Security Risk Flags</h4>
+                {% for flag in ai.risk_flags %}
+                <div class="ruai-ai-risk-flag risk-{{ flag.level|lower }}">
+                    <span class="ruai-risk-badge ruai-risk-{{ flag.level|lower }}">{{ flag.level }}</span>
+                    <div><strong>{{ flag.area }}</strong>: {{ flag.reason }}</div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Threat Boundary Analysis -->
+            {% if ai.threat_boundary_analysis %}
+            <div class="ruai-detail-section">
+                <h4>Threat Boundary Analysis</h4>
+                {% for tb in ai.threat_boundary_analysis %}
+                <div class="ruai-tb-card">
+                    <strong>{{ tb.boundary }}</strong>
+                    {% if tb.components %}<div class="ruai-tb-meta">Components: {{ tb.components if tb.components is string else tb.components|join(', ') }}</div>{% endif %}
+                    {% if tb.risks %}<div class="ruai-tb-risks"><strong>Risks:</strong> {{ tb.risks if tb.risks is string else tb.risks|join('; ') }}</div>{% endif %}
+                    {% if tb.controls_present %}<div class="ruai-tb-controls"><strong>Controls:</strong> {{ tb.controls_present if tb.controls_present is string else tb.controls_present|join('; ') }}</div>{% endif %}
+                    {% if tb.gaps %}<div class="ruai-tb-gaps"><strong>Gaps:</strong> {{ tb.gaps if tb.gaps is string else tb.gaps|join('; ') }}</div>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Clarifying Questions -->
+            {% if ai.clarifying_questions %}
+            <div class="ruai-detail-section">
+                <h4>Clarifying Questions</h4>
+                {% for q in ai.clarifying_questions %}
+                <div class="ruai-ai-question">{{ q }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Summary -->
+            {% if ai.review_summary_md %}
+            <div class="ruai-detail-section">
+                <h4>Review Summary</h4>
+                <div class="ruai-ai-summary">{{ ai.review_summary_md }}</div>
+            </div>
+            {% endif %}
+            </div>{# close ruai-ai-content #}
+
+            {% else %}
+            <div id="ruai-no-review" style="{{ 'display:none;' if s.status == 'ai_reviewing' else '' }}text-align:center; padding:40px 20px; color:#64748b;">
+                <p>No AI review available.</p>
+                <button class="ruai-btn ruai-btn-ghost" onclick="rerunAiReview({{ s.id }})">🤖 Run AI Review</button>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- F2: Security Control Mapping Checklist -->
+    <div class="ruai-checklist-panel" id="checklist-panel">
+        <h3>Security Control Mapping Checklist</h3>
+        <div class="ruai-checklist-progress" id="checklist-progress">
+            <div class="ruai-checklist-bar"><div class="ruai-checklist-bar-fill" id="checklist-bar-fill" style="width:0%"></div></div>
+            <span id="checklist-count">0/12</span>
+        </div>
+        <div class="ruai-checklist-items" id="checklist-items">
+            <!-- Populated by JS -->
+        </div>
+    </div>
+
+    <!-- F5: Similar Past Cases -->
+    <div class="ruai-similar-panel" id="similar-panel">
+        <h3 class="ruai-collapsible-header" onclick="toggleSection('similar-content')">Similar Past Cases <span id="similar-toggle" style="float:right; font-size:0.8rem;">▼</span></h3>
+        <div id="similar-content" class="ruai-collapsible-content" style="display:none;">
+            <div id="similar-loading" style="text-align:center; padding:16px; color:var(--ruai-panel-text-muted);">Loading...</div>
+            <div id="similar-list"></div>
+        </div>
+    </div>
+
+    <!-- F10: Assigned Reviewers -->
+    <div class="ruai-assignments-panel" id="assignments-panel">
+        <h3>Assigned Reviewers</h3>
+        <div class="ruai-assignments-list" id="assignments-list">
+            {% if s.assignments %}
+            {% for a in s.assignments %}
+            <div class="ruai-assignment-chip {{ 'signed-off' if a.signed_off else '' }}">
+                <span class="ruai-assignment-name">{{ a.reviewer_name }}</span>
+                {% if a.signed_off %}
+                <span class="ruai-assignment-badge" title="Signed off {{ a.signed_off_at or '' }}">✓</span>
+                {% else %}
+                <span class="ruai-assignment-badge pending">pending</span>
+                {% endif %}
+                <span class="ruai-assignment-remove" onclick="unassignReviewer({{ s.id }}, '{{ a.reviewer_name }}')" title="Remove">×</span>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="ruai-assignment-empty" id="no-assignments">No reviewers assigned yet.</div>
+            {% endif %}
+        </div>
+        <div class="ruai-assign-input">
+            <input type="text" id="assign-reviewer-input" placeholder="Reviewer name to assign...">
+            <button class="ruai-btn ruai-btn-ghost" onclick="assignReviewer({{ s.id }})" style="padding:8px 16px;">Assign</button>
+        </div>
+    </div>
+
+    <!-- Reviewer Actions -->
+    <div class="ruai-actions-panel">
+        <h3>Reviewer Actions</h3>
+        <div class="ruai-reviewer-input">
+            <label for="reviewer-name">Reviewer:</label>
+            <input type="text" id="reviewer-name" placeholder="Your name">
+        </div>
+        <!-- F3: Canned Response Templates -->
+        <div class="ruai-canned-templates" id="canned-templates">
+            <div class="ruai-canned-label">Quick templates <small>(click to append, double-click to replace)</small></div>
+            <div class="ruai-canned-chips" id="canned-chips"></div>
+        </div>
+        <textarea id="reviewer-notes" placeholder="Notes, comments, or clarifying questions..."></textarea>
+        <div class="ruai-action-buttons">
+            <button class="ruai-btn ruai-btn-approve" id="btn-approve" onclick="submitAction({{ s.id }}, 'approve')">✅ Approve</button>
+            <button class="ruai-btn ruai-btn-reject" onclick="submitAction({{ s.id }}, 'reject')">❌ Reject</button>
+            <button class="ruai-btn ruai-btn-changes" onclick="submitAction({{ s.id }}, 'request_changes')">🔁 Request Changes</button>
+            <button class="ruai-btn ruai-btn-secondary" onclick="submitAction({{ s.id }}, 'comment')">💬 Add Comment</button>
+        </div>
+    </div>
+
+    <!-- F4: Risk Comparison Modal -->
+    <div id="compare-modal" class="ruai-modal">
+        <div class="ruai-modal-content" style="max-width:900px; text-align:left;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <h3 style="margin:0;">AI Review Comparison</h3>
+                <button class="ruai-btn ruai-btn-ghost" onclick="closeCompareModal()" style="padding:6px 12px;">✕ Close</button>
+            </div>
+            <div id="compare-content">Loading...</div>
+        </div>
+    </div>
+
+    <!-- Action History -->
+    {% if s.reviewer_actions %}
+    <div class="ruai-timeline">
+        <h3>Review History</h3>
+        {% for action in s.reviewer_actions %}
+        <div class="ruai-timeline-item">
+            <div class="ruai-timeline-dot {{ action.action }}"></div>
+            <div class="ruai-timeline-content">
+                <div class="ruai-timeline-action">{{ action.reviewer_name }} — {{ action.action|replace('_', ' ')|title }}</div>
+                <div class="ruai-timeline-meta">{{ action.created_at }}</div>
+                {% if action.notes %}<div class="ruai-timeline-notes">{{ action.notes }}</div>{% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+<div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+{% include '_chat_widget.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="{{ url_for('static', filename='js/dashboard_export.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chat_widget.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof initTheme === 'function') initTheme();
+
+    // Restore reviewer name from localStorage
+    var saved = localStorage.getItem('ruai_reviewer_name');
+    if (saved) document.getElementById('reviewer-name').value = saved;
+
+    // F2: Load checklist
+    loadChecklist();
+
+    // F3: Canned response templates
+    initCannedTemplates();
+
+    // F5: Load similar cases
+    loadSimilarCases();
+
+    // F6: Regulatory mapping badges
+    addRegulatoryBadges();
+
+    // Start polling if status is ai_reviewing (page loaded mid-review)
+    {% if s.status == 'ai_reviewing' %}
+    var trackerContainer = document.getElementById('ruai-tracker-container');
+    var aiContent = document.getElementById('ruai-ai-content');
+    if (trackerContainer) trackerContainer.style.display = '';
+    if (aiContent) aiContent.style.display = 'none';
+    setTrackerPhase('loading_submission');
+    pollReviewStatus({{ s.id }});
+    {% endif %}
+
+    // ── Chat Widget ──
+    initChatWidget({
+        title: 'Ask about this use case',
+        greeting: 'Hi! Ask me anything about this AI use case screening.',
+        loadingMessages: [
+            'Reviewing use case details\u2026',
+            'Analyzing risk flags\u2026',
+            'Checking threat boundaries\u2026',
+            'Evaluating completeness\u2026',
+            'Reviewing AI assessment\u2026'
+        ],
+        chips: [
+            {label: 'Risk summary', q: 'What is the overall risk and what are the key risk flags?'},
+            {label: 'Completeness gaps', q: 'Are there any completeness issues or missing information?'},
+            {label: 'Threat boundaries', q: 'Summarize the threat boundary analysis.'},
+            {label: 'Clarifying questions', q: 'What clarifying questions did the AI review raise?'}
+        ],
+        getContext: function() {
+            var lines = ['# RUAI Use Case Detail\n'];
+
+            // Header metadata
+            var header = document.querySelector('.ruai-detail-header');
+            if (header) {
+                var title = header.querySelector('.ruai-detail-title');
+                var meta = header.querySelector('.ruai-detail-meta');
+                if (title) lines.push('## ' + title.textContent.trim());
+                if (meta) lines.push(meta.textContent.trim());
+                lines.push('');
+            }
+
+            // Status & risk badge from header
+            var status = header ? header.querySelector('.ruai-status') : null;
+            var riskBadge = header ? header.querySelector('.ruai-risk-badge') : null;
+            if (status) lines.push('**Status:** ' + status.textContent.trim());
+            if (riskBadge) lines.push('**Overall Risk:** ' + riskBadge.textContent.trim());
+            lines.push('');
+
+            // All detail sections (submission + AI review panels)
+            var sections = document.querySelectorAll('.ruai-detail-section');
+            sections.forEach(function(sec) {
+                var h4 = sec.querySelector('h4');
+                if (h4) lines.push('## ' + h4.textContent.trim());
+
+                // Q&A items
+                var qaItems = sec.querySelectorAll('.ruai-qa-item');
+                qaItems.forEach(function(qa) {
+                    var label = qa.querySelector('.ruai-qa-label');
+                    var value = qa.querySelector('.ruai-qa-value');
+                    if (label && value) {
+                        lines.push('- **' + label.textContent.trim() + ':** ' + value.textContent.trim());
+                    }
+                });
+
+                // Risk grid cells
+                var riskCells = sec.querySelectorAll('.ruai-risk-cell');
+                riskCells.forEach(function(cell) {
+                    var lbl = cell.querySelector('.ruai-risk-cell-label');
+                    var badge = cell.querySelector('.ruai-risk-badge');
+                    if (lbl && badge) {
+                        lines.push('- ' + lbl.textContent.trim() + ': ' + badge.textContent.trim());
+                    }
+                });
+
+                // Completeness issues
+                var issues = sec.querySelectorAll('.ruai-ai-issue');
+                issues.forEach(function(el) { lines.push('- ' + el.textContent.trim()); });
+
+                // Risk flags
+                var flags = sec.querySelectorAll('.ruai-ai-risk-flag');
+                flags.forEach(function(el) { lines.push('- ' + el.textContent.trim()); });
+
+                // Threat boundary cards
+                var tbCards = sec.querySelectorAll('.ruai-tb-card');
+                tbCards.forEach(function(el) { lines.push('- ' + el.textContent.trim().replace(/\s+/g, ' ')); });
+
+                // Clarifying questions
+                var questions = sec.querySelectorAll('.ruai-ai-question');
+                questions.forEach(function(el) { lines.push('- ' + el.textContent.trim()); });
+
+                // Review summary
+                var summary = sec.querySelector('.ruai-ai-summary');
+                if (summary) lines.push(summary.textContent.trim());
+
+                lines.push('');
+            });
+
+            // Review history
+            var timeline = document.querySelectorAll('.ruai-timeline-item');
+            if (timeline.length) {
+                lines.push('## Review History');
+                timeline.forEach(function(item) {
+                    var action = item.querySelector('.ruai-timeline-action');
+                    var timeMeta = item.querySelector('.ruai-timeline-meta');
+                    var notes = item.querySelector('.ruai-timeline-notes');
+                    var parts = [];
+                    if (action) parts.push(action.textContent.trim());
+                    if (timeMeta) parts.push('(' + timeMeta.textContent.trim() + ')');
+                    if (notes) parts.push('— ' + notes.textContent.trim());
+                    lines.push('- ' + parts.join(' '));
+                });
+            }
+
+            return lines.join('\n');
+        }
+    });
+});
+
+function submitAction(submissionId, action) {
+    var name = document.getElementById('reviewer-name').value.trim();
+    var notes = document.getElementById('reviewer-notes').value.trim();
+
+    if (!name) {
+        if (typeof showToast === 'function') showToast('Please enter your name');
+        document.getElementById('reviewer-name').focus();
+        return;
+    }
+
+    // Remember name
+    localStorage.setItem('ruai_reviewer_name', name);
+
+    fetch('/api/ruai/' + submissionId + '/action', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({reviewer_name: name, action: action, notes: notes})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.status === 'success') {
+            window.location.reload();
+        } else {
+            if (typeof showToast === 'function') showToast(data.message || 'Error');
+        }
+    })
+    .catch(function() {
+        if (typeof showToast === 'function') showToast('Network error');
+    });
+}
+
+var TRACKER_CHECK_SVG = '<svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>';
+var TRACKER_PHASES = ['loading_submission', 'connecting_llm', 'analyzing', 'saving_results', 'done'];
+var TRACKER_STEP_IDS = ['tracker-step-load', 'tracker-step-llm', 'tracker-step-analyze', 'tracker-step-save', 'tracker-step-done'];
+var TRACKER_LINE_IDS = ['tracker-line-1', 'tracker-line-2', 'tracker-line-3', 'tracker-line-4'];
+var TRACKER_STATUS_MESSAGES = {
+    'loading_submission': 'Loading case data...',
+    'connecting_llm': 'Connecting to AI reviewer...',
+    'analyzing': 'Analyzing risk factors, controls, and compliance gaps...',
+    'saving_results': 'Saving review results...',
+    'done': 'AI review complete!',
+    'error': 'AI review failed. You can try again.',
+};
+var ANALYZING_TIPS = [
+    {text: 'Evaluating data governance and privacy controls', icon: '🛡️', color: '#0891b2'},
+    {text: 'Checking for prohibited AI techniques under EU AI Act', icon: '🇪🇺', color: '#7c3aed'},
+    {text: 'Assessing human oversight and override capabilities', icon: '👁️', color: '#059669'},
+    {text: 'Reviewing vendor transparency documentation', icon: '📋', color: '#d97706'},
+    {text: 'Analyzing potential impact on customers and fairness', icon: '⚖️', color: '#db2777'},
+    {text: 'Identifying non-traditional or suspect data factors', icon: '🔍', color: '#0891b2'},
+    {text: 'Mapping threat boundaries across the AI pipeline', icon: '🗺️', color: '#7c3aed'},
+    {text: 'Evaluating model risk and bias indicators', icon: '📊', color: '#059669'},
+    {text: 'Reviewing decision-making automation levels', icon: '🤖', color: '#d97706'},
+    {text: 'Checking regulatory and compliance alignment', icon: '📜', color: '#db2777'},
+    {text: 'Assessing data lineage and retention policies', icon: '🔗', color: '#0891b2'},
+    {text: 'Scanning for biometric data handling requirements', icon: '🧬', color: '#7c3aed'},
+    {text: 'Reviewing insurance-specific regulatory obligations', icon: '🏛️', color: '#059669'},
+    {text: 'Checking for adequate explainability and transparency', icon: '💡', color: '#d97706'},
+    {text: 'Evaluating third-party model supply chain risks', icon: '🔒', color: '#db2777'},
+    {text: 'Cross-referencing NIST AI Risk Management Framework', icon: '📐', color: '#0891b2'},
+    {text: 'Reviewing customer consent and notification processes', icon: '✉️', color: '#7c3aed'},
+    {text: 'Assessing adversarial robustness and attack surface', icon: '🎯', color: '#059669'},
+    {text: 'Checking model monitoring and drift detection plans', icon: '📈', color: '#d97706'},
+    {text: 'Evaluating incident response procedures for AI failures', icon: '🚨', color: '#db2777'},
+    {text: 'Reviewing training data provenance and quality controls', icon: '🧪', color: '#0891b2'},
+    {text: 'Assessing environmental and sustainability considerations', icon: '🌱', color: '#7c3aed'},
+    {text: 'Checking accessibility and inclusive design requirements', icon: '♿', color: '#059669'},
+    {text: 'Generating clarifying questions for the review team', icon: '❓', color: '#d97706'},
+];
+var _lastPhase = '';
+var _analyzeStartTime = null;
+var _elapsedTimer = null;
+var _tipIndex = 0;
+var RING_CIRCUMFERENCE = 2 * Math.PI * 20; // r=20 in SVG
+var EXPECTED_DURATION = 120; // 2 minutes expected
+
+function _formatElapsed(seconds) {
+    var m = Math.floor(seconds / 60);
+    var s = seconds % 60;
+    return m > 0 ? m + ':' + (s < 10 ? '0' : '') + s : '0:' + (s < 10 ? '0' : '') + s;
+}
+
+function _buildTimerRingHTML(elapsed) {
+    var progress = Math.min(elapsed / EXPECTED_DURATION, 1);
+    var dashoffset = RING_CIRCUMFERENCE * (1 - progress);
+    return '<div class="ruai-tracker-timer-ring">' +
+        '<svg viewBox="0 0 44 44"><circle class="ring-bg" cx="22" cy="22" r="20"/>' +
+        '<circle class="ring-progress" cx="22" cy="22" r="20" stroke-dasharray="' + RING_CIRCUMFERENCE.toFixed(1) + '" stroke-dashoffset="' + dashoffset.toFixed(1) + '"/></svg>' +
+        '<div class="ruai-tracker-timer-text">' + _formatElapsed(elapsed) + '</div></div>';
+}
+
+function _startElapsedTimer() {
+    _analyzeStartTime = Date.now();
+    _tipIndex = 0;
+    var statusEl = document.getElementById('ruai-tracker-status');
+    var stepEl = document.getElementById('tracker-step-analyze');
+    if (stepEl) stepEl.classList.add('analyzing-active');
+    var iconEl = stepEl ? stepEl.querySelector('.ruai-tracker-icon') : null;
+
+    // Set initial tip
+    if (statusEl) {
+        var t = ANALYZING_TIPS[0];
+        statusEl.innerHTML = '<span style="font-size:1.1em;">' + t.icon + '</span> <span style="color:' + t.color + ';">' + t.text + '...</span> <span style="opacity:0.5; font-size:0.82em;">typically ~3 min</span>';
+    }
+
+    _elapsedTimer = setInterval(function() {
+        var elapsed = Math.floor((Date.now() - _analyzeStartTime) / 1000);
+        // Update timer ring inside the icon
+        if (iconEl && _lastPhase === 'analyzing') {
+            iconEl.innerHTML = _buildTimerRingHTML(elapsed);
+        }
+        // Rotate status tip every 20 seconds
+        if (_lastPhase === 'analyzing' && statusEl) {
+            var newIdx = Math.floor(elapsed / 20) % ANALYZING_TIPS.length;
+            if (newIdx !== _tipIndex) {
+                _tipIndex = newIdx;
+                statusEl.style.opacity = '0';
+                setTimeout(function() {
+                    if (_lastPhase === 'analyzing') {
+                        var tip = ANALYZING_TIPS[_tipIndex];
+                        statusEl.innerHTML = '<span style="font-size:1.1em;">' + tip.icon + '</span> <span style="color:' + tip.color + ';">' + tip.text + '...</span> <span style="opacity:0.5; font-size:0.82em;">typically ~3 min</span>';
+                        statusEl.style.opacity = '1';
+                    }
+                }, 300);
+            }
+        }
+    }, 1000);
+}
+
+function _stopElapsedTimer() {
+    if (_elapsedTimer) { clearInterval(_elapsedTimer); _elapsedTimer = null; }
+    var stepEl = document.getElementById('tracker-step-analyze');
+    if (stepEl) stepEl.classList.remove('analyzing-active');
+}
+
+function setTrackerPhase(phase) {
+    if (phase === _lastPhase) return;
+    _lastPhase = phase;
+    var phaseIdx = TRACKER_PHASES.indexOf(phase);
+    var statusEl = document.getElementById('ruai-tracker-status');
+
+    // Manage elapsed timer for the analyzing phase
+    if (phase === 'analyzing') {
+        _startElapsedTimer();
+    } else {
+        _stopElapsedTimer();
+    }
+
+    // Update status message (analyzing phase handled by _startElapsedTimer)
+    if (phase !== 'analyzing' && statusEl && TRACKER_STATUS_MESSAGES[phase]) {
+        statusEl.style.opacity = '1';
+        statusEl.textContent = TRACKER_STATUS_MESSAGES[phase];
+    }
+
+    // Mark steps as done / active
+    for (var i = 0; i < TRACKER_STEP_IDS.length; i++) {
+        var step = document.getElementById(TRACKER_STEP_IDS[i]);
+        if (!step) continue;
+        step.classList.remove('done', 'active', 'error');
+        if (i < phaseIdx) {
+            step.classList.add('done');
+            step.querySelector('.ruai-tracker-icon').innerHTML = TRACKER_CHECK_SVG;
+        } else if (i === phaseIdx) {
+            step.classList.add('active');
+            if (phase === 'analyzing') {
+                // Timer ring is managed by _startElapsedTimer
+                step.querySelector('.ruai-tracker-icon').innerHTML = _buildTimerRingHTML(0);
+            } else if (phase !== 'done') {
+                step.querySelector('.ruai-tracker-icon').innerHTML = '<div class="ruai-tracker-spinner"></div>';
+            } else {
+                step.querySelector('.ruai-tracker-icon').innerHTML = TRACKER_CHECK_SVG;
+                step.classList.remove('active');
+                step.classList.add('done');
+            }
+        }
+    }
+    // Mark lines as done
+    for (var j = 0; j < TRACKER_LINE_IDS.length; j++) {
+        var line = document.getElementById(TRACKER_LINE_IDS[j]);
+        if (!line) continue;
+        if (j < phaseIdx) {
+            line.classList.add('done');
+        } else {
+            line.classList.remove('done');
+        }
+    }
+
+    // Handle error state
+    if (phase === 'error') {
+        if (statusEl) statusEl.textContent = TRACKER_STATUS_MESSAGES['error'];
+        // Mark the last active step as error
+        for (var k = 0; k < TRACKER_STEP_IDS.length; k++) {
+            var s = document.getElementById(TRACKER_STEP_IDS[k]);
+            if (s && s.classList.contains('active')) {
+                s.classList.remove('active');
+                s.classList.add('error');
+                s.querySelector('.ruai-tracker-icon').innerHTML = '<span style="font-size:14px;">!</span>';
+                break;
+            }
+        }
+    }
+}
+
+function rerunAiReview(submissionId) {
+    fetch('/api/ruai/' + submissionId + '/rerun-review', {method: 'POST', headers: {'Content-Type': 'application/json'}})
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.status === 'success') {
+            // Show tracker, hide existing AI review and fallback
+            var container = document.getElementById('ruai-tracker-container');
+            var noReview = document.getElementById('ruai-no-review');
+            var aiContent = document.getElementById('ruai-ai-content');
+            if (container) container.style.display = '';
+            if (noReview) noReview.style.display = 'none';
+            if (aiContent) aiContent.style.display = 'none';
+            _lastPhase = '';  // reset so setTrackerPhase doesn't skip
+            setTrackerPhase('loading_submission');
+            pollReviewStatus(submissionId);
+            if (typeof showToast === 'function') showToast('AI review started');
+        } else {
+            if (typeof showToast === 'function') showToast(data.message || 'Error');
+        }
+    })
+    .catch(function() {
+        if (typeof showToast === 'function') showToast('Network error');
+    });
+}
+
+function pollReviewStatus(submissionId) {
+    var pollCount = 0;
+    var maxPolls = 90;
+    var interval = setInterval(function() {
+        pollCount++;
+        if (pollCount > maxPolls) {
+            clearInterval(interval);
+            setTrackerPhase('error');
+            var statusEl = document.getElementById('ruai-tracker-status');
+            if (statusEl) statusEl.textContent = 'AI review is taking longer than expected. Try refreshing or re-run the review.';
+            return;
+        }
+        fetch('/api/ruai/' + submissionId + '/status')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.phase) setTrackerPhase(data.phase);
+                if (data.phase === 'error') {
+                    clearInterval(interval);
+                    return;
+                }
+                if (data.phase === 'done') {
+                    clearInterval(interval);
+                    setTrackerPhase('done');
+                    // Show LLM stats in the status bar
+                    var statusEl = document.getElementById('ruai-tracker-status');
+                    if (statusEl) {
+                        var html = '<strong style="color:#059669;">AI Review Complete</strong>';
+                        if (data.stats) {
+                            var chips = [];
+                            if (data.stats.duration_s) chips.push('&#9201; ' + _formatElapsed(Math.round(data.stats.duration_s)));
+                            var toks = data.stats.total_tokens || data.stats.output_tokens;
+                            if (toks) chips.push('&#9889; ' + toks.toLocaleString() + ' tokens');
+                            if (data.stats.model) {
+                                var _m = String(data.stats.model);
+                                var _label = _m.indexOf('metiq-') === 0 ? _m.replace('metiq-', 'the internal LLM gateway · ') : 'Local LLM';
+                                chips.push('&#129302; ' + _label);
+                            }
+                            if (chips.length) html += '<br><span style="font-size:0.82em; opacity:0.7;">' + chips.join(' &nbsp;·&nbsp; ') + '</span>';
+                        }
+                        statusEl.innerHTML = html;
+                    }
+                    setTimeout(function() { window.location.reload(); }, 3000);
+                } else if (data.status !== 'ai_reviewing' && data.phase !== 'loading_submission' && data.phase !== 'connecting_llm' && data.phase !== 'analyzing' && data.phase !== 'saving_results') {
+                    clearInterval(interval);
+                    setTrackerPhase('error');
+                }
+            })
+            .catch(function() { /* silent — will retry */ });
+    }, 2000);
+}
+
+// ── F1: PDF Export ──────────────────────────────────────────────
+function exportReviewPdf() {
+    DashboardExport.exportPdf(null, {
+        title: {{ s.use_case_name|tojson }},
+        subtitle: {{ (s.use_case_id or '') | tojson }} + ' — ' + {{ s.owner_name|tojson }} + ' — ' + {{ s.lob|tojson }},
+        sections: [
+            '.ruai-detail-header',
+            '.ruai-detail-panel:first-child',
+            '.ruai-ai-panel',
+            '.ruai-checklist-panel',
+            '.ruai-actions-panel',
+            '.ruai-timeline'
+        ]
+    });
+}
+
+// ── F2: Reviewer Checklist ──────────────────────────────────────
+var CHECKLIST_ORDER = ['data_governance','privacy_review','vendor_documentation','human_oversight','regulatory_compliance','bias_fairness','security_assessment','model_validation'];
+var CHECKLIST_LABELS = {
+    data_governance: 'Data Governance', privacy_review: 'Privacy Review',
+    vendor_documentation: 'Vendor Documentation', human_oversight: 'Human Oversight',
+    regulatory_compliance: 'Regulatory Compliance', bias_fairness: 'Bias & Fairness',
+    security_assessment: 'Security Assessment', model_validation: 'Model Validation'
+};
+var _checklistState = {};
+
+function loadChecklist() {
+    var reviewer = (document.getElementById('reviewer-name').value || localStorage.getItem('ruai_reviewer_name') || '').trim();
+    if (!reviewer) { renderChecklist({}); return; }
+    fetch('/api/ruai/{{ s.id }}/checklist?reviewer=' + encodeURIComponent(reviewer))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            _checklistState = data.items || {};
+            renderChecklist(_checklistState);
+        })
+        .catch(function() { renderChecklist({}); });
+}
+
+function renderChecklist(items) {
+    var container = document.getElementById('checklist-items');
+    var html = '';
+    var checked = 0;
+    CHECKLIST_ORDER.forEach(function(key) {
+        var isChecked = items[key] || false;
+        if (isChecked) checked++;
+        html += '<label class="ruai-checklist-item' + (isChecked ? ' checked' : '') + '">' +
+            '<input type="checkbox" ' + (isChecked ? 'checked' : '') + ' onchange="toggleChecklistItem(\'' + key + '\', this.checked)">' +
+            '<span>' + CHECKLIST_LABELS[key] + '</span></label>';
+    });
+    container.innerHTML = html;
+    updateChecklistProgress(checked);
+}
+
+function toggleChecklistItem(key, checked) {
+    _checklistState[key] = checked;
+    var reviewer = document.getElementById('reviewer-name').value.trim();
+    if (!reviewer) { if (typeof showToast === 'function') showToast('Enter your name first'); return; }
+    localStorage.setItem('ruai_reviewer_name', reviewer);
+    fetch('/api/ruai/{{ s.id }}/checklist', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({reviewer_name: reviewer, items: _checklistState})
+    });
+    var count = 0;
+    CHECKLIST_ORDER.forEach(function(k) { if (_checklistState[k]) count++; });
+    updateChecklistProgress(count);
+    // Highlight approve button when all checked
+    var btn = document.getElementById('btn-approve');
+    if (btn) btn.classList.toggle('ruai-btn-approve-ready', count === 8);
+}
+
+function updateChecklistProgress(count) {
+    var pct = Math.round(count / 8 * 100);
+    var fill = document.getElementById('checklist-bar-fill');
+    var counter = document.getElementById('checklist-count');
+    if (fill) fill.style.width = pct + '%';
+    if (counter) counter.textContent = count + '/8';
+}
+
+// Reload checklist when reviewer name changes
+document.getElementById('reviewer-name').addEventListener('change', loadChecklist);
+
+// ── F3: Canned Response Templates ──────────────────────────────
+var CANNED_TEMPLATES = [
+    'Please provide SOC 2 Type II report for the vendor.',
+    'Clarify data retention and deletion policies.',
+    'Document human override procedures for AI decisions.',
+    'Provide bias testing / fairness audit results.',
+    'Submit completed PRA (Privacy Risk Assessment).',
+    'Provide model card and documentation.',
+    'Define incident response plan for AI failures.',
+    'Address regulatory filing requirements (SR 11-7, EU AI Act).'
+];
+
+function initCannedTemplates() {
+    var container = document.getElementById('canned-chips');
+    if (!container) return;
+    CANNED_TEMPLATES.forEach(function(tpl) {
+        var chip = document.createElement('span');
+        chip.className = 'ruai-canned-chip';
+        chip.textContent = tpl.substring(0, 40) + (tpl.length > 40 ? '...' : '');
+        chip.title = tpl;
+        chip.addEventListener('click', function() {
+            var ta = document.getElementById('reviewer-notes');
+            ta.value = (ta.value ? ta.value + '\n' : '') + tpl;
+            ta.focus();
+        });
+        chip.addEventListener('dblclick', function(e) {
+            e.preventDefault();
+            var ta = document.getElementById('reviewer-notes');
+            ta.value = tpl;
+            ta.focus();
+        });
+        container.appendChild(chip);
+    });
+}
+
+// ── F4: Risk Comparison Modal ──────────────────────────────────
+function openCompareModal() {
+    document.getElementById('compare-modal').classList.add('show');
+    document.getElementById('compare-content').innerHTML = '<div style="text-align:center; padding:24px; color:var(--ruai-panel-text-muted);">Loading reviews...</div>';
+    fetch('/api/ruai/{{ s.id }}/reviews')
+        .then(function(r) { return r.json(); })
+        .then(function(reviews) {
+            if (reviews.length < 2) {
+                document.getElementById('compare-content').innerHTML = '<p>Only one review available.</p>';
+                return;
+            }
+            var latest = reviews[reviews.length - 1];
+            var prev = reviews[reviews.length - 2];
+            var html = '<div class="ruai-compare-grid">';
+            // Overall risk change
+            html += '<div class="ruai-compare-header"><div class="ruai-compare-col"><strong>Previous Review</strong><br><small>' + (prev.created_at || '') + '</small></div>';
+            html += '<div class="ruai-compare-col"><strong>Latest Review</strong><br><small>' + (latest.created_at || '') + '</small></div></div>';
+            // Overall score
+            html += '<div class="ruai-compare-row"><div class="ruai-compare-label">Overall Risk</div>';
+            html += '<div class="ruai-compare-col"><span class="ruai-risk-badge ruai-risk-' + (prev.overall_risk_score || 'medium').toLowerCase() + '">' + (prev.overall_risk_score || '-') + '</span></div>';
+            var arrow = prev.overall_risk_score !== latest.overall_risk_score ? ' →' : ' =';
+            html += '<div class="ruai-compare-col"><span class="ruai-risk-badge ruai-risk-' + (latest.overall_risk_score || 'medium').toLowerCase() + '">' + (latest.overall_risk_score || '-') + '</span>' + arrow + '</div></div>';
+            // Per-area comparison
+            var prevAreas = prev.preliminary_risk_assessment || {};
+            var latestAreas = latest.preliminary_risk_assessment || {};
+            var allAreas = Object.keys(Object.assign({}, prevAreas, latestAreas));
+            allAreas.forEach(function(area) {
+                var pLevel = prevAreas[area] || '-';
+                var lLevel = latestAreas[area] || '-';
+                var changed = pLevel !== lLevel;
+                html += '<div class="ruai-compare-row' + (changed ? ' changed' : '') + '"><div class="ruai-compare-label">' + area.replace(/_/g, ' ') + '</div>';
+                html += '<div class="ruai-compare-col"><span class="ruai-risk-badge ruai-risk-' + pLevel.toLowerCase() + '">' + pLevel + '</span></div>';
+                html += '<div class="ruai-compare-col"><span class="ruai-risk-badge ruai-risk-' + lLevel.toLowerCase() + '">' + lLevel + '</span></div></div>';
+            });
+            // Risk flags diff
+            var prevFlags = (prev.risk_flags || []).map(function(f) { return f.area + ': ' + f.reason; });
+            var latestFlags = (latest.risk_flags || []).map(function(f) { return f.area + ': ' + f.reason; });
+            var added = latestFlags.filter(function(f) { return prevFlags.indexOf(f) === -1; });
+            var removed = prevFlags.filter(function(f) { return latestFlags.indexOf(f) === -1; });
+            if (added.length || removed.length) {
+                html += '<div class="ruai-compare-flags"><strong>Risk Flag Changes:</strong>';
+                added.forEach(function(f) { html += '<div class="ruai-compare-flag added">+ ' + f + '</div>'; });
+                removed.forEach(function(f) { html += '<div class="ruai-compare-flag removed">- ' + f + '</div>'; });
+                html += '</div>';
+            }
+            html += '</div>';
+            document.getElementById('compare-content').innerHTML = html;
+        })
+        .catch(function() {
+            document.getElementById('compare-content').innerHTML = '<p style="color:#ef4444;">Failed to load reviews.</p>';
+        });
+}
+
+function closeCompareModal() {
+    document.getElementById('compare-modal').classList.remove('show');
+}
+
+// ── F5: Similar Past Cases ─────────────────────────────────────
+function loadSimilarCases() {
+    fetch('/api/ruai/{{ s.id }}/similar')
+        .then(function(r) { return r.json(); })
+        .then(function(cases) {
+            var loading = document.getElementById('similar-loading');
+            var list = document.getElementById('similar-list');
+            if (loading) loading.style.display = 'none';
+            if (!cases.length) {
+                list.innerHTML = '<div style="padding:12px; color:var(--ruai-panel-text-muted); font-size:0.85rem;">No similar cases found.</div>';
+                return;
+            }
+            var html = '';
+            cases.forEach(function(c) {
+                var risk = c.ai_overall_risk || '-';
+                html += '<a href="/ruai-dashboard/' + c.id + '" class="ruai-similar-item">';
+                html += '<div class="ruai-similar-info"><strong>' + _escHtml(c.use_case_name) + '</strong>';
+                html += '<div class="ruai-similar-meta">' + _escHtml(c.lob || '') + ' &middot; ' + (c.status || '').replace(/_/g, ' ') + ' &middot; ' + (c.submitted_at || '').substring(0, 10) + '</div></div>';
+                html += '<div class="ruai-similar-score"><span class="ruai-risk-badge ruai-risk-' + risk.toLowerCase() + '">' + risk + '</span>';
+                html += '<div class="ruai-similarity-bar"><div class="ruai-similarity-fill" style="width:' + (c.similarity_score || 0) + '%"></div></div>';
+                html += '<small>' + (c.similarity_score || 0) + '%</small></div>';
+                html += '</a>';
+            });
+            list.innerHTML = html;
+        })
+        .catch(function() {
+            var loading = document.getElementById('similar-loading');
+            if (loading) loading.textContent = 'Could not load similar cases.';
+        });
+}
+
+function toggleSection(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var showing = el.style.display !== 'none';
+    el.style.display = showing ? 'none' : '';
+    var toggle = document.getElementById(id.replace('-content', '-toggle'));
+    if (toggle) toggle.textContent = showing ? '▼' : '▲';
+}
+
+// ── F6: Regulatory Mapping Badges ──────────────────────────────
+var REGULATORY_MAP = {
+    'data_governance': ['NIST AI RMF Map 1.5', 'EU AI Act Art. 10'],
+    'privacy': ['CCPA §1798.100', 'EU AI Act Art. 10(5)'],
+    'infosec': ['NIST AI RMF Measure 2.7', 'EU AI Act Art. 15'],
+    'ethical_ai': ['EU AI Act Art. 5', 'EU AI Act Art. 14'],
+    'model_risk': ['SR 11-7', 'EU AI Act Art. 9'],
+    'bias': ['EU AI Act Art. 10(2f)', 'NIST AI RMF Map 2.3'],
+    'human_oversight': ['EU AI Act Art. 14', 'NIST AI RMF Gov 1.3'],
+    'prohibited': ['EU AI Act Art. 5 (Prohibited Practices)'],
+    'biometric': ['EU AI Act Art. 5(1d)', 'CCPA §1798.140(c)'],
+    'financial': ['SR 11-7', 'EU AI Act Annex III'],
+    'customer': ['CCPA', 'EU AI Act Art. 13'],
+    'vendor': ['EU AI Act Art. 28', 'NIST AI RMF Gov 5.1'],
+    'fairness': ['EU AI Act Art. 10(2f)', 'NIST AI RMF Map 2.3'],
+    'transparency': ['EU AI Act Art. 13', 'NIST AI RMF Gov 1.1'],
+};
+
+function addRegulatoryBadges() {
+    // Add to risk-by-area cells
+    document.querySelectorAll('.ruai-risk-cell').forEach(function(cell) {
+        var label = cell.querySelector('.ruai-risk-cell-label');
+        if (!label) return;
+        var area = label.textContent.trim().toLowerCase().replace(/\s+/g, '_');
+        var regs = REGULATORY_MAP[area] || [];
+        if (!regs.length) return;
+        var badges = regs.map(function(r) { return '<span class="ruai-reg-badge">' + r + '</span>'; }).join('');
+        cell.insertAdjacentHTML('beforeend', '<div class="ruai-reg-badges">' + badges + '</div>');
+    });
+    // Add to risk flags
+    document.querySelectorAll('.ruai-ai-risk-flag').forEach(function(flag) {
+        var text = flag.textContent.toLowerCase();
+        var matched = [];
+        Object.keys(REGULATORY_MAP).forEach(function(key) {
+            if (text.indexOf(key) !== -1) {
+                REGULATORY_MAP[key].forEach(function(r) {
+                    if (matched.indexOf(r) === -1) matched.push(r);
+                });
+            }
+        });
+        if (matched.length) {
+            var badges = matched.slice(0, 3).map(function(r) { return '<span class="ruai-reg-badge">' + r + '</span>'; }).join('');
+            flag.insertAdjacentHTML('beforeend', '<div class="ruai-reg-badges">' + badges + '</div>');
+        }
+    });
+}
+
+// ── F9: Inline Document Viewer ─────────────────────────────────
+function toggleDocPreview(el, submissionId, filename) {
+    var preview = el.parentElement.querySelector('.ruai-doc-preview');
+    if (!preview) return;
+    if (preview.style.display !== 'none') {
+        preview.style.display = 'none';
+        return;
+    }
+    var ext = filename.split('.').pop().toLowerCase();
+    var url = '/api/ruai/' + submissionId + '/documents/' + encodeURIComponent(filename);
+    if (ext === 'pdf') {
+        preview.innerHTML = '<iframe src="' + url + '" class="ruai-doc-iframe"></iframe>';
+    } else if (['png','jpg','jpeg','gif','svg'].indexOf(ext) !== -1) {
+        preview.innerHTML = '<img src="' + url + '" class="ruai-doc-img">';
+    } else if (['txt','csv'].indexOf(ext) !== -1) {
+        fetch(url).then(function(r) { return r.text(); }).then(function(text) {
+            preview.innerHTML = '<pre class="ruai-doc-pre">' + _escHtml(text.substring(0, 10000)) + '</pre>';
+        });
+    } else {
+        preview.innerHTML = '<a href="' + url + '" target="_blank" class="ruai-btn ruai-btn-ghost" style="margin:8px 0; display:inline-block;">Download ' + _escHtml(filename) + '</a>';
+    }
+    preview.style.display = 'block';
+}
+
+// ── F10: Reviewer Assignments ──────────────────────────────────
+function assignReviewer(submissionId) {
+    var name = document.getElementById('assign-reviewer-input').value.trim();
+    var assignedBy = document.getElementById('reviewer-name').value.trim();
+    if (!name) { if (typeof showToast === 'function') showToast('Enter reviewer name to assign'); return; }
+    if (!assignedBy) { if (typeof showToast === 'function') showToast('Enter your name first'); document.getElementById('reviewer-name').focus(); return; }
+    localStorage.setItem('ruai_reviewer_name', assignedBy);
+    fetch('/api/ruai/' + submissionId + '/assign', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({reviewer_name: name, assigned_by: assignedBy})
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.status === 'success') window.location.reload();
+        else if (typeof showToast === 'function') showToast(data.message || 'Error');
+    }).catch(function() { if (typeof showToast === 'function') showToast('Network error'); });
+}
+
+function unassignReviewer(submissionId, name) {
+    if (!confirm('Remove ' + name + ' from assigned reviewers?')) return;
+    fetch('/api/ruai/' + submissionId + '/unassign', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({reviewer_name: name})
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.status === 'success') window.location.reload();
+        else if (typeof showToast === 'function') showToast(data.message || 'Error');
+    }).catch(function() { if (typeof showToast === 'function') showToast('Network error'); });
+}
+
+// ── Utility ────────────────────────────────────────────────────
+function _escHtml(str) {
+    if (!str) return '';
+    var d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+}
+</script>
+{% endblock %}

@@ -12,7 +12,7 @@ Usage:
     # Manual sync
     python -m src.components.tanium_signals_sync
 
-    # Scheduled via all_jobs.py
+    # Scheduled via scheduler.py
 """
 
 import csv

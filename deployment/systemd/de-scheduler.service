@@ -1,0 +1,17 @@
+[Unit]
+Description=DE Scheduler (Detection Rules + Tipper Analysis)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/vinay/security-ops-platform
+ExecStart=/home/vinay/security-ops-platform/.venv/bin/python3 -u src/de_scheduler.py
+Restart=on-failure
+KillMode=mixed
+TimeoutStopSec=10
+RestartSec=30
+Environment=PYTHONUNBUFFERED=1
+Environment=LLM_BASE_URL=http://localhost:8017/v1
+
+[Install]
+WantedBy=default.target

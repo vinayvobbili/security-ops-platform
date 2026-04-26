@@ -1,0 +1,348 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'RUAI Reference Docs' %}
+{% set page_title_left_icon = '📚' %}
+{% set page_title_right_icon = '🤖' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ruai.css') }}">
+<style>
+.rd-container { max-width: 960px; margin: 0 auto; padding: 24px 16px; position: relative; z-index: 1; }
+
+.rd-stats-bar { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.rd-stat {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--ruai-card-bg); border: 1px solid var(--ruai-card-border);
+    border-radius: 12px; padding: 12px 18px; box-shadow: var(--ruai-card-shadow);
+}
+.rd-stat-icon { font-size: 1.4rem; }
+.rd-stat-body { display: flex; flex-direction: column; }
+.rd-stat-value { font-weight: 700; font-size: 1.1rem; color: var(--ruai-card-text); }
+.rd-stat-label { font-size: 0.78rem; color: var(--ruai-card-text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+
+.rd-status-badge {
+    font-size: 0.82rem; padding: 5px 14px; border-radius: 20px; font-weight: 600;
+}
+.rd-status-badge.indexed { background: rgba(5, 150, 105, 0.12); color: #059669; }
+.rd-status-badge.empty   { background: rgba(148, 163, 184, 0.12); color: #94a3b8; }
+.rd-status-badge.error   { background: rgba(220, 38, 38, 0.12); color: #dc2626; }
+
+.rd-sync-banner {
+    display: none; align-items: center; gap: 10px;
+    background: linear-gradient(135deg, rgba(8,145,178,0.08), rgba(124,58,237,0.06));
+    border: 1px solid var(--ruai-aurora-1); border-radius: 10px;
+    padding: 12px 18px; margin-bottom: 16px; font-size: 0.9rem; color: var(--ruai-card-text);
+}
+.rd-sync-banner.active { display: flex; }
+.rd-spinner {
+    width: 18px; height: 18px; border: 2px solid var(--ruai-card-border);
+    border-top-color: var(--ruai-aurora-1); border-radius: 50%;
+    animation: rd-spin 0.8s linear infinite;
+}
+@keyframes rd-spin { to { transform: rotate(360deg); } }
+
+.rd-toolbar {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 12px; flex-wrap: wrap; gap: 8px;
+}
+.rd-toolbar-left { font-size: 0.88rem; color: var(--ruai-card-text-secondary); }
+
+.rd-table-wrap {
+    background: var(--ruai-card-bg); border: 1px solid var(--ruai-card-border);
+    border-radius: 12px; overflow: hidden; box-shadow: var(--ruai-card-shadow);
+}
+.rd-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.rd-table thead { background: var(--ruai-glass-bg); }
+.rd-table th {
+    text-align: left; padding: 10px 14px; font-weight: 600; font-size: 0.78rem;
+    text-transform: uppercase; letter-spacing: 0.04em; color: var(--ruai-card-text-muted);
+    border-bottom: 1px solid var(--ruai-card-border);
+}
+.rd-table td { padding: 10px 14px; border-bottom: 1px solid var(--ruai-glass-border); color: var(--ruai-card-text); }
+.rd-table tbody tr:last-child td { border-bottom: none; }
+.rd-table tbody tr:hover { background: var(--ruai-glass-bg); }
+.rd-filename { font-weight: 500; }
+.rd-size, .rd-modified { color: var(--ruai-card-text-secondary); font-size: 0.85rem; }
+.rd-empty { text-align: center; padding: 32px !important; color: var(--ruai-card-text-muted); }
+.rd-td-actions { display: flex; gap: 6px; }
+.rd-btn-icon {
+    background: none; border: 1px solid var(--ruai-card-border); border-radius: 6px;
+    padding: 4px 8px; cursor: pointer; font-size: 0.9rem; color: var(--ruai-card-text-secondary);
+    transition: all 0.15s; text-decoration: none;
+}
+.rd-btn-icon:hover { background: var(--ruai-glass-bg); border-color: var(--ruai-aurora-1); color: var(--ruai-aurora-1); }
+.rd-btn-icon.rd-btn-delete:hover { border-color: #dc2626; color: #dc2626; }
+
+.rd-btn {
+    padding: 8px 18px; border-radius: 8px; font-weight: 600; font-size: 0.88rem;
+    cursor: pointer; border: none; transition: all 0.15s;
+}
+.rd-btn-primary {
+    background: linear-gradient(135deg, var(--ruai-aurora-1), var(--ruai-aurora-2));
+    color: #fff;
+}
+.rd-btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+.rd-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.rd-drop-zone {
+    border: 2px dashed var(--ruai-upload-border); border-radius: 12px;
+    padding: 36px 20px; text-align: center; cursor: pointer; transition: all 0.2s;
+}
+.rd-drop-zone:hover, .rd-drop-zone.dragover {
+    border-color: var(--ruai-aurora-1); background: var(--ruai-upload-hover-bg);
+}
+.rd-drop-icon { font-size: 2rem; margin-bottom: 8px; }
+.rd-drop-text { font-size: 0.92rem; color: var(--ruai-card-text-secondary); }
+.rd-drop-hint { font-size: 0.78rem; color: var(--ruai-card-text-muted); margin-top: 6px; }
+
+.rd-file-list { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.rd-file-chip {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--ruai-glass-bg); border: 1px solid var(--ruai-card-border);
+    border-radius: 8px; padding: 8px 12px; font-size: 0.88rem;
+}
+.rd-file-chip-name { flex: 1; font-weight: 500; color: var(--ruai-card-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rd-file-chip-size { color: var(--ruai-card-text-muted); font-size: 0.82rem; }
+.rd-file-chip-remove { background: none; border: none; cursor: pointer; font-size: 1.1rem; color: var(--ruai-card-text-muted); padding: 0 4px; }
+.rd-file-chip-remove:hover { color: #dc2626; }
+
+.rd-toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #1e293b; color: #fff; padding: 10px 24px; border-radius: 10px;
+    font-size: 0.9rem; z-index: 9999; opacity: 0; transition: opacity 0.3s; pointer-events: none;
+}
+.rd-toast.show { opacity: 1; }
+
+.rd-back { display: inline-flex; align-items: center; gap: 6px; font-size: 0.88rem; color: var(--ruai-page-link); text-decoration: none; margin-bottom: 16px; }
+.rd-back:hover { text-decoration: underline; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ruai-page-bg">
+    <div class="ruai-orb ruai-orb-1"></div>
+    <div class="ruai-orb ruai-orb-2"></div>
+    <div class="ruai-orb ruai-orb-3"></div>
+</div>
+<div class="rd-container">
+    <a href="/ruai-dashboard" class="rd-back">&larr; Back to Dashboard</a>
+
+    <div class="rd-stats-bar">
+        <div class="rd-stat">
+            <span class="rd-stat-icon">📁</span>
+            <div class="rd-stat-body">
+                <span class="rd-stat-value" id="rdDocCount">{{ docs|length }}</span>
+                <span class="rd-stat-label">Documents</span>
+            </div>
+        </div>
+        <div class="rd-stat">
+            <span class="rd-stat-icon">🧩</span>
+            <div class="rd-stat-body">
+                <span class="rd-stat-value" id="rdChunkCount">{{ stats.total_chunks | default(0) }}</span>
+                <span class="rd-stat-label">Vector Chunks</span>
+            </div>
+        </div>
+        <div class="rd-stat" style="flex:1; justify-content:flex-end;">
+            <span class="rd-status-badge {{ stats.status | default('empty') }}" id="rdStatusBadge">
+                {% if stats.status == 'indexed' %}Indexed
+                {% elif stats.status == 'error' %}Error
+                {% else %}Empty{% endif %}
+            </span>
+        </div>
+    </div>
+
+    <div class="rd-sync-banner" id="rdSyncBanner">
+        <div class="rd-spinner"></div>
+        <span id="rdSyncMsg">Embedding documents...</span>
+    </div>
+
+    <div class="rd-toolbar">
+        <div class="rd-toolbar-left">
+            {{ docs|length }} document{{ 's' if docs|length != 1 else '' }} in library
+        </div>
+        <div>
+            <button class="rd-btn rd-btn-primary" onclick="document.getElementById('rdFileInput').click()">+ Upload Documents</button>
+        </div>
+    </div>
+
+    <input type="file" id="rdFileInput" multiple accept=".pdf,.docx,.doc,.xlsx,.xls" style="display:none;" onchange="handleFiles(this.files)">
+
+    {% if not docs %}
+    <div class="rd-drop-zone" id="rdDropZone">
+        <div class="rd-drop-icon">📂</div>
+        <div class="rd-drop-text">Drag & drop files here, or click Upload Documents above</div>
+        <div class="rd-drop-hint">PDF, Word, Excel &mdash; max 16 MB each</div>
+    </div>
+    {% endif %}
+
+    <div class="rd-file-list" id="rdPendingFiles" style="display:none;"></div>
+    <div style="margin-top:12px; display:none;" id="rdSaveRow">
+        <button class="rd-btn rd-btn-primary" id="rdSaveBtn" onclick="saveAndEmbed()">Save & Embed</button>
+    </div>
+
+    <div class="rd-table-wrap" style="margin-top:16px;">
+        <table class="rd-table">
+            <thead>
+                <tr>
+                    <th style="width:36px;"></th>
+                    <th>Filename</th>
+                    <th style="width:90px;">Size</th>
+                    <th style="width:140px;">Modified</th>
+                    <th style="width:100px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="rdTbody">
+                {% if docs %}
+                {% for doc in docs %}
+                <tr data-filename="{{ doc.filename | e }}">
+                    <td>
+                        {% if doc.ext == '.pdf' %}📄
+                        {% elif doc.ext in ['.docx', '.doc'] %}📝
+                        {% elif doc.ext in ['.xlsx', '.xls'] %}📊
+                        {% else %}📁{% endif %}
+                    </td>
+                    <td class="rd-filename">{{ doc.filename }}</td>
+                    <td class="rd-size">{{ doc.size_str }}</td>
+                    <td class="rd-modified">{{ doc.modified }}</td>
+                    <td>
+                        <div class="rd-td-actions">
+                            <a class="rd-btn-icon" href="/api/ruai-docs/download/{{ doc.filename | urlencode }}" download title="Download">&#11015;</a>
+                            <button class="rd-btn-icon rd-btn-delete" onclick="deleteDoc('{{ doc.filename | e }}')" title="Delete">&#128465;</button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% else %}
+                <tr id="rdEmptyRow">
+                    <td colspan="5" class="rd-empty">No documents yet. Upload files to get started.</td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="rd-toast" id="rdToast"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    const pendingContainer = document.getElementById('rdPendingFiles');
+    const saveRow = document.getElementById('rdSaveRow');
+    const fileInput = document.getElementById('rdFileInput');
+    let pendingFiles = [];
+
+    const dropZone = document.getElementById('rdDropZone');
+    if (dropZone) {
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
+    }
+
+    const container = document.querySelector('.rd-container');
+    container.addEventListener('dragover', e => e.preventDefault());
+    container.addEventListener('drop', e => { e.preventDefault(); handleFiles(e.dataTransfer.files); });
+
+    window.handleFiles = function(fileList) {
+        if (!fileList || !fileList.length) return;
+        for (const f of fileList) {
+            if (pendingFiles.some(p => p.name === f.name)) continue;
+            pendingFiles.push(f);
+        }
+        renderPending();
+    };
+
+    function renderPending() {
+        if (!pendingFiles.length) { pendingContainer.style.display = 'none'; saveRow.style.display = 'none'; return; }
+        pendingContainer.style.display = 'flex';
+        saveRow.style.display = 'block';
+        pendingContainer.innerHTML = pendingFiles.map((f, i) => `
+            <div class="rd-file-chip">
+                <span>${fileIcon(f.name)}</span>
+                <span class="rd-file-chip-name">${esc(f.name)}</span>
+                <span class="rd-file-chip-size">${fmtSize(f.size)}</span>
+                <button class="rd-file-chip-remove" onclick="removePending(${i})">&times;</button>
+            </div>
+        `).join('');
+    }
+
+    window.removePending = function(idx) { pendingFiles.splice(idx, 1); renderPending(); };
+
+    window.saveAndEmbed = async function() {
+        if (!pendingFiles.length) return;
+        const btn = document.getElementById('rdSaveBtn');
+        btn.disabled = true;
+        btn.textContent = 'Uploading...';
+        const fd = new FormData();
+        pendingFiles.forEach(f => fd.append('documents', f));
+        try {
+            const resp = await fetch('/api/ruai-docs/upload', { method: 'POST', body: fd });
+            const data = await resp.json();
+            if (data.status !== 'success') { toast(data.message || 'Upload failed', true); btn.disabled = false; btn.textContent = 'Save & Embed'; return; }
+            toast(`${data.files.length} file(s) uploaded`);
+            pendingFiles = [];
+            renderPending();
+            fileInput.value = '';
+        } catch (err) {
+            toast('Upload error: ' + err.message, true);
+            btn.disabled = false;
+            btn.textContent = 'Save & Embed';
+            return;
+        }
+        btn.textContent = 'Embedding...';
+        showSync('Embedding documents into vector store...');
+        try {
+            const resp = await fetch('/api/ruai-docs/rebuild', { method: 'POST' });
+            const data = await resp.json();
+            hideSync();
+            if (data.success) toast(`Embedded ${data.chunks_after} chunks`);
+            else toast('Embedding failed: ' + (data.error || 'unknown'), true);
+        } catch (err) { hideSync(); toast('Embedding error: ' + err.message, true); }
+        setTimeout(() => location.reload(), 800);
+    };
+
+    window.deleteDoc = async function(filename) {
+        if (!confirm(`Delete "${filename}"?`)) return;
+        try {
+            const resp = await fetch('/api/ruai-docs/delete', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename }),
+            });
+            const data = await resp.json();
+            if (data.status === 'success') {
+                toast('Deleted ' + filename);
+                const row = document.querySelector(`tr[data-filename="${CSS.escape(filename)}"]`);
+                if (row) row.remove();
+                document.getElementById('rdDocCount').textContent = document.querySelectorAll('#rdTbody tr[data-filename]').length;
+                // Re-embed remaining docs
+                showSync('Re-embedding after delete...');
+                const rb = await fetch('/api/ruai-docs/rebuild', { method: 'POST' });
+                const rbd = await rb.json();
+                hideSync();
+                if (rbd.success) {
+                    document.getElementById('rdChunkCount').textContent = rbd.chunks_after;
+                    document.getElementById('rdStatusBadge').textContent = rbd.chunks_after > 0 ? 'Indexed' : 'Empty';
+                }
+            } else { toast(data.message || 'Delete failed', true); }
+        } catch (err) { toast('Delete error: ' + err.message, true); }
+    };
+
+    function showSync(msg) { const b = document.getElementById('rdSyncBanner'); document.getElementById('rdSyncMsg').textContent = msg; b.classList.add('active'); }
+    function hideSync() { document.getElementById('rdSyncBanner').classList.remove('active'); }
+
+    function toast(msg, isError) {
+        const t = document.getElementById('rdToast');
+        t.textContent = msg; t.style.background = isError ? '#dc2626' : '#1e293b';
+        t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 3000);
+    }
+    function fileIcon(name) {
+        const ext = name.split('.').pop().toLowerCase();
+        return { pdf:'📄', docx:'📝', doc:'📝', xlsx:'📊', xls:'📊' }[ext] || '📁';
+    }
+    function fmtSize(b) { if (b < 1024) return b+' B'; if (b < 1024*1024) return (b/1024).toFixed(1)+' KB'; return (b/(1024*1024)).toFixed(1)+' MB'; }
+    function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+})();
+</script>
+{% endblock %}

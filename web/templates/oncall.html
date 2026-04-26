@@ -1,0 +1,179 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'On-Call Schedule' %}
+{% set page_title_left_icon = '&#128222;' %}
+{% set page_title_right_icon = '&#128197;' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/oncall.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="oc-container">
+
+    <!-- Current On-Call Banner -->
+    {% if current and current.name %}
+    <div class="oc-banner">
+        <div class="oc-banner-label">Currently On-Call</div>
+        <div class="oc-banner-name">{{ current.name }}</div>
+        <div class="oc-banner-contact">
+            {% if current.email_address %}
+            <a href="mailto:{{ current.email_address }}">{{ current.email_address }}</a>
+            {% endif %}
+            {% if current.phone_number %}
+            <span class="oc-banner-sep">|</span>
+            <a href="tel:{{ current.phone_number }}">{{ current.phone_number }}</a>
+            {% endif %}
+        </div>
+    </div>
+    {% else %}
+    <div class="oc-banner oc-banner-warn">
+        <div class="oc-banner-name">No on-call assignment for this week</div>
+    </div>
+    {% endif %}
+
+    <!-- Calendar + Team side-by-side -->
+    <div class="oc-layout">
+
+        <!-- Calendar Section -->
+        <div class="oc-calendar-section">
+            <div class="oc-section-header">
+                <h2>Rotation Calendar</h2>
+                <div class="oc-swap-bar" id="swapBar" style="display:none;">
+                    <span id="swapStatus"></span>
+                    <button class="oc-btn oc-btn-sm oc-btn-cancel" onclick="cancelSwap()">Cancel</button>
+                </div>
+            </div>
+
+            {% for month_label, weeks in months.items() %}
+            <div class="oc-month">
+                <div class="oc-month-label">{{ month_label }}</div>
+                <div class="oc-month-header">
+                    <span class="oc-mh-week">Week</span>
+                    <span class="oc-mh-analyst">Analyst</span>
+                    <span class="oc-mh-actions">Actions</span>
+                </div>
+                {% for w in weeks %}
+                <div class="oc-week oc-week-{{ w.status }}" data-date="{{ w.monday_date }}" data-analyst="{{ w.analyst_name }}">
+                    <div class="oc-week-date">
+                        {{ w.display_date }}
+                        {% if w.status == 'current' %}<span class="oc-badge-now">NOW</span>{% endif %}
+                    </div>
+                    <div class="oc-week-analyst">
+                        <span class="oc-analyst-dot" style="background:{{ w.color }};"></span>
+                        {% if w.status != 'past' %}
+                        <select class="oc-select" onchange="confirmAssign(this, '{{ w.monday_date }}')" data-original="{{ w.analyst_name }}">
+                            {% for a in analysts %}
+                            <option value="{{ a.name }}" {% if a.name == w.analyst_name %}selected{% endif %}>{{ a.name }}</option>
+                            {% endfor %}
+                        </select>
+                        {% else %}
+                        <span class="oc-analyst-name-past">{{ w.analyst_name }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="oc-week-actions">
+                        {% if w.status != 'past' %}
+                        <button class="oc-btn oc-btn-swap" onclick="toggleSwap('{{ w.monday_date }}')" title="Swap with another week">Swap</button>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Team Members Section -->
+        <div class="oc-team-section">
+            <div class="oc-section-header">
+                <h2>Team</h2>
+                <button class="oc-btn oc-btn-add" onclick="openAnalystModal()">+ Add</button>
+            </div>
+
+            <div class="oc-team-list">
+                {% for a in analysts %}
+                <div class="oc-team-card" data-name="{{ a.name }}">
+                    <div class="oc-team-dot" style="background:{{ color_map.get(a.name, '#94a3b8') }};"></div>
+                    <div class="oc-team-info">
+                        <div class="oc-team-name">{{ a.name }}</div>
+                        {% if a.email_address %}
+                        <div class="oc-team-email"><a href="mailto:{{ a.email_address }}">{{ a.email_address }}</a></div>
+                        {% endif %}
+                        {% if a.phone_number %}
+                        <div class="oc-team-phone">{{ a.phone_number }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="oc-team-actions">
+                        <button class="oc-btn-icon" onclick="editAnalyst(this)" title="Edit">&#9998;</button>
+                        <button class="oc-btn-icon oc-btn-icon-del" onclick="deleteAnalyst('{{ a.name }}')" title="Remove">&times;</button>
+                    </div>
+                </div>
+                {% endfor %}
+                {% if not analysts %}
+                <div class="oc-empty">No analysts added yet.</div>
+                {% endif %}
+            </div>
+
+            <!-- Legend -->
+            <div class="oc-legend">
+                <div class="oc-legend-title">Legend</div>
+                {% for a in analysts %}
+                <div class="oc-legend-item">
+                    <span class="oc-legend-dot" style="background:{{ color_map.get(a.name, '#94a3b8') }};"></span>
+                    <span>{{ a.name }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Add/Edit Analyst Modal -->
+<div class="oc-modal-overlay" id="analystModal" style="display:none;" onclick="closeAnalystModal(event)">
+    <div class="oc-modal" onclick="event.stopPropagation()">
+        <div class="oc-modal-header">
+            <h3 id="modalTitle">Add Analyst</h3>
+            <button class="oc-btn-icon" onclick="closeAnalystModal()">&times;</button>
+        </div>
+        <form id="analystForm" onsubmit="saveAnalyst(event)">
+            <input type="hidden" id="modalOriginalName" value="">
+            <div class="oc-form-group">
+                <label for="modalName">Name</label>
+                <input type="text" id="modalName" required placeholder="Enter name">
+            </div>
+            <div class="oc-form-group">
+                <label for="modalEmail">Email</label>
+                <input type="email" id="modalEmail" placeholder="email@example.com">
+            </div>
+            <div class="oc-form-group">
+                <label for="modalPhone">Phone</label>
+                <input type="tel" id="modalPhone" placeholder="555-123-4567">
+            </div>
+            <div class="oc-modal-actions">
+                <button type="button" class="oc-btn oc-btn-cancel" onclick="closeAnalystModal()">Cancel</button>
+                <button type="submit" class="oc-btn oc-btn-save">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Confirm Dialog -->
+<div class="oc-confirm-overlay" id="confirmOverlay" style="display:none;">
+    <div class="oc-confirm">
+        <div class="oc-confirm-icon" id="confirmIcon"></div>
+        <div class="oc-confirm-title" id="confirmTitle"></div>
+        <div class="oc-confirm-msg" id="confirmMsg"></div>
+        <div class="oc-confirm-actions">
+            <button class="oc-btn oc-btn-cancel" id="confirmCancel">Cancel</button>
+            <button class="oc-btn oc-confirm-ok" id="confirmOk">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="oc-toast" id="toast"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/oncall.js') }}"></script>
+{% endblock %}

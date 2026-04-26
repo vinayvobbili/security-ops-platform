@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Project Intake</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
+    {% block extra_css %}
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/ai_intake.css') }}">{% endblock %}
+</head>
+<body class="{% block body_classes %}ai-intake-page{% endblock %}">
+{% import 'title_macros.html' as titles %}
+{% set page_title = titles.build_title('AI Project Intake', '🤖', '📋') %}
+{% include 'top_bar.html' %}
+{% block content %}
+    <div class="form-container">
+        <h2 class="form-subtitle"><span class="subtitle-gs">Global Security</span> <span class="subtitle-ai">AI Project Intake Form</span></h2>
+        <form id="aiIntakeForm" method="post" action="/submit-ai-intake">
+            <div class="form-group">
+                <label for="requesterName">Requester Name<span class="required">*</span></label>
+                <input type="text" id="requesterName" name="requesterName" required>
+            </div>
+
+            <div class="form-group">
+                <label for="emailPrefix">Email<span class="required">*</span></label>
+                <div class="email-input-row">
+                    <input type="text" id="emailPrefix" name="emailPrefix" placeholder="first.last" required>
+                    <span class="email-suffix" id="emailDomain">{{ email_domain }}</span>
+                </div>
+                <input type="hidden" id="email" name="email">
+            </div>
+
+            <div class="form-group">
+                <label for="team">Team / Department<span class="required">*</span></label>
+                <input type="text" id="team" name="team" required>
+            </div>
+
+            <div class="form-group">
+                <label for="projectName">Project Name<span class="required">*</span></label>
+                <input type="text" id="projectName" name="projectName" required>
+            </div>
+
+            <div class="form-group">
+                <label for="useCase">Use Case Category<span class="required">*</span></label>
+                <select id="useCase" name="useCase" required>
+                    <option value="" disabled selected>Select a category</option>
+                    <option value="Automation">Automation</option>
+                    <option value="Data Analysis">Data Analysis</option>
+                    <option value="Chat/Assistant">Chat/Assistant</option>
+                    <option value="Content Generation">Content Generation</option>
+                    <option value="Threat Detection">Threat Detection</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="problemStatement">Problem Statement<span class="required">*</span></label>
+                <div class="helper-text">What problem are you trying to solve?</div>
+                <textarea id="problemStatement" name="problemStatement" required></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="expectedOutcome">Expected Outcome<span class="required">*</span></label>
+                <div class="helper-text">What does success look like?</div>
+                <textarea id="expectedOutcome" name="expectedOutcome" required></textarea>
+            </div>
+
+            <div class="form-group priority-row">
+                <label>Priority<span class="required">*</span></label>
+                <div class="radio-group">
+                    <div class="radio-option">
+                        <input type="radio" id="priorityLow" name="priority" value="Low" required>
+                        <label for="priorityLow">Low</label>
+                    </div>
+                    <div class="radio-option">
+                        <input type="radio" id="priorityMedium" name="priority" value="Medium" checked>
+                        <label for="priorityMedium">Medium</label>
+                    </div>
+                    <div class="radio-option">
+                        <input type="radio" id="priorityHigh" name="priority" value="High">
+                        <label for="priorityHigh">High</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="dataSources">Data Sources Involved</label>
+                <div class="helper-text">APIs, databases, logs, etc. (optional)</div>
+                <input type="text" id="dataSources" name="dataSources">
+            </div>
+
+            <div class="form-group">
+                <label for="timeline">Target Completion Timeline<span class="required">*</span></label>
+                <select id="timeline" name="timeline" required>
+                    <option value="" disabled selected>Select a timeline</option>
+                    <option value="1-2 weeks">1-2 weeks</option>
+                    <option value="1 month">1 month</option>
+                    <option value="1 quarter">1 quarter</option>
+                    <option value="Flexible">Flexible</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="additionalNotes">Additional Notes</label>
+                <textarea id="additionalNotes" name="additionalNotes"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="documents">Supporting Documents</label>
+                <div class="helper-text">Architecture diagrams, requirements docs, screenshots, etc. (optional, max 10 MB each)</div>
+                <input type="file" id="documents" name="documents" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.png,.jpg,.jpeg,.gif,.svg">
+                <p id="fileError" class="file-error"></p>
+            </div>
+
+            <button type="submit">Submit Request</button>
+        </form>
+        <div id="responseModal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <div id="response"></div>
+            </div>
+        </div>
+        {% block extra_js %}
+            <script src="{{ url_for('static', filename='js/ai_intake.js') }}"></script>{% endblock %}
+        <script src="/static/js/common.js"></script>
+        <script>
+            initRandomMusic();
+        </script>
+    </div>
+{% endblock %}
+{% if config.watermark_author %}<div style="position:fixed;bottom:8px;right:16px;font-size:11px;color:rgba(0,0,0,0.25);font-style:italic;pointer-events:none;z-index:9999;">By {{ config.watermark_author }}</div>{% endif %}
+</body>
+</html>

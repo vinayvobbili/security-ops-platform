@@ -8,19 +8,26 @@ their clients).
 import logging
 from typing import Optional
 
-from langchain_ollama import ChatOllama, OllamaEmbeddings
+from langchain_core.language_models import BaseChatModel
+from langchain_core.embeddings import Embeddings
+
+from my_bot.utils.llm_factory import create_llm, create_router_llm, create_embeddings
+from my_bot.utils.enhanced_config import ModelConfig
 
 logger = logging.getLogger(__name__)
 
-# Singleton LLM instance
-_llm: Optional[ChatOllama] = None
-_embeddings: Optional[OllamaEmbeddings] = None
+# Singleton instances
+_llm: Optional[BaseChatModel] = None
+_router_llm: Optional[BaseChatModel] = None
+_embeddings: Optional[Embeddings] = None
+_model_config: Optional[ModelConfig] = None
 
-# Configuration (matching state_manager settings)
-LLM_MODEL = "glm-4.7-flash"
-EMBEDDING_MODEL = "nomic-embed-text"
-NUM_CTX = 16384
-TEMPERATURE = 0.1
+
+def _get_config() -> ModelConfig:
+    global _model_config
+    if _model_config is None:
+        _model_config = ModelConfig()
+    return _model_config
 
 
 def ensure_llm_initialized() -> None:
@@ -30,40 +37,43 @@ def ensure_llm_initialized() -> None:
     if _llm is not None:
         return
 
-    logger.info(f"Connecting to LLM: {LLM_MODEL}...")
-    _llm = ChatOllama(
-        model=LLM_MODEL,
-        temperature=TEMPERATURE,
-        keep_alive=-1,
-        num_ctx=NUM_CTX,
-        client_kwargs={'timeout': 300.0},
-    )
-    logger.info(f"Connected to {LLM_MODEL} (num_ctx={NUM_CTX})")
+    cfg = _get_config()
+    logger.info(f"Connecting to LLM: {cfg.llm_model_name}...")
+    _llm = create_llm(cfg)
+    logger.info(f"Connected to {cfg.llm_model_name}")
 
-    logger.info(f"Connecting to embeddings: {EMBEDDING_MODEL}...")
-    _embeddings = OllamaEmbeddings(model=EMBEDDING_MODEL)
-    logger.info(f"Connected to {EMBEDDING_MODEL}")
+    logger.info(f"Connecting to embeddings: {cfg.embedding_model_name}...")
+    _embeddings = create_embeddings(cfg)
+    logger.info(f"Connected to {cfg.embedding_model_name}")
 
 
-def get_llm() -> Optional[ChatOllama]:
+def get_llm() -> Optional[BaseChatModel]:
     """Get the LLM instance."""
     ensure_llm_initialized()
     return _llm
 
 
-def get_llm_with_temperature(temperature: float) -> ChatOllama:
+def get_llm_with_temperature(temperature: float) -> BaseChatModel:
     """Get LLM with custom temperature."""
     ensure_llm_initialized()
-    return ChatOllama(
-        model=LLM_MODEL,
-        temperature=temperature,
-        keep_alive=-1,
-        num_ctx=NUM_CTX,
-        client_kwargs={'timeout': 300.0},
-    )
+    return create_llm(_get_config(), temperature=temperature)
 
 
-def get_embeddings() -> Optional[OllamaEmbeddings]:
+def get_embeddings() -> Optional[Embeddings]:
     """Get the embeddings instance."""
     ensure_llm_initialized()
     return _embeddings
+
+
+def get_router_llm() -> Optional[BaseChatModel]:
+    """Get the lightweight router LLM (Qwen3-8B). Used for cheap auxiliary
+    passes like the XSOAR triage critic where the main analysis LLM would be
+    overkill."""
+    global _router_llm
+    if _router_llm is None:
+        try:
+            _router_llm = create_router_llm(_get_config())
+        except Exception as e:
+            logger.warning(f"Router LLM init failed: {e}")
+            return None
+    return _router_llm

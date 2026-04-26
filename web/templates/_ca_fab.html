@@ -1,0 +1,107 @@
+{# Shared chrome: mode toggle, floating help button, global tooltip listener. #}
+<div class="ca-mode-toggle" role="radiogroup" aria-label="Drafting mode">
+    <button type="button" class="ca-mode-label demo" data-mode="demo" data-tip="DEMO MODE: drafts use pre-written canned answers. Safe to click around — no the internal LLM gateway calls, no real KB retrieval. Use for first-look demos and walkthroughs."
+            role="radio">Demo</button>
+    <button type="button" class="ca-mode-label live" data-mode="live" data-tip="LIVE MODE: drafts call the internal LLM gateway with real KB retrieval. If KB is empty or the internal LLM gateway is unreachable, drafts fall back to canned with a clear warning so you can see what happened."
+            role="radio">Live</button>
+</div>
+<button type="button" class="ca-fab" id="ca-fab-btn" title="Take the tour" aria-label="Take the tour">
+    ?
+    <span class="ca-fab-label">Replay walkthrough</span>
+</button>
+<div class="ca-tip-popup" id="ca-tip-popup" role="tooltip"></div>
+<script>
+(function() {
+    // --- Mode toggle (Demo/Live) ---
+    function getCookie(name) {
+        const m = document.cookie.match('(^|;)\\s*' + name + '=([^;]+)');
+        return m ? decodeURIComponent(m[2]) : null;
+    }
+    function setCookie(name, value, days) {
+        const d = new Date();
+        d.setTime(d.getTime() + (days * 86400 * 1000));
+        document.cookie = name + '=' + encodeURIComponent(value) + ';expires=' + d.toUTCString() + ';path=/;SameSite=Lax';
+    }
+    const currentMode = getCookie('ca_mode') || 'demo';
+    document.body.classList.add('ca-' + currentMode + '-mode');
+    if (currentMode === 'live') {
+        // Suppress walkthrough auto-start in Live mode (FAB click still works for manual replay)
+        ['landing','new','queue','workspace'].forEach(k => localStorage.setItem('ca_tour_seen_' + k, '1'));
+    }
+    document.querySelectorAll('.ca-mode-label').forEach(btn => {
+        if (btn.dataset.mode === currentMode) btn.classList.add('active');
+        btn.addEventListener('click', () => {
+            const newMode = btn.dataset.mode;
+            if (newMode === currentMode) return;
+            setCookie('ca_mode', newMode, 30);
+            // Brief flash before reload so users see the swap take effect
+            document.querySelectorAll('.ca-mode-label').forEach(b => b.classList.toggle('active', b.dataset.mode === newMode));
+            setTimeout(() => location.reload(), 180);
+        });
+    });
+
+    // --- Floating help button: replay walkthrough for the current page ---
+    document.getElementById('ca-fab-btn').addEventListener('click', () => {
+        const tourKey = document.body.dataset.caTour || 'landing';
+        if (window.CATour) window.CATour.start(tourKey);
+    });
+
+    // --- Global tip tooltip listener ---
+    const popup = document.getElementById('ca-tip-popup');
+
+    function show(el) {
+        const text = el.dataset.tip || el.getAttribute('aria-label') || '';
+        if (!text) return;
+        popup.textContent = text;
+        popup.classList.add('active');
+        // Force a reflow so we can measure
+        const popupRect = popup.getBoundingClientRect();
+        const elRect = el.getBoundingClientRect();
+        const popupH = popupRect.height || 60;
+        const popupW = popupRect.width || 260;
+
+        // Prefer above; flip below if not enough room
+        const spaceAbove = elRect.top;
+        let top;
+        if (spaceAbove >= popupH + 14) {
+            top = elRect.top - popupH - 12;
+            popup.classList.add('above');
+            popup.classList.remove('below');
+        } else {
+            top = elRect.bottom + 12;
+            popup.classList.add('below');
+            popup.classList.remove('above');
+        }
+
+        let left = elRect.left - 10;
+        if (left + popupW > window.innerWidth - 14) left = window.innerWidth - popupW - 14;
+        if (left < 14) left = 14;
+
+        popup.style.top = top + 'px';
+        popup.style.left = left + 'px';
+    }
+
+    function hide() {
+        popup.classList.remove('active');
+    }
+
+    document.addEventListener('mouseover', e => {
+        const tip = e.target.closest('[data-tip]');
+        if (tip) show(tip);
+    });
+    document.addEventListener('mouseout', e => {
+        const tip = e.target.closest('[data-tip]');
+        if (tip) hide();
+    });
+    document.addEventListener('focusin', e => {
+        const tip = e.target.closest('[data-tip]');
+        if (tip) show(tip);
+    });
+    document.addEventListener('focusout', e => {
+        const tip = e.target.closest('[data-tip]');
+        if (tip) hide();
+    });
+    // Hide on scroll so it doesn't detach
+    window.addEventListener('scroll', hide, true);
+})();
+</script>

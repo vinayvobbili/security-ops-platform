@@ -57,5 +57,6 @@
 <script src="{{ url_for('static', filename='js/common.js') }}"></script>
 {% block extra_js %}
     <script src="{{ url_for('static', filename='js/pokedex_chat.js') }}"></script>{% endblock %}
+{% if config.watermark_author %}<div style="position:fixed;bottom:8px;right:16px;font-size:11px;color:rgba(0,0,0,0.25);font-style:italic;pointer-events:none;z-index:9999;">By {{ config.watermark_author }}</div>{% endif %}
 </body>
 </html>

@@ -1,0 +1,1 @@
+"""OE Detection configuration package."""

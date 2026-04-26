@@ -166,10 +166,12 @@ def get_tuning_requests_submitted_by_last_shift():
 
             # Compare timezone-aware datetimes
             if created_date >= eight_hours_ago:
-                # Convert to string format
+                # Convert to markdown link format
                 item_id = item.get('id', 'Unknown')
                 item_title = fields.get('System.Title', 'No Title')
-                item_str = f"{item_id}: {item_title}"
+                project = config.azdo_de_project or 'Detection-Engineering'
+                item_url = f"{organization_url}/{project}/_workitems/edit/{item_id}"
+                item_str = f"[{item_id}: {item_title}]({item_url})"
                 recent_item_strings.append(item_str)
 
         except (ValueError, AttributeError) as e:

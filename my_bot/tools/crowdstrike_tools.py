@@ -16,6 +16,7 @@ from services.crowdstrike import CrowdStrikeClient
 
 # Import tool logging decorator
 from src.utils.tool_decorator import log_tool_call
+from src.utils.llm_decorators import validate_args, HOSTNAME_PATTERN
 
 # Lazy-initialized CrowdStrike client
 _crowdstrike_client: Optional[CrowdStrikeClient] = None
@@ -33,6 +34,7 @@ def _get_crowdstrike_client() -> Optional[CrowdStrikeClient]:
 
 
 @tool
+@validate_args(hostname=HOSTNAME_PATTERN)
 @log_tool_call
 def get_device_containment_status(hostname: str) -> str:
     """Get device containment status from CrowdStrike.
@@ -73,6 +75,7 @@ def get_device_containment_status(hostname: str) -> str:
 
 
 @tool
+@validate_args(hostname=HOSTNAME_PATTERN)
 @log_tool_call
 def get_device_online_status(hostname: str) -> str:
     """Get device online status from CrowdStrike.
@@ -97,6 +100,7 @@ def get_device_online_status(hostname: str) -> str:
 
 
 @tool
+@validate_args(hostname=HOSTNAME_PATTERN)
 @log_tool_call
 def get_device_details_cs(hostname: str) -> str:
     """Get detailed device information from CrowdStrike."""
@@ -265,7 +269,7 @@ def _format_cs_incident_result(incidents: list) -> str:
 
 @tool
 @log_tool_call
-def get_crowdstrike_detections(limit: int = 20, status: str = "") -> str:
+def get_crowdstrike_detections(limit: int = 10, status: str = "") -> str:
     """Get recent detections from CrowdStrike Falcon EDR platform.
 
     USE THIS TOOL when the user asks for CrowdStrike detections, CS detections,
@@ -378,8 +382,9 @@ def get_crowdstrike_detection_details(detection_id: str) -> str:
 
 
 @tool
+@validate_args(hostname=HOSTNAME_PATTERN)
 @log_tool_call
-def search_crowdstrike_detections_by_hostname(hostname: str, limit: int = 20) -> str:
+def search_crowdstrike_detections_by_hostname(hostname: str, limit: int = 10) -> str:
     """Search CrowdStrike detections for a specific hostname.
 
     USE THIS TOOL when user asks for CrowdStrike detections on a specific host
@@ -411,7 +416,7 @@ def search_crowdstrike_detections_by_hostname(hostname: str, limit: int = 20) ->
 
 @tool
 @log_tool_call
-def get_crowdstrike_incidents(limit: int = 20, status: str = "") -> str:
+def get_crowdstrike_incidents(limit: int = 10, status: str = "") -> str:
     """Get recent incidents from CrowdStrike Falcon platform.
 
     USE THIS TOOL when the user asks for CrowdStrike incidents, CS incidents,
@@ -532,8 +537,9 @@ def get_and_clear_generated_file_path():
 
 
 @tool
+@validate_args(hostname=HOSTNAME_PATTERN)
 @log_tool_call
-def collect_browser_history(hostname: str, days: int = 7) -> str:
+def collect_browser_history(hostname: str, days: int = 7, platform: str = None) -> str:
     """Collect browser history from a device using CrowdStrike RTR.
 
     USE THIS TOOL when user asks for browser history, browsing history,
@@ -542,6 +548,7 @@ def collect_browser_history(hostname: str, days: int = 7) -> str:
     Args:
         hostname: The target device hostname (e.g., 'LAPTOP123', 'US24J65C4')
         days: Number of days of history to retrieve (default: 7, max: 90)
+        platform: Device platform ('Windows' or 'Mac'). Auto-detected if not provided.
     """
     global _last_generated_file_path
     import time
@@ -556,12 +563,35 @@ def collect_browser_history(hostname: str, days: int = 7) -> str:
     days = min(max(1, days), 90)
     cutoff_date = datetime.now() - timedelta(days=days)
 
+    # Auto-detect platform if not provided
+    if not platform:
+        from services.crowdstrike import CrowdStrikeClient
+        try:
+            cs = CrowdStrikeClient()
+            device_id = cs.get_device_id(hostname)
+            if device_id:
+                details = cs.get_device_details(device_id)
+                platform = details.get('platform_name', 'Windows')
+        except Exception:
+            platform = 'Windows'
+
+    # Pick the right staging script based on platform
+    script_name = "Stage_Browser_History_Mac" if platform == 'Mac' else "Stage_Browser_History"
+
+    # Resolve local script path for inline fallback (handles CloudFile cache staleness)
+    local_script_path = None
+    if platform == 'Mac':
+        script_file = Path(__file__).resolve().parent.parent.parent / "data" / "scripts" / "Stage_Browser_History_Mac.sh"
+        if script_file.is_file():
+            local_script_path = str(script_file)
+
     # Step 1: Run staging script to copy history files to temp location
-    logging.info(f"Staging browser history files on {hostname}")
+    logging.info(f"Staging browser history files on {hostname} (platform={platform})")
     result = run_rtr_script(
         hostname=hostname,
-        cloud_script_name="Stage_Browser_History",
-        command_line=""
+        cloud_script_name=script_name,
+        command_line="",
+        local_script_path=local_script_path
     )
 
     if not result["success"]:
@@ -744,6 +774,39 @@ def _parse_sqlite_history(db_path: str, browser: str, user: str, cutoff_date) ->
                     'visit_count': visit_count or 0
                 })
 
+        elif browser.lower() == 'safari':
+            # Safari: visit_time is seconds since 2001-01-01 (Core Data epoch)
+            core_data_epoch = datetime(2001, 1, 1)
+            safari_cutoff = (cutoff_date - core_data_epoch).total_seconds()
+
+            cursor.execute("""
+                SELECT hi.url, hv.title, hv.visit_time, hi.visit_count
+                FROM history_items hi
+                JOIN history_visits hv ON hv.history_item = hi.id
+                WHERE hv.visit_time > ?
+                ORDER BY hv.visit_time DESC
+                LIMIT 1000
+            """, (safari_cutoff,))
+
+            for row in cursor.fetchall():
+                url, title, visit_time, visit_count = row
+                if visit_time:
+                    try:
+                        ts = core_data_epoch + timedelta(seconds=visit_time)
+                        timestamp = ts.strftime('%Y-%m-%d %H:%M:%S')
+                    except:
+                        timestamp = str(visit_time)
+                else:
+                    timestamp = ""
+
+                entries.append({
+                    'browser': f"{browser} ({user})",
+                    'url': url or "",
+                    'title': title or "",
+                    'timestamp': timestamp,
+                    'visit_count': visit_count or 0
+                })
+
         conn.close()
     except Exception as e:
         logging.error(f"Error parsing {browser} history: {e}")
@@ -889,13 +952,14 @@ def save_to_excel(entries: list[dict], filename_prefix: str, columns: list[str] 
 # =============================================================================
 
 @tool
+@validate_args(hostname=HOSTNAME_PATTERN)
 @log_tool_call
 def search_falcon_events(
     hostname: str,
     start_time: str = "24h",
     end_time: str = "now",
     query_filter: str = "",
-    limit: int = 50
+    limit: int = 20
 ) -> str:
     """Search CrowdStrike Falcon LogScale events for a specific host.
 

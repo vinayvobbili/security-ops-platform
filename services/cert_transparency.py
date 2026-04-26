@@ -592,10 +592,20 @@ def discover_brand_impersonation(
 
                 # Found a suspicious domain!
                 if domain not in new_suspicious:
+                    # Classify: subdomain-abuse vs combo-squatting
+                    # Extract registrable domain (last 2 parts)
+                    parts = domain.rsplit('.', 2)
+                    registrable = '.'.join(parts[-2:]) if len(parts) >= 2 else domain
+                    if brand_lower not in registrable:
+                        threat_type = "subdomain-abuse"
+                    else:
+                        threat_type = "combo-squatting"
+
                     threat_info = {
                         "domain": domain,
                         "cert_id": cert_id,
                         "brand": brand,
+                        "threat_type": threat_type,
                         "issuer": cert.get("issuer_name", "Unknown"),
                         "not_before": cert.get("not_before"),
                         "not_after": cert.get("not_after"),

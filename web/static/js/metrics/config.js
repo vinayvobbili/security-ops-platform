@@ -67,7 +67,8 @@ export const AVAILABLE_COLUMNS = {
     'openDuration': {label: 'Open Duration', category: 'Metrics', path: 'openDuration', type: 'number'},
     'timetorespond': {label: 'Time to Respond', category: 'Metrics', path: 'time_to_respond_secs', type: 'duration'},
     'timetocontain': {label: 'Time to Contain', category: 'Metrics', path: 'time_to_contain_secs', type: 'duration'},
-    'notes': {label: 'User Notes', category: 'Investigation', path: 'notes', type: 'array'}
+    'notes': {label: 'User Notes', category: 'Investigation', path: 'notes', type: 'array'},
+    'closeNotes': {label: 'Close Notes', category: 'Investigation', path: 'closeNotes', type: 'string'}
 };
 
 // Default visible columns

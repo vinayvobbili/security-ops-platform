@@ -1,0 +1,220 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'DnR Escalation Contacts' %}
+{% set page_title_left_icon = '📇' %}
+{% set page_title_right_icon = '📞' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/escalation_contacts.css') }}?v=20260424a">
+{% endblock %}
+
+{% block content %}
+<div class="ec-container">
+
+    <!-- Toolbar -->
+    <div class="ec-toolbar">
+        <div class="ec-toolbar-left">
+            <div class="ec-search-wrap">
+                <span class="ec-search-icon" aria-hidden="true">🔍</span>
+                <input type="search" id="ecSearchInput" class="ec-search-input"
+                       placeholder="Search name, team, email, phone…" autocomplete="off" spellcheck="false">
+                <button type="button" class="ec-search-clear" id="ecSearchClear" aria-label="Clear search" title="Clear (Esc)">&times;</button>
+            </div>
+            <span class="ec-count" id="contactCount"></span>
+        </div>
+        <div class="ec-toolbar-right">
+            <button class="ec-btn ec-btn-add" onclick="openAddModal()">+ Add Contact</button>
+        </div>
+    </div>
+
+    <!-- No-results state (shown when search matches nothing) -->
+    <div class="ec-no-results" id="ecNoResults" style="display:none;">
+        <div class="ec-no-results-icon">🔍</div>
+        <div>No contacts match <strong id="ecNoResultsQuery"></strong></div>
+    </div>
+
+    <!-- Sync Banner -->
+    <div class="ec-sync-banner" id="ecSyncBanner">
+        <div class="ec-banner-spinner"></div>
+        <span>Rebuilding contact embeddings…</span>
+    </div>
+
+    <!-- Region Tabs -->
+    <div class="ec-tabs" id="regionTabs">
+        {% for region in regions %}
+        <button class="ec-tab{% if loop.first %} ec-tab-active{% endif %}" data-region="{{ region }}" onclick="switchTab('{{ region }}')">{{ region }}</button>
+        {% endfor %}
+        {% if sheet_tabs %}
+        <span class="ec-tab-divider" title="Regional Contact List worksheets">|</span>
+        {% for sheet in sheet_tabs %}
+        <button class="ec-tab ec-tab-sheet" data-region="sheet-{{ sheet.slug }}" onclick="switchTab('sheet-{{ sheet.slug }}')">{{ sheet.name }}</button>
+        {% endfor %}
+        {% endif %}
+    </div>
+
+    <!-- Tab Content -->
+    {% for region in regions %}
+    <div class="ec-tab-content{% if loop.first %} ec-tab-content-active{% endif %}" id="tab-{{ region }}">
+        {% if contacts.get(region) %}
+            {% for team_group in contacts[region] %}
+            <div class="ec-team-section">
+                <div class="ec-team-header">{{ team_group.team }}</div>
+                <div class="ec-table-wrap">
+                    <table class="ec-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Title</th>
+                                <th>Email</th>
+                                <th>Phone</th>
+                                <th>Comments</th>
+                                <th class="ec-th-actions">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in team_group.contacts %}
+                            <tr data-id="{{ c.id }}" id="row-{{ c.id }}">
+                                <td data-field="name">{{ c.name }}</td>
+                                <td data-field="title">{{ c.title }}</td>
+                                <td data-field="email">
+                                    {% if c.email %}<a href="mailto:{{ c.email }}" class="ec-email-link">{{ c.email }}</a>{% endif %}
+                                </td>
+                                <td data-field="phone">{{ c.phone }}</td>
+                                <td data-field="comments" class="ec-comments-cell">{{ c.comments }}</td>
+                                <td class="ec-actions">
+                                    <button class="ec-btn-icon ec-btn-edit" onclick="startEdit({{ c.id }})" title="Edit">&#9998;</button>
+                                    <button class="ec-btn-icon ec-btn-delete" onclick="deleteContact({{ c.id }})" title="Delete">&times;</button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+        <div class="ec-empty">No contacts in this region.</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    {# ─── Worksheet tabs from Regional Contact List.xlsx (read-only) ─── #}
+    {% for sheet in sheet_tabs %}
+    <div class="ec-tab-content" id="tab-sheet-{{ sheet.slug }}">
+        <div class="ec-team-section">
+            <div class="ec-team-header">
+                {{ sheet.name }}
+                <span class="ec-sheet-meta">— from Regional Contact List.xlsx · {{ sheet.rows | length }} {% if sheet.is_doc %}line{{ 's' if sheet.rows | length != 1 }}{% else %}row{{ 's' if sheet.rows | length != 1 }}{% endif %}</span>
+            </div>
+            {% if sheet.is_doc %}
+                <div class="ec-doc-block">
+                    {% for line in sheet.rows %}
+                    <p>{{ line[0] }}</p>
+                    {% endfor %}
+                </div>
+            {% elif sheet.rows %}
+                <div class="ec-table-wrap">
+                    <table class="ec-table ec-table-readonly">
+                        <thead>
+                            <tr>
+                                {% for col in sheet.columns %}
+                                <th>{{ col }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in sheet.rows %}
+                            <tr>
+                                {% for cell in row %}
+                                <td>
+                                    {%- if cell and '@' in cell and ' ' not in cell -%}
+                                        <a href="mailto:{{ cell }}" class="ec-email-link">{{ cell }}</a>
+                                    {%- else -%}
+                                        {{ cell }}
+                                    {%- endif -%}
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="ec-empty">No data in this worksheet.</div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+
+</div>
+
+<!-- Add Contact Modal -->
+<div class="ec-modal-overlay" id="addModal" style="display:none;" onclick="closeAddModal(event)">
+    <div class="ec-modal" onclick="event.stopPropagation()">
+        <div class="ec-modal-header">
+            <h3>Add Contact</h3>
+            <button class="ec-modal-close" onclick="closeAddModal()">&times;</button>
+        </div>
+        <form id="addContactForm" onsubmit="submitAddContact(event)">
+            <div class="ec-form-grid">
+                <div class="ec-form-group">
+                    <label>Region <span class="ec-required">*</span></label>
+                    <select id="addRegion" required>
+                        {% for region in regions %}
+                        <option value="{{ region }}">{{ region }}</option>
+                        {% endfor %}
+                        <option value="__new__">+ New Region...</option>
+                    </select>
+                    <input type="text" id="addRegionCustom" placeholder="New region name" style="display:none; margin-top:6px;">
+                </div>
+                <div class="ec-form-group">
+                    <label>Team <span class="ec-required">*</span></label>
+                    <input type="text" id="addTeam" required placeholder="e.g. EMEA-CIRT">
+                </div>
+                <div class="ec-form-group">
+                    <label>Name <span class="ec-required">*</span></label>
+                    <input type="text" id="addName" required placeholder="Full name">
+                </div>
+                <div class="ec-form-group">
+                    <label>Title</label>
+                    <input type="text" id="addTitle" placeholder="Job title">
+                </div>
+                <div class="ec-form-group">
+                    <label>Email</label>
+                    <input type="email" id="addEmail" placeholder="<redacted-email>">
+                </div>
+                <div class="ec-form-group">
+                    <label>Phone</label>
+                    <input type="text" id="addPhone" placeholder="+1 555-0100">
+                </div>
+                <div class="ec-form-group ec-form-group-full">
+                    <label>Comments</label>
+                    <textarea id="addComments" rows="2" placeholder="e.g. When escalating to AMthe company, copy ASIA-CIRT too"></textarea>
+                </div>
+            </div>
+            <div class="ec-modal-footer">
+                <button type="button" class="ec-btn ec-btn-cancel" onclick="closeAddModal()">Cancel</button>
+                <button type="submit" class="ec-btn ec-btn-add">Add Contact</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="ec-toast" id="ecToast"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/escalation_contacts.js') }}?v=20260424a"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof initTheme === 'function') initTheme();
+    updateCount();
+    // Show banner if a rebuild is already in progress (e.g. page reloaded right after add)
+    fetch('/api/escalation-contacts/status')
+        .then(r => r.json())
+        .then(data => { if (data.running) { ecShowSyncBanner(); ecStartPolling(); } })
+        .catch(() => {});
+});
+</script>
+{% endblock %}

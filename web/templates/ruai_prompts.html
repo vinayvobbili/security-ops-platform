@@ -1,0 +1,611 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'RUAI LLM Prompts' %}
+{% set page_title_left_icon = '🧠' %}
+{% set page_title_right_icon = '✏️' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ruai.css') }}">
+<style>
+.rp-container { max-width: 1080px; margin: 0 auto; padding: 24px 16px; position: relative; z-index: 1; }
+.rp-back {
+    display: inline-flex; align-items: center; gap: 8px; font-size: 0.88rem; font-weight: 600;
+    color: var(--ruai-card-text-secondary); text-decoration: none; margin-bottom: 20px;
+    padding: 6px 12px; border-radius: 20px; background: var(--ruai-glass-bg);
+    border: 1px solid var(--ruai-card-border); transition: all 0.15s;
+}
+.rp-back:hover {
+    color: var(--ruai-aurora-1); border-color: var(--ruai-aurora-1);
+    transform: translateX(-2px); text-decoration: none;
+}
+
+/* Hero header card */
+.rp-hero {
+    position: relative; overflow: hidden;
+    background:
+        radial-gradient(900px 260px at 0% 0%, rgba(124,58,237,0.18), transparent 70%),
+        radial-gradient(700px 220px at 100% 100%, rgba(8,145,178,0.18), transparent 70%),
+        var(--ruai-card-bg);
+    border: 1px solid var(--ruai-card-border);
+    border-radius: 18px; padding: 22px 26px; margin-bottom: 20px;
+    box-shadow: var(--ruai-card-shadow), 0 8px 30px rgba(124,58,237,0.08);
+}
+.rp-hero::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--ruai-aurora-1), var(--ruai-aurora-2), var(--ruai-aurora-1));
+}
+.rp-hero h3 {
+    margin: 0 0 6px; font-size: 1.4rem; font-weight: 700; letter-spacing: -0.01em;
+    font-family: 'Outfit', 'Inter', sans-serif;
+    background: linear-gradient(135deg, var(--ruai-aurora-1), var(--ruai-aurora-2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.rp-hero p.rp-desc { margin: 0 0 16px; font-size: 0.92rem; color: var(--ruai-card-text-secondary); line-height: 1.5; }
+
+/* Stats row */
+.rp-stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.rp-stat {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--ruai-glass-bg); border: 1px solid var(--ruai-card-border);
+    border-radius: 12px; padding: 10px 16px; min-width: 140px;
+    transition: transform 0.15s, border-color 0.15s;
+}
+.rp-stat:hover { transform: translateY(-2px); border-color: var(--ruai-aurora-1); }
+.rp-stat-icon {
+    width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem;
+    background: linear-gradient(135deg, rgba(124,58,237,0.18), rgba(8,145,178,0.18));
+    border: 1px solid rgba(124,58,237,0.3);
+}
+.rp-stat-body { display: flex; flex-direction: column; }
+.rp-stat-value {
+    font-size: 1.15rem; font-weight: 700; font-family: 'Outfit', sans-serif;
+    color: var(--ruai-card-text); line-height: 1.1;
+}
+.rp-stat-label {
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--ruai-card-text-muted); font-weight: 600;
+}
+
+/* Placeholder chip row */
+.rp-ph-wrap {
+    background: var(--ruai-glass-bg); border: 1px solid var(--ruai-card-border);
+    border-radius: 12px; padding: 10px 14px;
+}
+.rp-ph-label {
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--ruai-card-text-muted); font-weight: 700; margin-right: 10px;
+}
+.rp-chip {
+    display: inline-block;
+    background: linear-gradient(135deg, rgba(124,58,237,0.12), rgba(8,145,178,0.12));
+    border: 1px solid rgba(124,58,237,0.28);
+    border-radius: 20px; padding: 3px 10px; font-size: 0.76rem;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    color: var(--ruai-aurora-1); margin: 2px 4px 2px 0; font-weight: 600;
+    transition: transform 0.1s;
+}
+.rp-chip:hover { transform: translateY(-1px); }
+
+.rp-card {
+    background: var(--ruai-card-bg); border: 1px solid var(--ruai-card-border);
+    border-radius: 16px; padding: 22px 24px; box-shadow: var(--ruai-card-shadow);
+    margin-bottom: 18px;
+}
+
+.rp-toolbar {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;
+    padding: 8px 10px; border-radius: 10px;
+    background: linear-gradient(135deg, rgba(124,58,237,0.04), rgba(8,145,178,0.04));
+    border: 1px solid var(--ruai-glass-border);
+}
+.rp-btn {
+    padding: 7px 14px; border-radius: 8px; font-weight: 600; font-size: 0.85rem;
+    cursor: pointer; border: 1px solid var(--ruai-card-border); background: var(--ruai-card-bg);
+    color: var(--ruai-card-text); transition: all 0.15s;
+}
+.rp-btn:hover {
+    border-color: var(--ruai-aurora-1); color: var(--ruai-aurora-1);
+    background: rgba(124,58,237,0.06); transform: translateY(-1px);
+}
+.rp-btn-primary {
+    background: linear-gradient(135deg, var(--ruai-aurora-1), var(--ruai-aurora-2));
+    border: none; color: #fff;
+    box-shadow: 0 3px 10px rgba(124,58,237,0.28);
+}
+.rp-btn-primary:hover {
+    opacity: 0.95; transform: translateY(-1px); color: #fff;
+    box-shadow: 0 5px 14px rgba(124,58,237,0.38);
+    background: linear-gradient(135deg, var(--ruai-aurora-1), var(--ruai-aurora-2));
+}
+.rp-btn-danger:hover { border-color: #dc2626; color: #dc2626; background: rgba(220,38,38,0.06); }
+.rp-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.rp-tabs {
+    display: flex; gap: 4px; border-bottom: 2px solid var(--ruai-card-border);
+    margin-bottom: 16px; padding-bottom: 0;
+}
+.rp-tab {
+    padding: 10px 20px; font-size: 0.9rem; cursor: pointer; border: none;
+    background: transparent; color: var(--ruai-card-text-muted);
+    font-weight: 600; position: relative; transition: color 0.15s;
+}
+.rp-tab:hover { color: var(--ruai-aurora-1); }
+.rp-tab.active { color: var(--ruai-card-text); }
+.rp-tab.active::after {
+    content: ''; position: absolute; left: 12px; right: 12px; bottom: -2px; height: 3px;
+    background: linear-gradient(90deg, var(--ruai-aurora-1), var(--ruai-aurora-2));
+    border-radius: 3px 3px 0 0;
+}
+
+.rp-view-toggle {
+    display: inline-flex; border: 1px solid var(--ruai-card-border); border-radius: 20px;
+    overflow: hidden; background: var(--ruai-card-bg); margin-left: auto;
+    padding: 3px;
+}
+.rp-view-toggle button {
+    border: none; background: transparent; color: var(--ruai-card-text-secondary);
+    padding: 6px 16px; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+    border-radius: 16px; transition: all 0.15s;
+}
+.rp-view-toggle button:hover:not(.active) { color: var(--ruai-aurora-1); }
+.rp-view-toggle button.active {
+    background: linear-gradient(135deg, var(--ruai-aurora-1), var(--ruai-aurora-2));
+    color: #fff; box-shadow: 0 2px 8px rgba(124,58,237,0.3);
+}
+
+.rp-editor, .rp-preview { width: 100%; }
+.rp-hidden-pane { display: none !important; }
+
+.rp-editor {
+    width: 100%; min-height: 520px; max-height: 720px;
+    border: 1px solid var(--ruai-card-border); border-radius: 10px;
+    background: var(--ruai-glass-bg); color: var(--ruai-card-text);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.88rem;
+    padding: 12px; line-height: 1.5; resize: vertical;
+}
+.rp-editor:focus { outline: none; border-color: var(--ruai-aurora-1); box-shadow: 0 0 0 2px rgba(124,58,237,0.12); }
+
+.rp-preview {
+    min-height: 520px; max-height: 720px; overflow-y: auto;
+    border: 1px solid var(--ruai-card-border); border-radius: 14px;
+    background:
+        radial-gradient(1200px 400px at -10% -20%, rgba(124,58,237,0.08), transparent 60%),
+        radial-gradient(900px 360px at 110% 120%, rgba(8,145,178,0.08), transparent 60%),
+        var(--ruai-card-bg);
+    color: var(--ruai-card-text);
+    padding: 22px 28px; font-size: 0.95rem;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.65;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+/* Headings — Outfit + gradient accent bar */
+.rp-preview h1, .rp-preview h2, .rp-preview h3, .rp-preview h4 {
+    font-family: 'Outfit', 'Inter', sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 1.35em 0 0.5em;
+    color: var(--ruai-card-text);
+}
+.rp-preview h1 {
+    font-size: 1.55rem;
+    background: linear-gradient(135deg, var(--ruai-aurora-1), var(--ruai-aurora-2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    padding-bottom: 0.3em; border-bottom: 2px solid rgba(124,58,237,0.25);
+}
+.rp-preview h2 {
+    font-size: 1.22rem; position: relative; padding-left: 14px;
+}
+.rp-preview h2::before {
+    content: ''; position: absolute; left: 0; top: 0.3em; bottom: 0.3em; width: 4px;
+    background: linear-gradient(180deg, var(--ruai-aurora-1), var(--ruai-aurora-2));
+    border-radius: 3px;
+}
+.rp-preview h3 { font-size: 1.05rem; color: var(--ruai-aurora-1); }
+.rp-preview h4 { font-size: 0.95rem; color: var(--ruai-card-text-secondary); text-transform: uppercase; letter-spacing: 0.06em; }
+
+.rp-preview p { margin: 0.55em 0; }
+.rp-preview strong { color: var(--ruai-card-text); font-weight: 700; }
+.rp-preview em { color: var(--ruai-card-text-secondary); }
+.rp-preview a { color: var(--ruai-aurora-1); text-decoration: none; border-bottom: 1px dashed rgba(124,58,237,0.5); }
+.rp-preview a:hover { color: var(--ruai-aurora-2); border-bottom-color: var(--ruai-aurora-2); }
+
+/* Lists */
+.rp-preview ul, .rp-preview ol { padding-left: 1.6em; margin: 0.55em 0; }
+.rp-preview li { margin: 0.2em 0; }
+.rp-preview ul li::marker { color: var(--ruai-aurora-1); }
+.rp-preview ol li::marker { color: var(--ruai-aurora-2); font-weight: 700; }
+
+/* Tables — zebra, gradient header, rounded */
+.rp-preview table {
+    border-collapse: separate; border-spacing: 0; width: 100%;
+    margin: 16px 0; font-size: 0.88rem;
+    border: 1px solid var(--ruai-card-border); border-radius: 10px; overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.rp-preview thead th {
+    background: linear-gradient(135deg, rgba(124,58,237,0.14), rgba(8,145,178,0.14));
+    color: var(--ruai-card-text); font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.76rem;
+    padding: 10px 14px; text-align: left;
+    border-bottom: 2px solid rgba(124,58,237,0.3);
+}
+.rp-preview tbody td {
+    padding: 9px 14px; border-bottom: 1px solid var(--ruai-glass-border);
+    color: var(--ruai-card-text); vertical-align: top;
+}
+.rp-preview tbody tr:nth-child(even) td { background: rgba(124,58,237,0.035); }
+.rp-preview tbody tr:hover td { background: rgba(8,145,178,0.06); }
+.rp-preview tbody tr:last-child td { border-bottom: none; }
+.rp-preview th:not(:last-child), .rp-preview td:not(:last-child) { border-right: 1px solid var(--ruai-glass-border); }
+
+/* Code */
+.rp-preview code {
+    background: rgba(124,58,237,0.10); color: var(--ruai-aurora-1);
+    padding: 2px 7px; border-radius: 5px; font-size: 0.85em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    border: 1px solid rgba(124,58,237,0.18);
+}
+.rp-preview pre {
+    background: #0f172a; color: #e2e8f0;
+    padding: 14px 16px; border-radius: 10px; overflow-x: auto;
+    border: 1px solid rgba(124,58,237,0.25);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 8px rgba(0,0,0,0.15);
+    font-size: 0.85rem; line-height: 1.5;
+    margin: 14px 0;
+}
+.rp-preview pre code { background: transparent; color: inherit; border: none; padding: 0; }
+
+/* Blockquote — accent card */
+.rp-preview blockquote {
+    border-left: 4px solid; border-image: linear-gradient(180deg, var(--ruai-aurora-1), var(--ruai-aurora-2)) 1;
+    margin: 14px 0; padding: 10px 16px;
+    background: linear-gradient(90deg, rgba(124,58,237,0.06), transparent);
+    color: var(--ruai-card-text-secondary); font-style: italic;
+    border-radius: 0 8px 8px 0;
+}
+
+/* Horizontal rule */
+.rp-preview hr {
+    border: none; height: 2px; margin: 22px 0;
+    background: linear-gradient(90deg, transparent, var(--ruai-aurora-1), var(--ruai-aurora-2), transparent);
+}
+
+.rp-versions-table {
+    width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.9rem;
+    margin-top: 8px; border: 1px solid var(--ruai-card-border); border-radius: 12px; overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.rp-versions-table thead th {
+    background: linear-gradient(135deg, rgba(124,58,237,0.12), rgba(8,145,178,0.12));
+    font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--ruai-card-text); padding: 12px 14px; text-align: left;
+    border-bottom: 2px solid rgba(124,58,237,0.28);
+}
+.rp-versions-table tbody td {
+    padding: 11px 14px; border-bottom: 1px solid var(--ruai-glass-border);
+    color: var(--ruai-card-text); vertical-align: middle;
+}
+.rp-versions-table tbody tr:last-child td { border-bottom: none; }
+.rp-versions-table tbody tr:hover td { background: rgba(8,145,178,0.05); }
+.rp-versions-table tr.rp-active td {
+    background: linear-gradient(90deg, rgba(124,58,237,0.10), rgba(124,58,237,0.03));
+    font-weight: 500;
+}
+.rp-versions-table tr.rp-active td:first-child {
+    border-left: 3px solid var(--ruai-aurora-1);
+    padding-left: 11px;
+}
+.rp-badge-active {
+    display: inline-block; margin-left: 6px;
+    font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em;
+    background: linear-gradient(135deg, #059669, #10b981); color: #fff;
+    padding: 3px 10px; border-radius: 10px; font-weight: 700;
+    box-shadow: 0 1px 4px rgba(5,150,105,0.3);
+}
+
+.rp-note-input {
+    width: 100%; padding: 10px 14px; border-radius: 10px;
+    border: 1px solid var(--ruai-card-border); background: var(--ruai-card-bg);
+    color: var(--ruai-card-text); font-size: 0.9rem; margin-bottom: 12px;
+    transition: all 0.15s;
+}
+.rp-note-input:focus {
+    outline: none; border-color: var(--ruai-aurora-1);
+    box-shadow: 0 0 0 3px rgba(124,58,237,0.12); background: var(--ruai-glass-bg);
+}
+.rp-note-input::placeholder { color: var(--ruai-card-text-muted); }
+
+.rp-toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #1e293b; color: #fff; padding: 10px 24px; border-radius: 10px;
+    font-size: 0.9rem; z-index: 9999; opacity: 0; transition: opacity 0.3s; pointer-events: none;
+}
+.rp-toast.show { opacity: 1; }
+
+.rp-picker {
+    font-size: 0.85rem; padding: 7px 12px; border-radius: 8px;
+    border: 1px solid var(--ruai-card-border); background: var(--ruai-card-bg);
+    color: var(--ruai-card-text); cursor: pointer; transition: all 0.15s;
+    font-weight: 500;
+}
+.rp-picker:hover { border-color: var(--ruai-aurora-1); }
+.rp-picker:focus { outline: none; border-color: var(--ruai-aurora-1); box-shadow: 0 0 0 3px rgba(124,58,237,0.12); }
+
+.rp-hidden { display: none !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ruai-page-bg">
+    <div class="ruai-orb ruai-orb-1"></div>
+    <div class="ruai-orb ruai-orb-2"></div>
+    <div class="ruai-orb ruai-orb-3"></div>
+</div>
+<div class="rp-container">
+    <a href="/ruai-dashboard" class="rp-back">&larr; Back to Dashboard</a>
+
+    {% if prompts|length > 1 %}
+    <div class="rp-card">
+        <label for="rpSelect" style="font-size:0.88rem; font-weight:600; margin-right:10px;">Prompt:</label>
+        <select id="rpSelect" class="rp-picker" onchange="switchPrompt(this.value)">
+            {% for p in prompts %}
+            <option value="{{ p.key }}" {% if p.key == selected.key %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    {% endif %}
+
+    <div class="rp-hero">
+        <h3>{{ selected.name }}</h3>
+        <p class="rp-desc">{{ selected.description }}</p>
+
+        <div class="rp-stats">
+            <div class="rp-stat">
+                <div class="rp-stat-icon">⚡</div>
+                <div class="rp-stat-body">
+                    <span class="rp-stat-value">v{{ selected.active_version }}</span>
+                    <span class="rp-stat-label">Active Version</span>
+                </div>
+            </div>
+            <div class="rp-stat">
+                <div class="rp-stat-icon">📜</div>
+                <div class="rp-stat-body">
+                    <span class="rp-stat-value">{{ selected.versions|length }}</span>
+                    <span class="rp-stat-label">Versions on Record</span>
+                </div>
+            </div>
+            <div class="rp-stat">
+                <div class="rp-stat-icon">🔖</div>
+                <div class="rp-stat-body">
+                    <span class="rp-stat-value">{{ selected.placeholders|length }}</span>
+                    <span class="rp-stat-label">Placeholders</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="rp-ph-wrap">
+            <span class="rp-ph-label">Available placeholders</span>
+            {% for ph in selected.placeholders %}
+            <span class="rp-chip">{{ '{{' }}{{ ph }}{{ '}}' }}</span>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="rp-card">
+        <div class="rp-tabs">
+            <button class="rp-tab active" data-tab="edit" onclick="switchTab('edit')">Edit / New Version</button>
+            <button class="rp-tab" data-tab="history" onclick="switchTab('history')">Version History</button>
+        </div>
+
+        <div id="rpTabEdit">
+            <div class="rp-toolbar">
+                <button class="rp-btn" onclick="wrap('**','**')" title="Bold">B</button>
+                <button class="rp-btn" onclick="wrap('*','*')" title="Italic"><em>I</em></button>
+                <button class="rp-btn" onclick="prefix('## ')" title="Heading 2">H2</button>
+                <button class="rp-btn" onclick="prefix('### ')" title="Heading 3">H3</button>
+                <button class="rp-btn" onclick="prefix('- ')" title="Bulleted list">• List</button>
+                <button class="rp-btn" onclick="prefix('1. ')" title="Numbered list">1. List</button>
+                <button class="rp-btn" onclick="insertTable()" title="Insert table">⊞ Table</button>
+                <button class="rp-btn" onclick="wrap('`','`')" title="Inline code">&lt;/&gt;</button>
+                <button class="rp-btn" onclick="insertCodeBlock()" title="Code block">Code Block</button>
+                <button class="rp-btn" onclick="insertQuote()" title="Block quote">&ldquo; Quote</button>
+                <button class="rp-btn" onclick="insertHr()" title="Horizontal rule">— HR</button>
+                <select class="rp-picker" onchange="insertPlaceholder(this.value); this.value='';" title="Insert placeholder">
+                    <option value="">Insert placeholder…</option>
+                    {% for ph in selected.placeholders %}
+                    <option value="{{ ph }}">{{ '{{' }}{{ ph }}{{ '}}' }}</option>
+                    {% endfor %}
+                </select>
+                <button class="rp-btn" onclick="loadVersion('active')" title="Reload current active content">↺ Reset</button>
+                <div class="rp-view-toggle" role="tablist" aria-label="Editor view">
+                    <button type="button" id="rpViewEditBtn" class="active" onclick="setView('edit')">Edit</button>
+                    <button type="button" id="rpViewPreviewBtn" onclick="setView('preview')">Preview</button>
+                </div>
+            </div>
+
+            <input type="text" class="rp-note-input" id="rpNote" placeholder="Change note (optional) — shown in version history" maxlength="500">
+
+            <div>
+                <textarea class="rp-editor" id="rpEditor" spellcheck="false"></textarea>
+                <div class="rp-preview rp-hidden-pane" id="rpPreview"></div>
+            </div>
+
+            <div style="margin-top: 12px; display:flex; gap:8px; flex-wrap: wrap;">
+                <button class="rp-btn rp-btn-primary" onclick="saveVersion()">Save as New Version (Active)</button>
+                <button class="rp-btn" onclick="saveVersion(false)">Save as New Version (Inactive)</button>
+            </div>
+        </div>
+
+        <div id="rpTabHistory" class="rp-hidden">
+            <table class="rp-versions-table">
+                <thead>
+                    <tr>
+                        <th style="width:70px;">Version</th>
+                        <th style="width:190px;">Created</th>
+                        <th>Note</th>
+                        <th style="width:260px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for v in selected.versions | reverse %}
+                    <tr class="{% if v.version == selected.active_version %}rp-active{% endif %}" data-version="{{ v.version }}">
+                        <td>
+                            v{{ v.version }}
+                            {% if v.version == selected.active_version %}<span class="rp-badge-active">Active</span>{% endif %}
+                        </td>
+                        <td>{{ v.created_at }}</td>
+                        <td>{{ v.note or '—' }}</td>
+                        <td>
+                            <button class="rp-btn" onclick="loadVersion({{ v.version }})">Load into editor</button>
+                            {% if v.version != selected.active_version %}
+                            <button class="rp-btn" onclick="setActive({{ v.version }})">Set active</button>
+                            <button class="rp-btn rp-btn-danger" onclick="deleteVersion({{ v.version }})">Delete</button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="rp-toast" id="rpToast"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+(function() {
+    const PROMPT_KEY = {{ selected.key | tojson }};
+    const VERSIONS = {{ selected.versions | tojson }};
+    const ACTIVE_VERSION = {{ selected.active_version | tojson }};
+
+    const editor = document.getElementById('rpEditor');
+    const preview = document.getElementById('rpPreview');
+
+    function versionContent(v) {
+        const rec = VERSIONS.find(x => x.version === v);
+        return rec ? rec.content : '';
+    }
+
+    window.switchPrompt = function(key) { location.href = '/ruai-prompts?key=' + encodeURIComponent(key); };
+
+    window.switchTab = function(which) {
+        document.querySelectorAll('.rp-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === which));
+        document.getElementById('rpTabEdit').classList.toggle('rp-hidden', which !== 'edit');
+        document.getElementById('rpTabHistory').classList.toggle('rp-hidden', which !== 'history');
+    };
+
+    window.loadVersion = function(v) {
+        const content = v === 'active' ? versionContent(ACTIVE_VERSION) : versionContent(v);
+        editor.value = content;
+        switchTab('edit');
+        setView('edit');
+    };
+
+    let currentView = 'edit';
+    function renderPreview() {
+        try { preview.innerHTML = marked.parse(editor.value || ''); }
+        catch (e) { preview.textContent = editor.value; }
+    }
+    window.setView = function(which) {
+        currentView = which;
+        const editBtn = document.getElementById('rpViewEditBtn');
+        const prevBtn = document.getElementById('rpViewPreviewBtn');
+        editBtn.classList.toggle('active', which === 'edit');
+        prevBtn.classList.toggle('active', which === 'preview');
+        editor.classList.toggle('rp-hidden-pane', which !== 'edit');
+        preview.classList.toggle('rp-hidden-pane', which !== 'preview');
+        if (which === 'preview') renderPreview();
+    };
+    editor.addEventListener('input', () => { if (currentView === 'preview') renderPreview(); });
+
+    // Insertion helpers
+    function getSel() { return { start: editor.selectionStart, end: editor.selectionEnd, text: editor.value.substring(editor.selectionStart, editor.selectionEnd) }; }
+    function replaceSel(before, newText, after) {
+        const s = editor.selectionStart, e = editor.selectionEnd;
+        const v = editor.value;
+        editor.value = v.substring(0, s) + before + newText + after + v.substring(e);
+        const caret = s + before.length + newText.length;
+        editor.focus();
+        editor.setSelectionRange(caret, caret);
+        if (currentView === 'preview') renderPreview();
+    }
+    window.wrap = function(pre, post) {
+        const { text } = getSel();
+        replaceSel(pre, text || 'text', post);
+    };
+    window.prefix = function(p) {
+        const s = editor.selectionStart;
+        const before = editor.value.lastIndexOf('\n', s - 1) + 1;
+        editor.value = editor.value.substring(0, before) + p + editor.value.substring(before);
+        const caret = s + p.length;
+        editor.focus();
+        editor.setSelectionRange(caret, caret);
+        if (currentView === 'preview') renderPreview();
+    };
+    window.insertTable = function() {
+        const tbl = '\n\n| Column A | Column B | Column C |\n|---|---|---|\n| row 1 a | row 1 b | row 1 c |\n| row 2 a | row 2 b | row 2 c |\n\n';
+        replaceSel(tbl, '', '');
+    };
+    window.insertCodeBlock = function() {
+        replaceSel('\n```\n', 'code', '\n```\n');
+    };
+    window.insertQuote = function() { prefix('> '); };
+    window.insertHr = function() { replaceSel('\n\n---\n\n', '', ''); };
+    window.insertPlaceholder = function(name) { if (name) replaceSel('{{' + name + '}}', '', ''); };
+
+    // API calls
+    async function api(url, method, body) {
+        const opts = { method, headers: { 'Content-Type': 'application/json' } };
+        if (body) opts.body = JSON.stringify(body);
+        const r = await fetch(url, opts);
+        return r.json();
+    }
+
+    window.saveVersion = async function(setActiveFlag) {
+        if (setActiveFlag === undefined) setActiveFlag = true;
+        const content = editor.value;
+        const note = document.getElementById('rpNote').value || '';
+        if (!content.trim()) { toast('Prompt is empty', true); return; }
+        try {
+            const data = await api('/api/ruai-prompts/' + encodeURIComponent(PROMPT_KEY) + '/versions', 'POST',
+                { content, note, set_active: setActiveFlag });
+            if (data.status !== 'success') { toast(data.message || 'Save failed', true); return; }
+            toast('Saved v' + data.version + (setActiveFlag ? ' (now active)' : ''));
+            setTimeout(() => location.reload(), 600);
+        } catch (err) { toast('Save error: ' + err.message, true); }
+    };
+
+    window.setActive = async function(v) {
+        try {
+            const data = await api('/api/ruai-prompts/' + encodeURIComponent(PROMPT_KEY) + '/active', 'POST', { version: v });
+            if (data.status !== 'success') { toast(data.message || 'Failed', true); return; }
+            toast('v' + v + ' is now active');
+            setTimeout(() => location.reload(), 500);
+        } catch (err) { toast('Error: ' + err.message, true); }
+    };
+
+    window.deleteVersion = async function(v) {
+        if (!confirm('Delete version v' + v + '? This cannot be undone.')) return;
+        try {
+            const data = await api('/api/ruai-prompts/' + encodeURIComponent(PROMPT_KEY) + '/versions/' + v, 'DELETE');
+            if (data.status !== 'success') { toast(data.message || 'Delete failed', true); return; }
+            toast('Deleted v' + v);
+            setTimeout(() => location.reload(), 500);
+        } catch (err) { toast('Error: ' + err.message, true); }
+    };
+
+    function toast(msg, isError) {
+        const t = document.getElementById('rpToast');
+        t.textContent = msg; t.style.background = isError ? '#dc2626' : '#1e293b';
+        t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    // Seed editor with active content — preview renders lazily when toggled
+    editor.value = versionContent(ACTIVE_VERSION);
+})();
+</script>
+{% endblock %}

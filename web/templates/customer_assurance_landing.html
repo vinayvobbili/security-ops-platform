@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Assurance</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/customer_assurance.css') }}">
+</head>
+<body class="ca-page" data-ca-tour="landing">
+{% import 'title_macros.html' as titles %}
+{% set page_title = titles.build_title('Customer Assurance', '🛡️', '📋') %}
+{% include 'top_bar.html' %}
+
+<div class="ca-container">
+    <!-- Hero -->
+    <div class="ca-hero" id="ca-tour-hero">
+        <div class="ca-hero-badge">🛡️ Global Security · Customer Assurance</div>
+        <h1>Drafting assistant for customer security reviews</h1>
+        <p>Intake, draft, review, and deliver responses to customer security questionnaires, RFPs, and assessments — with policy-grounded draft answers from the the company knowledge base, powered by the internal LLM gateway.</p>
+        <div class="ca-hero-actions">
+            <a class="ca-btn" href="/customer-assurance/new" id="ca-tour-cta-new">+ New Request</a>
+            <a class="ca-btn" href="/customer-assurance/requests" id="ca-tour-cta-queue">View Queue</a>
+            <button type="button" class="ca-btn ca-btn-tour" id="ca-tour-start">▶ Take the tour</button>
+        </div>
+    </div>
+
+    <!-- What is this? info card -->
+    <div class="ca-tip-card">
+        <div class="ca-tip-card-icon">?</div>
+        <div>
+            <strong>What is this tool?</strong> A self-service workspace for the Customer Assurance team. The account team submits a customer security questionnaire, the AI drafts grounded answers from our policy library, an analyst reviews and approves, and the final response exports as a Word document — in minutes instead of days.
+            <br><br>
+            <span class="ca-next-ribbon">What to do next</span>
+            &nbsp;Click <strong>+ New Request</strong> to log a questionnaire, or <strong>View Queue</strong> to see requests already in flight. First time here? Hit <strong>Take the tour</strong>.
+        </div>
+    </div>
+
+    <!-- Stats -->
+    {% if stats.total > 0 %}
+    <div class="ca-stats" id="ca-tour-stats">
+        <div class="ca-stat" data-tip="Every request in the system, including completed ones. Click any count to drill into that status.">
+            <div class="ca-stat-value">{{ stats.total }}</div>
+            <div class="ca-stat-label">Total Requests <span class="ca-tip" data-tip="Every request in the system, including completed ones."></span></div>
+        </div>
+        <div class="ca-stat">
+            <div class="ca-stat-value">{{ stats.drafting }}</div>
+            <div class="ca-stat-label">In Drafting <span class="ca-tip" data-tip="Analyst is actively reviewing AI drafts — not yet approved."></span></div>
+        </div>
+        <div class="ca-stat">
+            <div class="ca-stat-value">{{ stats.needs_legal }}</div>
+            <div class="ca-stat-label">Needs Legal <span class="ca-tip ca-tip-purple" data-tip="Flagged by an analyst for Legal/IP review before release. Usually involves contract language, breach timelines, or data-residency commitments."></span></div>
+        </div>
+        <div class="ca-stat">
+            <div class="ca-stat-value">{{ stats.ready }}</div>
+            <div class="ca-stat-label">Ready to Deliver <span class="ca-tip ca-tip-accent" data-tip="All answers approved. Export the .docx and hand back to the account team."></span></div>
+        </div>
+        <div class="ca-stat">
+            <div class="ca-stat-value">{{ stats.delivered }}</div>
+            <div class="ca-stat-label">Delivered <span class="ca-tip" data-tip="Request is complete — the response was sent back to the customer."></span></div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Flow diagram -->
+    <h2 class="ca-section-title">How the process works <span class="ca-tip" data-tip="These 5 steps mirror the current Customer Assurance process. The tool automates steps 2 and 3, and gives analysts a workspace for step 4."></span></h2>
+    <div class="ca-flow" id="ca-tour-flow">
+        <div class="ca-flow-step" id="ca-tour-flow-1">
+            <div class="ca-flow-num">1</div>
+            <h4>Intake</h4>
+            <p>Account team submits a customer questionnaire. Paste the questions or upload the file.</p>
+        </div>
+        <div class="ca-flow-step" id="ca-tour-flow-2">
+            <div class="ca-flow-num">2</div>
+            <h4>Auto-split</h4>
+            <p>Questions are extracted into individual items, grouped by section.</p>
+        </div>
+        <div class="ca-flow-step" id="ca-tour-flow-3">
+            <div class="ca-flow-num">3</div>
+            <h4>Draft with AI</h4>
+            <p>the internal LLM gateway retrieves relevant policies, SOC 2 evidence, and standard responses, then drafts each answer with citations.</p>
+        </div>
+        <div class="ca-flow-step" id="ca-tour-flow-4">
+            <div class="ca-flow-num">4</div>
+            <h4>Review & Edit</h4>
+            <p>Analysts review each draft, edit freely, approve, or flag for Legal / SME review.</p>
+        </div>
+        <div class="ca-flow-step" id="ca-tour-flow-5">
+            <div class="ca-flow-num">5</div>
+            <h4>Deliver</h4>
+            <p>Export the final response as a Word document and send back via the account team.</p>
+        </div>
+    </div>
+
+    <!-- Entry tiles -->
+    <h2 class="ca-section-title">Get started <span class="ca-tip" data-tip="Three entry points. Pick based on what you're trying to do."></span></h2>
+    <div class="ca-tiles">
+        <a class="ca-tile" href="/customer-assurance/new" id="ca-tour-tile-new">
+            <div class="ca-tile-icon">✏️</div>
+            <div>
+                <h3>New Request</h3>
+                <p>Start a new questionnaire — paste questions or upload an Excel/Word file.</p>
+            </div>
+        </a>
+        <a class="ca-tile" href="/customer-assurance/requests" id="ca-tour-tile-queue">
+            <div class="ca-tile-icon accent">📋</div>
+            <div>
+                <h3>Queue</h3>
+                <p>Review all in-flight customer requests, filter by status or segment.</p>
+            </div>
+        </a>
+        <a class="ca-tile" href="/customer-assurance/kb" id="ca-tour-tile-kb">
+            <div class="ca-tile-icon purple">📚</div>
+            <div>
+                <h3>Knowledge Base</h3>
+                <p>{% if kb.chunk_count > 0 %}{{ kb.chunk_count }} indexed chunks from {{ kb.source_files|length }} source docs.{% else %}Upload policies, SOC 2 reports, and standard responses to ground draft answers.{% endif %}</p>
+            </div>
+        </a>
+    </div>
+
+    {% if stats.total == 0 %}
+    <div class="ca-card{% if mode == 'demo' %} ca-demo-only{% endif %}" style="margin-top:28px;text-align:center;padding:32px;">
+        <h3 style="margin-bottom:6px;">No requests yet</h3>
+        {% if mode == 'demo' %}
+        <p style="color:var(--ca-text-muted);margin:0 0 18px;font-size:14px;">Start with sample data to see the full workflow, or create your first request.</p>
+        <button type="button" class="ca-btn ca-btn-accent" id="ca-seed-demo">🚀 Load Demo Data</button>
+        {% else %}
+        <p style="color:var(--ca-text-muted);margin:0 0 18px;font-size:14px;">No real customer requests in the system yet. Click <strong>+ New Request</strong> to log one.</p>
+        <a href="/customer-assurance/new" class="ca-btn ca-btn-primary">+ New Request</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<script src="{{ url_for('static', filename='js/common.js') }}"></script>
+<script src="{{ url_for('static', filename='js/customer_assurance_tour.js') }}"></script>
+<script>
+// --- Demo seed button ---
+document.getElementById('ca-seed-demo')?.addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    e.target.textContent = 'Loading…';
+    try {
+        const resp = await fetch('/customer-assurance/demo/seed', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({wipe: true}),
+        });
+        const data = await resp.json();
+        if (data.status === 'success') {
+            location.reload();
+        } else {
+            alert('Seed failed: ' + JSON.stringify(data));
+            e.target.disabled = false;
+            e.target.textContent = '🚀 Load Demo Data';
+        }
+    } catch (err) {
+        alert('Seed failed: ' + err);
+        e.target.disabled = false;
+        e.target.textContent = '🚀 Load Demo Data';
+    }
+});
+
+// --- Tour trigger + auto-start on first visit ---
+document.getElementById('ca-tour-start')?.addEventListener('click', () => {
+    CATour.start('landing');
+});
+if (!localStorage.getItem('ca_tour_seen_landing')) {
+    setTimeout(() => CATour.start('landing'), 600);
+    localStorage.setItem('ca_tour_seen_landing', '1');
+}
+</script>
+{% include '_ca_fab.html' %}
+{% if config.watermark_author %}<div style="position:fixed;bottom:8px;right:16px;font-size:11px;color:rgba(0,0,0,0.25);font-style:italic;pointer-events:none;z-index:9999;">By {{ config.watermark_author }}</div>{% endif %}
+</body>
+</html>

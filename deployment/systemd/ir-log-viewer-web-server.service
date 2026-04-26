@@ -1,22 +1,24 @@
 [Unit]
-Description=Log Viewer - Web Server
-After=network-online.target ir-web-server.service
+Description=Log Viewer - Web App
+After=network-online.target ir-web-app.service
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=user
 Group=user
-WorkingDirectory=/home/user/pub/IR
-EnvironmentFile=/home/user/pub/IR/.env
+WorkingDirectory=/home/user/IR
+EnvironmentFile=/home/user/IR/.env
 
 # Kill any orphan process using this port before starting
 ExecStartPre=-/bin/bash -c 'fuser -k 8039/tcp 2>/dev/null || true'
 
-# Start log viewer for Web Server
-ExecStart=/home/user/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8039 --title "Web Server" --file /home/user/pub/IR/logs/web_server.log
+# Start log viewer for Web App
+ExecStart=/home/user/IR/.venv/bin/python deployment/log_viewer.py --port 8039 --title "Web App" --file /home/user/IR/logs/web_server.log
 
 Restart=on-failure
+KillMode=mixed
+TimeoutStopSec=10
 RestartSec=10
 
 StandardOutput=journal

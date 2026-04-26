@@ -107,7 +107,11 @@ export function adaptAllChartsTheme() {
         'funnelChart',
         'topHostsChart',
         'topUsersChart',
-        'resolutionTimeChart'
+        'resolutionTimeChart',
+        'sankeyChart',
+        'wordCloudChart',
+        'notesWordCloudChart',
+        'dayHourHeatmap'
     ];
     chartIds.forEach(id => adaptChartTheme(id));
 }

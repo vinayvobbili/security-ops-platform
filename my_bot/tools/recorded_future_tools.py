@@ -12,6 +12,7 @@ from langchain_core.tools import tool
 
 from services.recorded_future import RecordedFutureClient
 from src.utils.tool_decorator import log_tool_call
+from src.utils.llm_decorators import validate_args, IP_ADDRESS_PATTERN, DOMAIN_PATTERN, HASH_PATTERN
 
 # Lazy-initialized Recorded Future client
 _rf_client: Optional[RecordedFutureClient] = None
@@ -38,7 +39,7 @@ def _format_enrichment_result(data: dict, indicator_type: str, indicator: str) -
         return f"Error: {data['error']}"
 
     # Extract results from response
-    results = client.extract_enrichment_results(data) if _rf_client else []
+    results = _rf_client.extract_enrichment_results(data) if _rf_client else []
 
     if not results:
         return f"No enrichment data found for {indicator_type}: {indicator}"
@@ -193,6 +194,7 @@ def _format_actor_summary(summary: dict) -> str:
 
 
 @tool
+@validate_args(ip_address=IP_ADDRESS_PATTERN)
 @log_tool_call
 def lookup_ip_recorded_future(ip_address: str) -> str:
     """Look up an IP address in Recorded Future for threat intelligence.
@@ -215,6 +217,7 @@ def lookup_ip_recorded_future(ip_address: str) -> str:
 
 
 @tool
+@validate_args(domain=DOMAIN_PATTERN)
 @log_tool_call
 def lookup_domain_recorded_future(domain: str) -> str:
     """Look up a domain in Recorded Future for threat intelligence.
@@ -241,6 +244,7 @@ def lookup_domain_recorded_future(domain: str) -> str:
 
 
 @tool
+@validate_args(file_hash=HASH_PATTERN)
 @log_tool_call
 def lookup_hash_recorded_future(file_hash: str) -> str:
     """Look up a file hash in Recorded Future for malware intelligence.

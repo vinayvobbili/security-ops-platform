@@ -1,0 +1,146 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'AI Intake Submission' %}
+{% set page_title_left_icon = '🤖' %}
+{% set page_title_right_icon = '📋' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ai_intake_detail.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="aid-container">
+    <div class="aid-nav">
+        <a href="/ai-intake-submissions">&larr; All Submissions</a>
+        <a href="/ai-intake">+ New Request</a>
+    </div>
+
+    <div class="aid-card">
+        <div class="aid-header">
+            <span class="aid-project">{{ s.project_name }}</span>
+            <div class="aid-header-right">
+                <span class="aid-priority aid-priority-{{ s.priority|lower }}">{{ s.priority }}</span>
+                <button class="aid-delete-btn" title="Delete submission" onclick="document.getElementById('deleteModal').classList.add('show')">🗑️</button>
+            </div>
+        </div>
+        <div class="aid-meta">Submitted {{ s.submitted_at[:16] if s.submitted_at else 'N/A' }}</div>
+
+        <hr class="aid-divider">
+
+        <div class="aid-grid">
+            <div class="aid-field">
+                <div class="aid-field-label">Requester</div>
+                <div class="aid-field-value">{{ s.requester_name }}</div>
+            </div>
+            <div class="aid-field">
+                <div class="aid-field-label">Email</div>
+                <div class="aid-field-value">{{ s.email }}</div>
+            </div>
+            <div class="aid-field">
+                <div class="aid-field-label">Team / Department</div>
+                <div class="aid-field-value">{{ s.team }}</div>
+            </div>
+            <div class="aid-field">
+                <div class="aid-field-label">Use Case Category</div>
+                <div class="aid-field-value">{{ s.use_case }}</div>
+            </div>
+            <div class="aid-field">
+                <div class="aid-field-label">Target Completion Timeline</div>
+                <div class="aid-field-value">{{ s.timeline }}</div>
+            </div>
+            {% if s.data_sources %}
+            <div class="aid-field">
+                <div class="aid-field-label">Data Sources</div>
+                <div class="aid-field-value">{{ s.data_sources }}</div>
+            </div>
+            {% endif %}
+        </div>
+
+        <hr class="aid-divider">
+
+        <div class="aid-section">
+            <div class="aid-section-title">Problem Statement</div>
+            <div class="aid-section-body">{{ s.problem_statement }}</div>
+        </div>
+
+        <div class="aid-section">
+            <div class="aid-section-title">Expected Outcome</div>
+            <div class="aid-section-body">{{ s.expected_outcome }}</div>
+        </div>
+
+        {% if s.additional_notes %}
+        <div class="aid-section">
+            <div class="aid-section-title">Additional Notes</div>
+            <div class="aid-section-body">{{ s.additional_notes }}</div>
+        </div>
+        {% endif %}
+
+        {% if s.documents %}
+        <hr class="aid-divider">
+        <div class="aid-docs">
+            📎
+            {% for doc in s.documents.split(',') %}
+                {% set name = doc.strip() %}
+                {% if name %}
+                <a href="/ai-intake-submissions/{{ s.id }}/download/{{ name }}" class="aid-doc-link">{{ name }}</a>{% if not loop.last %}, {% endif %}
+                {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Delete confirmation modal -->
+<div id="deleteModal" class="aid-delete-modal" onclick="if(event.target===this)this.classList.remove('show')">
+    <div class="aid-delete-box">
+        <h3>Delete Submission #{{ s.id }}</h3>
+        <p>Enter password to confirm deletion</p>
+        <input type="password" id="deletePassword" placeholder="Password" autocomplete="off"
+               onkeydown="if(event.key==='Enter')confirmDelete()">
+        <div class="aid-delete-error" id="deleteError">Incorrect password</div>
+        <div class="aid-delete-actions">
+            <button class="aid-btn-cancel" onclick="document.getElementById('deleteModal').classList.remove('show')">Cancel</button>
+            <button class="aid-btn-confirm" onclick="confirmDelete()">Delete</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof initTheme === 'function') initTheme();
+});
+
+function confirmDelete() {
+    const pw = document.getElementById('deletePassword').value;
+    const errEl = document.getElementById('deleteError');
+    const btn = document.querySelector('.aid-btn-confirm');
+    btn.disabled = true;
+    btn.textContent = 'Deleting...';
+    errEl.style.display = 'none';
+
+    fetch('/ai-intake-submissions/{{ s.id }}', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw })
+    })
+    .then(r => r.json().then(data => ({ status: r.status, data })))
+    .then(({ status, data }) => {
+        if (status === 200) {
+            window.location.href = '/ai-intake-submissions';
+        } else {
+            errEl.textContent = data.message || 'Incorrect password';
+            errEl.style.display = 'block';
+            btn.disabled = false;
+            btn.textContent = 'Delete';
+        }
+    })
+    .catch(() => {
+        errEl.textContent = 'Network error';
+        errEl.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Delete';
+    });
+}
+</script>
+{% endblock %}

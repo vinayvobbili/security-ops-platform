@@ -1,0 +1,127 @@
+{% extends 'base_layout.html' %}
+
+{% block page_title_plain %}Database Security{% endblock %}
+
+{% set page_title_text = 'Database Security' %}
+{% set page_title_left_icon = '🛢️' %}
+{% set page_title_right_icon = '🔒' %}
+
+{% block extra_css %}
+<style>
+    .dbsec-frame-wrap {
+        position: fixed;
+        top: calc(var(--nav-height) + 24px);
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: #fff;
+    }
+    .dbsec-frame-wrap iframe {
+        width: 100%;
+        height: 100%;
+        border: 0;
+        display: block;
+    }
+    .dbsec-version-badge {
+        position: fixed;
+        bottom: 12px;
+        right: 12px;
+        z-index: 50;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        background: rgba(15, 23, 42, 0.85);
+        color: #e2e8f0;
+        font: 600 11px/1.3 ui-monospace, "SF Mono", Monaco, monospace;
+        text-decoration: none;
+        border-radius: 999px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+        backdrop-filter: blur(6px);
+        transition: background .15s, color .15s, transform .15s;
+    }
+    .dbsec-version-badge:hover {
+        background: rgba(0, 47, 108, 0.95);
+        color: #fff;
+        transform: translateY(-1px);
+    }
+    .dbsec-version-badge .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #78BE20;
+        box-shadow: 0 0 6px rgba(120, 190, 32, 0.7);
+    }
+    .dbsec-version-badge.loading .dot { background: #94a3b8; box-shadow: none; }
+    .dbsec-version-badge.unknown .dot { background: #f59e0b; box-shadow: none; }
+    .dbsec-version-badge .vid { letter-spacing: .3px; }
+    .dbsec-version-badge .sub { color: #94a3b8; font-weight: 500; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dbsec-frame-wrap">
+    <iframe src="/db-sec-app/"
+            title="Database Security"
+            allow="clipboard-write"
+            referrerpolicy="no-referrer-when-downgrade"></iframe>
+</div>
+
+<a id="dbsec-version-badge"
+   class="dbsec-version-badge loading"
+   href="/db-security/deploy"
+   title="Go to deploy portal">
+    <span class="dot"></span>
+    <span class="vid">loading…</span>
+</a>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const badge = document.getElementById('dbsec-version-badge');
+    if (!badge) return;
+    const vid = badge.querySelector('.vid');
+
+    function fmtRelTime(iso) {
+        if (!iso) return '';
+        const t = new Date(iso).getTime();
+        if (!t) return '';
+        const delta = Math.max(0, (Date.now() - t) / 1000);
+        if (delta < 90) return 'just now';
+        if (delta < 3600) return Math.floor(delta / 60) + 'm ago';
+        if (delta < 86400) return Math.floor(delta / 3600) + 'h ago';
+        return Math.floor(delta / 86400) + 'd ago';
+    }
+
+    fetch('/api/db-security/active-version')
+        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+        .then(data => {
+            badge.classList.remove('loading');
+            if (!data.version_id) {
+                badge.classList.add('unknown');
+                vid.textContent = 'version unknown';
+                badge.title = 'No .deploy_meta.json — pre-portal deployment. Click to open deploy portal.';
+                return;
+            }
+            const rel = fmtRelTime(data.activated_at);
+            vid.innerHTML = data.version_id +
+                (rel ? ' <span class="sub">· ' + rel + '</span>' : '');
+            const full = [
+                'Version: ' + data.version_id,
+                data.sha256_short ? 'SHA: ' + data.sha256_short : '',
+                data.uploaded_at ? 'Uploaded: ' + new Date(data.uploaded_at).toLocaleString() : '',
+                data.activated_at ? 'Activated: ' + new Date(data.activated_at).toLocaleString() : '',
+                '',
+                'Click to open the deploy portal.',
+            ].filter(Boolean).join('\n');
+            badge.title = full;
+        })
+        .catch(() => {
+            badge.classList.remove('loading');
+            badge.classList.add('unknown');
+            vid.textContent = 'version unavailable';
+        });
+})();
+</script>
+{% endblock %}

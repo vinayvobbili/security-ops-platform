@@ -1,0 +1,180 @@
+{
+  "_comment": [
+    "Maps file path patterns to the systemd services that must be restarted",
+    "when those files change. Used by the /deploy skill to determine which",
+    "services are affected by a commit.",
+    "",
+    "Patterns use glob syntax relative to the repo root.",
+    "A change matching multiple patterns unions all affected services.",
+    "",
+    "Services NOT in this map (no repo code to reload):",
+    "  ir-aispm        — external sidecar (external/aispm/)",
+    "  ir-datasette     — standalone CLI tool",
+    "  ir-searxng       — external metasearch engine",
+    "  ir-socks-proxy   — SSH tunnel, no Python",
+    "  ir-reranker      — standalone cross-encoder, no project imports",
+    "  ir-log-viewer-*  — standalone Flask log viewers, no project imports"
+  ],
+
+  "patterns": {
+    "my_config.py": [
+      "ir-web-app", "ir-scheduler", "ir-epp-scheduler",
+      "ir-tars", "ir-jarvis", "ir-case", "ir-barnacles",
+      "ir-pokedex", "ir-toodles", "ir-msoar", "ir-money-ball",
+      "ir-peer-ping", "ir-bot-status-api"
+    ],
+
+    "src/utils/**": [
+      "ir-web-app", "ir-scheduler", "ir-epp-scheduler",
+      "ir-tars", "ir-jarvis", "ir-case", "ir-barnacles",
+      "ir-pokedex", "ir-toodles", "ir-msoar", "ir-money-ball",
+      "ir-bot-status-api"
+    ],
+
+    "services/tanium.py": [
+      "ir-tars", "ir-jarvis", "ir-case", "ir-epp-scheduler"
+    ],
+    "services/service_now.py": [
+      "ir-tars", "ir-jarvis", "ir-case", "ir-epp-scheduler",
+      "ir-scheduler", "ir-toodles", "ir-money-ball", "ir-web-app"
+    ],
+    "services/xsoar.py": [
+      "ir-msoar", "ir-scheduler", "ir-toodles", "ir-web-app"
+    ],
+    "services/crowdstrike.py": [
+      "ir-jarvis", "ir-epp-scheduler", "ir-toodles"
+    ],
+    "services/metiq.py": [
+      "ir-metiq-shim", "ir-money-ball", "ir-bot-status-api", "ir-web-app"
+    ],
+    "services/recorded_future.py": [
+      "ir-scheduler"
+    ],
+    "services/virus_total.py": [
+      "ir-scheduler"
+    ],
+    "services/mitre_attack_data.py": [
+      "ir-scheduler"
+    ],
+
+    "src/epp/**": [
+      "ir-tars", "ir-jarvis", "ir-case", "ir-epp-scheduler"
+    ],
+
+    "src/enrichment/**": [
+      "ir-tars", "ir-jarvis", "ir-case", "ir-epp-scheduler"
+    ],
+
+    "webex_bots/tanium_bot_base.py": [
+      "ir-tars", "ir-jarvis", "ir-case"
+    ],
+    "webex_bots/tars.py": [
+      "ir-tars", "ir-epp-scheduler"
+    ],
+    "webex_bots/jarvis.py": [
+      "ir-jarvis", "ir-epp-scheduler"
+    ],
+    "webex_bots/barnacles.py": [
+      "ir-barnacles"
+    ],
+    "webex_bots/pokedex.py": [
+      "ir-pokedex"
+    ],
+    "webex_bots/toodles.py": [
+      "ir-toodles"
+    ],
+    "webex_bots/msoar.py": [
+      "ir-msoar"
+    ],
+    "webex_bots/money_ball.py": [
+      "ir-money-ball"
+    ],
+    "webex_bots/case.py": [
+      "ir-case"
+    ],
+    "webex_bots/cards/**": [
+      "ir-tars", "ir-jarvis", "ir-case", "ir-barnacles",
+      "ir-pokedex", "ir-toodles", "ir-msoar", "ir-money-ball"
+    ],
+
+    "src/ir_scheduler.py": [
+      "ir-scheduler"
+    ],
+    "src/epp_scheduler.py": [
+      "ir-epp-scheduler"
+    ],
+
+    "src/components/xsoar_alert_triage/**": [
+      "ir-scheduler"
+    ],
+    "src/components/ticket_cache.py": [
+      "ir-scheduler"
+    ],
+    "src/components/contacts_lookup.py": [
+      "ir-pokedex", "ir-web-app"
+    ],
+    "src/components/reimaged_hosts.py": [
+      "ir-money-ball"
+    ],
+    "src/components/web/**": [
+      "ir-web-app"
+    ],
+    "src/components/domain_monitoring/**": [
+      "ir-scheduler"
+    ],
+    "src/components/unknown_devices_report.py": [
+      "ir-scheduler"
+    ],
+
+    "src/charts/**": [
+      "ir-scheduler", "ir-money-ball", "ir-web-app"
+    ],
+
+    "src/deferred_rtr.py": [
+      "ir-scheduler"
+    ],
+
+    "my_bot/**": [
+      "ir-pokedex", "ir-barnacles", "ir-toodles"
+    ],
+
+    "web/**": [
+      "ir-web-app"
+    ],
+
+    "deployment/bot_status_api.py": [
+      "ir-bot-status-api"
+    ],
+    "deployment/metiq_shim_server.py": [
+      "ir-metiq-shim"
+    ],
+    "deployment/reranker_server.py": [
+      "ir-reranker"
+    ],
+    "deployment/log_viewer.py": [
+      "ir-log-viewer-epp", "ir-log-viewer-jobs"
+    ],
+
+    "src/peer_ping_keepalive.py": [
+      "ir-peer-ping"
+    ],
+
+    "mcp_server/**": [
+      "ir-mcp-server"
+    ],
+
+    "data/regions_by_country_tanium.json": [
+      "ir-tars", "ir-jarvis", "ir-case", "ir-epp-scheduler"
+    ],
+    "data/regions_by_country_crowdstrike.json": [
+      "ir-jarvis", "ir-epp-scheduler"
+    ],
+    "data/countries_by_code.json": [
+      "ir-tars", "ir-jarvis", "ir-case", "ir-epp-scheduler"
+    ],
+
+    "scripts/backfill_xsoar_timeline.py": [
+      "ir-scheduler"
+    ]
+  }
+}

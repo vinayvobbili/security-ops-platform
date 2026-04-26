@@ -509,5 +509,6 @@ def hunt_crowdstrike(entities, hours: int) -> ToolHuntResult:
         filename_hits=all_filename_hits,
         errors=all_errors[:5],
         queries=all_queries,
-        foundry_access_denied=foundry_access_denied
+        foundry_access_denied=foundry_access_denied,
+        logscale_events_found=logscale_events_found,
     )

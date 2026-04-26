@@ -56,7 +56,7 @@ TICKET_IMPORT_CARD = AdaptiveCard(
                 Submit(
                     title="📥 Import",
                     style=ActionStyle.POSITIVE,
-                    data={"callback_keyword": "import"}
+                    data={"callback_keyword": "do_import"}
                 )
             ]
         )

@@ -1,0 +1,1348 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'Meeting Recap' %}
+{% set page_title_left_icon = '🎙️' %}
+{% set page_title_right_icon = '📋' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/recap.css') }}?v=22">
+{% endblock %}
+
+{% block content %}
+<div class="rc-container">
+
+    <!-- Info Button -->
+    <div class="rc-info-row" id="rcInfoRow">
+        <button class="rc-info-btn" onclick="document.getElementById('rcInfoModal').style.display='flex'" title="How does this work?">
+            <span class="rc-info-btn-icon">✦</span> How does this work?
+        </button>
+    </div>
+
+    <!-- Back link (viewer mode only) -->
+    <div class="rc-back-row" id="rcBackRow" style="display:none;">
+        <a class="rc-back-link" href="/recap">&larr; Back to all recaps</a>
+    </div>
+
+    <!-- Upload Section -->
+    <div class="rc-section rc-section--upload" id="rcUploadSection">
+        <h2>Upload Meeting Recording</h2>
+
+        <div class="rc-upload-row">
+            <div class="rc-type-slider rc-type-slider--three">
+                <input type="radio" name="meetingType" id="typeIncident" value="incident_bridge">
+                <input type="radio" name="meetingType" id="typeTeam" value="team_meeting" checked>
+                <input type="radio" name="meetingType" id="typeCustomer" value="customer_requirements">
+                <label for="typeIncident" class="rc-type-slider-opt" data-color="incident">
+                    <span class="rc-type-icon">🚨</span> Incident Bridge
+                </label>
+                <label for="typeTeam" class="rc-type-slider-opt" data-color="team">
+                    <span class="rc-type-icon">👥</span> Team Meeting
+                </label>
+                <label for="typeCustomer" class="rc-type-slider-opt" data-color="customer">
+                    <span class="rc-type-icon">🧭</span> Customer Requirements
+                </label>
+                <div class="rc-type-slider-thumb"></div>
+            </div>
+            <div class="rc-dropzone" id="rcDropzone">
+                <div class="rc-dropzone-inline">
+                    <div class="rc-dropzone-icon">🎧</div>
+                    <div class="rc-dropzone-copy">
+                        <div class="rc-dropzone-text">Drop your recording here or click to browse</div>
+                        <div class="rc-dropzone-hint">.mp3, .wav, .m4a, .mp4, .mkv, .mov and more &middot; max 500&nbsp;MB</div>
+                    </div>
+                </div>
+                <div class="rc-dropzone-filename" id="rcFilename"></div>
+                <input type="file" id="rcFile" accept=".mp3,.wav,.m4a,.flac,.ogg,.aac,.mp4,.mkv,.mov,.avi,.webm,.m4v">
+            </div>
+        </div>
+
+        <div class="rc-form-grid">
+            <div class="rc-field rc-field--date">
+                <span class="rc-field-label">Date (optional)</span>
+                <input type="date" id="rcDate">
+            </div>
+            <div class="rc-field rc-field--language">
+                <span class="rc-field-label">Summary language</span>
+                <select id="rcLanguage"></select>
+            </div>
+            <div class="rc-field rc-field--attendees">
+                <span class="rc-field-label">Attendees (optional)</span>
+                <input type="text" id="rcAttendees" placeholder="Alice, Bob, Charlie">
+            </div>
+            <div class="rc-field rc-field--video">
+                <span class="rc-field-label">Generate Video Recap?</span>
+                <label class="rc-toggle">
+                    <input type="checkbox" id="rcGenerateVideo">
+                    <span class="rc-toggle-track"><span class="rc-toggle-thumb"></span></span>
+                    <span class="rc-toggle-text">No</span>
+                </label>
+            </div>
+        </div>
+
+        <div style="text-align:center;">
+            <button class="rc-btn rc-btn--primary" id="rcUploadBtn" onclick="Recap.upload()">
+                <span class="rc-btn-text">Transcribe & Summarize</span>
+                <span class="rc-btn-spinner" id="rcUploadSpinner" style="display:none;"></span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Progress Tracker Section -->
+    <div class="rc-section" id="rcTrackerSection" style="display:none;">
+        <div class="rc-tracker">
+            <div class="rc-tracker-steps">
+                <div class="rc-tracker-step" id="rc-step-upload">
+                    <div class="rc-tracker-icon">📤</div>
+                    <div class="rc-tracker-label">Uploading</div>
+                    <div class="rc-tracker-eta">~1-4 min / 300 MB</div>
+                </div>
+                <div class="rc-tracker-line" id="rc-line-1"></div>
+                <div class="rc-tracker-step" id="rc-step-transcribe">
+                    <div class="rc-tracker-icon">🎧</div>
+                    <div class="rc-tracker-label">Transcribing</div>
+                    <div class="rc-tracker-eta">~45-90 min / 1 hr audio</div>
+                </div>
+                <div class="rc-tracker-line" id="rc-line-2"></div>
+                <div class="rc-tracker-step" id="rc-step-summarize">
+                    <div class="rc-tracker-icon">🧠</div>
+                    <div class="rc-tracker-label">Summarizing</div>
+                    <div class="rc-tracker-eta">~1-2 min</div>
+                </div>
+                <div class="rc-tracker-line" id="rc-line-3"></div>
+                <div class="rc-tracker-step" id="rc-step-done">
+                    <div class="rc-tracker-icon">✅</div>
+                    <div class="rc-tracker-label">Complete</div>
+                    <div class="rc-tracker-eta">&nbsp;</div>
+                </div>
+            </div>
+            <div class="rc-tracker-status" id="rcTrackerStatus">Starting...</div>
+            <div class="rc-tracker-closable" id="rcClosable" style="display:none;">
+                <span class="rc-closable-icon">☕</span>
+                <div>
+                    <strong>Safe to close this window.</strong> Transcription and summarization run on the server and can take several minutes. You can come back to <a href="/recap">/recap</a> anytime to see the result in the <em>Recent recaps</em> list.
+                </div>
+            </div>
+            <div class="rc-waveform" id="rcWaveform" style="display:none;">
+                <div class="rc-waveform-bar"></div>
+                <div class="rc-waveform-bar"></div>
+                <div class="rc-waveform-bar"></div>
+                <div class="rc-waveform-bar"></div>
+                <div class="rc-waveform-bar"></div>
+                <div class="rc-waveform-bar"></div>
+                <div class="rc-waveform-bar"></div>
+            </div>
+            <div class="rc-tracker-elapsed" id="rcElapsed"></div>
+            <div class="rc-tracker-funfact" id="rcFunFact"></div>
+        </div>
+    </div>
+
+    <!-- Results Section -->
+    <div class="rc-section" id="rcResultsSection" style="display:none;">
+        <div class="rc-results-header">
+            <h2 class="rc-results-title" id="rcResultsTitle">Results</h2>
+            <span class="rc-lang-badge" id="rcLangBadge" style="display:none;" title="Summary language"></span>
+            <button class="rc-results-close" onclick="Recap.collapseResults()" title="Collapse">&times;</button>
+        </div>
+        <div class="rc-video-block" id="rcVideoBlock" style="display:none;">
+            <video class="rc-video" id="rcVideoPlayer" controls preload="metadata"></video>
+            <div class="rc-video-actions">
+                <a class="rc-btn rc-btn--secondary" id="rcVideoDownload" download>⬇ Download video</a>
+            </div>
+        </div>
+        <div id="rcSummaryBlock"></div>
+        <div class="rc-translate-row">
+            <label class="rc-translate-label" for="rcTranslateTarget">🌐 Translate summary to</label>
+            <select id="rcTranslateTarget"></select>
+            <button class="rc-btn rc-btn--secondary" id="rcTranslateBtn" onclick="Recap.translateSummary()">
+                <span class="rc-btn-text">Translate</span>
+                <span class="rc-btn-spinner" id="rcTranslateSpinner" style="display:none;"></span>
+            </button>
+            <span class="rc-translate-note" id="rcTranslateNote"></span>
+        </div>
+        <h3>Transcript</h3>
+        <div class="rc-transcript" id="rcTranscriptBlock"></div>
+        <div class="rc-actions">
+            <button class="rc-btn rc-btn--secondary" onclick="Recap.copyToClipboard()">📋 Copy to clipboard</button>
+            <button class="rc-btn rc-btn--secondary" onclick="Recap.downloadText()">💾 Download as text</button>
+            <button class="rc-btn rc-btn--secondary" id="rcSendToQAbtn" onclick="Recap.sendToMeetingQA()" style="display:none;">📝 Compare with my notes</button>
+            <button class="rc-btn rc-btn--danger" onclick="Recap.deleteCurrent()">Delete this recap</button>
+            <button class="rc-btn rc-btn--secondary" onclick="Recap.resetForm()">New recap</button>
+        </div>
+    </div>
+
+    <!-- Active Jobs Section -->
+    <div class="rc-section" id="rcActiveJobsSection" style="display:none;">
+        <h2>Active Jobs <span class="rc-active-count" id="rcActiveCount"></span></h2>
+        <div id="rcActiveJobsBlock"></div>
+    </div>
+
+    <!-- History Section -->
+    <div class="rc-section" id="rcHistorySection">
+        <h2>Recent Recaps</h2>
+        <div id="rcHistoryBlock"><div class="rc-empty">Loading...</div></div>
+    </div>
+
+</div>
+
+<!-- How Does This Work? Modal -->
+<div class="rc-info-backdrop" id="rcInfoModal" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+    <div class="rc-info-modal" onclick="event.stopPropagation()">
+        <div class="rc-info-header">
+            <h3>How Does Meeting Recap Work?</h3>
+            <button class="rc-info-close" onclick="document.getElementById('rcInfoModal').style.display='none'">&times;</button>
+        </div>
+        <div class="rc-info-body">
+            <div class="rc-info-video-wrap">
+                <video class="rc-info-video" controls preload="metadata" poster="{{ url_for('static', filename='videos/recap_demo_poster.jpg') }}">
+                    <source src="{{ url_for('static', filename='videos/recap_demo.mp4') }}" type="video/mp4">
+                    Your browser doesn't support embedded video.
+                </video>
+                <div class="rc-info-video-caption">Quick walkthrough — upload to recap in under 2 minutes.</div>
+            </div>
+            <div class="rc-info-section">
+                <div class="rc-info-icon">📤</div>
+                <div>
+                    <h4>1. Upload</h4>
+                    <p>Upload an audio or video file of your meeting. Supported formats include MP3, WAV, M4A, MP4, MKV, MOV, and more. Select the meeting type &mdash; <strong>Incident Bridge</strong> or <strong>Team Meeting</strong> &mdash; to get a summary tailored to the context.</p>
+                </div>
+            </div>
+            <div class="rc-info-section">
+                <div class="rc-info-icon">🎬</div>
+                <div>
+                    <h4>2. Audio Extraction</h4>
+                    <p>If you uploaded a video container (MP4, MKV, etc.), <strong>ffmpeg</strong> automatically extracts the audio track and converts it to 16kHz mono WAV &mdash; the optimal format for transcription accuracy.</p>
+                </div>
+            </div>
+            <div class="rc-info-section">
+                <div class="rc-info-icon">🎧</div>
+                <div>
+                    <h4>3. Speech-to-Text</h4>
+                    <p>OpenAI's <strong>Whisper large-v3-turbo</strong> (a 809M-parameter speech recognition model) transcribes the audio. It auto-detects the language and handles accents, background noise, and technical jargon. Runs locally on Apple Silicon &mdash; nothing leaves our infrastructure.</p>
+                </div>
+            </div>
+            <div class="rc-info-section">
+                <div class="rc-info-icon">🗣️</div>
+                <div>
+                    <h4>4. Speaker Diarization</h4>
+                    <p><strong>Pyannote 3.1</strong> identifies individual speakers and assigns labels (SPEAKER_00, SPEAKER_01, etc.). Each transcript segment is tagged with the speaker who has the most overlap with that time window. You can rename speakers to real names after processing.</p>
+                </div>
+            </div>
+            <div class="rc-info-section">
+                <div class="rc-info-icon">🧠</div>
+                <div>
+                    <h4>5. AI Summary</h4>
+                    <p>The diarized transcript is sent to an LLM which produces a structured JSON summary. The output varies by meeting type:</p>
+                    <ul>
+                        <li><strong>Incident Bridge</strong> &mdash; executive summary, timeline of events, decisions, action items with owners, and open questions</li>
+                        <li><strong>Team Meeting</strong> &mdash; overview, topics with key points, decisions, and action items with owners</li>
+                        <li><strong>Customer Requirements</strong> &mdash; Solutions Architect's view: requirements (with must/should/nice priority), pain points, success criteria, stakeholders, action items, and open questions</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="rc-info-section">
+                <div class="rc-info-icon">✏️</div>
+                <div>
+                    <h4>6. Review &amp; Edit</h4>
+                    <p>Click any <strong>SPEAKER_NN</strong> label in the transcript to rename it (e.g., "Alice"). All instances update at once and the mapping is saved. Use <strong>"Compare with my notes"</strong> to cross-check the transcript against your own meeting minutes in the Meeting Q&amp;A tool.</p>
+                </div>
+            </div>
+            <div class="rc-info-section">
+                <div class="rc-info-icon">🌐</div>
+                <div>
+                    <h4>7. Multilingual Summaries</h4>
+                    <p>Pick a language at upload time to get the summary in that language straight from the first pass, or translate an existing English summary in place from the results panel. Supported languages: <strong>English, Spanish, French, German, Italian, Portuguese, Dutch, Russian, Chinese (Simplified), Japanese, Korean, Hindi, Arabic</strong> (13 total). Speaker labels (<code>SPEAKER_00</code>), ISO dates, and priority tokens (<code>must-have</code> / <code>should-have</code> / <code>nice-to-have</code>) stay in their original form so downstream tooling keeps working.</p>
+                </div>
+            </div>
+            <div class="rc-info-section">
+                <div class="rc-info-icon">🎞️</div>
+                <div>
+                    <h4>8. Video Recap (optional)</h4>
+                    <p>Flip the <strong>Generate Video Recap?</strong> toggle on the upload form to also get a narrated MP4 of the summary &mdash; perfect for skimming a one-hour meeting in about ninety seconds. Once it's ready, it appears as an embedded player at the top of the recap with a download button. The pipeline:</p>
+                    <ul>
+                        <li><strong>Slides</strong> &mdash; PIL renders one slide per section (cover, summary, topics&nbsp;/&nbsp;timeline&nbsp;/&nbsp;requirements, decisions, action items, open questions, outro), styled to the corporate cybersecurity slide template &mdash; navy covers with a blue ribbon, the company wordmark, page counter, and a section badge ("03 | TOPICS") on every slide.</li>
+                        <li><strong>Bullets vs. narration</strong> &mdash; slide bullets stay short (just the headline). The narration is the prose version that weaves in owners, due dates, and rationales ("Marcus will own the rollout by April&nbsp;25 &mdash; rationale: ...").</li>
+                        <li><strong>Voice</strong> &mdash; per-slide TTS via <strong>Kokoro</strong> on the inference Mac (en, es, fr, it, pt, ja, zh, hi), with <strong>gTTS</strong> as an automatic fallback for the other locales (de, nl, ru, ko, ar) or if the Kokoro tunnel is down. Section labels are localized in all 13 supported languages.</li>
+                        <li><strong>Compose</strong> &mdash; ffmpeg muxes the slides + per-slide audio with a brand-blue gradient and bed music, fading out over the outro card.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="rc-info-divider"></div>
+
+            <h4 class="rc-info-prompt-title">The Prompts</h4>
+            <p class="rc-info-prompt-subtitle">These are the exact instructions given to the LLM to generate each summary type.</p>
+
+            <div class="rc-info-prompt-tabs">
+                <button class="rc-info-prompt-tab active" onclick="Recap.switchPromptTab('incident')">🚨 Incident Bridge</button>
+                <button class="rc-info-prompt-tab" onclick="Recap.switchPromptTab('team')">👥 Team Meeting</button>
+                <button class="rc-info-prompt-tab" onclick="Recap.switchPromptTab('customer')">🧭 Customer Requirements</button>
+            </div>
+
+            <div class="rc-info-prompt-panel" id="rcPromptIncident">
+                <div class="rc-info-section">
+                    <div class="rc-info-icon">🎯</div>
+                    <div>
+                        <h4>System Instruction</h4>
+                        <p>You are a SOC incident analyst summarizing a recorded incident bridge call. Output ONLY valid JSON &mdash; no markdown, no preamble, no explanation. Be concise and fact-only. Distinguish decisions made, actions assigned, and the timeline of events. Use the speaker labels from the transcript verbatim when assigning action items.</p>
+                    </div>
+                </div>
+                <div class="rc-info-section">
+                    <div class="rc-info-icon">📋</div>
+                    <div>
+                        <h4>Required Output Fields</h4>
+                        <ul>
+                            <li><strong>title</strong> &mdash; short descriptive title (max 80 chars)</li>
+                            <li><strong>summary</strong> &mdash; 3&ndash;5 sentence executive summary of what happened and current status</li>
+                            <li><strong>timeline</strong> &mdash; array of <code>{time, speaker, event}</code> capturing the sequence of events</li>
+                            <li><strong>decisions</strong> &mdash; array of <code>{decision, decided_by, rationale}</code></li>
+                            <li><strong>action_items</strong> &mdash; array of <code>{action, owner, due}</code> with speaker labels as owners</li>
+                            <li><strong>open_questions</strong> &mdash; unresolved items raised but not answered</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rc-info-prompt-panel" id="rcPromptTeam" style="display:none;">
+                <div class="rc-info-section">
+                    <div class="rc-info-icon">🎯</div>
+                    <div>
+                        <h4>System Instruction</h4>
+                        <p>You are an executive assistant summarizing a recorded team meeting. Output ONLY valid JSON &mdash; no markdown, no preamble, no explanation. Capture agenda topics discussed, decisions reached, and action items with clear owners. Use the speaker labels from the transcript verbatim when assigning action items.</p>
+                    </div>
+                </div>
+                <div class="rc-info-section">
+                    <div class="rc-info-icon">📋</div>
+                    <div>
+                        <h4>Required Output Fields</h4>
+                        <ul>
+                            <li><strong>title</strong> &mdash; short descriptive title (max 80 chars)</li>
+                            <li><strong>summary</strong> &mdash; 3&ndash;5 sentence overview of what the team discussed</li>
+                            <li><strong>topics</strong> &mdash; array of <code>{topic, key_points[]}</code> capturing agenda items and themes</li>
+                            <li><strong>decisions</strong> &mdash; array of <code>{decision, rationale}</code></li>
+                            <li><strong>action_items</strong> &mdash; array of <code>{action, owner, due}</code> with speaker labels as owners</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rc-info-prompt-panel" id="rcPromptCustomer" style="display:none;">
+                <div class="rc-info-section">
+                    <div class="rc-info-icon">🎯</div>
+                    <div>
+                        <h4>System Instruction</h4>
+                        <p>You are a Senior Solutions Architect listening to a recorded customer discovery or requirements call. Your job is to extract the customer's stated requirements, pain points, and success criteria from the conversation so an engineering team can act on them. Output ONLY valid JSON &mdash; no markdown, no preamble, no explanation. Be precise and evidence-based &mdash; only capture what was explicitly stated or clearly implied; do not invent features the customer did not ask for. Use the speaker labels from the transcript verbatim when attributing requirements, concerns, or action items.</p>
+                    </div>
+                </div>
+                <div class="rc-info-section">
+                    <div class="rc-info-icon">📋</div>
+                    <div>
+                        <h4>Required Output Fields</h4>
+                        <ul>
+                            <li><strong>title</strong> &mdash; short descriptive title (max 80 chars)</li>
+                            <li><strong>summary</strong> &mdash; 3&ndash;5 sentence executive summary of the customer's situation and ask</li>
+                            <li><strong>requirements</strong> &mdash; array of <code>{requirement, priority, raised_by, rationale}</code> (priority: must-have / should-have / nice-to-have)</li>
+                            <li><strong>pain_points</strong> &mdash; array of <code>{pain, impact}</code></li>
+                            <li><strong>success_criteria</strong> &mdash; how the customer will judge the solution a success</li>
+                            <li><strong>stakeholders</strong> &mdash; array of <code>{speaker, role, concerns}</code></li>
+                            <li><strong>action_items</strong> &mdash; array of <code>{action, owner, due}</code></li>
+                            <li><strong>open_questions</strong> &mdash; items to follow up on</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rc-info-divider"></div>
+
+            <div class="rc-info-section">
+                <div class="rc-info-icon">⚙️</div>
+                <div>
+                    <h4>Infrastructure</h4>
+                    <p><strong>Transcription model:</strong> Whisper large-v3-turbo (faster-whisper, int8 quantized)<br>
+                    <strong>Diarization model:</strong> pyannote/speaker-diarization-3.1<br>
+                    <strong>Summary model:</strong> Local LLM on Apple Silicon<br>
+                    <strong>Video pipeline:</strong> PIL slide renderer + Kokoro TTS (with gTTS fallback) + ffmpeg compose<br>
+                    <strong>Privacy:</strong> All processing runs on internal infrastructure &mdash; no data leaves the network<br>
+                    <strong>Storage:</strong> Transcripts, summaries &amp; rendered videos kept on disk; audio files auto-deleted after 30 days<br>
+                    <strong>Performance:</strong> ~5&ndash;15 min for a 30-min recording (varies with audio quality and speaker count); video adds another ~1&ndash;2 min</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+{% if initial_recap_id is not none %}window.INITIAL_RECAP_ID = {{ initial_recap_id }};{% endif %}
+const Recap = (() => {
+    const INITIAL_RECAP_ID = typeof window.INITIAL_RECAP_ID === 'number' ? window.INITIAL_RECAP_ID : null;
+    let currentRecapId = null;
+    let currentRecap = null;
+    let elapsedTimer = null;
+    let elapsedStart = null;
+    let funFactIndex = 0;
+    let supportedLanguages = [];  // [{code, name}]
+    let defaultLanguageCode = 'en';
+    const languageName = (code) => {
+        const m = supportedLanguages.find(l => l.code === code);
+        return m ? m.name : (code || 'English');
+    };
+    const FUN_FACTS_INTERVAL = 12; // seconds between rotations
+    const FUN_FACTS = [
+        { icon: '🎧', text: 'Whisper can recognize speech in 99 languages.' },
+        { icon: '🧠', text: 'Speaker diarization figures out who said what — no name tags needed.' },
+        { icon: '⏱️', text: 'A 30-min recording typically takes 5-15 minutes to process.' },
+        { icon: '📊', text: 'The AI extracts action items, decisions, and timelines automatically.' },
+        { icon: '🎙️', text: 'Whisper large-v3 has 1.5 billion parameters trained on 680K hours of audio.' },
+        { icon: '🔊', text: 'Audio is converted to 16kHz mono WAV for optimal transcription quality.' },
+        { icon: '🗣️', text: 'Pyannote can distinguish overlapping speakers in noisy recordings.' },
+        { icon: '📝', text: 'After transcription, you can rename SPEAKER_00 to real names with one click.' },
+        { icon: '🔗', text: 'Use "Compare with my notes" to cross-check your own meeting minutes.' },
+        { icon: '🧹', text: 'Audio files are auto-deleted after 30 days — transcripts are kept forever.' },
+        { icon: '💡', text: 'Tip: Incident bridge recaps get timelines; team meetings get topic summaries.' },
+        { icon: '🏎️', text: 'Whisper processes audio ~2x faster than real-time on Apple Silicon.' },
+        { icon: '📋', text: 'The summary prompt is tuned for SOC workflows — decisions, owners, and deadlines.' },
+        { icon: '🌍', text: 'Whisper auto-detects the language — no config needed for multilingual calls.' },
+        { icon: '🎬', text: 'MP4 video? No problem — ffmpeg extracts the audio track automatically.' },
+        { icon: '🎞️', text: 'Toggle "Generate Video Recap?" to also get a narrated MP4 of the summary.' },
+    ];
+
+    // ---------------------------------------------------------------
+    // Tiny DOM builder — keeps structure in JS but escapes via DOM APIs
+    // (textContent / setAttribute) so we never hand-roll HTML strings.
+    // ---------------------------------------------------------------
+    function h(tag, attrs, ...children) {
+        const el = document.createElement(tag);
+        if (attrs) {
+            for (const [k, v] of Object.entries(attrs)) {
+                if (v == null || v === false) continue;
+                if (k === 'class') el.className = v;
+                else if (k === 'dataset') Object.assign(el.dataset, v);
+                else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2).toLowerCase(), v);
+                else el.setAttribute(k, String(v));
+            }
+        }
+        _append(el, children);
+        return el;
+    }
+    function _append(parent, nodes) {
+        for (const n of nodes) {
+            if (n == null || n === false) continue;
+            if (Array.isArray(n)) _append(parent, n);
+            else if (n instanceof Node) parent.appendChild(n);
+            else parent.appendChild(document.createTextNode(String(n)));
+        }
+    }
+    function _clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
+    function _replace(el, ...children) { _clear(el); _append(el, children); }
+
+    const MEETING_TAGS = {
+        incident_bridge:       { cls: 'rc-tag--incident', label: 'Incident' },
+        team_meeting:          { cls: 'rc-tag--team',     label: 'Team' },
+        customer_requirements: { cls: 'rc-tag--customer', label: 'Customer' },
+    };
+    function _meetingTag(type) {
+        const t = MEETING_TAGS[type] || MEETING_TAGS.team_meeting;
+        return h('span', { class: `rc-tag ${t.cls}` }, t.label);
+    }
+
+    function _fmtTime(seconds) {
+        const s = Math.floor(seconds || 0);
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const sec = s % 60;
+        return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+    }
+
+    function _fmtDateET(utcStr) {
+        if (!utcStr) return '';
+        const d = new Date(utcStr + 'Z');
+        return d.toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short' });
+    }
+
+    // --- Tracker helpers ---
+    const STAGE_MAP = {
+        'queued':           { step: 0, text: 'Queued...' },
+        'transcribing':     { step: 1, text: 'Transcribing audio with Whisper + speaker diarization — budget roughly 1x the meeting length...' },
+        'summarizing':      { step: 2, text: 'Generating structured summary with AI...' },
+        'storing':          { step: 2, text: 'Saving to database...' },
+        'generating_video': { step: 3, text: 'Rendering narrated recap video (slides + TTS)...' },
+        'complete':         { step: 3, text: 'Complete' },
+        'failed':           { step: -1, text: 'Failed' },
+    };
+
+    function _updateTracker(stage) {
+        const info = STAGE_MAP[stage] || { step: 0, text: stage };
+        const steps = ['rc-step-upload', 'rc-step-transcribe', 'rc-step-summarize', 'rc-step-done'];
+        const lines = ['rc-line-1', 'rc-line-2', 'rc-line-3'];
+
+        steps.forEach((id, i) => {
+            const el = document.getElementById(id);
+            el.classList.remove('active', 'completed', 'error');
+            if (info.step < 0) {
+                if (i === 0) el.classList.add('error');
+            } else if (i < info.step) {
+                el.classList.add('completed');
+            } else if (i === info.step) {
+                el.classList.add('active');
+            }
+        });
+
+        lines.forEach((id, i) => {
+            const el = document.getElementById(id);
+            el.classList.toggle('completed', i < info.step && info.step >= 0);
+        });
+
+        document.getElementById('rcTrackerStatus').textContent = info.text;
+
+        // Show waveform during transcription
+        const wv = document.getElementById('rcWaveform');
+        wv.style.display = (stage === 'transcribing') ? 'flex' : 'none';
+
+        // Show "safe to close" only once the file is on the server (server-side stages).
+        // During 'queued' the browser is still streaming the upload — closing the tab
+        // there would abort the request.
+        const cl = document.getElementById('rcClosable');
+        const serverStages = (stage === 'transcribing' || stage === 'summarizing' || stage === 'storing' || stage === 'generating_video');
+        cl.style.display = serverStages ? '' : 'none';
+    }
+
+    // --- Dropzone ---
+    const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;  // 500 MB — keep in sync with nginx client_max_body_size and Flask MAX_CONTENT_LENGTH
+
+    function _fmtBytes(n) {
+        if (n >= 1024 * 1024 * 1024) return (n / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+        if (n >= 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' MB';
+        if (n >= 1024) return (n / 1024).toFixed(1) + ' KB';
+        return n + ' B';
+    }
+
+    function _acceptFile(file) {
+        if (file.size > MAX_UPLOAD_BYTES) {
+            alert(
+                `File is too large: ${_fmtBytes(file.size)}.\n\n` +
+                `Max upload size is 500 MB. Try trimming the recording, ` +
+                `exporting audio-only, or re-encoding at a lower bitrate.`
+            );
+            document.getElementById('rcFile').value = '';
+            _clearFilename();
+            return false;
+        }
+        _showFilename(`${file.name} (${_fmtBytes(file.size)})`);
+        return true;
+    }
+
+    function _initDropzone() {
+        const dz = document.getElementById('rcDropzone');
+        const fileInput = document.getElementById('rcFile');
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length) _acceptFile(fileInput.files[0]);
+        });
+
+        const genToggle = document.getElementById('rcGenerateVideo');
+        if (genToggle) {
+            const label = genToggle.closest('.rc-toggle').querySelector('.rc-toggle-text');
+            const sync = () => { label.textContent = genToggle.checked ? 'Yes' : 'No'; };
+            genToggle.addEventListener('change', sync);
+            sync();
+        }
+
+        dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.classList.add('dragover'); });
+        dz.addEventListener('dragleave', () => { dz.classList.remove('dragover'); });
+        dz.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dz.classList.remove('dragover');
+            if (e.dataTransfer.files.length) {
+                const file = e.dataTransfer.files[0];
+                if (_acceptFile(file)) {
+                    fileInput.files = e.dataTransfer.files;
+                }
+            }
+        });
+    }
+
+    function _showFilename(name) {
+        const el = document.getElementById('rcFilename');
+        el.textContent = name;
+        el.classList.add('visible');
+    }
+
+    function _clearFilename() {
+        const el = document.getElementById('rcFilename');
+        el.textContent = '';
+        el.classList.remove('visible');
+    }
+
+    // --- Upload ---
+    async function upload() {
+        const fileInput = document.getElementById('rcFile');
+        if (!fileInput.files.length) {
+            alert('Please choose a file');
+            return;
+        }
+        const meetingType = document.querySelector('input[name="meetingType"]:checked').value;
+        const language = document.getElementById('rcLanguage').value || defaultLanguageCode;
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        formData.append('meeting_type', meetingType);
+        formData.append('meeting_date', document.getElementById('rcDate').value);
+        formData.append('attendees', document.getElementById('rcAttendees').value);
+        formData.append('language', language);
+        formData.append('generate_video', document.getElementById('rcGenerateVideo').checked ? '1' : '0');
+
+        // Disable the button only for the duration of the upload stream itself.
+        document.getElementById('rcUploadBtn').disabled = true;
+        document.getElementById('rcUploadSpinner').style.display = '';
+        document.getElementById('rcTrackerSection').style.display = 'block';
+        _updateTracker('queued');
+        document.getElementById('rc-step-upload').classList.add('active');
+        _startElapsed();
+
+        try {
+            const resp = await fetch('/api/recap/upload', { method: 'POST', body: formData });
+            const ctype = resp.headers.get('content-type') || '';
+            let data;
+            if (ctype.includes('application/json')) {
+                data = await resp.json();
+            } else {
+                // Server returned HTML (nginx 413, gateway error, etc.) — show a friendly message
+                await resp.text();  // drain body
+                if (resp.status === 413) {
+                    throw new Error('File too large for the server (over 500 MB).');
+                }
+                throw new Error(`Server returned ${resp.status} ${resp.statusText || ''}`.trim());
+            }
+            if (!resp.ok) throw new Error(data.error || 'Upload failed');
+
+            // Upload finished — server has the file and a background job is running.
+            // Keep the tracker visible and poll job status so the user sees the full
+            // flow (transcribe → summarize → complete) without leaving the page.
+            // The form is reset so a second recording can be queued; Active Jobs is
+            // for users who returned via refresh, not for the job this tab just started.
+            ownedJobId = data.job_id;
+            _clearFilename();
+            document.getElementById('rcFile').value = '';
+            document.getElementById('rcUploadBtn').disabled = false;
+            document.getElementById('rcUploadSpinner').style.display = 'none';
+            _pollOwnedJob();
+            _refreshActiveJobs();
+        } catch (e) {
+            _stopElapsed();
+            _updateTracker('failed');
+            document.getElementById('rcTrackerStatus').textContent = 'Upload failed: ' + e.message;
+            document.getElementById('rcUploadBtn').disabled = false;
+            document.getElementById('rcUploadSpinner').style.display = 'none';
+        }
+    }
+
+    function _resetTracker() {
+        ['rc-step-upload', 'rc-step-transcribe', 'rc-step-summarize', 'rc-step-done'].forEach(id => {
+            document.getElementById(id).classList.remove('active', 'completed', 'error');
+        });
+        ['rc-line-1', 'rc-line-2', 'rc-line-3'].forEach(id => {
+            document.getElementById(id).classList.remove('completed');
+        });
+        document.getElementById('rcClosable').style.display = 'none';
+        document.getElementById('rcWaveform').style.display = 'none';
+    }
+
+    function _startElapsed() {
+        elapsedStart = Date.now();
+        funFactIndex = Math.floor(Math.random() * FUN_FACTS.length);
+        const elEl = document.getElementById('rcElapsed');
+        const ffEl = document.getElementById('rcFunFact');
+        if (elapsedTimer) clearInterval(elapsedTimer);
+        elapsedTimer = setInterval(() => {
+            const s = Math.floor((Date.now() - elapsedStart) / 1000);
+            const m = Math.floor(s / 60);
+            const sec = s % 60;
+            elEl.textContent = `Elapsed: ${m}:${String(sec).padStart(2, '0')}`;
+            // Rotate fun facts
+            const idx = (funFactIndex + Math.floor(s / FUN_FACTS_INTERVAL)) % FUN_FACTS.length;
+            const fact = FUN_FACTS[idx];
+            const newText = `${fact.icon} ${fact.text}`;
+            if (ffEl.textContent !== newText) {
+                ffEl.style.opacity = '0';
+                setTimeout(() => { ffEl.textContent = newText; ffEl.style.opacity = '1'; }, 200);
+            }
+        }, 1000);
+    }
+
+    function _stopElapsed() {
+        if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+        const ffEl = document.getElementById('rcFunFact');
+        if (ffEl) ffEl.textContent = '';
+    }
+
+    // --- Active Jobs section (server-sourced, polled while anything is running) ---
+    let activeJobsTimer = null;
+    let knownActiveJobIds = new Set();
+
+    // The job this tab just uploaded. While set, the inline tracker owns the UX
+    // for this job and _renderActiveJobs filters it out so it doesn't appear twice.
+    // On page refresh this is null and any still-running jobs surface via Active Jobs.
+    let ownedJobId = null;
+    let ownedJobTimer = null;
+
+    const JOB_STATUS_LABEL = {
+        'queued': 'Queued',
+        'transcribing': 'Transcribing audio',
+        'summarizing': 'Generating summary',
+        'storing': 'Saving',
+    };
+
+    const JOB_STATUS_ETA = {
+        'queued': '',
+        'transcribing': 'typical ~1x the meeting length',
+        'summarizing': 'typical ~1-2 min',
+        'storing': 'nearly done',
+    };
+
+    function _elapsedStr(startedAtIso, createdAtIso) {
+        const anchor = startedAtIso || createdAtIso;
+        if (!anchor) return '';
+        const started = new Date(anchor).getTime();
+        const s = Math.max(0, Math.floor((Date.now() - started) / 1000));
+        const m = Math.floor(s / 60);
+        return `${m}:${String(s % 60).padStart(2, '0')}`;
+    }
+
+    function _renderActiveJobs(jobs) {
+        const section = document.getElementById('rcActiveJobsSection');
+        const block = document.getElementById('rcActiveJobsBlock');
+        const count = document.getElementById('rcActiveCount');
+
+        if (!jobs.length) {
+            section.style.display = 'none';
+            _clear(block);
+            count.textContent = '';
+            return;
+        }
+        section.style.display = '';
+        count.textContent = `(${jobs.length})`;
+        _replace(block, jobs.map(_activeJobRow));
+    }
+
+    function _activeJobRow(j) {
+        const label = JOB_STATUS_LABEL[j.status] || j.status;
+        const eta = JOB_STATUS_ETA[j.status] || '';
+        const filename = j.audio_filename || j.job_id;
+        const elapsed = _elapsedStr(j.started_at, j.created_at);
+        return h('div', { class: 'rc-active-row' },
+            h('div', { class: 'rc-active-spinner' }),
+            h('div', { class: 'rc-active-main' },
+                h('div', { class: 'rc-active-title' }, filename, ' ', _meetingTag(j.meeting_type)),
+                h('div', { class: 'rc-active-status' },
+                    label,
+                    eta ? [' ', h('span', { class: 'rc-active-eta' }, `(${eta})`)] : null,
+                    ` · elapsed ${elapsed}`,
+                ),
+            ),
+        );
+    }
+
+    async function _pollOwnedJob() {
+        if (!ownedJobId) return;
+        try {
+            const resp = await fetch(`/api/recap/status/${ownedJobId}`);
+            if (resp.ok) {
+                const job = await resp.json();
+                _updateTracker(job.status);
+                if (job.status === 'complete' && job.recap_id) {
+                    _stopElapsed();
+                    if (ownedJobTimer) { clearTimeout(ownedJobTimer); ownedJobTimer = null; }
+                    window.location.href = `/recap/${job.recap_id}`;
+                    return;
+                }
+                if (job.status === 'failed') {
+                    _stopElapsed();
+                    document.getElementById('rcTrackerStatus').textContent = 'Failed: ' + (job.error || 'unknown error');
+                    ownedJobId = null;
+                    if (ownedJobTimer) { clearTimeout(ownedJobTimer); ownedJobTimer = null; }
+                    return;
+                }
+            }
+        } catch { /* transient — just retry on next tick */ }
+        ownedJobTimer = setTimeout(_pollOwnedJob, 3000);
+    }
+
+    async function _refreshActiveJobs() {
+        try {
+            const resp = await fetch('/api/recap/jobs/active');
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const allJobs = data.jobs || [];
+            // The inline tracker owns the job this tab just uploaded — don't also
+            // surface it in Active Jobs (which exists for returning/refreshed users).
+            const jobs = ownedJobId ? allJobs.filter(j => j.job_id !== ownedJobId) : allJobs;
+            const currentIds = new Set(jobs.map(j => j.job_id));
+
+            // If a previously-active job is no longer in the list, it completed or failed —
+            // refresh history so the user can see the result.
+            let completedAny = false;
+            for (const prev of knownActiveJobIds) {
+                if (!currentIds.has(prev)) { completedAny = true; break; }
+            }
+            knownActiveJobIds = currentIds;
+
+            _renderActiveJobs(jobs);
+            if (completedAny) _loadHistory();
+
+            // Keep polling while there's anything running
+            if (activeJobsTimer) clearTimeout(activeJobsTimer);
+            if (jobs.length) {
+                activeJobsTimer = setTimeout(_refreshActiveJobs, 3000);
+            } else {
+                activeJobsTimer = null;
+            }
+        } catch {
+            // Transient network error — retry in a bit if we were polling
+            if (activeJobsTimer) {
+                activeJobsTimer = setTimeout(_refreshActiveJobs, 5000);
+            }
+        }
+    }
+
+    async function _loadRecap(recapId) {
+        currentRecapId = recapId;
+        const resp = await fetch(`/api/recap/${recapId}`);
+        const recap = await resp.json();
+        if (!resp.ok) {
+            document.getElementById('rcTrackerStatus').textContent = 'Could not load recap: ' + (recap.error || 'unknown');
+            return;
+        }
+
+        currentRecap = recap;
+        document.getElementById('rcResultsSection').style.display = 'block';
+        document.getElementById('rcResultsTitle').textContent = recap.title || 'Results';
+        _renderLangBadge(recap.summary_language);
+        _renderTranslateSelect(recap.summary_language);
+        document.getElementById('rcTranslateNote').textContent = '';
+        _renderVideo(recap);
+        _renderSummary(recap);
+        _renderTranscript(recap);
+
+        // Show "Compare with my notes" only for team meetings
+        document.getElementById('rcSendToQAbtn').style.display =
+            recap.meeting_type === 'team_meeting' ? '' : 'none';
+
+        // Smooth scroll to results — only in landing mode where results sit
+        // below the upload form. In viewer mode, scrolling would hide the back link.
+        if (INITIAL_RECAP_ID === null) {
+            document.getElementById('rcResultsSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+
+    function _renderLangBadge(code) {
+        const badge = document.getElementById('rcLangBadge');
+        const name = languageName(code || defaultLanguageCode);
+        badge.textContent = `🌐 ${name}`;
+        badge.style.display = '';
+    }
+
+    function _renderVideo(recap) {
+        const block = document.getElementById('rcVideoBlock');
+        const player = document.getElementById('rcVideoPlayer');
+        const dl = document.getElementById('rcVideoDownload');
+        if (!recap.has_video) {
+            block.style.display = 'none';
+            player.removeAttribute('src');
+            player.load();
+            return;
+        }
+        const url = `/api/recap/${recap.id}/video.mp4`;
+        player.src = url;
+        dl.href = url;
+        dl.setAttribute('download', `recap_${recap.id}.mp4`);
+        block.style.display = '';
+    }
+
+    function _renderTranslateSelect(currentCode) {
+        const sel = document.getElementById('rcTranslateTarget');
+        _clear(sel);
+        const cur = currentCode || defaultLanguageCode;
+        for (const l of supportedLanguages) {
+            if (l.code === cur) continue;  // don't offer translating to the same language
+            const opt = h('option', { value: l.code }, l.name);
+            sel.appendChild(opt);
+        }
+        // If all languages filtered out (shouldn't happen), leave blank.
+    }
+
+    async function translateSummary() {
+        if (!currentRecapId) return;
+        const sel = document.getElementById('rcTranslateTarget');
+        const target = sel.value;
+        if (!target) return;
+        const btn = document.getElementById('rcTranslateBtn');
+        const spinner = document.getElementById('rcTranslateSpinner');
+        const note = document.getElementById('rcTranslateNote');
+        btn.disabled = true;
+        spinner.style.display = '';
+        note.textContent = `Translating to ${languageName(target)}…`;
+        try {
+            const resp = await fetch(`/api/recap/${currentRecapId}/translate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ language: target }),
+            });
+            const ct = resp.headers.get('content-type') || '';
+            if (!ct.includes('application/json')) {
+                throw new Error(`Server returned ${resp.status} ${resp.statusText || 'error'} (non-JSON response — server may be restarting)`);
+            }
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.error || 'Translation failed');
+            currentRecap = data;
+            document.getElementById('rcResultsTitle').textContent = data.title || 'Results';
+            _renderLangBadge(data.summary_language);
+            _renderTranslateSelect(data.summary_language);
+            _renderSummary(data);
+            note.textContent = `Summary now in ${languageName(data.summary_language)}.`;
+            _loadHistory();  // refresh history in case title changed
+        } catch (e) {
+            note.textContent = `Failed: ${e.message}`;
+        } finally {
+            btn.disabled = false;
+            spinner.style.display = 'none';
+        }
+    }
+
+    async function _loadLanguages() {
+        try {
+            const resp = await fetch('/api/recap/languages');
+            if (!resp.ok) return;
+            const data = await resp.json();
+            supportedLanguages = data.languages || [];
+            defaultLanguageCode = data.default || 'en';
+        } catch { /* network blip — selects stay empty, upload still works if server default hits */ }
+        const uploadSel = document.getElementById('rcLanguage');
+        _clear(uploadSel);
+        for (const l of supportedLanguages) {
+            const opt = h('option', { value: l.code }, l.name);
+            if (l.code === defaultLanguageCode) opt.selected = true;
+            uploadSel.appendChild(opt);
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Summary cards — one builder per section, each returns a single
+    // card Node (or null to skip). The per-meeting-type section lists
+    // below drive the render order.
+    // ---------------------------------------------------------------
+    function _card(modifier, emoji, title, ...body) {
+        return h('div', { class: `rc-summary-card rc-summary-card--${modifier}` },
+            h('h3', {}, h('span', { class: 'rc-card-emoji' }, emoji), ' ', title),
+            ...body,
+        );
+    }
+    function _list(items, rowFn) { return h('ul', {}, items.map(rowFn)); }
+    function _prioSlug(priority) { return String(priority).replace(/[^a-z-]/gi, '').toLowerCase(); }
+    const _has = (arr) => Array.isArray(arr) && arr.length > 0;
+
+    const SUMMARY_RENDERERS = {
+        overview: (s) => s.summary && _card('overview', '📋', 'Summary', h('p', {}, s.summary)),
+
+        timeline: (s) => _has(s.timeline) && _card('timeline', '⏱️', 'Timeline',
+            _list(s.timeline, (t) => h('li', {},
+                h('strong', {}, t.time), ' — ', t.speaker, ': ', t.event,
+            )),
+        ),
+
+        topics: (s) => _has(s.topics) && _card('topics', '💬', 'Topics',
+            s.topics.map((t) => [
+                h('p', { style: 'margin-top:8px;' }, h('strong', {}, t.topic)),
+                _list(t.key_points || [], (p) => h('li', {}, p)),
+            ]),
+        ),
+
+        requirements: (s) => _has(s.requirements) && _card('requirements', '📐', 'Requirements',
+            _list(s.requirements, (r) => h('li', {},
+                r.priority ? h('span', { class: `rc-prio rc-prio--${_prioSlug(r.priority)}` }, r.priority) : null,
+                r.priority ? ' ' : null,
+                h('strong', {}, r.requirement),
+                r.raised_by ? [' ', h('em', {}, `(${r.raised_by})`)] : null,
+                r.rationale ? ` — ${r.rationale}` : null,
+            )),
+        ),
+
+        pain_points: (s) => _has(s.pain_points) && _card('painpoints', '⚠️', 'Pain Points',
+            _list(s.pain_points, (p) => h('li', {},
+                h('strong', {}, p.pain),
+                p.impact ? ` — impact: ${p.impact}` : null,
+            )),
+        ),
+
+        success_criteria: (s) => _has(s.success_criteria) && _card('success', '🎯', 'Success Criteria',
+            _list(s.success_criteria, (c) => h('li', {}, c)),
+        ),
+
+        stakeholders: (s) => _has(s.stakeholders) && _card('stakeholders', '👤', 'Stakeholders',
+            _list(s.stakeholders, (st) => h('li', {},
+                h('strong', {}, st.speaker),
+                st.role ? [' ', h('em', {}, `(${st.role})`)] : null,
+                st.concerns ? ` — ${st.concerns}` : null,
+            )),
+        ),
+
+        decisions: (s) => _has(s.decisions) && _card('decisions', '✅', 'Decisions',
+            _list(s.decisions, (d) => h('li', {},
+                h('strong', {}, d.decision),
+                d.decided_by ? [' ', h('em', {}, `(${d.decided_by})`)] : null,
+                d.rationale ? ` — ${d.rationale}` : null,
+            )),
+        ),
+
+        action_items: (s) => _has(s.action_items) && _card('actions', '🎯', 'Action Items',
+            _list(s.action_items, (a) => h('li', {},
+                h('strong', {}, a.action), ' — ', a.owner, ' ', h('em', {}, `(${a.due})`),
+            )),
+        ),
+
+        open_questions: (s) => _has(s.open_questions) && _card('questions', '❓', 'Open Questions',
+            _list(s.open_questions, (q) => h('li', {}, q)),
+        ),
+    };
+
+    const SUMMARY_SECTIONS = {
+        incident_bridge:       ['overview', 'timeline',     'decisions', 'action_items', 'open_questions'],
+        team_meeting:          ['overview', 'topics',       'decisions', 'action_items', 'open_questions'],
+        customer_requirements: ['overview', 'requirements', 'pain_points', 'success_criteria', 'stakeholders', 'decisions', 'action_items', 'open_questions'],
+    };
+
+    function _renderSummary(recap) {
+        const s = recap.summary || {};
+        const block = document.getElementById('rcSummaryBlock');
+        const sections = SUMMARY_SECTIONS[recap.meeting_type] || SUMMARY_SECTIONS.team_meeting;
+        const cards = sections.map((name) => SUMMARY_RENDERERS[name](s)).filter(Boolean);
+        _replace(block, cards.length ? cards : h('div', { class: 'rc-empty' }, 'No summary available.'));
+    }
+
+    function _renderTranscript(recap) {
+        const block = document.getElementById('rcTranscriptBlock');
+        const segments = recap.transcript || [];
+        const names = recap.speaker_names || {};
+
+        if (!segments.length) {
+            _replace(block, h('div', { class: 'rc-empty' }, 'No transcript available.'));
+            return;
+        }
+        _replace(block, segments.map((seg) => _transcriptLine(seg, names[seg.speaker] || seg.speaker)));
+    }
+
+    function _transcriptLine(seg, displayName) {
+        const speakerEl = h('span', {
+            class: 'rc-speaker',
+            dataset: { speaker: seg.speaker },
+        }, displayName);
+        speakerEl.addEventListener('click', () => _editSpeaker(speakerEl));
+        return h('div', { class: 'rc-transcript-line' },
+            h('span', { class: 'rc-timestamp' }, _fmtTime(seg.start)),
+            speakerEl,
+            ' ',
+            seg.text,
+        );
+    }
+
+    function _editSpeaker(span) {
+        if (span.classList.contains('editing')) return;
+        const speakerId = span.dataset.speaker;
+        const previousDisplay = span.textContent;
+        span.classList.add('editing');
+
+        let cancelled = false;
+        const input = h('input', { type: 'text', value: previousDisplay });
+        input.addEventListener('blur', () => {
+            if (cancelled) _restoreSpeakerDisplay(span, previousDisplay);
+            else _commitSpeakerRename(span, input.value, speakerId);
+        });
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') input.blur();
+            else if (e.key === 'Escape') { cancelled = true; input.blur(); }
+        });
+        _replace(span, input);
+        input.focus();
+        input.select();
+    }
+
+    function _restoreSpeakerDisplay(span, text) {
+        span.classList.remove('editing');
+        span.textContent = text;
+    }
+
+    async function _commitSpeakerRename(span, rawValue, speakerId) {
+        const newName = rawValue.trim() || speakerId;
+        span.classList.remove('editing');
+        span.textContent = newName;
+
+        const safeId = (window.CSS && CSS.escape) ? CSS.escape(speakerId) : speakerId;
+        document.querySelectorAll(`.rc-speaker[data-speaker="${safeId}"]`).forEach((s) => {
+            s.textContent = newName;
+        });
+
+        const mapping = {};
+        document.querySelectorAll('.rc-speaker[data-speaker]').forEach((s) => {
+            mapping[s.dataset.speaker] = s.textContent;
+        });
+
+        try {
+            await fetch(`/api/recap/${currentRecapId}/speakers`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mapping }),
+            });
+        } catch (e) {
+            console.error('Could not save speaker rename:', e);
+        }
+    }
+
+    async function sendToMeetingQA() {
+        if (!currentRecapId) return;
+        const resp = await fetch(`/api/recap/${currentRecapId}`);
+        const recap = await resp.json();
+        if (!resp.ok) {
+            alert('Could not fetch transcript: ' + (recap.error || 'unknown'));
+            return;
+        }
+        const segments = recap.transcript || [];
+        const speakerNames = recap.speaker_names || {};
+        const lines = segments.map(s => {
+            const name = speakerNames[s.speaker] || s.speaker;
+            return `${name}: ${s.text}`;
+        });
+        sessionStorage.setItem('recap_transcript_for_meeting_qa', lines.join('\n'));
+        window.location.href = '/meeting-qa';
+    }
+
+    async function deleteCurrent() {
+        if (!currentRecapId) return;
+        if (!confirm('Delete this recap permanently?')) return;
+        const resp = await fetch(`/api/recap/${currentRecapId}`, { method: 'DELETE' });
+        if (resp.ok) {
+            if (INITIAL_RECAP_ID !== null) {
+                window.location.href = '/recap';
+            } else {
+                resetForm();
+                _loadHistory();
+            }
+        }
+    }
+
+    function collapseResults() {
+        document.getElementById('rcResultsSection').style.display = 'none';
+        document.getElementById('rcTrackerSection').style.display = 'none';
+    }
+
+    function resetForm() {
+        if (INITIAL_RECAP_ID !== null) {
+            window.location.href = '/recap';
+            return;
+        }
+        currentRecapId = null;
+        currentRecap = null;
+        document.getElementById('rcResultsSection').style.display = 'none';
+        document.getElementById('rcTrackerSection').style.display = 'none';
+        document.getElementById('rcFile').value = '';
+        document.getElementById('rcDate').value = '';
+        document.getElementById('rcAttendees').value = '';
+        const genToggle = document.getElementById('rcGenerateVideo');
+        if (genToggle) {
+            genToggle.checked = false;
+            genToggle.dispatchEvent(new Event('change'));
+        }
+        const langSel = document.getElementById('rcLanguage');
+        if (langSel) langSel.value = defaultLanguageCode;
+        const badge = document.getElementById('rcLangBadge');
+        if (badge) badge.style.display = 'none';
+        const note = document.getElementById('rcTranslateNote');
+        if (note) note.textContent = '';
+        document.getElementById('rcFilename').classList.remove('visible');
+        document.getElementById('rcFilename').textContent = '';
+        document.getElementById('rcUploadBtn').disabled = false;
+        document.getElementById('rcUploadSpinner').style.display = 'none';
+    }
+
+    async function _loadHistory() {
+        const block = document.getElementById('rcHistoryBlock');
+        try {
+            const resp = await fetch('/api/recap/list');
+            const data = await resp.json();
+            const recaps = data.recaps || [];
+            if (!recaps.length) {
+                _replace(block, h('div', { class: 'rc-empty' }, 'No recaps yet. Upload a recording to get started.'));
+                return;
+            }
+            _replace(block, recaps.map(_historyRow));
+        } catch (e) {
+            _replace(block, h('div', { class: 'rc-empty' }, 'Could not load history.'));
+        }
+    }
+
+    function _historyRow(r) {
+        return h('a', {
+            class: 'rc-history-row',
+            href: `/recap/${r.id}`,
+        },
+            h('div', {},
+                h('span', { class: 'rc-history-title' }, r.title || 'Untitled'),
+                _meetingTag(r.meeting_type),
+            ),
+            h('div', { class: 'rc-history-meta' }, _fmtDateET(r.created_at)),
+        );
+    }
+
+    // Init
+    document.addEventListener('DOMContentLoaded', () => {
+        if (INITIAL_RECAP_ID !== null) {
+            // Viewer mode: single recap, hide landing chrome and auto-load.
+            document.getElementById('rcUploadSection').style.display = 'none';
+            document.getElementById('rcHistorySection').style.display = 'none';
+            document.getElementById('rcInfoRow').style.display = 'none';
+            document.getElementById('rcBackRow').style.display = 'block';
+            _loadLanguages();
+            _loadRecap(INITIAL_RECAP_ID);
+        } else {
+            _initDropzone();
+            _loadLanguages();
+            _loadHistory();
+            _refreshActiveJobs();
+        }
+    });
+
+    function _buildPlainText() {
+        if (!currentRecap) return '';
+        const r = currentRecap;
+        const s = r.summary || {};
+        const speakerNames = r.speaker_names || {};
+        const lines = [];
+
+        lines.push(r.title || 'Meeting Recap');
+        lines.push('='.repeat((r.title || 'Meeting Recap').length));
+        if (r.meeting_date) lines.push(`Date: ${r.meeting_date}`);
+        if (r.attendees) lines.push(`Attendees: ${r.attendees}`);
+        lines.push('');
+
+        if (s.summary) {
+            lines.push('SUMMARY');
+            lines.push(s.summary);
+            lines.push('');
+        }
+
+        if (r.meeting_type === 'incident_bridge' && s.timeline && s.timeline.length) {
+            lines.push('TIMELINE');
+            for (const t of s.timeline) lines.push(`  [${t.time}] ${t.speaker}: ${t.event}`);
+            lines.push('');
+        }
+
+        if (r.meeting_type === 'team_meeting' && s.topics && s.topics.length) {
+            lines.push('TOPICS');
+            for (const t of s.topics) {
+                lines.push(`  ${t.topic}`);
+                for (const p of (t.key_points || [])) lines.push(`    - ${p}`);
+            }
+            lines.push('');
+        }
+
+        if (r.meeting_type === 'customer_requirements') {
+            if (s.requirements && s.requirements.length) {
+                lines.push('REQUIREMENTS');
+                for (const rq of s.requirements) {
+                    const prio = rq.priority ? `[${rq.priority}] ` : '';
+                    const by = rq.raised_by ? ` (raised by ${rq.raised_by})` : '';
+                    const rat = rq.rationale ? ` — ${rq.rationale}` : '';
+                    lines.push(`  - ${prio}${rq.requirement}${by}${rat}`);
+                }
+                lines.push('');
+            }
+            if (s.pain_points && s.pain_points.length) {
+                lines.push('PAIN POINTS');
+                for (const p of s.pain_points) {
+                    const imp = p.impact ? ` — impact: ${p.impact}` : '';
+                    lines.push(`  - ${p.pain}${imp}`);
+                }
+                lines.push('');
+            }
+            if (s.success_criteria && s.success_criteria.length) {
+                lines.push('SUCCESS CRITERIA');
+                for (const c of s.success_criteria) lines.push(`  - ${c}`);
+                lines.push('');
+            }
+            if (s.stakeholders && s.stakeholders.length) {
+                lines.push('STAKEHOLDERS');
+                for (const st of s.stakeholders) {
+                    const role = st.role ? ` (${st.role})` : '';
+                    const concerns = st.concerns ? ` — ${st.concerns}` : '';
+                    lines.push(`  - ${st.speaker}${role}${concerns}`);
+                }
+                lines.push('');
+            }
+        }
+
+        if (s.decisions && s.decisions.length) {
+            lines.push('DECISIONS');
+            for (const d of s.decisions) {
+                const by = d.decided_by ? ` (${d.decided_by})` : '';
+                lines.push(`  - ${d.decision}${by}${d.rationale ? ' — ' + d.rationale : ''}`);
+            }
+            lines.push('');
+        }
+
+        if (s.action_items && s.action_items.length) {
+            lines.push('ACTION ITEMS');
+            for (const a of s.action_items) lines.push(`  - ${a.action} — ${a.owner} (${a.due})`);
+            lines.push('');
+        }
+
+        if (s.open_questions && s.open_questions.length) {
+            lines.push('OPEN QUESTIONS');
+            for (const q of s.open_questions) lines.push(`  - ${q}`);
+            lines.push('');
+        }
+
+        const segments = r.transcript || [];
+        if (segments.length) {
+            lines.push('TRANSCRIPT');
+            for (const seg of segments) {
+                const name = speakerNames[seg.speaker] || seg.speaker;
+                lines.push(`[${_fmtTime(seg.start)}] ${name}: ${seg.text}`);
+            }
+        }
+
+        return lines.join('\n');
+    }
+
+    async function copyToClipboard() {
+        const text = _buildPlainText();
+        if (!text) return;
+        try {
+            await navigator.clipboard.writeText(text);
+            const btn = event.currentTarget;
+            const originalChildren = Array.from(btn.childNodes);
+            _replace(btn, '✅ Copied!');
+            setTimeout(() => { _replace(btn, originalChildren); }, 2000);
+        } catch (e) {
+            alert('Copy failed — try the download button instead.');
+        }
+    }
+
+    function downloadText() {
+        const text = _buildPlainText();
+        if (!text) return;
+        const title = (currentRecap.title || 'meeting-recap').replace(/[^a-zA-Z0-9_-]/g, '_');
+        const blob = new Blob([text], { type: 'text/plain' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${title}.txt`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+    }
+
+    function switchPromptTab(tab) {
+        document.getElementById('rcPromptIncident').style.display = tab === 'incident' ? '' : 'none';
+        document.getElementById('rcPromptTeam').style.display = tab === 'team' ? '' : 'none';
+        document.getElementById('rcPromptCustomer').style.display = tab === 'customer' ? '' : 'none';
+        document.querySelectorAll('.rc-info-prompt-tab').forEach(btn => btn.classList.remove('active'));
+        event.currentTarget.classList.add('active');
+    }
+
+    return { upload, sendToMeetingQA, deleteCurrent, resetForm, collapseResults, switchPromptTab, copyToClipboard, downloadText, translateSummary };
+})();
+</script>
+{% endblock %}

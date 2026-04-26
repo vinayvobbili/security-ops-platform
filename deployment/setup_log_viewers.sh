@@ -37,9 +37,9 @@ echo ""
 
 # Create htpasswd file for basic auth
 echo "Setting up password protection..."
-echo -n "$LOG_VIEWER_PASSWORD" | sudo htpasswd -i -c /home/user/pub/IR/.htpasswd "$LOG_VIEWER_USERNAME"
-sudo chown user:user /home/user/pub/IR/.htpasswd
-sudo chmod 644 /home/user/pub/IR/.htpasswd
+echo -n "$LOG_VIEWER_PASSWORD" | sudo htpasswd -i -c /home/user/IR/.htpasswd "$LOG_VIEWER_USERNAME"
+sudo chown user:user /home/user/IR/.htpasswd
+sudo chmod 644 /home/user/IR/.htpasswd
 echo "  ✓ Password configured (username: $LOG_VIEWER_USERNAME, password: $LOG_VIEWER_PASSWORD)"
 echo ""
 
@@ -56,7 +56,7 @@ server {
     listen 8030;
     server_name $LOG_VIEWER_HOSTNAME;
 
-    root /home/user/pub/IR/deployment;
+    root /home/user/IR/deployment;
     index log-viewer-index.html;
 
     location / {
@@ -235,12 +235,12 @@ cat > "$SCRIPT_DIR/log-viewer-index.html" <<'HTMLEOF'
         </a>
 
         <a href="LOG_VIEWER_BASE_URL_PLACEHOLDER:8037" class="log-card" target="_blank">
-            <h3>⏰ All Jobs</h3>
+            <h3>⏰ Scheduler</h3>
             <p>Scheduler logs</p>
         </a>
 
         <a href="LOG_VIEWER_BASE_URL_PLACEHOLDER:8039" class="log-card" target="_blank">
-            <h3>🌐 Web Server</h3>
+            <h3>🌐 Web App</h3>
             <p>Web server logs</p>
         </a>
     </div>
@@ -291,7 +291,7 @@ echo ""
 # Create symlink in ~/bin for easy management
 echo "Creating management symlink..."
 mkdir -p ~/bin
-ln -sf /home/user/pub/IR/deployment/manage_log_viewers.sh ~/bin/start_log_service
+ln -sf /home/user/IR/deployment/manage_log_viewers.sh ~/bin/start_log_service
 echo "  ✓ Symlink created: ~/bin/start_log_service"
 echo ""
 
@@ -326,7 +326,7 @@ echo "  ${LOG_VIEWER_BASE_URL}:8034 - MoneyBall"
 echo "  ${LOG_VIEWER_BASE_URL}:8035 - the orchestration service"
 echo "  ${LOG_VIEWER_BASE_URL}:8036 - the alert triage service"
 echo "  ${LOG_VIEWER_BASE_URL}:8038 - the threat-intel service"
-echo "  ${LOG_VIEWER_BASE_URL}:8037 - All Jobs"
+echo "  ${LOG_VIEWER_BASE_URL}:8037 - Scheduler"
 echo "  (Each protected with username: $LOG_VIEWER_USERNAME, password: $LOG_VIEWER_PASSWORD)"
 echo ""
 echo "Features:"

@@ -1,5 +1,5 @@
 [Unit]
-Description=IR the peer-status service Timer - Run every 5 minutes
+Description=Peer-Status Service Timer - Run every 5 minutes
 Requires=ir-peer-ping.service
 
 [Timer]

@@ -1,0 +1,22 @@
+[Unit]
+Description=IR Reranker (cross-encoder HTTP service)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/vinay/security-ops-platform
+ExecStart=/home/vinay/security-ops-platform/.venv/bin/python3 deployment/reranker_server.py
+Restart=on-failure
+KillMode=mixed
+TimeoutStopSec=10
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/home/vinay/security-ops-platform
+Environment=RERANKER_HOST=127.0.0.1
+Environment=RERANKER_PORT=8020
+Environment=RERANKER_MODEL=cross-encoder/ms-marco-MiniLM-L-6-v2
+StandardOutput=append:/home/vinay/security-ops-platform/data/transient/logs/reranker.log
+StandardError=append:/home/vinay/security-ops-platform/data/transient/logs/reranker.log
+
+[Install]
+WantedBy=default.target

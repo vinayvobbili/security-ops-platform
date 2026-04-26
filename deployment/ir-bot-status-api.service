@@ -8,12 +8,12 @@ Type=simple
 Restart=always
 RestartSec=10
 User=user
-WorkingDirectory=/home/user/pub/IR
-Environment="PATH=/home/user/pub/IR/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-EnvironmentFile=/home/user/pub/IR/.env
-ExecStart=/home/user/pub/IR/.venv/bin/python /home/user/pub/IR/deployment/bot_status_api.py
-StandardOutput=append:/home/user/pub/IR/logs/bot_status_api.log
-StandardError=append:/home/user/pub/IR/logs/bot_status_api.log
+WorkingDirectory=/home/user/IR
+Environment="PATH=/home/user/IR/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+EnvironmentFile=/home/user/IR/.env
+ExecStart=/home/user/IR/.venv/bin/python /home/user/IR/deployment/bot_status_api.py
+StandardOutput=append:/home/user/IR/logs/bot_status_api.log
+StandardError=append:/home/user/IR/logs/bot_status_api.log
 
 # Resource limits
 MemoryMax=512M

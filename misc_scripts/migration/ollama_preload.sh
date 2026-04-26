@@ -40,7 +40,7 @@ fi
 # This sends a minimal request that loads the model into memory
 log "Preloading model $MODEL with keep_alive=-1..."
 
-RESPONSE=$(curl -s -X POST http://localhost:11434/api/generate \
+RESPONSE=$(curl -s -X POST http://localhost:11433/api/generate \
     -H "Content-Type: application/json" \
     -d "{
         \"model\": \"$MODEL\",

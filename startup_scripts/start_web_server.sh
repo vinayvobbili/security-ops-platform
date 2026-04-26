@@ -1,10 +1,10 @@
 #!/bin/bash
 
-cd /home/user/pub/IR || exit 1
+cd /home/user/IR || exit 1
 
-SERVICE_NAME="ir-web-server.service"
-APP_NAME="Web Server"
-LOG_FILE="/home/user/pub/IR/logs/web_server.log"
+SERVICE_NAME="ir-web-app.service"
+APP_NAME="Web App"
+LOG_FILE="/home/user/IR/logs/web_server.log"
 
 echo "Managing $APP_NAME via systemd service: $SERVICE_NAME"
 echo ""
@@ -53,8 +53,8 @@ else
 fi
 
 # Also kill any stray processes (in case they're not managed by systemd)
-echo "Checking for stray web_server.py processes..."
-WEB_PIDS=$(pgrep -f "web_server.py")
+echo "Checking for stray app.py processes..."
+WEB_PIDS=$(pgrep -f "web/app.py")
 if [ -n "$WEB_PIDS" ]; then
     echo "Found stray processes: $WEB_PIDS - cleaning up..."
     echo "$WEB_PIDS" | xargs kill -9 2>/dev/null || true

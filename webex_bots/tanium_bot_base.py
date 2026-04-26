@@ -25,7 +25,7 @@ from webexpythonsdk.models.cards.actions import Submit
 from webexpythonsdk.models.cards.inputs import Text as TextInput
 from zoneinfo import ZoneInfo
 
-from src.utils.webex_utils import send_message_with_retry, send_card_with_retry
+from src.utils.webex_utils import send_message_with_retry, send_card_with_retry, clear_stale_lock
 
 logger = logging.getLogger(__name__)
 
@@ -197,9 +197,31 @@ def send_report_with_progress(config: TaniumBotConfig, room_id, filename, messag
         send_message_with_retry(config.webex_api, room_id=room_id, markdown=error_msg)
 
 
-def seek_approval_to_ring_tag_tanium(config: TaniumBotConfig, room_id, total_hosts=None, default_batch_size=1000):
-    """Send approval card for Tanium ring tagging with batch size option."""
+def seek_approval_to_ring_tag_tanium(config: TaniumBotConfig, room_id, total_hosts=None, default_batch_size=None, validate_batch_size=None):
+    """Send approval card for Tanium ring tagging.
+
+    Args:
+        validate_batch_size: If set, adds a "Validate (N)" button that triggers
+            the `validate_ring_tag_tanium_hosts` callback to tag a small
+            validation batch first.
+    """
     hosts_info = f" ({total_hosts:,} hosts available)" if total_hosts else ""
+
+    actions = [
+        Submit(title="No!", data={"callback_keyword": "dont_ring_tag_tanium_hosts"},
+               style=options.ActionStyle.DESTRUCTIVE),
+    ]
+    if validate_batch_size:
+        actions.append(
+            Submit(
+                title=f"Validate ({validate_batch_size}) 🧪",
+                data={"callback_keyword": "validate_ring_tag_tanium_hosts"},
+            )
+        )
+    actions.append(
+        Submit(title="Yes! Put a 💍 On It!", data={"callback_keyword": "ring_tag_tanium_hosts"},
+               style=options.ActionStyle.POSITIVE)
+    )
 
     card = AdaptiveCard(
         body=[
@@ -214,34 +236,14 @@ def seek_approval_to_ring_tag_tanium(config: TaniumBotConfig, room_id, total_hos
                     Column(
                         width="stretch",
                         items=[
-                            TextBlock(text=f"I can tag workstations and servers in Tanium {config.display_name}{hosts_info}. Do you want to proceed?", wrap=True)
+                            TextBlock(text=f"Do you want me to tag the currently online hosts in Tanium {config.display_name}?{hosts_info}", wrap=True)
                         ],
                         verticalContentAlignment=VerticalContentAlignment.CENTER
                     )
                 ]
-            ),
-            TextBlock(
-                text="🧪 Batch Size (Required for Safety)",
-                weight=options.FontWeight.BOLDER,
-                separator=True
-            ),
-            TextBlock(
-                text=f"Enter number of servers to randomly tag. Default is {default_batch_size:,}. Use higher numbers (1000, 5000, etc.) for larger deployments, or enter 'all' to tag all hosts.",
-                wrap=True,
-                isSubtle=True
-            ),
-            TextInput(
-                id="batch_size",
-                placeholder=f"Default: {default_batch_size:,} (or enter 1000, 5000, 'all')",
-                isRequired=False
             )
         ],
-        actions=[
-            Submit(title="No!", data={"callback_keyword": "dont_ring_tag_tanium_hosts"},
-                   style=options.ActionStyle.DESTRUCTIVE),
-            Submit(title="Yes! Put a 💍 On It!", data={"callback_keyword": "ring_tag_tanium_hosts"},
-                   style=options.ActionStyle.POSITIVE)
-        ]
+        actions=actions
     )
 
     result = send_card_with_retry(
@@ -272,7 +274,7 @@ def apply_tags_to_hosts(config: TaniumBotConfig, room_id, batch_size=None, run_b
         run_by: Who initiated the tagging (user name or 'scheduled job')
     """
     from services.tanium import TaniumClient
-    from src.utils.excel_formatting import apply_professional_formatting
+    from src.utils.excel_formatting import apply_professional_formatting, add_tanium_hyperlinks
     from services.epp_tagging_db import insert_tagging_run, bulk_insert_results
 
     start_time = time.time()
@@ -292,7 +294,7 @@ def apply_tags_to_hosts(config: TaniumBotConfig, room_id, batch_size=None, run_b
     try:
         # Read the report
         read_start = time.time()
-        df = pd.read_excel(report_path)
+        df = pd.read_excel(report_path, dtype=str, keep_default_na=False, na_values=[''])
         read_duration = time.time() - read_start
 
         total_hosts_in_report = len(df)
@@ -374,6 +376,11 @@ def apply_tags_to_hosts(config: TaniumBotConfig, room_id, batch_size=None, run_b
 
         # Initialize Tanium client
         tanium_client = TaniumClient()
+        # Get portal URL for clickable links in the report
+        target_instance = tanium_client.get_instance_by_name(config.display_name)
+        from my_config import get_config as _get_config
+        _cfg = _get_config()
+        tanium_portal_url = (_cfg.tanium_cloud_ui_url or (target_instance.server_url if target_instance else ''))
 
         # Track results
         successful_tags = []
@@ -456,12 +463,15 @@ def apply_tags_to_hosts(config: TaniumBotConfig, room_id, batch_size=None, run_b
                         continue
 
                     result = instance.bulk_add_tags(hosts, ring_tag, package_id)
-                    action_id = result.get('action', {}).get('scheduledAction', {}).get('id', 'N/A')
+                    action_data = result.get('action', {})
+                    action_id = action_data.get('id', 'N/A')
+                    scheduled_action_id = action_data.get('scheduledAction', {}).get('id', 'N/A')
 
                     for host in hosts:
                         successful_tags.append({
                             **host,
-                            'action_id': action_id
+                            'action_id': action_id,
+                            'scheduled_action_id': scheduled_action_id
                         })
 
                 except Exception as e:
@@ -494,6 +504,7 @@ def apply_tags_to_hosts(config: TaniumBotConfig, room_id, batch_size=None, run_b
                 'Ring Tag': host['tag'],
                 'Package ID': host['package_id'],
                 'Action ID': host['action_id'],
+                'Scheduled Action ID': host['scheduled_action_id'],
                 'Current Tags': host['current_tags'],
                 'Status': 'Successfully Tagged'
             })
@@ -508,6 +519,7 @@ def apply_tags_to_hosts(config: TaniumBotConfig, room_id, batch_size=None, run_b
                 'Ring Tag': host['tag'],
                 'Package ID': host['package_id'],
                 'Action ID': 'N/A',
+                'Scheduled Action ID': 'N/A',
                 'Current Tags': host['current_tags'],
                 'Status': f"Failed: {host['error']}"
             })
@@ -530,11 +542,15 @@ def apply_tags_to_hosts(config: TaniumBotConfig, room_id, batch_size=None, run_b
             'ring tag': 35,
             'package id': 12,
             'action id': 15,
+            'scheduled action id': 20,
             'current tags': 50,
             'status': 40
         }
         wrap_columns = {'current tags', 'status'}
         apply_professional_formatting(output_filename, column_widths=column_widths, wrap_columns=wrap_columns)
+        if tanium_portal_url:
+            add_tanium_hyperlinks(output_filename, tanium_portal_url,
+                                  tanium_id_column='Tanium ID', action_id_column='Action ID')
 
         total_duration = time.time() - start_time
 
@@ -765,6 +781,7 @@ def run_automated_ring_tagging_workflow(config: TaniumBotConfig, room_id: str, s
     # Step 1: Generate report
     logger.info(f"Step 1: Generating Tanium {config.display_name} hosts without ring tag report...")
     lock_path = config.root_directory / "src" / "epp" / "all_tanium_hosts.lock"
+    clear_stale_lock(lock_path)
 
     try:
         with fasteners.InterProcessLock(lock_path):
@@ -897,6 +914,7 @@ def run_automated_ring_tagging_workflow(config: TaniumBotConfig, room_id: str, s
     )
 
     ring_tag_lock_path = config.root_directory / "src" / "epp" / "ring_tag_tanium_hosts.lock"
+    clear_stale_lock(ring_tag_lock_path)
     try:
         with fasteners.InterProcessLock(ring_tag_lock_path):
             apply_tags_to_hosts(config, room_id, batch_size=default_batch_size, run_by='scheduled job')

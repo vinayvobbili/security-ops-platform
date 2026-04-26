@@ -1,0 +1,16 @@
+[Unit]
+Description=IR Sentinel Alert Triage (HAL9000 + CrowdStrike Poller)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/vinay/security-ops-platform
+ExecStart=/home/vinay/security-ops-platform/.venv/bin/python3 webex_bots/hal9000.py
+Restart=on-failure
+KillMode=mixed
+TimeoutStopSec=10
+RestartSec=30
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target

@@ -13,6 +13,7 @@ from langchain_core.tools import tool
 
 from services.service_now import ServiceNowClient
 from src.utils.tool_decorator import log_tool_call
+from src.utils.llm_decorators import validate_args, llm_cache, HOSTNAME_PATTERN
 
 # Lazy-initialized ServiceNow client
 _servicenow_client: Optional[ServiceNowClient] = None
@@ -96,6 +97,8 @@ def _format_host_details(details: dict, hostname: str) -> str:
 
 
 @tool
+@validate_args(hostname=HOSTNAME_PATTERN)
+@llm_cache(ttl_seconds=86400)
 @log_tool_call
 def get_host_details_snow(hostname: str) -> str:
     """Get host/device details from ServiceNow CMDB.
@@ -119,6 +122,86 @@ def get_host_details_snow(hostname: str) -> str:
 
     details = client.get_host_details(hostname_short)
     return _format_host_details(details, hostname_short)
+
+
+@tool
+@validate_args(hostname=HOSTNAME_PATTERN)
+@log_tool_call
+def get_servicenow_changes(hostname: str) -> str:
+    """Get active or recently scheduled ServiceNow change tickets for a host.
+
+    An active change window on the affected host can explain an alert as
+    expected maintenance activity — use this to rule out false positives
+    driven by planned work.
+
+    Args:
+        hostname: The hostname to search for (short name, no domain)
+    """
+    client = _get_servicenow_client()
+    if not client:
+        return "Error: ServiceNow service is not available."
+
+    short = hostname.strip().split('.')[0]
+    try:
+        changes = client.search_changes_by_ci(short)
+    except Exception as e:
+        return f"Error querying ServiceNow changes for {short}: {e}"
+
+    if not changes:
+        return f"No active change tickets found for '{short}'."
+
+    lines = [f"ServiceNow changes for '{short}' ({len(changes)} found):"]
+    for c in changes[:10]:
+        num = c.get('number', c.get('changeNumber', '?'))
+        state = c.get('state', c.get('status', ''))
+        ctype = c.get('type', c.get('changeType', ''))
+        desc = str(c.get('shortDescription', c.get('description', '')))[:150]
+        start = c.get('plannedStart', c.get('startDate', ''))
+        end = c.get('plannedEnd', c.get('endDate', ''))
+        lines.append(f"  - {num} [{state}/{ctype}] {start} → {end}")
+        if desc:
+            lines.append(f"    {desc}")
+    return "\n".join(lines)
+
+
+@tool
+@log_tool_call
+def get_servicenow_incidents(search_term: str, hours: int = 72) -> str:
+    """Get recent ServiceNow incidents where the affected CI matches a hostname or username.
+
+    Useful for finding existing incident tickets that correlate with the alert
+    under triage (e.g. a help-desk ticket opened for the same host around the
+    same time can explain benign activity).
+
+    Args:
+        search_term: Hostname or username to search for
+        hours: How far back to look (default 72 = 3 days)
+    """
+    client = _get_servicenow_client()
+    if not client:
+        return "Error: ServiceNow service is not available."
+
+    short = search_term.strip().split('.')[0]
+    try:
+        incidents = client.search_incidents_by_ci(short, hours=hours)
+    except Exception as e:
+        return f"Error querying ServiceNow incidents for {short}: {e}"
+
+    if not incidents:
+        return f"No ServiceNow incidents found for '{short}' in the last {hours}h."
+
+    lines = [f"ServiceNow incidents for '{short}' (last {hours}h, {len(incidents)} found):"]
+    for inc in incidents[:10]:
+        num = inc.get('number', inc.get('incidentNumber', '?'))
+        state = inc.get('state', '')
+        pri = inc.get('priority', '')
+        desc = str(inc.get('shortDescription', inc.get('description', '')))[:150]
+        opened = inc.get('createdDate', inc.get('openedAt', ''))
+        assign = inc.get('assignmentGroup', '')
+        lines.append(f"  - {num} [{state} P{pri}] opened {opened} — {assign}")
+        if desc:
+            lines.append(f"    {desc}")
+    return "\n".join(lines)
 
 
 # =============================================================================

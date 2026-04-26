@@ -18,13 +18,15 @@ from urllib3 import exceptions as urllib3_exceptions
 from webexpythonsdk import WebexAPI
 from webexpythonsdk.models.cards import (
     Colors, TextBlock, FontWeight, FontSize,
-    AdaptiveCard, HorizontalAlignment, FactSet, Fact
+    AdaptiveCard, HorizontalAlignment, VerticalContentAlignment,
+    FactSet, Fact, Container, ColumnSet, Column, options
 )
+from webexpythonsdk.models.cards.actions import OpenUrl
 
 from my_config import get_config
 from services import azdo
 from services.xsoar import TicketHandler, ListHandler, XsoarEnvironment
-# from src.charts.threatcon_level import load_threatcon_data, THREAT_CON_FILE
+from src.charts.threatcon_level import load_threatcon_data, THREAT_CON_FILE
 from .constants import (
     config,
     root_directory,
@@ -33,6 +35,7 @@ from .constants import (
     SHIFT_PERFORMANCE_MESSAGES,
     SHIFT_CHANGE_MESSAGES,
     CHART_NOT_FOUND_MESSAGES,
+    ShiftConstants,
 )
 from .metrics import get_open_tickets, BASE_QUERY
 from .shift_utils import safe_parse_datetime, get_eastern_timezone
@@ -196,6 +199,23 @@ class ShiftChangeFormatter:
         return formatted_hosts
 
     @staticmethod
+    def get_hosts_in_containment_raw() -> List[Dict[str, str]]:
+        """Get raw host data for Adaptive Card display with hyperlinks."""
+        hosts_data = prod_list_handler.get_list_data_by_name(f'{config.team_name} Contained Hosts')
+
+        hosts = []
+        for item in hosts_data:
+            contained_at = safe_parse_datetime(item.get("contained_at"))
+            ticket_id = item.get('ticket#', 'N/A')
+            hosts.append({
+                'ticket_id': ticket_id,
+                'ticket_url': f"{config.xsoar_prod_ui_base_url}/Custom/caseinfoid/{ticket_id}",
+                'hostname': item.get('hostname', 'Unknown'),
+                'duration': ShiftChangeFormatter.format_containment_duration(contained_at),
+            })
+        return hosts
+
+    @staticmethod
     def prepare_shift_data(shift_name: str) -> Dict[str, Any]:
         """Prepare all data needed for shift change announcement."""
         eastern = get_eastern_timezone()
@@ -211,7 +231,9 @@ class ShiftChangeFormatter:
             'shift_timings': get_shift_timings(shift_name),
             'management_notes': ShiftChangeFormatter.get_management_notes(),
             'hosts_in_containment': ShiftChangeFormatter.get_hosts_in_containment(),
-            'staffing_table': staffing_table
+            'hosts_raw': ShiftChangeFormatter.get_hosts_in_containment_raw(),
+            'staffing_table': staffing_table,
+            'staffing_data': staffing_data,
         }
 
 
@@ -232,6 +254,238 @@ def _create_shift_change_message(shift_name: str, shift_data: Dict[str, Any]) ->
     except Exception as e:
         logger.error(f"Error in _create_shift_change_message: {e}")
         return f"Good **{shift_name.upper()}**! A new shift's starting now!\n\nUnable to fetch shift details due to an error."
+
+
+def _get_open_ticket_summary() -> Dict[str, Any]:
+    """Get open ticket count and first N IDs for Adaptive Card display."""
+    try:
+        all_tickets = TicketHandler(XsoarEnvironment.PROD).get_tickets(query=BASE_QUERY + ' -status:closed')
+        total = len(all_tickets)
+        show_count = min(total, ShiftConstants.TICKET_SHOW_COUNT)
+        ids = [ticket['id'] for ticket in all_tickets[:show_count]]
+        remaining = total - show_count
+        ids_text = ', '.join(ids)
+        if remaining > 0:
+            ids_text += f" and {remaining} more"
+        return {'total': total, 'ids_text': ids_text}
+    except Exception as e:
+        logger.error(f"Error in _get_open_ticket_summary: {e}")
+        return {'total': 0, 'ids_text': 'Unable to fetch'}
+
+
+def _create_shift_change_card(shift_name: str, shift_data: Dict[str, Any]) -> AdaptiveCard:
+    """Create an Adaptive Card for the shift change announcement."""
+    shift_emojis = {'morning': '☀️', 'afternoon': '🌤️', 'night': '🌙'}
+    shift_greetings = {'morning': 'Good Morning', 'afternoon': 'Good Afternoon', 'night': 'Good Night'}
+    shift_emoji = shift_emojis.get(shift_name, '🔔')
+    greeting = shift_greetings.get(shift_name, 'Shift Change')
+
+    eastern = get_eastern_timezone()
+    today_str = datetime.now(eastern).strftime('%b %d, %Y')
+
+    # ── Header ─────────────────────────────────────────────────
+    header = Container(
+        style=options.ContainerStyle.ACCENT,
+        bleed=True,
+        items=[
+            TextBlock(
+                text=f"{shift_emoji} {greeting}!",
+                weight=FontWeight.BOLDER,
+                size=FontSize.LARGE,
+                color=Colors.LIGHT,
+                horizontalAlignment=HorizontalAlignment.CENTER,
+            ),
+            TextBlock(
+                text=f"A new shift's starting now! · {today_str}",
+                size=FontSize.SMALL,
+                color=Colors.LIGHT,
+                horizontalAlignment=HorizontalAlignment.CENTER,
+                spacing=options.Spacing.NONE,
+            ),
+        ]
+    )
+
+    # ── Shift Info ─────────────────────────────────────────────
+    info_section = FactSet(
+        separator=True,
+        facts=[
+            Fact(title="⏰ Timings", value=shift_data['shift_timings']),
+        ]
+    )
+
+    # ── Open Tickets & Containment (big numbers) ───────────────
+    ticket_summary = _get_open_ticket_summary()
+    hosts_raw = shift_data.get('hosts_raw', [])
+
+    stats = ColumnSet(
+        spacing=options.Spacing.MEDIUM,
+        columns=[
+            Column(
+                width="stretch",
+                verticalContentAlignment=VerticalContentAlignment.CENTER,
+                items=[
+                    TextBlock(
+                        text=str(ticket_summary['total']),
+                        size=FontSize.EXTRA_LARGE,
+                        weight=FontWeight.BOLDER,
+                        color=Colors.ACCENT,
+                        horizontalAlignment=HorizontalAlignment.CENTER,
+                    ),
+                    TextBlock(
+                        text="Open Tickets",
+                        size=FontSize.SMALL,
+                        weight=FontWeight.BOLDER,
+                        horizontalAlignment=HorizontalAlignment.CENTER,
+                        spacing=options.Spacing.NONE,
+                    ),
+                ],
+            ),
+            Column(
+                width="stretch",
+                verticalContentAlignment=VerticalContentAlignment.CENTER,
+                items=[
+                    TextBlock(
+                        text=str(len(hosts_raw)),
+                        size=FontSize.EXTRA_LARGE,
+                        weight=FontWeight.BOLDER,
+                        color=Colors.ATTENTION if hosts_raw else Colors.GOOD,
+                        horizontalAlignment=HorizontalAlignment.CENTER,
+                    ),
+                    TextBlock(
+                        text="In Containment",
+                        size=FontSize.SMALL,
+                        weight=FontWeight.BOLDER,
+                        horizontalAlignment=HorizontalAlignment.CENTER,
+                        spacing=options.Spacing.NONE,
+                    ),
+                ],
+            ),
+        ]
+    )
+
+    body = [header, info_section, stats]
+
+    # ── Hosts in Containment detail ────────────────────────────
+    hosts_raw = shift_data.get('hosts_raw', [])
+    if hosts_raw:
+        containment_header = TextBlock(
+            text="🔒 Hosts in Containment (TUC)",
+            weight=FontWeight.BOLDER,
+            size=FontSize.SMALL,
+            separator=True,
+        )
+        body.append(containment_header)
+
+        # Column headers
+        col_widths = ("2", "3", "2")  # fixed weights so headers align with data rows
+        body.append(ColumnSet(
+            spacing=options.Spacing.SMALL,
+            columns=[
+                Column(width=col_widths[0], items=[
+                    TextBlock(text="Ticket", weight=FontWeight.BOLDER, size=FontSize.SMALL, color=Colors.ACCENT),
+                ]),
+                Column(width=col_widths[1], items=[
+                    TextBlock(text="Hostname", weight=FontWeight.BOLDER, size=FontSize.SMALL, color=Colors.ACCENT),
+                ]),
+                Column(width=col_widths[2], items=[
+                    TextBlock(text="Duration", weight=FontWeight.BOLDER, size=FontSize.SMALL, color=Colors.ACCENT),
+                ]),
+            ]
+        ))
+
+        # One row per host — ticket column is clickable
+        for host in hosts_raw:
+            body.append(ColumnSet(
+                spacing=options.Spacing.NONE,
+                columns=[
+                    Column(
+                        width=col_widths[0],
+                        selectAction=OpenUrl(url=host['ticket_url']),
+                        items=[
+                            TextBlock(
+                                text=f"X#{host['ticket_id']}",
+                                size=FontSize.SMALL,
+                                color=Colors.ACCENT,
+                            ),
+                        ]
+                    ),
+                    Column(width=col_widths[1], items=[
+                        TextBlock(text=host['hostname'], size=FontSize.SMALL),
+                    ]),
+                    Column(width=col_widths[2], items=[
+                        TextBlock(text=host['duration'], size=FontSize.SMALL, isSubtle=True),
+                    ]),
+                ]
+            ))
+
+    # ── Management Notes ───────────────────────────────────────
+    notes = shift_data.get('management_notes', '')
+    if notes:
+        notes_section = Container(
+            separator=True,
+            items=[
+                TextBlock(
+                    text="📋 Management Notes",
+                    weight=FontWeight.BOLDER,
+                    size=FontSize.SMALL,
+                ),
+                TextBlock(
+                    text=notes,
+                    size=FontSize.SMALL,
+                    wrap=True,
+                    spacing=options.Spacing.SMALL,
+                ),
+            ]
+        )
+        body.append(notes_section)
+
+    # ── Staffing ───────────────────────────────────────────────
+    staffing_data = shift_data.get('staffing_data', {})
+    if staffing_data:
+        role_labels = {
+            'monitoring_analysts': '🖥️ Monitoring',
+            'response_analysts': '🔍 Response',
+            'senior_analysts': '⭐ Senior',
+            'On-Call': '📱 On-Call',
+        }
+        staffing_columns = []
+        for role, members in staffing_data.items():
+            display_role = role_labels.get(role, role.replace('_', ' ').title())
+            members_text = '\n'.join(m for m in members if m)
+            staffing_columns.append(
+                Column(
+                    width="stretch",
+                    items=[
+                        TextBlock(
+                            text=display_role,
+                            weight=FontWeight.BOLDER,
+                            size=FontSize.SMALL,
+                            color=Colors.ACCENT,
+                        ),
+                        TextBlock(
+                            text=members_text or "—",
+                            size=FontSize.SMALL,
+                            wrap=True,
+                            spacing=options.Spacing.SMALL,
+                        ),
+                    ]
+                )
+            )
+
+        staffing_header = TextBlock(
+            text="👥 Scheduled Staffing",
+            weight=FontWeight.BOLDER,
+            size=FontSize.SMALL,
+            separator=True,
+        )
+        staffing_grid = ColumnSet(
+            columns=staffing_columns,
+            spacing=options.Spacing.SMALL,
+        )
+        body.append(staffing_header)
+        body.append(staffing_grid)
+
+    return AdaptiveCard(body=body)
 
 
 @retry(
@@ -350,35 +604,192 @@ def announce_previous_shift_performance(room_id: str, shift_name: str) -> None:
 
         tuning_requests_submitted = azdo.get_tuning_requests_submitted_by_last_shift()
 
-        shift_performance = AdaptiveCard(
-            body=[
+        # Extract per-analyst ack/closed counts from ticket owners
+        ack_counts = {}
+        closed_counts = {}
+        all_owners = set()
+        for ticket in inflow:
+            owner = ticket.get('owner', '').strip()
+            if owner and owner.lower() not in ('', 'unassigned', 'admin'):
+                name = owner.split('@')[0]
+                all_owners.add(name)
+                ack_counts[name] = ack_counts.get(name, 0) + 1
+        for ticket in outflow:
+            owner = ticket.get('owner', '').strip()
+            if owner and owner.lower() not in ('', 'unassigned', 'admin'):
+                name = owner.split('@')[0]
+                all_owners.add(name)
+                closed_counts[name] = closed_counts.get(name, 0) + 1
+        analysts_str = '\n'.join(
+            f"{name} (Ack:{ack_counts.get(name, 0)}, Closed:{closed_counts.get(name, 0)})"
+            for name in sorted(all_owners)
+        ) if all_owners else ''
+        analyst_count = len(all_owners)
+        acked_per = f" ({round(len(inflow) / analyst_count, 1)}/analyst)" if analyst_count else ''
+        closed_per = f" ({round(len(outflow) / analyst_count, 1)}/analyst)" if analyst_count else ''
+
+        # ── Performance Score ─────────────────────────────────────
+        from src.components.secops_shift_metrics import calculate_performance_score, extract_sla_metrics
+        sla_metrics = extract_sla_metrics(inflow)
+        score = calculate_performance_score(
+            len(inflow), len(outflow), sla_metrics, analyst_count
+        )
+
+        # ── Header ─────────────────────────────────────────────────
+        header = Container(
+            style=options.ContainerStyle.ACCENT,
+            bleed=True,
+            items=[
                 TextBlock(
-                    text="Previous Shift Performance",
+                    text="📊 Previous Shift Performance",
                     weight=FontWeight.BOLDER,
-                    color=Colors.ACCENT,
-                    size=FontSize.DEFAULT,
+                    size=FontSize.LARGE,
+                    color=Colors.LIGHT,
                     horizontalAlignment=HorizontalAlignment.CENTER,
                 ),
-                FactSet(
-                    facts=[
-                        Fact(title="Shift Lead", value=previous_shift_staffing_data['senior_analysts'][0]),
-                        Fact(title="Tickets ack'ed", value=str(len(inflow))),
-                        Fact(title="Tickets closed",
-                             value=f"{len(outflow)}"),
-                        Fact(title="MTPs",
-                             value=', '.join([ticket['id'] for ticket in malicious_true_positives])),
-                        Fact(title="SLA Breaches",
-                             value=f"Resp- {len(response_sla_breaches)} [{', '.join(['X#' + breach['id'] for breach in response_sla_breaches])}]\n"
-                                   f"Cont- {len(containment_sla_breaches)} [{', '.join(['X#' + breach['id'] for breach in containment_sla_breaches])}]"),
-                        Fact(title="MTT (min:sec)",
-                             value=f"Respond- {int(mean_time_to_respond // 60)}:{int(mean_time_to_respond % 60):02d} \n"
-                                   f"Contain- {int(mean_time_to_contain // 60)}:{int(mean_time_to_contain % 60):02d}"),
-                        Fact(title="IOCs blocked", value=iocs_blocked or ""),
-                        Fact(title="Hosts contained", value=hosts_contained or ""),
-                        Fact(title="Tuning requests", value=', '.join(tuning_requests_submitted) or "")
-                    ]
-                )
+                TextBlock(
+                    text=f"{prev_shift_name.capitalize()} Shift · {target_date.strftime('%b %d, %Y')} · Score: [{score}/10](http://gdnr.the company.com/shift-performance?shift_id={target_date.strftime('%Y-%m-%d')}_{prev_shift_name})",
+                    size=FontSize.SMALL,
+                    color=Colors.LIGHT,
+                    horizontalAlignment=HorizontalAlignment.CENTER,
+                    spacing=options.Spacing.NONE,
+                ),
             ]
+        )
+
+        # ── Team ──────────────────────────────────────────────────
+        team_section = FactSet(
+            separator=True,
+            facts=[
+                Fact(title="👤 Shift Lead", value=previous_shift_staffing_data['senior_analysts'][0]),
+                Fact(title="👥 Analysts", value=analysts_str),
+            ]
+        )
+
+        # ── Key metrics (big numbers) ────────────────────────────
+        mtp_ids = ', '.join([
+            f"[{ticket['id']}]({config.xsoar_prod_ui_base_url}/Custom/caseinfoid/{ticket['id']})"
+            for ticket in malicious_true_positives
+        ])
+        ticket_stats = ColumnSet(
+            separator=True,
+            spacing=options.Spacing.MEDIUM,
+            columns=[
+                Column(
+                    width="stretch",
+                    verticalContentAlignment=VerticalContentAlignment.CENTER,
+                    items=[
+                        TextBlock(
+                            text=str(len(inflow)),
+                            size=FontSize.EXTRA_LARGE,
+                            weight=FontWeight.BOLDER,
+                            color=Colors.ACCENT,
+                            horizontalAlignment=HorizontalAlignment.CENTER,
+                        ),
+                        TextBlock(
+                            text="Ack'ed",
+                            size=FontSize.SMALL,
+                            weight=FontWeight.BOLDER,
+                            horizontalAlignment=HorizontalAlignment.CENTER,
+                            spacing=options.Spacing.NONE,
+                        ),
+                        TextBlock(
+                            text=acked_per.strip(),
+                            size=FontSize.SMALL,
+                            isSubtle=True,
+                            horizontalAlignment=HorizontalAlignment.CENTER,
+                            spacing=options.Spacing.NONE,
+                        ),
+                    ],
+                ),
+                Column(
+                    width="stretch",
+                    verticalContentAlignment=VerticalContentAlignment.CENTER,
+                    items=[
+                        TextBlock(
+                            text=str(len(outflow)),
+                            size=FontSize.EXTRA_LARGE,
+                            weight=FontWeight.BOLDER,
+                            color=Colors.GOOD,
+                            horizontalAlignment=HorizontalAlignment.CENTER,
+                        ),
+                        TextBlock(
+                            text="Closed",
+                            size=FontSize.SMALL,
+                            weight=FontWeight.BOLDER,
+                            horizontalAlignment=HorizontalAlignment.CENTER,
+                            spacing=options.Spacing.NONE,
+                        ),
+                        TextBlock(
+                            text=closed_per.strip(),
+                            size=FontSize.SMALL,
+                            isSubtle=True,
+                            horizontalAlignment=HorizontalAlignment.CENTER,
+                            spacing=options.Spacing.NONE,
+                        ),
+                    ],
+                ),
+                Column(
+                    width="stretch",
+                    verticalContentAlignment=VerticalContentAlignment.CENTER,
+                    items=[
+                        TextBlock(
+                            text=str(len(malicious_true_positives)),
+                            size=FontSize.EXTRA_LARGE,
+                            weight=FontWeight.BOLDER,
+                            color=Colors.ATTENTION if malicious_true_positives else Colors.DEFAULT,
+                            horizontalAlignment=HorizontalAlignment.CENTER,
+                        ),
+                        TextBlock(
+                            text="MTPs",
+                            size=FontSize.SMALL,
+                            weight=FontWeight.BOLDER,
+                            horizontalAlignment=HorizontalAlignment.CENTER,
+                            spacing=options.Spacing.NONE,
+                        ),
+                        TextBlock(
+                            text=mtp_ids,
+                            size=FontSize.SMALL,
+                            isSubtle=True,
+                            horizontalAlignment=HorizontalAlignment.CENTER,
+                            spacing=options.Spacing.NONE,
+                            wrap=True,
+                        ),
+                    ],
+                ),
+            ]
+        )
+
+        # ── SLA & Response Times ─────────────────────────────────
+        sla_emoji = "🔴" if (response_sla_breaches or containment_sla_breaches) else "✅"
+        performance_section = FactSet(
+            separator=True,
+            facts=[
+                Fact(
+                    title=f"{sla_emoji} SLA Breaches",
+                    value=f"Resp- {len(response_sla_breaches)} [{', '.join(['X#' + b['id'] for b in response_sla_breaches])}]\n"
+                          f"Cont- {len(containment_sla_breaches)} [{', '.join(['X#' + b['id'] for b in containment_sla_breaches])}]"
+                ),
+                Fact(
+                    title="⏱️ MTT (min:sec)",
+                    value=f"Respond- {int(mean_time_to_respond // 60)}:{int(mean_time_to_respond % 60):02d}\n"
+                          f"Contain- {int(mean_time_to_contain // 60)}:{int(mean_time_to_contain % 60):02d}"
+                ),
+            ]
+        )
+
+        # ── Actions & Indicators ─────────────────────────────────
+        actions_section = FactSet(
+            separator=True,
+            facts=[
+                Fact(title="🛡️ IOCs blocked", value=iocs_blocked or "—"),
+                Fact(title="💻 Hosts contained", value=hosts_contained or "—"),
+                Fact(title="🔧 Tuning requests", value=', '.join(tuning_requests_submitted) or "—"),
+            ]
+        )
+
+        shift_performance = AdaptiveCard(
+            body=[header, team_section, ticket_stats, performance_section, actions_section]
         )
         fun_message = random.choice(SHIFT_PERFORMANCE_MESSAGES)
         webex_api.messages.create(
@@ -403,13 +814,16 @@ def announce_shift_change(shift_name: str, room_id: str, sleep_time: int = 30) -
         # Prepare all shift data
         shift_data = ShiftChangeFormatter.prepare_shift_data(shift_name)
 
-        # Create and send message
-        message_text = _create_shift_change_message(shift_name, shift_data)
+        # Create and send Adaptive Card
+        shift_card = _create_shift_change_card(shift_name, shift_data)
         fun_message = random.choice(SHIFT_CHANGE_MESSAGES)
         webex_api.messages.create(
             roomId=room_id,
             text=fun_message,
-            markdown=message_text
+            attachments=[{
+                "contentType": "application/vnd.microsoft.card.adaptive",
+                "content": shift_card.to_dict()
+            }]
         )
 
         # Wait before sending performance message
@@ -469,14 +883,14 @@ def send_daily_operational_report_charts(room_id: str = None) -> None:
             'Open vs Closed - 12 Month Trend.png',
         ]
 
-        #         # Add ThreatCon chart only if level is not green
-        #         try:
-        #             threatcon_data = load_threatcon_data(THREAT_CON_FILE)
-        #             if threatcon_data.get('level', 'green').lower() != 'green':
-        #                 dor_charts.append('Threatcon Level.png')
-        #                 logger.info(f"🚨 ThreatCon level is {threatcon_data['level'].upper()} - including chart")
-        #         except Exception as tc_err:
-        #             logger.warning(f"Could not check ThreatCon level: {tc_err}")
+        # Add ThreatCon chart only if level is not green
+        try:
+            threatcon_data = load_threatcon_data(THREAT_CON_FILE)
+            if threatcon_data.get('level', 'green').lower() != 'green':
+                dor_charts.append('Threatcon Level.png')
+                logger.info(f"🚨 ThreatCon level is {threatcon_data['level'].upper()} - including chart")
+        except Exception as tc_err:
+            logger.warning(f"Could not check ThreatCon level: {tc_err}")
 
         for chart in dor_charts:
             chart_path = secops_charts_path / chart
@@ -524,13 +938,32 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Test announcements to dev test space')
     parser.add_argument('--dor', action='store_true', help='Send DOR charts and region table')
+    parser.add_argument('--shift-change', choices=['morning', 'afternoon', 'night'],
+                        help='Send shift change card for given shift')
     args = parser.parse_args()
 
-    if not args.dor:
-        print("Usage: python -m src.secops.announcements --dor")
+    if not args.dor and not args.shift_change:
+        print("Usage: python -m src.secops.announcements --dor | --shift-change {morning,afternoon,night}")
         print("\nTests will be sent to dev test space (ROOM_ID)")
         exit(1)
 
     print(f"🧪 Testing announcements to test space...")
-    print("\n📊 Sending DOR charts and region table...")
-    send_daily_operational_report_charts()
+
+    if args.shift_change:
+        print(f"\n🔔 Sending shift change card for '{args.shift_change}' shift...")
+        shift_data = ShiftChangeFormatter.prepare_shift_data(args.shift_change)
+        shift_card = _create_shift_change_card(args.shift_change, shift_data)
+        fun_message = random.choice(SHIFT_CHANGE_MESSAGES)
+        webex_api.messages.create(
+            roomId=ROOM_ID,
+            text=fun_message,
+            attachments=[{
+                "contentType": "application/vnd.microsoft.card.adaptive",
+                "content": shift_card.to_dict()
+            }]
+        )
+        print("✅ Shift change card sent!")
+
+    if args.dor:
+        print("\n📊 Sending DOR charts and region table...")
+        send_daily_operational_report_charts()

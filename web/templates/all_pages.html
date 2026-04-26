@@ -1,0 +1,346 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'All Pages' %}
+{% set page_title_left_icon = '📂' %}
+{% set page_title_right_icon = '🗂️' %}
+
+{% block extra_css %}
+<style>
+/* --- All Pages Directory --- */
+.ap-container { max-width: 1200px; margin: 24px auto; padding: 0 20px 40px; }
+
+/* Sticky search bar */
+.ap-search-wrap {
+    position: sticky; top: 0; z-index: 20;
+    margin: 0 -20px 24px; padding: 14px 20px;
+    background: rgba(248,250,252,0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(148,163,184,0.25);
+}
+.ap-search-box {
+    position: relative; max-width: 520px; margin: 0 auto;
+}
+.ap-search-box::before {
+    content: '🔎'; position: absolute; left: 14px; top: 50%;
+    transform: translateY(-50%); font-size: 1rem; opacity: 0.6;
+    pointer-events: none;
+}
+.ap-search-input {
+    width: 100%; box-sizing: border-box;
+    padding: 11px 40px 11px 40px;
+    border: 1px solid rgba(0,70,173,0.25);
+    border-radius: 999px;
+    background: #fff; color: #1e293b;
+    font-size: 0.95rem; font-weight: 500;
+    outline: none; transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(0,70,173,0.06);
+}
+.ap-search-input:focus {
+    border-color: rgba(0,70,173,0.55);
+    box-shadow: 0 2px 10px rgba(0,70,173,0.18);
+}
+.ap-search-clear {
+    position: absolute; right: 10px; top: 50%;
+    transform: translateY(-50%);
+    border: none; background: transparent;
+    font-size: 1.1rem; color: #64748b; cursor: pointer;
+    padding: 4px 8px; border-radius: 50%;
+    display: none;
+}
+.ap-search-clear:hover { background: rgba(148,163,184,0.2); color: #1e293b; }
+.ap-search-box.has-text .ap-search-clear { display: block; }
+.ap-search-hint {
+    text-align: center; font-size: 0.78rem; color: #64748b;
+    margin-top: 6px;
+}
+.ap-no-results {
+    text-align: center; padding: 40px 20px;
+    color: #64748b; font-size: 0.95rem;
+    display: none;
+}
+.ap-no-results.show { display: block; }
+
+.ap-section { margin-bottom: 32px; }
+.ap-section.ap-hidden { display: none; }
+.ap-section-title {
+    font-size: 1.15rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    margin: 0 0 14px 4px; display: flex; align-items: center; gap: 8px;
+    color: var(--ap-accent, #475569);
+}
+.ap-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 14px;
+}
+.ap-card {
+    display: flex; align-items: center; gap: 14px;
+    padding: 18px 20px;
+    background: linear-gradient(135deg, var(--ap-accent-bg-a, rgba(0,70,173,0.06)) 0%, var(--ap-accent-bg-b, rgba(0,166,81,0.06)) 100%);
+    border: 1px solid var(--ap-accent-border, rgba(0,70,173,0.15));
+    border-left: 4px solid var(--ap-accent, rgba(0,70,173,0.5));
+    border-radius: 14px;
+    text-decoration: none; color: #1e293b;
+    font-weight: 600; font-size: 0.95rem;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+.ap-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px var(--ap-accent-shadow, rgba(0,70,173,0.18));
+    border-color: var(--ap-accent, rgba(0,70,173,0.35));
+}
+.ap-card.ap-hidden { display: none; }
+.ap-card-icon { font-size: 1.6rem; flex-shrink: 0; }
+.ap-card-label { line-height: 1.25; }
+
+/* Per-section accent colors (driven by data-accent on .ap-section) */
+.ap-section[data-accent="blue"]   { --ap-accent: #0046ad; --ap-accent-bg-a: rgba(0,70,173,0.07); --ap-accent-bg-b: rgba(0,70,173,0.02); --ap-accent-border: rgba(0,70,173,0.18); --ap-accent-shadow: rgba(0,70,173,0.20); }
+.ap-section[data-accent="green"]  { --ap-accent: #00a651; --ap-accent-bg-a: rgba(0,166,81,0.08);  --ap-accent-bg-b: rgba(0,166,81,0.02);  --ap-accent-border: rgba(0,166,81,0.20); --ap-accent-shadow: rgba(0,166,81,0.22); }
+.ap-section[data-accent="orange"] { --ap-accent: #d97706; --ap-accent-bg-a: rgba(217,119,6,0.08); --ap-accent-bg-b: rgba(217,119,6,0.02); --ap-accent-border: rgba(217,119,6,0.22); --ap-accent-shadow: rgba(217,119,6,0.22); }
+.ap-section[data-accent="purple"] { --ap-accent: #7c3aed; --ap-accent-bg-a: rgba(124,58,237,0.08); --ap-accent-bg-b: rgba(124,58,237,0.02); --ap-accent-border: rgba(124,58,237,0.22); --ap-accent-shadow: rgba(124,58,237,0.22); }
+.ap-section[data-accent="gold"]   { --ap-accent: #ca8a04; --ap-accent-bg-a: rgba(202,138,4,0.10); --ap-accent-bg-b: rgba(202,138,4,0.02); --ap-accent-border: rgba(202,138,4,0.25); --ap-accent-shadow: rgba(202,138,4,0.25); }
+
+/* Frequent section */
+#ap-frequent { display: none; }
+#ap-frequent.show { display: block; }
+#ap-frequent .ap-card-badge {
+    margin-left: auto; font-size: 0.7rem; font-weight: 700;
+    color: #ca8a04; background: rgba(202,138,4,0.12);
+    padding: 2px 7px; border-radius: 999px;
+}
+
+/* Dark mode */
+body.dark-mode .ap-search-wrap { background: rgba(15,23,42,0.88); border-bottom-color: rgba(148,163,184,0.18); }
+body.dark-mode .ap-search-input { background: #1e293b; color: #e2e8f0; border-color: rgba(148,163,184,0.3); }
+body.dark-mode .ap-search-input:focus { border-color: rgba(0,166,81,0.6); }
+body.dark-mode .ap-card { color: #e2e8f0; background: linear-gradient(135deg, rgba(30,41,59,0.7) 0%, rgba(15,23,42,0.7) 100%); }
+body.dark-mode .ap-card:hover { background: linear-gradient(135deg, rgba(30,41,59,0.9) 0%, var(--ap-accent-bg-a) 100%); }
+body.dark-mode { background: #0f172a; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ap-container">
+
+    <div class="ap-search-wrap">
+        <div class="ap-search-box" id="ap-search-box">
+            <input type="text" id="ap-search" class="ap-search-input"
+                   placeholder="Search pages… (type to filter)" autocomplete="off" spellcheck="false">
+            <button type="button" class="ap-search-clear" id="ap-search-clear" title="Clear">✕</button>
+        </div>
+        <div class="ap-search-hint">Tip: press <kbd>/</kbd> to jump to search · <kbd>Esc</kbd> to clear</div>
+    </div>
+
+    <div class="ap-section" id="ap-frequent" data-accent="gold">
+        <div class="ap-section-title">⭐ Frequent</div>
+        <div class="ap-grid" id="ap-frequent-grid"></div>
+    </div>
+
+    <div class="ap-section" data-accent="blue">
+        <div class="ap-section-title">📊 Dashboards & Analytics</div>
+        <div class="ap-grid">
+            <a href="/" target="_blank" class="ap-card"><span class="ap-card-icon">🏠</span><span class="ap-card-label">Home</span></a>
+            <a href="/meaningful-metrics" target="_blank" class="ap-card"><span class="ap-card-icon">💹</span><span class="ap-card-label">Analytics</span></a>
+            <a href="/shift-performance" target="_blank" class="ap-card"><span class="ap-card-icon">⚖️</span><span class="ap-card-label">Shift Performance</span></a>
+            <a href="/epp-tagging-metrics" target="_blank" class="ap-card"><span class="ap-card-icon">🏷️</span><span class="ap-card-label">EPP Tagging Metrics</span></a>
+            <a href="/threat-intel-dashboard" target="_blank" class="ap-card"><span class="ap-card-icon">🕵️</span><span class="ap-card-label">Threat Intel Dashboard</span></a>
+            <a href="/detection-rules" target="_blank" class="ap-card"><span class="ap-card-icon">🛡️</span><span class="ap-card-label">Detection Rules Catalog</span></a>
+            <a href="/defense-pulse" target="_blank" class="ap-card"><span class="ap-card-icon">💓</span><span class="ap-card-label">control-efficacy analytics</span></a>
+            <a href="/xsoar" target="_blank" class="ap-card"><span class="ap-card-icon">📋</span><span class="ap-card-label">XSOAR Dashboard</span></a>
+            <a href="/domain-monitoring" target="_blank" class="ap-card"><span class="ap-card-icon">📡</span><span class="ap-card-label">Domain Monitoring</span></a>
+            <a href="/powerbi" target="_blank" class="ap-card"><span class="ap-card-icon">📊</span><span class="ap-card-label">Power BI Explorer</span></a>
+            <a href="/qradar-chat" target="_blank" class="ap-card"><span class="ap-card-icon">🤖</span><span class="ap-card-label">QRadar AQL Explorer</span></a>
+            <a href="/pir" target="_blank" class="ap-card"><span class="ap-card-icon">🎯</span><span class="ap-card-label">PIR Management</span></a>
+        </div>
+    </div>
+
+    <div class="ap-section" data-accent="green">
+        <div class="ap-section-title">📝 Forms</div>
+        <div class="ap-grid">
+            <a href="/msoc-form" target="_blank" class="ap-card"><span class="ap-card-icon">📋️</span><span class="ap-card-label">MSOC Form</span></a>
+            <a href="/speak-up-form" target="_blank" class="ap-card"><span class="ap-card-icon">📣</span><span class="ap-card-label">Speak Up Form</span></a>
+            <a href="/xsoar-ticket-import-form" target="_blank" class="ap-card"><span class="ap-card-icon">📥</span><span class="ap-card-label">XSOAR Ticket Import</span></a>
+            <a href="/travel-form" target="_blank" class="ap-card"><span class="ap-card-icon">✈️</span><span class="ap-card-label">Travel Form</span></a>
+            <a href="/red-team-testing-form" target="_blank" class="ap-card"><span class="ap-card-icon">🧪</span><span class="ap-card-label">Red Team Testing</span></a>
+            <a href="/ai-intake" target="_blank" class="ap-card"><span class="ap-card-icon">🤖</span><span class="ap-card-label">AI Project Intake</span></a>
+            <a href="/ai-intake-submissions" target="_blank" class="ap-card"><span class="ap-card-icon">📊</span><span class="ap-card-label">AI Intake Submissions</span></a>
+            <a href="/customer-assurance" target="_blank" class="ap-card"><span class="ap-card-icon">🛡️</span><span class="ap-card-label">Customer Assurance</span></a>
+            <a href="/customer-assurance/requests" target="_blank" class="ap-card"><span class="ap-card-icon">📋</span><span class="ap-card-label">Customer Assurance Queue</span></a>
+            <a href="/ruai-screening" target="_blank" class="ap-card"><span class="ap-card-icon">⚖️</span><span class="ap-card-label">RUAI Screening</span></a>
+            <a href="/ruai-dashboard" target="_blank" class="ap-card"><span class="ap-card-icon">📋</span><span class="ap-card-label">RUAI Dashboard</span></a>
+            <a href="/oncall" target="_blank" class="ap-card"><span class="ap-card-icon">📞</span><span class="ap-card-label">On-Call Schedule</span></a>
+            <a href="/roster" target="_blank" class="ap-card"><span class="ap-card-icon">👥</span><span class="ap-card-label">Daily Roster</span></a>
+            <a href="/escalation-contacts" target="_blank" class="ap-card"><span class="ap-card-icon">📇</span><span class="ap-card-label">DnR Contacts</span></a>
+            <a href="/favorite-urls" target="_blank" class="ap-card"><span class="ap-card-icon">🔗</span><span class="ap-card-label">DnR URLs</span></a>
+            <a href="/docs-library" target="_blank" class="ap-card"><span class="ap-card-icon">📚</span><span class="ap-card-label">Docs Library</span></a>
+            <a href="/meeting-qa" target="_blank" class="ap-card"><span class="ap-card-icon">📝</span><span class="ap-card-label">Meeting Minutes QA</span></a>
+            <a href="/recap" target="_blank" class="ap-card"><span class="ap-card-icon">🎙️</span><span class="ap-card-label">Meeting Recap</span></a>
+            <a href="/wiki" target="_blank" class="ap-card"><span class="ap-card-icon">🧠</span><span class="ap-card-label">GDnR Wiki</span></a>
+        </div>
+    </div>
+
+    <div class="ap-section" data-accent="orange">
+        <div class="ap-section-title">🔧 Security Tools</div>
+        <div class="ap-grid">
+            <a href="/apt-other-names-search" target="_blank" class="ap-card"><span class="ap-card-icon">🔎</span><span class="ap-card-label">APT Other Names Search</span></a>
+            <a href="/domain-lookalike" target="_blank" class="ap-card"><span class="ap-card-icon">🌐</span><span class="ap-card-label">Domain Lookalike Detector</span></a>
+            <a href="/cribl-diagnostics" target="_blank" class="ap-card"><span class="ap-card-icon">📡</span><span class="ap-card-label">Cribl Edge Diagnostics</span></a>
+            <a href="/qradar" target="_blank" class="ap-card"><span class="ap-card-icon">📡</span><span class="ap-card-label">QRadar Explorer</span></a>
+            <a href="/db-security" target="_blank" class="ap-card"><span class="ap-card-icon">🛢️</span><span class="ap-card-label">Database Security</span></a>
+            <a href="/db-config" target="_blank" class="ap-card"><span class="ap-card-icon">⚙️</span><span class="ap-card-label">DB Config</span></a>
+            <a href="/ai-spm" target="_blank" class="ap-card"><span class="ap-card-icon">🤖</span><span class="ap-card-label">AI SPM</span></a>
+            <a href="/dspm" target="_blank" class="ap-card"><span class="ap-card-icon">🛡️</span><span class="ap-card-label">DSPM</span></a>
+            <a href="/exposed-api-scanner" target="_blank" class="ap-card"><span class="ap-card-icon">🔑</span><span class="ap-card-label">Exposed API Scanner</span></a>
+            <a href="/cyber-simulator" target="_blank" class="ap-card"><span class="ap-card-icon">🎮</span><span class="ap-card-label">Cyber Simulator</span></a>
+            <a href="/oe-detection" target="_blank" class="ap-card"><span class="ap-card-icon">🔍</span><span class="ap-card-label">OE Detection</span></a>
+            <a href="/salesforce-scanner" target="_blank" class="ap-card"><span class="ap-card-icon">☁️</span><span class="ap-card-label">Salesforce Scanner</span></a>
+            <a href="/s3-scanner" target="_blank" class="ap-card"><span class="ap-card-icon">🪣</span><span class="ap-card-label">S3 Bucket Scanner</span></a>
+            <a href="/ticket-cannon" target="_blank" class="ap-card"><span class="ap-card-icon">🔇</span><span class="ap-card-label">Ticket Cannon Silencer</span></a>
+            <a href="/cyber-tool-inventory" target="_blank" class="ap-card"><span class="ap-card-icon">🧰</span><span class="ap-card-label">Cyber Tool Inventory</span></a>
+        </div>
+    </div>
+
+    <div class="ap-section" data-accent="purple">
+        <div class="ap-section-title">🔒 Admin</div>
+        <div class="ap-grid">
+            <a href="/traffic-logs" target="_blank" class="ap-card"><span class="ap-card-icon">📈</span><span class="ap-card-label">Traffic Logs</span></a>
+            <a href="/llm-usage" target="_blank" class="ap-card"><span class="ap-card-icon">🤖</span><span class="ap-card-label">LLM Usage</span></a>
+            <a href="/connectors" target="_blank" class="ap-card"><span class="ap-card-icon">🔌</span><span class="ap-card-label">Connectors</span></a>
+            {% if config.logs_viewer_url %}
+            <a href="{{ config.logs_viewer_url }}" target="_blank" rel="noopener noreferrer" class="ap-card"><span class="ap-card-icon">🎛️</span><span class="ap-card-label">Mission Control</span></a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="ap-no-results" id="ap-no-results">
+        No pages match your search. <a href="#" id="ap-clear-link">Clear</a>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof initTheme === 'function') initTheme();
+
+    // --- Frequent-pages tracking (localStorage) ---
+    const FREQ_KEY = 'ap_card_clicks_v1';
+    const FREQ_TOP_N = 6;
+
+    function loadFreq() {
+        try { return JSON.parse(localStorage.getItem(FREQ_KEY) || '{}'); }
+        catch (e) { return {}; }
+    }
+    function saveFreq(m) {
+        try { localStorage.setItem(FREQ_KEY, JSON.stringify(m)); } catch (e) {}
+    }
+    function bumpFreq(href) {
+        if (!href) return;
+        const m = loadFreq();
+        const prev = m[href] || { count: 0, last: 0 };
+        m[href] = { count: prev.count + 1, last: Date.now() };
+        saveFreq(m);
+    }
+
+    // Build the Frequent row from the top-N most-clicked cards
+    function renderFrequent() {
+        const freq = loadFreq();
+        const entries = Object.entries(freq)
+            .filter(([, v]) => v && v.count > 0)
+            .sort((a, b) => (b[1].count - a[1].count) || (b[1].last - a[1].last))
+            .slice(0, FREQ_TOP_N);
+        const section = document.getElementById('ap-frequent');
+        const grid = document.getElementById('ap-frequent-grid');
+        grid.innerHTML = '';
+        if (entries.length === 0) { section.classList.remove('show'); return; }
+
+        // Build a href → source-card map from the real sections (skip the frequent grid itself)
+        const sourceCards = document.querySelectorAll('.ap-section:not(#ap-frequent) .ap-card');
+        const byHref = {};
+        sourceCards.forEach(c => { byHref[c.getAttribute('href')] = c; });
+
+        let added = 0;
+        entries.forEach(([href, v]) => {
+            const src = byHref[href];
+            if (!src) return;
+            const clone = src.cloneNode(true);
+            clone.classList.remove('ap-hidden');
+            const badge = document.createElement('span');
+            badge.className = 'ap-card-badge';
+            badge.textContent = '×' + v.count;
+            clone.appendChild(badge);
+            grid.appendChild(clone);
+            added++;
+        });
+        if (added > 0) section.classList.add('show'); else section.classList.remove('show');
+    }
+
+    // Bump counter on click (for the original cards; the Frequent clones inherit the listener via delegation)
+    document.addEventListener('click', function(ev) {
+        const card = ev.target.closest('.ap-card');
+        if (!card) return;
+        // For clones inside #ap-frequent, use the href directly (same href as source)
+        bumpFreq(card.getAttribute('href'));
+    }, true);
+
+    renderFrequent();
+
+    // --- Search / filter ---
+    const input = document.getElementById('ap-search');
+    const box = document.getElementById('ap-search-box');
+    const clearBtn = document.getElementById('ap-search-clear');
+    const noResults = document.getElementById('ap-no-results');
+    const clearLink = document.getElementById('ap-clear-link');
+
+    // Cache haystacks once for perf
+    const realSections = Array.from(document.querySelectorAll('.ap-section')).filter(s => s.id !== 'ap-frequent');
+    const sectionData = realSections.map(section => {
+        const cards = Array.from(section.querySelectorAll('.ap-card')).map(card => ({
+            el: card,
+            hay: (card.querySelector('.ap-card-label')?.textContent || '').toLowerCase()
+        }));
+        return { el: section, cards };
+    });
+    const frequentSection = document.getElementById('ap-frequent');
+
+    function applyFilter(qRaw) {
+        const q = (qRaw || '').trim().toLowerCase();
+        box.classList.toggle('has-text', q.length > 0);
+
+        // Hide the Frequent row while filtering — the user wants to find something specific
+        if (frequentSection) frequentSection.style.display = q ? 'none' : '';
+
+        let anyVisible = 0;
+        sectionData.forEach(({ el, cards }) => {
+            let secVisible = 0;
+            cards.forEach(({ el: cardEl, hay }) => {
+                const match = !q || hay.includes(q);
+                cardEl.classList.toggle('ap-hidden', !match);
+                if (match) secVisible++;
+            });
+            el.classList.toggle('ap-hidden', secVisible === 0);
+            anyVisible += secVisible;
+        });
+        noResults.classList.toggle('show', q.length > 0 && anyVisible === 0);
+    }
+
+    input.addEventListener('input', e => applyFilter(e.target.value));
+    clearBtn.addEventListener('click', () => { input.value = ''; applyFilter(''); input.focus(); });
+    clearLink.addEventListener('click', e => { e.preventDefault(); input.value = ''; applyFilter(''); input.focus(); });
+
+    // Keyboard shortcuts: "/" focuses search, Esc clears
+    document.addEventListener('keydown', e => {
+        const tag = (e.target.tagName || '').toLowerCase();
+        const typing = tag === 'input' || tag === 'textarea' || e.target.isContentEditable;
+        if (e.key === '/' && !typing) { e.preventDefault(); input.focus(); input.select(); }
+        else if (e.key === 'Escape' && document.activeElement === input) {
+            input.value = ''; applyFilter(''); input.blur();
+        }
+    });
+
+    // Autofocus on load (delayed so it doesn't fight with any layout work)
+    setTimeout(() => { input.focus(); }, 50);
+});
+</script>
+{% endblock %}
