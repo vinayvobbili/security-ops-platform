@@ -5,27 +5,29 @@ title: Self-Healing Bot Architecture
 
 # Self-Healing Bot Architecture
 
-Production-grade chat bots with enterprise reliability patterns for 24/7 SOC operations.
+Production-grade chat bots with enterprise reliability patterns for 24/7 SOC operations — 14 bots in production across Webex Teams and Microsoft Teams.
 
 ---
 
 ## Overview
 
-The platform includes 10 production Webex bots, each with self-healing capabilities that ensure continuous operation without manual intervention.
+The platform runs 14 production chat bots — 11 on Webex Teams, 3 on Microsoft Teams — each with self-healing capabilities that keep them running without manual intervention.
 
-### Available Bots
+### Bot roles
 
-| Bot | Purpose |
-|-----|---------|
-| **the security assistant bot** | LLM-powered security investigation assistant |
-| **Hal9000** | Advanced LLM assistant with extended capabilities |
-| **the notification service** | Team collaboration and notifications |
-| **the orchestration service** | Automated security workflows |
-| **the alert triage service** | Metrics collection and reporting |
-| **the case orchestrator** | XSOAR integration and incident management |
-| **Tars** | Specialized operations |
-| **Money_Ball** | Analytics and statistics |
-| **Case** | Case management assistance |
+| Role | Purpose |
+|---|---|
+| **Security Assistant Bot** | LLM-powered investigation assistant with full tool access |
+| **Windows Triage Agent** | Specialized triage for Windows endpoint alerts |
+| **Notification Service** | Team collaboration and routine notifications |
+| **Orchestration Service** | Automated security workflows |
+| **Alert Triage Service** | Frontline alert triage and routing |
+| **Threat-Intel Service** | IOC enrichment and threat-intel queries |
+| **Case Orchestrator** | SOAR ticket lifecycle management |
+| **Metrics Service** | Operational metrics and reporting |
+| **Peer-Status Service** | Cross-team status sync |
+| **Control-Efficacy Analytics** | Detection coverage and BAS results |
+| **Teams Integrations** | Three Microsoft Teams bots for ticket lookup, host status, and on-call lookups |
 
 ---
 
@@ -108,8 +110,8 @@ When external services fail, bots provide fallback responses rather than failing
 │                    Bot Application Layer                     │
 │                                                             │
 │   ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐      │
-│   │ the security assistant bot │  │ the notification service │  │ the orchestration service  │  │ Others  │      │
-│   │   LLM   │  │  Collab │  │Workflow │  │   ...   │      │
+│   │Security │  │ Notify  │  │Workflow │  │ Others  │      │
+│   │Assistant│  │ Service │  │ Service │  │  ...    │      │
 │   └─────────┘  └─────────┘  └─────────┘  └─────────┘      │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
@@ -136,7 +138,7 @@ After=network.target
 [Service]
 Type=simple
 User=secops
-ExecStart=/usr/bin/python3 /opt/security-ops/webex_bots/pokedex.py
+ExecStart=/usr/bin/python3 /opt/security-ops/webex_bots/security_assistant.py
 Restart=always
 RestartSec=10
 

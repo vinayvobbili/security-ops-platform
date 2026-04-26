@@ -83,7 +83,7 @@ Team productivity metrics:
 │                             ▼                               │
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │                  Template Engine                      │   │
-│  │            30+ HTML templates with charts             │   │
+│  │            80+ HTML templates with charts             │   │
 │  └──────────────────────────────────────────────────────┘   │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
@@ -135,18 +135,18 @@ Uses Waitress WSGI server for production reliability:
 
 ```python
 from waitress import serve
-from web.web_server import app
+from web.app import app
 
-serve(app, host='0.0.0.0', port=5000, threads=4)
+serve(app, host='0.0.0.0', port=8080, threads=4)
 ```
 
 ### Development
 
 ```bash
 # Start development server
-python web/web_server.py
+python web/app.py
 
-# Access at http://localhost:5000
+# Access at http://localhost:8080
 ```
 
 ---

@@ -33,8 +33,8 @@ This platform follows a layered architecture designed for scalability, reliabili
 │   │  LLM            │  │  RAG Pipeline   │  │  Security       │    │
 │   │  Orchestration  │  │                 │  │  Tools          │    │
 │   │  ─────────────  │  │  ─────────────  │  │  ─────────────  │    │
-│   │  LangChain      │  │  ChromaDB       │  │  22 Tools       │    │
-│   │  Ollama         │  │  Embeddings     │  │  Investigation  │    │
+│   │  LangChain      │  │  ChromaDB       │  │  36 Tools       │    │
+│   │  mlx-lm         │  │  Embeddings     │  │  Investigation  │    │
 │   │  Tool Binding   │  │  Doc Processing │  │  Enrichment     │    │
 │   └────────┬────────┘  └────────┬────────┘  └────────┬────────┘    │
 └────────────┼────────────────────┼────────────────────┼──────────────┘
@@ -134,24 +134,27 @@ security-ops-platform/
 │   └── ...                  # 20+ more integrations
 │
 ├── my_bot/                   # AI/ML Layer
-│   ├── core/                # LLM orchestration (LangChain + Ollama)
-│   ├── tools/               # 22 security investigation tools
+│   ├── core/                # LLM orchestration (LangChain + mlx-lm)
+│   ├── tools/               # 36 security investigation tools
 │   ├── document/            # RAG document processing (ChromaDB)
 │   └── utils/               # AI utilities
 │
-├── webex_bots/              # User Interface - Chat Bots
-│   ├── pokedex.py           # LLM-powered security assistant
-│   ├── hal9000.py           # Advanced LLM assistant
-│   ├── toodles.py           # Team collaboration
-│   ├── jarvis.py            # Automated workflows
-│   ├── barnacles.py         # Metrics and reporting
-│   └── base/                # Shared bot architecture
+├── mcp_server/               # MCP Server - 31 tools, FastMCP
+│   ├── server.py            # FastMCP entry point
+│   └── tools/               # Per-capability tool modules
+│
+├── webex_bots/              # Chat Bots - Webex Teams
+│   └── ...                  # Bot processes + shared base classes
+│
+├── teams_bots/              # Chat Bots - Microsoft Teams
 │
 ├── web/                      # User Interface - Web Dashboard
-│   ├── web_server.py        # Flask application
-│   ├── routes/              # API endpoints (7 blueprints)
-│   ├── templates/           # HTML templates (30+)
+│   ├── app.py               # Flask application entrypoint
+│   ├── routes/              # API + page routes (blueprint-organized)
+│   ├── templates/           # 80+ HTML templates
 │   └── static/              # CSS, JS, assets
+│
+├── n8n_workflows/           # 35 importable n8n workflow JSONs
 │
 ├── src/                      # Core Services
 │   ├── components/          # Business logic modules
@@ -315,7 +318,7 @@ COPY . /app
 WORKDIR /app
 
 # Run with production WSGI server
-CMD ["python", "-m", "waitress", "--port=5000", "web.web_server:app"]
+CMD ["python", "-m", "waitress", "--port=8080", "web.app:app"]
 ```
 
 ### Service Management

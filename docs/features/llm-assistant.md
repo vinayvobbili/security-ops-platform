@@ -11,7 +11,7 @@ An AI investigation engine that augments SOC analyst capabilities through natura
 
 ## Overview
 
-The security assistant uses **Retrieval-Augmented Generation (RAG)** to combine LLM intelligence with real-time security data from 25 integrated tools. Analysts can ask questions in natural language and receive enriched, contextual responses.
+The security assistant uses **Retrieval-Augmented Generation (RAG)** to combine LLM intelligence with real-time security data from 36 integrated tools. Analysts can ask questions in natural language and receive enriched, contextual responses.
 
 ### Key Capabilities
 
@@ -23,7 +23,7 @@ The security assistant uses **Retrieval-Augmented Generation (RAG)** to combine 
 
 ---
 
-## Investigation Tools (25)
+## Investigation Tools (36)
 
 ### Endpoint Detection & Response
 
@@ -94,7 +94,7 @@ The security assistant uses **Retrieval-Augmented Generation (RAG)** to combine 
 ## Technical Implementation
 
 - **Framework**: LangChain with native tool binding
-- **LLM**: Ollama (local inference)
+- **LLM**: mlx-lm on Apple Silicon (local inference, OpenAI-compatible API)
 - **Vector Store**: ChromaDB for document embeddings
 - **Pattern**: Simple @tool decorators, no complex orchestration
 
