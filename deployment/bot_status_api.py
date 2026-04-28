@@ -96,14 +96,6 @@ BOTS = {
         'log_port': 8034,
         'systemd_service': 'ir-money-ball.service'
     },
-    'jarvis': {
-        'name': 'the orchestration service',
-        'emoji': '🛡️',
-        'process_pattern': 'webex_bots/jarvis',
-        'start_script': 'startup_scripts/start_jarvis.sh',
-        'log_port': 8035,
-        'systemd_service': 'ir-jarvis.service'
-    },
     'barnacles': {
         'name': 'the alert triage service',
         'emoji': '⚓',
@@ -111,22 +103,6 @@ BOTS = {
         'start_script': 'startup_scripts/start_barnacles.sh',
         'log_port': 8036,
         'systemd_service': 'ir-barnacles.service'
-    },
-    'tars': {
-        'name': 'the threat-intel service',
-        'emoji': '☁️',
-        'process_pattern': 'webex_bots/tars',
-        'start_script': 'startup_scripts/start_tars.sh',
-        'log_port': 8038,
-        'systemd_service': 'ir-tars.service'
-    },
-    'case': {
-        'name': 'CASE',
-        'emoji': '🏢',
-        'process_pattern': 'webex_bots/case',
-        'start_script': 'startup_scripts/start_case.sh',
-        'log_port': 8041,
-        'systemd_service': 'ir-case.service'
     },
     'jobs': {
         'name': 'IR Scheduler',

@@ -3,7 +3,7 @@
 # Currently configured for the security assistant bot, easily extendible to other bots
 
 # Bot Configuration - MODIFY THESE FOR OTHER BOTS
-BOT_NAME="pokedex"                    # Bot identifier (pokedex, hal9000, etc.)
+BOT_NAME="pokedex"                    # Bot identifier (pokedex, barnacles, etc.)
 BOT_PROCESS_NAME="pokedex.py"         # Process name to monitor
 BOT_LOG_FILE="pokedex.log"            # Log file name
 BOT_RESTART_SCRIPT="restart_pokedex.sh"  # Restart script name

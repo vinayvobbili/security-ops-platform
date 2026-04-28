@@ -393,7 +393,7 @@ def main():
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
     # Configure logging for standalone execution
-    # (when called from jarvis, logging is already configured)
+    # (when called from another module, logging is already configured)
     LOG_FILE = ROOT_DIRECTORY / "logs" / "invalid_ring_tags.log"
     LOG_FILE.parent.mkdir(exist_ok=True)
 

@@ -37,7 +37,6 @@ systemctl enable ir-msoar.service
 systemctl enable ir-money-ball.service
 systemctl enable ir-toodles.service
 systemctl enable ir-barnacles.service
-systemctl enable ir-jarvis.service
 echo "  ✓ Bot services enabled"
 echo ""
 
@@ -49,7 +48,6 @@ systemctl enable ir-log-viewer-barnacles.service
 systemctl enable ir-log-viewer-msoar.service
 systemctl enable ir-log-viewer-money-ball.service
 systemctl enable ir-log-viewer-toodles.service
-systemctl enable ir-log-viewer-jarvis.service
 echo "  ✓ Log viewer services enabled"
 echo ""
 
@@ -63,7 +61,6 @@ echo "  - ir-msoar         (the case orchestrator bot)"
 echo "  - ir-money-ball    (MoneyBall bot)"
 echo "  - ir-toodles       (the notification service bot)"
 echo "  - ir-barnacles     (the alert triage service bot)"
-echo "  - ir-jarvis        (the orchestration service bot)"
 echo ""
 echo "Available log viewer services:"
 echo "  - ir-log-viewer-all          (All services - port 8030)"
@@ -72,10 +69,9 @@ echo "  - ir-log-viewer-barnacles    (the alert triage service - port 8031)"
 echo "  - ir-log-viewer-msoar        (the case orchestrator - port 8032)"
 echo "  - ir-log-viewer-money-ball   (MoneyBall - port 8033)"
 echo "  - ir-log-viewer-toodles      (the notification service - port 8034)"
-echo "  - ir-log-viewer-jarvis       (the orchestration service - port 8036)"
 echo ""
 echo "Management commands:"
-echo "  Start all bots:     sudo systemctl start ir-scheduler ir-msoar ir-money-ball ir-toodles ir-barnacles ir-jarvis"
+echo "  Start all bots:     sudo systemctl start ir-scheduler ir-msoar ir-money-ball ir-toodles ir-barnacles"
 echo "  Start all viewers:  sudo systemctl start ir-log-viewer-*"
 echo "  Stop all:           sudo systemctl stop ir-*"
 echo "  Restart all:        sudo systemctl restart ir-*"
@@ -94,5 +90,4 @@ echo "  the alert triage service:     http://localhost:8031 (user: sirt, pass: s
 echo "  the case orchestrator:         http://localhost:8032 (user: sirt, pass: sirt)"
 echo "  MoneyBall:     http://localhost:8033 (user: sirt, pass: sirt)"
 echo "  the notification service:       http://localhost:8034 (user: sirt, pass: sirt)"
-echo "  the orchestration service:        http://localhost:8036 (user: sirt, pass: sirt)"
 echo ""

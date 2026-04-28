@@ -37,7 +37,7 @@ def main():
 
     # Step 1: Show current topology
     print("📊 Current Topology:")
-    print("   the notification service → the orchestration service → the alert triage service → Money_Ball → the notification service ⟲")
+    print("   the notification service → the alert triage service → Money_Ball → the notification service ⟲")
     print("   msoar → the notification service (spoke)")
     print()
 
@@ -48,8 +48,8 @@ def main():
     print("  1. Insert into main ring between Money_Ball and the notification service")
     print("     Result: ...Money_Ball → NewBot → the notification service...")
     print()
-    print("  2. Insert into main ring between the notification service and the orchestration service")
-    print("     Result: ...the notification service → NewBot → the orchestration service...")
+    print("  2. Insert into main ring between the notification service and the alert triage service")
+    print("     Result: ...the notification service → NewBot → the alert triage service...")
     print()
     print("  3. Create spoke (point new bot at existing bot)")
     print("     Result: NewBot → the notification service (no changes to other bots)")
@@ -96,7 +96,7 @@ def main():
         target = "toodles"
         predecessor = "money_ball"
     elif choice == "2":
-        target = "jarvis"
+        target = "barnacles"
         predecessor = "toodles"
     else:
         target = "toodles"

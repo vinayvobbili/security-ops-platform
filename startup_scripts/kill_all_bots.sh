@@ -1,7 +1,7 @@
 #!/bin/bash
 # Kill ALL bot instances (use before restart to clean up multiple instances)
 
-BOTS=("toodles" "barnacles" "money_ball" "msoar" "jarvis" "tars")
+BOTS=("toodles" "barnacles" "money_ball" "msoar")
 
 echo "🛑 Killing ALL bot instances..."
 echo "=================================================="

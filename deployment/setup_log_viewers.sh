@@ -219,19 +219,9 @@ cat > "$SCRIPT_DIR/log-viewer-index.html" <<'HTMLEOF'
             <p>MoneyBall bot logs</p>
         </a>
 
-        <a href="LOG_VIEWER_BASE_URL_PLACEHOLDER:8035" class="log-card" target="_blank">
-            <h3>🛡️ the orchestration service</h3>
-            <p>the orchestration service bot logs</p>
-        </a>
-
         <a href="LOG_VIEWER_BASE_URL_PLACEHOLDER:8036" class="log-card" target="_blank">
             <h3>⚓ the alert triage service</h3>
             <p>the alert triage service bot logs</p>
-        </a>
-
-        <a href="LOG_VIEWER_BASE_URL_PLACEHOLDER:8038" class="log-card" target="_blank">
-            <h3>🤖 the threat-intel service</h3>
-            <p>the threat-intel service bot logs</p>
         </a>
 
         <a href="LOG_VIEWER_BASE_URL_PLACEHOLDER:8037" class="log-card" target="_blank">
@@ -275,7 +265,7 @@ sudo cp "$SCRIPT_DIR/systemd"/ir-log-viewer-*.service /etc/systemd/system/
 sudo systemctl daemon-reload
 
 # Enable all services
-for service in all toodles msoar money-ball barnacles tars jobs jarvis; do
+for service in all toodles msoar money-ball barnacles jobs; do
     sudo systemctl enable ir-log-viewer-${service}.service
 done
 echo "  ✓ Systemd services installed and enabled"
@@ -297,7 +287,7 @@ echo ""
 
 # Start all log viewer services
 echo "Starting log viewer services..."
-for service in all toodles msoar money-ball barnacles tars jobs jarvis; do
+for service in all toodles msoar money-ball barnacles jobs; do
     sudo systemctl start ir-log-viewer-${service}.service
 done
 sleep 2
@@ -323,9 +313,7 @@ echo "  ${LOG_VIEWER_BASE_URL}:8031 - All Services (journalctl)"
 echo "  ${LOG_VIEWER_BASE_URL}:8032 - the notification service"
 echo "  ${LOG_VIEWER_BASE_URL}:8033 - the case orchestrator"
 echo "  ${LOG_VIEWER_BASE_URL}:8034 - MoneyBall"
-echo "  ${LOG_VIEWER_BASE_URL}:8035 - the orchestration service"
 echo "  ${LOG_VIEWER_BASE_URL}:8036 - the alert triage service"
-echo "  ${LOG_VIEWER_BASE_URL}:8038 - the threat-intel service"
 echo "  ${LOG_VIEWER_BASE_URL}:8037 - Scheduler"
 echo "  (Each protected with username: $LOG_VIEWER_USERNAME, password: $LOG_VIEWER_PASSWORD)"
 echo ""

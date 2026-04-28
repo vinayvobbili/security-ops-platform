@@ -108,7 +108,7 @@ def setup_logging(
     - Optional log rotation on startup (default: enabled)
 
     Args:
-        bot_name: Name of the bot (e.g., 'msoar', 'hal9000')
+        bot_name: Name of the bot (e.g., 'msoar', 'barnacles')
         log_level: Logging level for root logger (default: logging.INFO)
         log_dir: Directory for log files (default: 'logs')
         info_modules: List of module names to set to INFO level (useful when root is WARNING)

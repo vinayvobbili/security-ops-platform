@@ -55,10 +55,9 @@ def _read_csv(path: Path) -> list[dict]:
 
 
 def migrate_conversations(conn: sqlite3.Connection):
-    """Migrate pokedex, hal9000, win_ai conversation CSVs."""
+    """Migrate pokedex, win_ai conversation CSVs."""
     mapping = {
         "pokedex_conversations.csv": "pokedex",
-        "hal9000_conversations.csv": "hal9000",
         "win_ai_conversations.csv": "win_ai",
     }
     total = 0
@@ -104,11 +103,7 @@ def migrate_activity(conn: sqlite3.Connection):
     """Migrate decorator-based activity log CSVs."""
     files = [
         ("barnacles_activity_log.csv", "barnacles"),
-        ("tars_activity_log.csv", "tars"),
-        ("jarvis_activity_log.csv", "jarvis"),
-        ("jarvais_activity_log.csv", "jarvis"),
         ("moneyball_activity_log.csv", "moneyball"),
-        ("case_activity_log.csv", "case"),
         ("toodles_activity_log.csv", "toodles"),
     ]
     total = 0

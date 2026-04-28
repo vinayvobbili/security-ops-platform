@@ -173,46 +173,6 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _shutdown_handler)
     signal.signal(signal.SIGINT, _shutdown_handler)
 
-    # Automated CrowdStrike ring tagging (Mon/Thu 09:00 ET)
-    # Timeout: 90 min (60 min safety window + 30 min for tagging), non-blocking
-    logger.info("Scheduling automated CrowdStrike ring tagging (Mon/Thu 09:00 ET)...")
-    def _run_cs_ring_tagging():
-        from webex_bots.jarvis import run_automated_ring_tagging_workflow
-        run_automated_ring_tagging_workflow()
-
-    def _run_tanium_ring_tagging():
-        from webex_bots.tars import run_automated_ring_tagging_workflow
-        run_automated_ring_tagging_workflow()
-
-    schedule.every().monday.at('09:00', eastern).do(
-        lambda: safe_run(_run_cs_ring_tagging, name="automated_cs_ring_tagging_monday", timeout=5400, blocking=False)
-    )
-    schedule.every().thursday.at('09:00', eastern).do(
-        lambda: safe_run(_run_cs_ring_tagging, name="automated_cs_ring_tagging_thursday", timeout=5400, blocking=False)
-    )
-
-    # Automated Tanium Cloud ring tagging (Mon/Thu at 4 AM, 12 PM, 8 PM ET)
-    # Timeout: 90 min (60 min safety window + 30 min for tagging), non-blocking
-    logger.info("Scheduling automated Tanium Cloud ring tagging (Mon/Thu 04:00, 12:00, 20:00 ET)...")
-    schedule.every().monday.at('04:00', eastern).do(
-        lambda: safe_run(_run_tanium_ring_tagging, name="automated_tanium_ring_tagging_mon_04am", timeout=5400, blocking=False)
-    )
-    schedule.every().monday.at('12:00', eastern).do(
-        lambda: safe_run(_run_tanium_ring_tagging, name="automated_tanium_ring_tagging_mon_12pm", timeout=5400, blocking=False)
-    )
-    schedule.every().monday.at('20:00', eastern).do(
-        lambda: safe_run(_run_tanium_ring_tagging, name="automated_tanium_ring_tagging_mon_08pm", timeout=5400, blocking=False)
-    )
-    schedule.every().thursday.at('04:00', eastern).do(
-        lambda: safe_run(_run_tanium_ring_tagging, name="automated_tanium_ring_tagging_thu_04am", timeout=5400, blocking=False)
-    )
-    schedule.every().thursday.at('12:00', eastern).do(
-        lambda: safe_run(_run_tanium_ring_tagging, name="automated_tanium_ring_tagging_thu_12pm", timeout=5400, blocking=False)
-    )
-    schedule.every().thursday.at('20:00', eastern).do(
-        lambda: safe_run(_run_tanium_ring_tagging, name="automated_tanium_ring_tagging_thu_08pm", timeout=5400, blocking=False)
-    )
-
     # Weekly MGCC migration cache refresh (Sun 02:00 ET)
     # This produces Tanium_MGCC_Hosts_cloud.xlsx — the whitelist that the ring-tagging
     # job uses to narrow MGCC migration candidates from ~85K hosts down to ~7K. Without
