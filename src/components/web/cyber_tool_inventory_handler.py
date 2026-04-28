@@ -59,7 +59,7 @@ BUSINESS_WORKING_CLIENTS = [
 # Keyword → category for inferring the "long name" suffix
 CATEGORY_HINTS = [
     (("crowdstrike", "edr", "endpoint", "carbon black"), "Endpoint Detection & Response"),
-    (("zscaler", "vpn", "proxy", "firewall"), "Network Security Gateway"),
+    (("vpn", "proxy", "firewall"), "Network Security Gateway"),
     (("ad ", "active directory", "okta", "ping", "mfa", "sso", "iam", "identity", "access"), "Identity & Access Management"),
     (("abnormal", "proofpoint", "mimecast", "email"), "Email Security"),
     (("splunk", "qradar", "siem", "sumo"), "Security Information & Event Management"),

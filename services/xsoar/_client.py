@@ -2,7 +2,7 @@
 XSOAR Client Configuration and Initialization
 
 This module handles:
-- SSL context creation for corporate proxies (Zscaler)
+- SSL context creation for corporate proxies
 - demisto-py client initialization for prod and dev environments
 - Connection pool configuration and patching
 - Timeout and retry configuration
@@ -38,14 +38,14 @@ urllib3_logger.setLevel(logging.WARNING)
 
 
 def create_ssl_context_for_proxy():
-    """Create SSL context compatible with Zscaler/corporate proxies."""
+    """Create SSL context compatible with corporate proxies."""
     ctx = ssl.create_default_context()
-    # Load system certificates (includes the Zscaler cert we added to certifi)
+    # Load system certificates (includes any corp proxy cert added to certifi)
     ctx.check_hostname = True
     ctx.verify_mode = ssl.CERT_REQUIRED
     # Allow TLS 1.0+ for compatibility with proxies
     ctx.minimum_version = ssl.TLSVersion.TLSv1
-    # Load CA certificates from certifi (which now includes Zscaler cert)
+    # Load CA certificates from certifi
     ctx.load_verify_locations(cafile=certifi.where())
     return ctx
 
@@ -74,10 +74,10 @@ def _patched_pool_manager_init(self, *args, **kwargs):
 urllib3.PoolManager.__init__ = _patched_pool_manager_init
 
 
-# Detect if we're behind Zscaler/corporate proxy by checking environment
+# Detect if we're behind a corporate proxy by checking environment
 # Auto-detection logic:
-# - macOS (Darwin) = local dev environment with Zscaler = disable SSL verification
-# - Linux = VM/server environment without Zscaler = enable SSL verification
+# - macOS (Darwin) = local dev environment with TLS-inspecting proxy = disable SSL verification
+# - Linux = VM/server environment without TLS inspection = enable SSL verification
 # - Override with DISABLE_SSL_VERIFY environment variable
 system_platform = platform.system()
 
@@ -87,12 +87,12 @@ if 'DISABLE_SSL_VERIFY' in os.environ:
     DISABLE_SSL_VERIFY = os.getenv('DISABLE_SSL_VERIFY').lower() == 'true'
     config_source = "environment variable"
 else:
-    # Default: enable SSL verification (Zscaler certs installed)
+    # Default: enable SSL verification (proxy certs installed if needed)
     DISABLE_SSL_VERIFY = False
     config_source = f"default ({system_platform})"
 
 if DISABLE_SSL_VERIFY:
-    log.info(f"SSL verification DISABLED ({config_source}) - corporate proxy/Zscaler environment")
+    log.info(f"SSL verification DISABLED ({config_source}) - corporate proxy environment")
 else:
     log.info(f"SSL verification ENABLED ({config_source}) - direct connection to XSOAR")
 
@@ -149,7 +149,7 @@ for client in [prod_client, dev_client]:
                 pool_kwargs['ca_certs'] = None  # Use system default (certifi)
                 pool_kwargs['ssl_context'] = _ssl_context
             else:
-                # Disable SSL verification for corporate proxy (Zscaler)
+                # Disable SSL verification for corporate proxy
                 pool_kwargs['cert_reqs'] = 'CERT_NONE'
 
             rest_client.pool_manager = urllib3.PoolManager(**pool_kwargs)

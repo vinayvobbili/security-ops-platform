@@ -32,7 +32,7 @@ A comprehensive collection of n8n workflows designed for your Security Operation
 | `incident_escalation.json` | Webhook | Smart escalation based on severity, time, VIP status, keywords |
 | `major_incident_war_room.json` | Webhook | Creates Webex war room, assembles team, collects evidence |
 | `cross_system_correlation.json` | Webhook | Correlates incidents across CrowdStrike/QRadar/Vectra/XSOAR |
-| `network_evidence_collector.json` | Webhook | Automated evidence collection from QRadar, Zscaler, DNS logs |
+| `network_evidence_collector.json` | Webhook | Automated evidence collection from QRadar and DNS logs |
 | `runbook_suggestion.json` | Webhook | Suggests relevant SecOps runbooks based on incident type |
 
 ### XSOAR & Ticket Management
@@ -74,13 +74,6 @@ A comprehensive collection of n8n workflows designed for your Security Operation
 | `user_offboarding_check.json` | Webhook | Validates user offboarding across security tools |
 | `user_offboarding_scheduled.json` | Schedule (weekly) | Cross-references HR terminations with tool access |
 
-### Zscaler & Network Security
-
-| Workflow | Trigger | Description |
-|----------|---------|-------------|
-| `zscaler_url_blocklist.json` | Webhook | Manual URL blocking with approval |
-| `zscaler_urlhaus_auto_block.json` | Schedule | Auto-blocks URLs from URLhaus threat feed |
-
 ### Reporting & Metrics
 
 | Workflow | Trigger | Description |
@@ -110,7 +103,6 @@ Configure these credentials in n8n (**Settings** → **Credentials**):
 | XSOAR API | Header Auth | `Authorization: <api_key>` |
 | Tanium API | Header Auth | `session: <token>` |
 | Vectra API | Header Auth | `Authorization: Token <token>` |
-| Zscaler API | Custom | See workflow for auth flow |
 | Abnormal Security | Header Auth | `Authorization: Bearer <token>` |
 
 ### Threat Intelligence
@@ -204,7 +196,7 @@ curl -s -H "Authorization: Bearer YOUR_BOT_TOKEN" \
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    DATA COLLECTION                           │
-│  CrowdStrike │ QRadar │ XSOAR │ Vectra │ Tanium │ Zscaler  │
+│  CrowdStrike │ QRadar │ XSOAR │ Vectra │ Tanium             │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -222,7 +214,7 @@ curl -s -H "Authorization: Bearer YOUR_BOT_TOKEN" \
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    ACTIONS                                   │
-│  Webex Alert │ XSOAR Ticket │ Zscaler Block │ Email │ Log  │
+│  Webex Alert │ XSOAR Ticket │ URL Block │ Email │ Log       │
 └─────────────────────────────────────────────────────────────┘
 ```
 

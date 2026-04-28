@@ -7,7 +7,9 @@
           "interval": [
             {
               "field": "weeks",
-              "triggerAtDay": [1],
+              "triggerAtDay": [
+                1
+              ],
               "triggerAtHour": 6,
               "triggerAtMinute": 0
             }
@@ -18,7 +20,10 @@
       "name": "Weekly Schedule (Monday 6 AM)",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
-      "position": [220, 400]
+      "position": [
+        220,
+        400
+      ]
     },
     {
       "parameters": {
@@ -51,7 +56,10 @@
       "name": "Fetch HR Termination List",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [460, 400],
+      "position": [
+        460,
+        400
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "hr-system-api",
@@ -68,7 +76,10 @@
       "name": "Process HR Termination Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [680, 400]
+      "position": [
+        680,
+        400
+      ]
     },
     {
       "parameters": {
@@ -93,7 +104,10 @@
       "name": "CrowdStrike Get All Devices",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [920, 200],
+      "position": [
+        920,
+        200
+      ],
       "credentials": {
         "oAuth2Api": {
           "id": "crowdstrike-oauth",
@@ -119,47 +133,14 @@
       "name": "CrowdStrike Get Device Details",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1140, 200],
+      "position": [
+        1140,
+        200
+      ],
       "credentials": {
         "oAuth2Api": {
           "id": "crowdstrike-oauth",
           "name": "CrowdStrike OAuth2"
-        }
-      },
-      "continueOnFail": true
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "={{$credentials.zscalerApiUrl}}/users",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "page",
-              "value": "1"
-            },
-            {
-              "name": "pageSize",
-              "value": "1000"
-            }
-          ]
-        },
-        "options": {
-          "timeout": 120000
-        }
-      },
-      "id": "zscaler-all-users",
-      "name": "Zscaler Get All Users",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [920, 400],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "zscaler-api-key",
-          "name": "Zscaler API Key"
         }
       },
       "continueOnFail": true
@@ -191,7 +172,10 @@
       "name": "Active Directory Get All Users",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [920, 600],
+      "position": [
+        920,
+        600
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "ldap-proxy-auth",
@@ -202,13 +186,16 @@
     },
     {
       "parameters": {
-        "jsCode": "// Cross-reference terminated users with security tools\nconst hrData = $('Process HR Termination Data').first().json;\nconst auditInfo = hrData.audit_info;\nconst terminatedUsers = hrData.terminated_users;\n\n// Get security tool data\nlet crowdstrikeDevices = [];\ntry {\n  const csData = $('CrowdStrike Get Device Details').first().json;\n  crowdstrikeDevices = csData.resources || [];\n} catch (e) {\n  console.log('CrowdStrike error:', e.message);\n}\n\nlet zscalerUsers = [];\ntry {\n  const zsData = $('Zscaler Get All Users').first().json;\n  zscalerUsers = zsData.users || zsData || [];\n} catch (e) {\n  console.log('Zscaler error:', e.message);\n}\n\nlet adUsers = [];\ntry {\n  const adData = $('Active Directory Get All Users').first().json;\n  adUsers = adData.users || adData || [];\n} catch (e) {\n  console.log('AD error:', e.message);\n}\n\n// Build lookup maps for faster matching\nconst csDevicesByEmail = {};\nconst csDevicesByUsername = {};\ncrowdstrikeDevices.forEach(device => {\n  if (device.email) {\n    const email = device.email.toLowerCase();\n    if (!csDevicesByEmail[email]) csDevicesByEmail[email] = [];\n    csDevicesByEmail[email].push(device);\n  }\n  if (device.username) {\n    const username = device.username.toLowerCase();\n    if (!csDevicesByUsername[username]) csDevicesByUsername[username] = [];\n    csDevicesByUsername[username].push(device);\n  }\n});\n\nconst zscalerByEmail = {};\nzscalerUsers.forEach(user => {\n  if (user.email) {\n    zscalerByEmail[user.email.toLowerCase()] = user;\n  }\n});\n\nconst adByEmail = {};\nconst adByUsername = {};\nconst adByEmployeeId = {};\nadUsers.forEach(user => {\n  if (user.mail) adByEmail[user.mail.toLowerCase()] = user;\n  if (user.sAMAccountName) adByUsername[user.sAMAccountName.toLowerCase()] = user;\n  if (user.employeeID) adByEmployeeId[user.employeeID] = user;\n});\n\n// Cross-reference each terminated user\nconst orphanedAccounts = [];\nconst cleanUsers = [];\n\nterminatedUsers.forEach(user => {\n  const email = user.email?.toLowerCase();\n  const username = user.username?.toLowerCase();\n  const employeeId = user.employee_id;\n  \n  const issues = [];\n  \n  // Check CrowdStrike\n  const csDevices = [\n    ...(csDevicesByEmail[email] || []),\n    ...(csDevicesByUsername[username] || [])\n  ];\n  const uniqueCSDevices = [...new Map(csDevices.map(d => [d.device_id, d])).values()];\n  if (uniqueCSDevices.length > 0) {\n    issues.push({\n      system: 'CrowdStrike',\n      type: 'device_assigned',\n      details: {\n        device_count: uniqueCSDevices.length,\n        devices: uniqueCSDevices.map(d => ({\n          device_id: d.device_id,\n          hostname: d.hostname,\n          platform: d.platform_name,\n          last_seen: d.last_seen\n        }))\n      }\n    });\n  }\n  \n  // Check Zscaler\n  const zsUser = zscalerByEmail[email];\n  if (zsUser && zsUser.state === 'ENABLED') {\n    issues.push({\n      system: 'Zscaler ZIA',\n      type: 'active_account',\n      details: {\n        user_id: zsUser.id,\n        state: zsUser.state,\n        groups: zsUser.groups || []\n      }\n    });\n  }\n  \n  // Check Active Directory\n  const adUser = adByEmail[email] || adByUsername[username] || adByEmployeeId[employeeId];\n  if (adUser) {\n    // Check if account is enabled (bit 2 of userAccountControl)\n    const isDisabled = adUser.userAccountControl && (adUser.userAccountControl & 2) === 2;\n    if (!isDisabled) {\n      issues.push({\n        system: 'Active Directory',\n        type: 'account_enabled',\n        details: {\n          sAMAccountName: adUser.sAMAccountName,\n          userAccountControl: adUser.userAccountControl,\n          lastLogon: adUser.lastLogon\n        }\n      });\n    }\n  }\n  \n  if (issues.length > 0) {\n    orphanedAccounts.push({\n      user: user,\n      issues: issues,\n      days_since_termination: Math.floor((Date.now() - new Date(user.termination_date).getTime()) / (1000 * 60 * 60 * 24)),\n      risk_level: issues.length >= 2 ? 'HIGH' : 'MEDIUM'\n    });\n  } else {\n    cleanUsers.push(user);\n  }\n});\n\n// Sort by risk level and days since termination\norphanedAccounts.sort((a, b) => {\n  if (a.risk_level !== b.risk_level) {\n    return a.risk_level === 'HIGH' ? -1 : 1;\n  }\n  return b.days_since_termination - a.days_since_termination;\n});\n\nconst auditResult = {\n  audit_info: {\n    ...auditInfo,\n    completed_at: new Date().toISOString(),\n    systems_checked: ['CrowdStrike', 'Zscaler ZIA', 'Active Directory']\n  },\n  summary: {\n    total_terminated_users_checked: terminatedUsers.length,\n    orphaned_accounts_found: orphanedAccounts.length,\n    clean_users: cleanUsers.length,\n    high_risk_count: orphanedAccounts.filter(a => a.risk_level === 'HIGH').length,\n    medium_risk_count: orphanedAccounts.filter(a => a.risk_level === 'MEDIUM').length\n  },\n  orphaned_accounts: orphanedAccounts,\n  clean_users: cleanUsers.map(u => u.email)\n};\n\nreturn [{ json: auditResult }];"
+        "jsCode": "// Cross-reference terminated users with security tools\nconst hrData = $('Process HR Termination Data').first().json;\nconst auditInfo = hrData.audit_info;\nconst terminatedUsers = hrData.terminated_users;\n\n// Get security tool data\nlet crowdstrikeDevices = [];\ntry {\n  const csData = $('CrowdStrike Get Device Details').first().json;\n  crowdstrikeDevices = csData.resources || [];\n} catch (e) {\n  console.log('CrowdStrike error:', e.message);\n}\n\nlet Users = [];\ntry {\n  const zsData = $(' Get All Users').first().json;\n  Users = zsData.users || zsData || [];\n} catch (e) {\n  console.log(' error:', e.message);\n}\n\nlet adUsers = [];\ntry {\n  const adData = $('Active Directory Get All Users').first().json;\n  adUsers = adData.users || adData || [];\n} catch (e) {\n  console.log('AD error:', e.message);\n}\n\n// Build lookup maps for faster matching\nconst csDevicesByEmail = {};\nconst csDevicesByUsername = {};\ncrowdstrikeDevices.forEach(device => {\n  if (device.email) {\n    const email = device.email.toLowerCase();\n    if (!csDevicesByEmail[email]) csDevicesByEmail[email] = [];\n    csDevicesByEmail[email].push(device);\n  }\n  if (device.username) {\n    const username = device.username.toLowerCase();\n    if (!csDevicesByUsername[username]) csDevicesByUsername[username] = [];\n    csDevicesByUsername[username].push(device);\n  }\n});\n\nconst ByEmail = {};\nUsers.forEach(user => {\n  if (user.email) {\n    ByEmail[user.email.toLowerCase()] = user;\n  }\n});\n\nconst adByEmail = {};\nconst adByUsername = {};\nconst adByEmployeeId = {};\nadUsers.forEach(user => {\n  if (user.mail) adByEmail[user.mail.toLowerCase()] = user;\n  if (user.sAMAccountName) adByUsername[user.sAMAccountName.toLowerCase()] = user;\n  if (user.employeeID) adByEmployeeId[user.employeeID] = user;\n});\n\n// Cross-reference each terminated user\nconst orphanedAccounts = [];\nconst cleanUsers = [];\n\nterminatedUsers.forEach(user => {\n  const email = user.email?.toLowerCase();\n  const username = user.username?.toLowerCase();\n  const employeeId = user.employee_id;\n  \n  const issues = [];\n  \n  // Check CrowdStrike\n  const csDevices = [\n    ...(csDevicesByEmail[email] || []),\n    ...(csDevicesByUsername[username] || [])\n  ];\n  const uniqueCSDevices = [...new Map(csDevices.map(d => [d.device_id, d])).values()];\n  if (uniqueCSDevices.length > 0) {\n    issues.push({\n      system: 'CrowdStrike',\n      type: 'device_assigned',\n      details: {\n        device_count: uniqueCSDevices.length,\n        devices: uniqueCSDevices.map(d => ({\n          device_id: d.device_id,\n          hostname: d.hostname,\n          platform: d.platform_name,\n          last_seen: d.last_seen\n        }))\n      }\n    });\n  }\n  \n  // Check \n  const zsUser = ByEmail[email];\n  if (zsUser && zsUser.state === 'ENABLED') {\n    issues.push({\n      system: '',\n      type: 'active_account',\n      details: {\n        user_id: zsUser.id,\n        state: zsUser.state,\n        groups: zsUser.groups || []\n      }\n    });\n  }\n  \n  // Check Active Directory\n  const adUser = adByEmail[email] || adByUsername[username] || adByEmployeeId[employeeId];\n  if (adUser) {\n    // Check if account is enabled (bit 2 of userAccountControl)\n    const isDisabled = adUser.userAccountControl && (adUser.userAccountControl & 2) === 2;\n    if (!isDisabled) {\n      issues.push({\n        system: 'Active Directory',\n        type: 'account_enabled',\n        details: {\n          sAMAccountName: adUser.sAMAccountName,\n          userAccountControl: adUser.userAccountControl,\n          lastLogon: adUser.lastLogon\n        }\n      });\n    }\n  }\n  \n  if (issues.length > 0) {\n    orphanedAccounts.push({\n      user: user,\n      issues: issues,\n      days_since_termination: Math.floor((Date.now() - new Date(user.termination_date).getTime()) / (1000 * 60 * 60 * 24)),\n      risk_level: issues.length >= 2 ? 'HIGH' : 'MEDIUM'\n    });\n  } else {\n    cleanUsers.push(user);\n  }\n});\n\n// Sort by risk level and days since termination\norphanedAccounts.sort((a, b) => {\n  if (a.risk_level !== b.risk_level) {\n    return a.risk_level === 'HIGH' ? -1 : 1;\n  }\n  return b.days_since_termination - a.days_since_termination;\n});\n\nconst auditResult = {\n  audit_info: {\n    ...auditInfo,\n    completed_at: new Date().toISOString(),\n    systems_checked: ['CrowdStrike', '', 'Active Directory']\n  },\n  summary: {\n    total_terminated_users_checked: terminatedUsers.length,\n    orphaned_accounts_found: orphanedAccounts.length,\n    clean_users: cleanUsers.length,\n    high_risk_count: orphanedAccounts.filter(a => a.risk_level === 'HIGH').length,\n    medium_risk_count: orphanedAccounts.filter(a => a.risk_level === 'MEDIUM').length\n  },\n  orphaned_accounts: orphanedAccounts,\n  clean_users: cleanUsers.map(u => u.email)\n};\n\nreturn [{ json: auditResult }];"
       },
       "id": "cross-reference-audit",
       "name": "Cross-Reference Audit",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1400, 400]
+      "position": [
+        1400,
+        400
+      ]
     },
     {
       "parameters": {
@@ -226,7 +213,10 @@
       "name": "Orphaned Accounts Found?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [1620, 400]
+      "position": [
+        1620,
+        400
+      ]
     },
     {
       "parameters": {
@@ -236,7 +226,10 @@
       "name": "Split High Risk for Tickets",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1860, 300]
+      "position": [
+        1860,
+        300
+      ]
     },
     {
       "parameters": {
@@ -255,7 +248,10 @@
       "name": "Create XSOAR Orphan Account Ticket",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [2080, 300],
+      "position": [
+        2080,
+        300
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "xsoar-api-key",
@@ -272,7 +268,10 @@
       "name": "Collect Created Tickets",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2300, 300]
+      "position": [
+        2300,
+        300
+      ]
     },
     {
       "parameters": {
@@ -282,7 +281,10 @@
       "name": "No Orphans Found",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1860, 500]
+      "position": [
+        1860,
+        500
+      ]
     },
     {
       "parameters": {
@@ -292,7 +294,10 @@
       "name": "Merge Audit Results",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2520, 400]
+      "position": [
+        2520,
+        400
+      ]
     },
     {
       "parameters": {
@@ -302,7 +307,10 @@
       "name": "Format Weekly Report",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2740, 400]
+      "position": [
+        2740,
+        400
+      ]
     },
     {
       "parameters": {
@@ -321,7 +329,10 @@
       "name": "Post Weekly Report to Webex",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [2960, 400],
+      "position": [
+        2960,
+        400
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "webex-bot-token",
@@ -347,7 +358,10 @@
       "name": "Log Audit to HR System",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [3180, 400],
+      "position": [
+        3180,
+        400
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "hr-system-api",
@@ -364,7 +378,10 @@
       "name": "Final Audit Log",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [3400, 400]
+      "position": [
+        3400,
+        400
+      ]
     }
   ],
   "connections": {
@@ -399,11 +416,6 @@
             "index": 0
           },
           {
-            "node": "Zscaler Get All Users",
-            "type": "main",
-            "index": 0
-          },
-          {
             "node": "Active Directory Get All Users",
             "type": "main",
             "index": 0
@@ -423,17 +435,6 @@
       ]
     },
     "CrowdStrike Get Device Details": {
-      "main": [
-        [
-          {
-            "node": "Cross-Reference Audit",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Zscaler Get All Users": {
       "main": [
         [
           {

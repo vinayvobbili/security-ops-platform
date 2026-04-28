@@ -49,7 +49,6 @@ from mcp_server.tools import (  # noqa: E402, F401
     thehive,
     abnormal,
     vectra,
-    zscaler,
     attackiq,
     oe_detection,
     # --- Threat intelligence ---

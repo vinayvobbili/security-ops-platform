@@ -77,7 +77,7 @@ BENIGN_DOMAINS = _get_company_domains() | {
     'fireeye.com', 'symantec.com', 'mcafee.com', 'kaspersky.com',
     'fortinet.com', 'sentinelone.com', 'elastic.co', 'splunk.com',
     'checkpoint.com', 'sophos.com', 'rapid7.com', 'qualys.com',
-    'tenable.com', 'zscaler.com', 'proofpoint.com', 'mimecast.com',
+    'tenable.com', 'proofpoint.com', 'mimecast.com',
     'secureworks.com', 'volexity.com', 'unit42.paloaltonetworks.com',
     'blog.talosintelligence.com', 'talosintelligence.com',
     'threatpost.com', 'bleepingcomputer.com', 'thehackernews.com',

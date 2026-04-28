@@ -122,12 +122,6 @@ from my_bot.tools.varonis_tools import get_varonis_user_alerts, get_varonis_data
 from my_bot.tools.active_directory_tools import get_ad_user, get_ad_computer
 from my_bot.tools.block_url_tools import request_url_block
 from my_bot.tools.diagram_tools import generate_diagram
-from my_bot.tools.zscaler_tools import (
-    lookup_zscaler_url, lookup_zscaler_urls, get_zscaler_sandbox_report,
-    get_zscaler_url_categories, get_zscaler_blocklist,
-    add_url_to_zscaler_blocklist, remove_url_from_zscaler_blocklist,
-    search_zscaler_users,
-)
 from my_bot.tools.attackiq_tools import (
     attackiq_list_templates, attackiq_create_assessment,
     attackiq_run_assessment, attackiq_get_results,
@@ -377,13 +371,6 @@ TOOL EFFICIENCY:
         "diagrams": {
             "description": "Diagram generation: render Mermaid flowcharts/sequence diagrams as PNG and post to the current Webex room — e.g. 'draw the attack flow', 'visualize this incident', 'make a sequence diagram of the SMTP exchange'",
             "tools": [generate_diagram]
-        },
-        "zscaler": {
-            "description": "Zscaler: URL/domain reputation lookups, sandbox file analysis, blocklist management, and user search",
-            "tools": [lookup_zscaler_url, lookup_zscaler_urls, get_zscaler_sandbox_report,
-                      get_zscaler_url_categories, get_zscaler_blocklist,
-                      add_url_to_zscaler_blocklist, remove_url_from_zscaler_blocklist,
-                      search_zscaler_users]
         },
         "hibp": {
             "description": "Have I Been Pwned: check if an email address or domain appears in known data breach databases",
@@ -867,16 +854,6 @@ Examples (router output):
 
                 # Diagram generation tool
                 generate_diagram,
-
-                # Zscaler tools
-                lookup_zscaler_url,
-                lookup_zscaler_urls,
-                get_zscaler_sandbox_report,
-                get_zscaler_url_categories,
-                get_zscaler_blocklist,
-                add_url_to_zscaler_blocklist,
-                remove_url_from_zscaler_blocklist,
-                search_zscaler_users,
 
                 # AttackIQ BAS tools
                 attackiq_list_templates,

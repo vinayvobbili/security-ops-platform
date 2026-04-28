@@ -167,23 +167,6 @@ def qradar_search_entra_by_user(
 
 
 @mcp.tool()
-def qradar_search_zpa_by_user(
-    username: str, hours: int = 168, max_results: int = 100
-) -> dict:
-    """Search QRadar Zscaler Private Access logon events by username.
-
-    Args:
-        username: Username to search for
-        hours: Hours of history
-        max_results: Max events
-    """
-    client = _get_client()
-    return client.search_zpa_logons_by_user(
-        username, hours=hours, max_results=max_results
-    )
-
-
-@mcp.tool()
 def qradar_get_reference_set(name: str) -> dict:
     """Get the values in a QRadar reference set.
 

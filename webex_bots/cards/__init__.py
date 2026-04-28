@@ -18,7 +18,6 @@ from .azdo_cards import AZDO_CARD
 from .testing_cards import APPROVED_TESTING_CARD
 from .import_cards import TICKET_IMPORT_CARD
 from .tuning_cards import TUNING_REQUEST_CARD
-from .url_cards import URL_BLOCK_VERDICT_CARD
 from .domain_cards import DOMAIN_LOOKALIKE_CARD
 from .birthday_cards import BIRTHDAY_ANNIVERSARY_CARD
 from .crowdstrike_cards import BROWSER_HISTORY_CARD, FILE_PULL_CARD
@@ -39,8 +38,6 @@ __all__ = [
     'TICKET_IMPORT_CARD',
     # Tuning cards
     'TUNING_REQUEST_CARD',
-    # URL cards
-    'URL_BLOCK_VERDICT_CARD',
     # Domain cards
     'DOMAIN_LOOKALIKE_CARD',
     # Birthday cards

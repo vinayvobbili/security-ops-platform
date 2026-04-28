@@ -69,7 +69,6 @@ The platform provides consistent, production-grade integrations across the secur
 | Platform | Capabilities |
 |----------|--------------|
 | **Abnormal Security** | Email threat detection, case investigation |
-| **Zscaler** | URL categorization, web filtering status |
 
 ### IT Service Management (ITSM)
 

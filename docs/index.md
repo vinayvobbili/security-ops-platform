@@ -115,7 +115,7 @@ Unified API clients for the security ecosystem:
 | **BAS** | AttackIQ |
 | **Identity / Data** | Active Directory, Varonis |
 | **Domain Security** | Certificate Transparency, WHOIS, Domain Lookalike Detection |
-| **Email Security** | Abnormal Security, Zscaler |
+| **Email Security** | Abnormal Security |
 | **ITSM** | ServiceNow |
 
 [View all integrations →](features/integrations)

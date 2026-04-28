@@ -602,10 +602,7 @@ class QRadarClient:
             SELECT sourceip, destinationip, "Computer Hostname", username,
                    URL, "Referer", "User Agent", filename, starttime
             FROM events
-            WHERE (
-                logsourcetypename(devicetype) = 'Zscaler Nss'
-                OR logsourcetypename(devicetype) = 'Blue Coat Web Security Service'
-            )
+            WHERE logsourcetypename(devicetype) = 'Blue Coat Web Security Service'
             AND URL ILIKE '%{_escape_aql_value(domain)}%'
             LIMIT {max_results}
             LAST {hours} HOURS
@@ -771,60 +768,6 @@ class QRadarClient:
                 OR "Subject" ILIKE '%{indicator}%'
                 OR "Filename" ILIKE '%{indicator}%'
             )
-            LIMIT {max_results}
-            LAST {hours} HOURS
-        """
-        return self.run_aql_search(aql.strip(), max_results=max_results)
-
-    def search_zpa_logons_by_ip(
-        self,
-        ip: str,
-        hours: int = 168,
-        max_results: int = 100
-    ) -> Dict[str, Any]:
-        """Search for Zscaler Private Access logon events by IP.
-
-        Args:
-            ip: The IP address to search for
-            hours: Number of hours to look back
-            max_results: Maximum events to return
-
-        Returns:
-            dict: Search results with events
-        """
-        aql = f"""
-            SELECT sourceip, destinationip, username, "Computer Hostname",
-                   qidname(qid) AS eventName, "ZPN-Sess-Status", starttime
-            FROM events
-            WHERE logsourcetypename(devicetype) = 'Zscaler Private Access'
-            AND (sourceip = '{ip}' OR destinationip = '{ip}')
-            LIMIT {max_results}
-            LAST {hours} HOURS
-        """
-        return self.run_aql_search(aql.strip(), max_results=max_results)
-
-    def search_zpa_logons_by_user(
-        self,
-        username: str,
-        hours: int = 168,
-        max_results: int = 100
-    ) -> Dict[str, Any]:
-        """Search for Zscaler Private Access logon events by username.
-
-        Args:
-            username: The username to search for
-            hours: Number of hours to look back
-            max_results: Maximum events to return
-
-        Returns:
-            dict: Search results with events
-        """
-        aql = f"""
-            SELECT sourceip, destinationip, username, "Computer Hostname",
-                   qidname(qid) AS eventName, "ZPN-Sess-Status", starttime
-            FROM events
-            WHERE logsourcetypename(devicetype) = 'Zscaler Private Access'
-            AND username ILIKE '%{username}%'
             LIMIT {max_results}
             LAST {hours} HOURS
         """
@@ -1159,10 +1102,7 @@ class QRadarClient:
             SELECT sourceip, destinationip, "Computer Hostname", username,
                    URL, "Referer", "User Agent", filename, starttime
             FROM events
-            WHERE (
-                logsourcetypename(devicetype) = 'Zscaler Nss'
-                OR logsourcetypename(devicetype) = 'Blue Coat Web Security Service'
-            )
+            WHERE logsourcetypename(devicetype) = 'Blue Coat Web Security Service'
             AND ({domain_conditions})
             LIMIT {max_results}
             LAST {hours} HOURS
@@ -1295,7 +1235,7 @@ class QRadarClient:
     ) -> Dict[str, Any]:
         """Search for multiple domains across all log sources in a single query.
 
-        Combines webproxy (Zscaler, Blue Coat), email (Area1, Abnormal),
+        Combines webproxy (Blue Coat), email (Area1, Abnormal),
         O365 threat intel, and Palo Alto into one query for efficiency.
         Returns source identification and context fields for each event.
 
@@ -1328,7 +1268,6 @@ class QRadarClient:
             FROM events
             WHERE (
                 logsourcetypename(devicetype) IN (
-                    'Zscaler Nss',
                     'Blue Coat Web Security Service',
                     'Area1 Security',
                     'Abnormal Security',
@@ -1386,7 +1325,6 @@ class QRadarClient:
                    URL, "Action", "User Agent"
             FROM events
             WHERE logsourcetypename(devicetype) IN (
-                'Zscaler Nss',
                 'Blue Coat Web Security Service',
                 'Palo Alto PA Series'
             )
@@ -1427,41 +1365,6 @@ class QRadarClient:
                    qidname(qid) AS eventName, URL, "Threat Name", magnitude, starttime
             FROM events
             WHERE ({ip_conditions})
-            LIMIT {max_results}
-            LAST {hours} HOURS
-        """
-        return self.run_aql_search(aql.strip(), max_results=max_results)
-
-    def batch_search_ips_zpa(
-        self,
-        ips: List[str],
-        hours: int = 168,
-        max_results: int = 500
-    ) -> Dict[str, Any]:
-        """Search for multiple IPs in ZPA logs (single query).
-
-        Args:
-            ips: List of IP addresses to search for
-            hours: Number of hours to look back
-            max_results: Maximum events to return
-
-        Returns:
-            dict: Search results with events
-        """
-        if not ips:
-            return {"events": [], "count": 0}
-
-        ip_conditions = " OR ".join([
-            f"(sourceip = '{_escape_aql_value(ip)}' OR destinationip = '{_escape_aql_value(ip)}')"
-            for ip in ips
-        ])
-
-        aql = f"""
-            SELECT sourceip, destinationip, username, "Computer Hostname",
-                   qidname(qid) AS eventName, "ZPN-Sess-Status", starttime
-            FROM events
-            WHERE logsourcetypename(devicetype) = 'Zscaler Private Access'
-            AND ({ip_conditions})
             LIMIT {max_results}
             LAST {hours} HOURS
         """
@@ -1587,7 +1490,7 @@ class QRadarClient:
     ) -> Dict[str, Any]:
         """Search for multiple IPs across all log sources in a single query.
 
-        Combines ZPA, Entra, CrowdStrike, Palo Alto, and general events into
+        Combines Entra, CrowdStrike, Palo Alto, and general events into
         one query for efficiency. Returns source identification and context
         fields for each event.
 
@@ -1613,13 +1516,11 @@ class QRadarClient:
                    qidname(qid) AS eventName,
                    "Threat Name", "Action", URL,
                    "Process Name", Command,
-                   "ZPN-Sess-Status",
                    "Conditional Access Status",
                    "PAN Log SubType"
             FROM events
             WHERE (
                 logsourcetypename(devicetype) IN (
-                    'Zscaler Private Access',
                     'Microsoft Entra ID',
                     'CrowdStrikeEndpoint',
                     'Tanium HTTP',
@@ -1849,7 +1750,7 @@ if __name__ == "__main__":
     # Test new search methods (use short time window for speed)
     test_hours = 1
 
-    print("\n3. Testing domain search (Zscaler/Blue Coat)...")
+    print("\n3. Testing domain search (Blue Coat web proxy)...")
     result = client.search_events_by_domain("google.com", hours=test_hours, max_results=5)
     if "error" in result:
         print(f"   Error: {result['error']}")
@@ -1870,21 +1771,14 @@ if __name__ == "__main__":
     else:
         print(f"   Found {len(result.get('events', []))} events")
 
-    print("\n6. Testing ZPA logon search...")
-    result = client.search_zpa_logons_by_ip("<internal-host>", hours=test_hours, max_results=5)
-    if "error" in result:
-        print(f"   Error: {result['error']}")
-    else:
-        print(f"   Found {len(result.get('events', []))} events")
-
-    print("\n7. Testing Entra ID search...")
+    print("\n6. Testing Entra ID search...")
     result = client.search_entra_by_ip("<internal-host>", hours=test_hours, max_results=5)
     if "error" in result:
         print(f"   Error: {result['error']}")
     else:
         print(f"   Found {len(result.get('events', []))} events")
 
-    print("\n8. Testing endpoint hash search (CrowdStrike/Tanium)...")
+    print("\n7. Testing endpoint hash search (CrowdStrike/Tanium)...")
     result = client.search_endpoint_by_hash("d41d8cd98f00b204e9800998ecf8427e", hours=test_hours, max_results=5)
     if "error" in result:
         print(f"   Error: {result['error']}")

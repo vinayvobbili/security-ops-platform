@@ -241,11 +241,6 @@ def get_config(bot_name: str | None = None):
         vectra_api_base_url=os.environ.get("VECTRA_API_BASE_URL"),
         vectra_client_id=os.environ.get("VECTRA_API_CLIENT_ID"),
         vectra_api_key=os.environ.get("VECTRA_API_KEY"),
-        # Zscaler ZIA configuration
-        zscaler_base_url=os.environ.get("ZSCALER_API_BASE_URL"),
-        zscaler_username=os.environ.get("ZSCALER_API_USERNAME"),
-        zscaler_password=os.environ.get("ZSCALER_API_PASSWORD"),
-        zscaler_api_key=os.environ.get("ZSCALER_API_KEY"),
         # TheHive
         thehive_url=os.environ.get("THE_HIVE_URL"),
         thehive_api_key=os.environ.get("THE_HIVE_API_KEY"),
@@ -457,11 +452,6 @@ class Config:
     vectra_api_base_url: Optional[str] = None
     vectra_client_id: Optional[str] = None
     vectra_api_key: Optional[str] = None
-    # Zscaler ZIA configuration
-    zscaler_base_url: Optional[str] = None
-    zscaler_username: Optional[str] = None
-    zscaler_password: Optional[str] = None
-    zscaler_api_key: Optional[str] = None
     # TheHive configuration
     thehive_url: Optional[str] = None
     thehive_api_key: Optional[str] = None

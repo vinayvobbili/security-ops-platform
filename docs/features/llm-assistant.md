@@ -70,7 +70,6 @@ The security assistant uses **Retrieval-Augmented Generation (RAG)** to combine 
 | **Have I Been Pwned** | Email breach checking |
 | **ServiceNow** | CMDB queries, ticket creation |
 | **Abnormal Security** | Email threat investigation |
-| **Zscaler** | URL categorization |
 
 ### Analysis & Remediation
 

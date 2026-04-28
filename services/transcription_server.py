@@ -47,7 +47,7 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-# Use macOS native trust store for SSL (avoids Zscaler / corp CA issues)
+# Use macOS native trust store for SSL (avoids corp CA issues)
 try:
     import truststore
     truststore.inject_into_ssl()

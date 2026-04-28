@@ -44,7 +44,7 @@ class the internal LLM gatewayClient:
 
         # Route through SOCKS proxy (SSH tunnel to Mac on corp network)
         # the internal LLM gateway is a corp-internal API — not reachable from lab-vm without proxy.
-        # Zscaler on the Mac intercepts TLS, so disable verify when proxied.
+        # The proxy chain may intercept TLS, so disable verify when proxied.
         proxy = (getattr(config, "m3_proxy", None) or "").strip()
         if proxy:
             self.session.proxies = {"http": proxy, "https": proxy}

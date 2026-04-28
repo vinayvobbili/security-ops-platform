@@ -21,7 +21,7 @@ ARCHITECTURE APPROACH:
 - Source attribution handled by agent prompts and tool responses
 """
 
-# Configure SSL for corporate proxy environments (Zscaler, etc.) - MUST BE FIRST
+# Configure SSL for corporate proxy environments - MUST BE FIRST
 import sys
 from pathlib import Path
 
@@ -86,7 +86,7 @@ from my_bot.utils.webex_format import convert_markdown_tables
 
 from src.utils.ssl_config import configure_ssl_if_needed
 
-configure_ssl_if_needed(verbose=True)  # Re-enabled due to ZScaler connectivity issues
+configure_ssl_if_needed(verbose=True)  # Re-enabled for TLS-inspecting proxy environments
 
 # Enhanced WebSocket client for websockets 14.x compatibility
 from src.utils.enhanced_websocket_client import patch_websocket_client

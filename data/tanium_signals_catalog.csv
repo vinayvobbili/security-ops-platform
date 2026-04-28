@@ -1531,8 +1531,8 @@ Domain Account Enumeration,Detects usage of the NET.EXE utility to enumerate dom
 Windows Accessibility Logon Bypasses,Detects the use of logon accessibility features to bypass logon and maintain persistence.,windows,T1546,Event Triggered Execution
 Windows Accessibility Logon Bypasses,Detects the use of logon accessibility features to bypass logon and maintain persistence.,windows,T1546.008,Event Triggered Execution: Accessibility Features
 Windows Accessibility Logon Bypasses,Detects the use of logon accessibility features to bypass logon and maintain persistence.,windows,T1112,Modify Registry
-DE_IPv6_Enabled,To detect when Ipv6 is enabled on a windows host. This disables zScaler and allows exfiltration.,windows,T1090,Proxy
-DE_IPv6_Enabled,To detect when Ipv6 is enabled on a windows host. This disables zScaler and allows exfiltration.,windows,T1562.001,Impair Defenses: Disable or Modify Tools
+DE_IPv6_Enabled,To detect when Ipv6 is enabled on a windows host. This disables the corporate web proxy and allows exfiltration.,windows,T1090,Proxy
+DE_IPv6_Enabled,To detect when Ipv6 is enabled on a windows host. This disables the corporate web proxy and allows exfiltration.,windows,T1562.001,Impair Defenses: Disable or Modify Tools
 CMD with Graph Ancestry,Detects execution of the command prompt where an ancestral process is Graph. This can be a sign of attacker activity but should be tuned for known scripts or internal processes.,windows,T1059,Command and Scripting Interpreter
 CMD with Graph Ancestry,Detects execution of the command prompt where an ancestral process is Graph. This can be a sign of attacker activity but should be tuned for known scripts or internal processes.,windows,T1059.003,Command and Scripting Interpreter: Windows Command Shell
 Visio Spawned Process Creating VBS Files,Detects the creation of VBS files by Visio or a descendent process which may be a sign of attack activity.,windows,T1059,Command and Scripting Interpreter

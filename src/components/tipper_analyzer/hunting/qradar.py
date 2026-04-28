@@ -16,7 +16,7 @@ def hunt_qradar(entities, hours: int) -> ToolHuntResult:
     Runs all search types concurrently:
     - Domain search (webproxy, email, O365, PA firewall)
     - URL path search (webproxy)
-    - IP search (ZPA, Entra, endpoint, PA firewall)
+    - IP search (Entra, endpoint, PA firewall)
     - Hash search (endpoint)
 
     Args:
@@ -269,7 +269,6 @@ def _aggregate_domain_hits_with_context(
     """
     # Map QRadar log source names to short labels
     source_map = {
-        'Zscaler Nss': 'Zscaler',
         'Blue Coat Web Security Service': 'BlueCoat',
         'Area1 Security': 'Area1',
         'Abnormal Security': 'Abnormal',
@@ -347,7 +346,7 @@ def _extract_domain_event_context(event: Dict[str, Any], source: str) -> str:
 
     Args:
         event: Event dict from QRadar
-        source: Short source label (Zscaler, PaloAlto, Area1, etc.)
+        source: Short source label (BlueCoat, PaloAlto, Area1, etc.)
 
     Returns:
         Context string or empty string if no meaningful context
@@ -377,7 +376,7 @@ def _extract_domain_event_context(event: Dict[str, Any], source: str) -> str:
         if subject:
             parts.append(f"Subj: {subject[:40]}")
 
-    elif source in ('Zscaler', 'BlueCoat'):
+    elif source == 'BlueCoat':
         user_agent = event.get('User Agent', '')
         action = event.get('Action', '')
         filename = event.get('filename', '')
@@ -421,7 +420,6 @@ def _aggregate_ip_hits_with_context(
     """
     # Map QRadar log source names to short labels
     source_map = {
-        'Zscaler Private Access': 'ZPA',
         'Microsoft Entra ID': 'Entra',
         'CrowdStrikeEndpoint': 'CrowdStrike',
         'Tanium HTTP': 'Tanium',
@@ -487,7 +485,7 @@ def _extract_event_context(event: Dict[str, Any], source: str) -> str:
 
     Args:
         event: Event dict from QRadar
-        source: Short source label (ZPA, Entra, CrowdStrike, PaloAlto, etc.)
+        source: Short source label (Entra, CrowdStrike, PaloAlto, etc.)
 
     Returns:
         Context string or empty string if no meaningful context
@@ -523,11 +521,6 @@ def _extract_event_context(event: Dict[str, Any], source: str) -> str:
             parts.append(f"CA: {status}")
         if event_name and 'sign' in event_name.lower():
             parts.append(event_name)
-
-    elif source == 'ZPA':
-        status = event.get('ZPN-Sess-Status', '')
-        if status:
-            parts.append(f"Session: {status}")
 
     else:
         # Generic fallback
@@ -569,7 +562,6 @@ def _aggregate_url_hits(
         url_events: Dict to accumulate results
     """
     source_map = {
-        'Zscaler Nss': 'Zscaler',
         'Blue Coat Web Security Service': 'BlueCoat',
         'Palo Alto PA Series': 'PaloAlto',
     }

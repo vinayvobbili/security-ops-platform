@@ -6,12 +6,12 @@ the notification service Bot - Configuration Guide
 
 This bot supports three operating modes:
 
-1. FULL RESILIENCE MODE (for ZScaler/corporate proxy environments)
+1. FULL RESILIENCE MODE (for corporate proxy / TLS-inspection environments)
    SHOULD_USE_RESILIENCY = True
    USE_AUTO_RECONNECT = ignored
    Features: SSL patching, WebSocket patching, device cleanup, auto-reconnect
 
-2. LITE RESILIENCE MODE (recommended for production without ZScaler)
+2. LITE RESILIENCE MODE (recommended for production without TLS-inspection)
    SHOULD_USE_RESILIENCY = False
    USE_AUTO_RECONNECT = True
    Features: Device cleanup, auto-reconnect (handles WebSocket timeouts)
@@ -56,7 +56,7 @@ from my_config import get_config
 
 CONFIG = get_config()
 
-# ALWAYS configure SSL for proxy environments (auto-detects ZScaler/proxies)
+# ALWAYS configure SSL for proxy environments (auto-detects corp proxies)
 from src.utils.ssl_config import configure_ssl_if_needed
 
 configure_ssl_if_needed(verbose=True)
@@ -111,13 +111,12 @@ from services.xsoar import ListHandler, TicketHandler, XsoarEnvironment
 from webex_bots.cards import (
     NEW_TICKET_CARD, IOC_HUNT, THREAT_HUNT, AZDO_CARD,
     APPROVED_TESTING_CARD, TICKET_CANNON_CARD, NOISE_SUPPRESSOR_CARD, TICKET_IMPORT_CARD, TUNING_REQUEST_CARD,
-    URL_BLOCK_VERDICT_CARD, DOMAIN_LOOKALIKE_CARD, BIRTHDAY_ANNIVERSARY_CARD,
+    DOMAIN_LOOKALIKE_CARD, BIRTHDAY_ANNIVERSARY_CARD,
     BROWSER_HISTORY_CARD, FILE_PULL_CARD, all_options_card,
     CONTACTS_MENU_CARD, build_contacts_add_card
 )
 from my_bot.tools.crowdstrike_tools import collect_browser_history, get_and_clear_generated_file_path
 from services.crowdstrike_rtr import download_rtr_file
-from src.components.url_lookup_traffic import URLChecker
 from src.utils.http_utils import get_session
 from src.utils.toodles_decorators import toodles_log_activity
 from src.utils.webex_validation import validate_required_inputs, get_input_value
@@ -1143,7 +1142,7 @@ class GetBotHealth(the notification serviceCommand):
         # Determine current mode
         if CONFIG.should_use_proxy_resilience:
             mode = "Full Resilience"
-            health_detail = "ZScaler features + Auto-reconnect"
+            health_detail = "Proxy/TLS features + Auto-reconnect"
             features = "SSL config, WebSocket patching, device cleanup, auto-restart"
         elif CONFIG.should_auto_reconnect:
             mode = "Lite Resilience"
@@ -1616,97 +1615,6 @@ class FetchFilePull(the notification serviceCommand):
         )
 
 
-class GetUrlBlockVerdictForm(CardOnlyCommand):
-    """Display the URL block verdict form."""
-    command_keyword = "get_url_block_verdict_form"
-    card = URL_BLOCK_VERDICT_CARD
-    delete_previous_message = False
-
-
-class ProcessUrlBlockVerdict(the notification serviceCommand):
-    """Process URL filtering submission from the card."""
-    command_keyword = "url_verdict"
-    card = None
-
-    @toodles_log_activity
-    def execute(self, message, attachment_actions, activity):
-        import time
-        start_time = time.time()
-
-        # Handle both card submission and direct text command
-        if hasattr(attachment_actions, 'inputs') and 'urls_to_check' in attachment_actions.inputs:
-            # This is a card submission
-            urls_text = attachment_actions.inputs['urls_to_check'].strip()
-        else:
-            # This is a direct text command - extract URLs from message
-            urls_text = message.replace("url_verdict", "").strip()
-
-        if not urls_text:
-            return f"{activity['actor']['displayName']}, please provide URLs to test. Example: @toodles url_verdict facebook.com, google.com"
-
-        try:
-            # Create tester and parse/normalize URLs using backend logic
-            url_checker = URLChecker()
-            urls = url_checker.parse_and_normalize_urls(urls_text)
-
-            if not urls:
-                return f"{activity['actor']['displayName']}, please provide valid URLs to test."
-
-            # Test URLs and collect results
-            result = url_checker.get_block_verdict(urls, normalize=False)  # Already normalized
-            results = result['details']
-
-            # Build table data for tabulate
-            table_rows = []
-            for result in results:
-                url = result['url']
-                zs = result['zscaler']
-                bo = result['bloxone']
-
-                # Status indicators
-                zs_status = '✅' if zs.get('allowed') else '❌'
-
-                if 'skipped' in bo:
-                    bo_status = 'SKIPPED'
-                else:
-                    bo_status = '✅' if bo.get('allowed') else '❌'
-
-                # Truncate URL if too long for cleaner display
-                display_url = url if len(url) <= 50 else url[:47] + '...'
-
-                table_rows.append([display_url, zs_status, bo_status])
-
-            # Create table using tabulate
-            table_headers = ['URL', 'ZScaler', 'Bloxone']
-            table_str = tabulate(table_rows, headers=table_headers, tablefmt='simple', colalign=['left', 'center', 'center'])
-
-            # Calculate response time
-            response_time = round(time.time() - start_time)
-
-            # Build final response with Markdown formatting
-            response = (f"**{activity['actor']['displayName']}, URL block verdict results:**\n"
-                        f"```\n{table_str}\n\nLegend: ✅=ALLOWED ❌=BLOCKED\n"
-                        f"Response Time: {response_time}s\n```")
-
-            # Check length and fallback to summary if needed
-            if len(response) > 7000:  # Conservative limit for Webex
-                total = len(results)
-                zs_blocked = sum(1 for r in results if not r['zscaler'].get('allowed'))
-                bo_blocked = sum(1 for r in results if not r['bloxone'].get('allowed', True) and 'skipped' not in r['bloxone'])
-
-                response = (f"{activity['actor']['displayName']}, tested {total} URLs.\n"
-                            f"ZScaler blocked: {zs_blocked}/{total}\n"
-                            f"Bloxone blocked: {bo_blocked}/{total}\n"
-                            f"Results too long for chat - reduce the number of URLs in the input.\n"
-                            f"Responded in {response_time}s")
-
-            return response
-
-        except Exception as e:
-            logger.error(f"URL testing error: {str(e)}")
-            return f"{activity['actor']['displayName']}, error testing URLs: {str(e)}"
-
-
 class GetBirthdayAnniversaryForm(the notification serviceCommand):
     """Display the birthday and anniversary input form."""
     command_keyword = "get_birthday_anniversary_form"
@@ -2075,8 +1983,6 @@ def toodles_initialization(bot=None):
         bot.add_command(GetCompanyHolidays())
         bot.add_command(GetBotHealth())
         bot.add_command(Hi())
-        bot.add_command(GetUrlBlockVerdictForm())
-        bot.add_command(ProcessUrlBlockVerdict())
         bot.add_command(GetBirthdayAnniversaryForm())
         bot.add_command(SaveBirthdayAnniversary())
         # Domain monitoring

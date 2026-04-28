@@ -62,7 +62,7 @@ Multi-source monitoring with automated correlation across Certificate Transparen
 [Read more →](https://vinayvobbili.github.io/security-ops-platform/features/domain-monitoring)
 
 ### 30+ Security Integrations
-Unified API clients across EDR/XDR (CrowdStrike Falcon + RTR, Tanium, Vectra), SIEM (QRadar, Cortex XSIAM), SOAR (Cortex XSOAR), case management (DFIR-IRIS, TheHive), threat intel (Recorded Future, VirusTotal, URLScan, AbuseIPDB, Abuse.ch, IntelX, Shodan, HIBP), BAS (AttackIQ), identity (Active Directory, Varonis), email security (Abnormal, Zscaler), and ITSM (ServiceNow).
+Unified API clients across EDR/XDR (CrowdStrike Falcon + RTR, Tanium, Vectra), SIEM (QRadar, Cortex XSIAM), SOAR (Cortex XSOAR), case management (DFIR-IRIS, TheHive), threat intel (Recorded Future, VirusTotal, URLScan, AbuseIPDB, Abuse.ch, IntelX, Shodan, HIBP), BAS (AttackIQ), identity (Active Directory, Varonis), email security (Abnormal), and ITSM (ServiceNow).
 [Read more →](https://vinayvobbili.github.io/security-ops-platform/features/integrations)
 
 ---

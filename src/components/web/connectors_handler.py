@@ -103,17 +103,6 @@ def _probe_qradar():
     return True
 
 
-def _probe_zscaler():
-    from services.zscaler import ZscalerClient
-    client = ZscalerClient()
-    if not client.is_configured():
-        raise RuntimeError('Not configured')
-    result = client.get_status()
-    if isinstance(result, dict) and 'error' in result:
-        raise RuntimeError(result['error'])
-    return True
-
-
 def _probe_vectra():
     from services.vectra import VectraClient
     client = VectraClient()
@@ -385,7 +374,6 @@ _PROBES = {
     'tanium_onprem': _probe_tanium_onprem,
     'cisco_amp': _probe_cisco_amp,
     'qradar': _probe_qradar,
-    'zscaler': _probe_zscaler,
     'vectra': _probe_vectra,
     'palo_alto': _probe_palo_alto,
     'recorded_future': _probe_recorded_future,
@@ -483,13 +471,6 @@ CONNECTORS: list[dict] = [
         'category': 'SIEM & Network Security',
         'description': 'IBM SIEM for log analysis and threat detection',
         'env_vars': ['QRADAR_API_URL', 'QRADAR_API_KEY'],
-    },
-    {
-        'id': 'zscaler',
-        'name': 'Zscaler',
-        'category': 'SIEM & Network Security',
-        'description': 'Cloud security web gateway',
-        'env_vars': ['ZSCALER_API_BASE_URL', 'ZSCALER_API_USERNAME', 'ZSCALER_API_PASSWORD', 'ZSCALER_API_KEY'],
     },
     {
         'id': 'vectra',

@@ -53,7 +53,7 @@
         'crowdstrike': '\uD83E\uDD85', 'falcon': '\uD83E\uDD85',
         'incident': '\uD83D\uDEA8', 'alert': '\uD83D\uDEA8',
         'dns': '\uD83C\uDF10', 'infoblox': '\uD83C\uDF10', 'network': '\uD83C\uDF10',
-        'firewall': '\uD83D\uDD25', 'zscaler': '\uD83D\uDD25',
+        'firewall': '\uD83D\uDD25', 'proxy': '\uD83D\uDD25',
         'health': '\uD83D\uDC9A', 'agent': '\uD83D\uDC9A',
         'usage': '\uD83D\uDCCA', 'metric': '\uD83D\uDCCA', 'report': '\uD83D\uDCCA', 'dashboard': '\uD83D\uDCCA', 'scorecard': '\uD83D\uDCCA',
         'cmdb': '\uD83D\uDDC3\uFE0F', 'consolidation': '\uD83D\uDDC3\uFE0F', 'sacm': '\uD83D\uDDC3\uFE0F',

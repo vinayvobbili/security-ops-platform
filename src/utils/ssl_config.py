@@ -2,8 +2,8 @@
 SSL Configuration for Corporate Proxy Environments
 
 This module provides SSL configuration for applications running behind corporate
-proxies like Zscaler that perform SSL/TLS inspection. It configures Python's
-SSL libraries to work properly in these environments.
+proxies that perform SSL/TLS inspection. It configures Python's SSL libraries
+to work properly in these environments.
 
 Usage:
     from src.utils.ssl_config import configure_ssl_for_corporate_proxy
@@ -24,7 +24,7 @@ def configure_ssl_for_corporate_proxy(verbose=False):
     Configure SSL settings for applications running behind corporate proxies.
 
     This function disables SSL verification and configures SSL contexts to
-    work with corporate proxies like Zscaler that perform SSL/TLS inspection.
+    work with corporate proxies that perform SSL/TLS inspection.
 
     Args:
         verbose (bool): If True, print configuration status messages
@@ -83,13 +83,6 @@ def is_corporate_proxy_detected():
         bool: True if corporate proxy is detected, False otherwise
     """
     try:
-        import subprocess
-
-        # Check for ZScaler process
-        result = subprocess.run(["ps", "aux"], capture_output=True, text=True)
-        if "zscaler" in result.stdout.lower():
-            return True
-
         # Check environment variables for proxy
         proxy_vars = ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']
         for var in proxy_vars:

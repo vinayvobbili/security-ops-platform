@@ -47,7 +47,6 @@ BENIGN_DOMAINS = {
     'mcafee.com', 'trellix.com',
     'fireeye.com',
     'elastic.co', 'elastic.github.io',
-    'zscaler.com',
     'proofpoint.com',
     'checkpoint.com', 'research.checkpoint.com',
     'recordedfuture.com',

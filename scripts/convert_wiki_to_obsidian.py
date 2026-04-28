@@ -50,7 +50,6 @@ TAG_RULES = [
     ("tanium", "platform/tanium"),
     ("crowdstrike|falcon", "platform/crowdstrike"),
     ("qradar", "platform/qradar"),
-    ("zscaler", "platform/zscaler"),
     ("vectra", "platform/vectra"),
     ("varonis", "platform/varonis"),
     ("entra.id|entra.?id|aadinternals", "platform/entra-id"),

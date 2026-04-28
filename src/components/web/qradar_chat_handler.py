@@ -26,13 +26,12 @@ LOG_SOURCE_CATEGORIES: list[dict] = [
         "id": "web_proxy",
         "name": "Web Proxy",
         "icon": "\U0001f310",
-        "description": "Zscaler NSS & Blue Coat web proxy logs",
+        "description": "Blue Coat web proxy logs",
         "log_source_filter": (
-            "logsourcetypename(devicetype) = 'Zscaler Nss' "
-            "OR logsourcetypename(devicetype) = 'Blue Coat Web Security Service'"
+            "logsourcetypename(devicetype) = 'Blue Coat Web Security Service'"
         ),
         "schema": (
-            "Log Sources: Zscaler Nss, Blue Coat Web Security Service\n"
+            "Log Source: Blue Coat Web Security Service\n"
             "Key Fields:\n"
             "  - sourceip, destinationip\n"
             "  - \"Computer Hostname\" — client hostname\n"
@@ -185,27 +184,6 @@ LOG_SOURCE_CATEGORIES: list[dict] = [
             {"label": "Top users", "query": "Who signed in the most in the last hour?"},
             {"label": "CA policy blocks", "query": "Any Conditional Access blocks in the last hour?"},
             {"label": "Summarize auth", "query": "Summarize authentication activity in the last hour"},
-        ],
-    },
-    {
-        "id": "zpa",
-        "name": "Zscaler Private Access",
-        "icon": "\U0001f6e1\ufe0f",
-        "description": "ZPA session and access logs",
-        "log_source_filter": "logsourcetypename(devicetype) = 'Zscaler Private Access'",
-        "schema": (
-            "Log Source: Zscaler Private Access\n"
-            "Key Fields:\n"
-            "  - sourceip, destinationip\n"
-            "  - username — ZPA user\n"
-            "  - \"ZPN-Sess-Status\" — session status\n"
-            "  - starttime, magnitude, qidname(qid) AS eventName"
-        ),
-        "chips": [
-            {"label": "Active sessions", "query": "Show me active ZPA sessions in the last hour"},
-            {"label": "Top users", "query": "Who are the top ZPA users in the last hour?"},
-            {"label": "Failed sessions", "query": "Any failed ZPA sessions in the last hour?"},
-            {"label": "Summarize ZPA", "query": "Summarize ZPA activity in the last hour"},
         ],
     },
     {

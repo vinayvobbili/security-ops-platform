@@ -355,13 +355,6 @@ CURATED_CHIPS: dict[str, list[dict]] = {
         {"label": "Servers vs workstations", "query": "How does DNS compliance compare between servers and workstations?"},
         {"label": "Summarize the data", "query": "Give me a high-level summary of DNS configuration compliance"},
     ],
-    "zscaler": [
-        {"label": "ZScaler deployment", "query": "How many assets have ZScaler deployed vs missing?"},
-        {"label": "Agent compliance", "query": "How many ZScaler agents are compliant vs non-compliant?"},
-        {"label": "Deployment by country", "query": "Which countries have the lowest ZScaler deployment?"},
-        {"label": "AnyConnect burndown", "query": "How is the AnyConnect to ZScaler migration progressing?"},
-        {"label": "Summarize the data", "query": "Give me a high-level summary of ZScaler deployment status"},
-    ],
     "venafi": [
         {"label": "Certificate expiry", "query": "How many certificates are expiring in the next 30 days?"},
         {"label": "Expired certificates", "query": "How many certificates have already expired?"},

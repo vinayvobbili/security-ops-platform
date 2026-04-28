@@ -16,7 +16,7 @@ class SharedIPNonCorpVPN(BaseRule):
     outbound connections to enterprise SSO/VPN endpoints that don't
     belong to our organization.
 
-    Sources: CrowdStrike EDR + ZScaler (via cs-mcp-server)
+    Sources: CrowdStrike EDR (via cs-mcp-server)
     """
 
     rule_id = "OE-NET-001"
@@ -49,7 +49,7 @@ class SharedIPNonCorpVPN(BaseRule):
             dest_type = conn.get("dest_type", "")
 
             is_enterprise_sso = dest_type in ("okta_tenant", "azure_ad", "ping_sso")
-            is_vpn = dest_type in ("cisco_anyconnect", "globalprotect", "zscaler_other")
+            is_vpn = dest_type in ("cisco_anyconnect", "globalprotect")
             is_ours = any(d in dest for d in our_domains)
 
             if (is_enterprise_sso or is_vpn) and not is_ours:

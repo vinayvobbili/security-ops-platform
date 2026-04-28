@@ -56,7 +56,6 @@ The Model Context Protocol standardizes how LLM clients talk to tools. By exposi
 | Tool | Capability |
 |---|---|
 | `abnormal` | Email threat investigation |
-| `zscaler` | URL categorization and filtering status |
 | `block_url` | Push URL blocks to upstream filtering |
 
 ### Identity

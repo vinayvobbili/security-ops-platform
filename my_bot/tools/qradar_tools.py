@@ -386,13 +386,12 @@ def run_qradar_aql_query(aql_query: str) -> str:
     - Time series: SELECT DATEFORMAT(starttime,'yyyy-MM-dd HH:00') AS hour, COUNT(*) AS cnt FROM events WHERE ... GROUP BY hour ORDER BY hour ASC LAST 24 HOURS
 
     LOG SOURCES & FIELDS (filter with logsourcetypename(devicetype) = '...'):
-    - Web Proxy (Zscaler Nss / Blue Coat): sourceip, destinationip, "Computer Hostname", username, URL, "Referer", "User Agent", filename, "Action" (Allowed/Blocked/nss-fw)
+    - Web Proxy (Blue Coat Web Security Service): sourceip, destinationip, "Computer Hostname", username, URL, "Referer", "User Agent", filename, "Action" (Allowed/Blocked)
     - Email (Area1 Security / Abnormal Security): sourceip, username, sender, recipient, "Subject"
     - Office 365 (deviceType='397', Operation IN ('TIUrlClickData','TIMailData')): username, URL, "Subject", "Filename"
     - Palo Alto (Palo Alto PA Series): sourceip, destinationip, "Threat Name", "Action", URL, "TSLD", "PAN Log SubType"
     - Endpoint (CrowdStrike Falcon / Tanium): "Computer Hostname", username, "Process Name", "Command", "MD5 Hash", "SHA256 Hash"
     - Entra ID (Microsoft Azure Active Directory): username, sourceip, Operation, "Conditional Access Status", "Region"
-    - ZPA (Zscaler Private Access): username, sourceip, "ZPN-Sess-Status"
     - Common fields (all sources): sourceip, destinationip, destinationport, username, starttime, magnitude (0-10)
 
     PERFORMANCE: NEVER GROUP BY URL (millions of unique values, will time out). Use GROUP BY "TSLD" for domain aggregations.
@@ -486,7 +485,7 @@ def _get_nl_to_aql_llm():
 # Order matters only as a tiebreaker (first match wins on equal scores).
 _CATEGORY_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
     ("web_proxy", (
-        "web proxy", "zscaler nss", "blue coat", "bluecoat", "browse", "browsed",
+        "web proxy", "blue coat", "bluecoat", "browse", "browsed",
         "blocked domain", "blocked url", "blocked site", "user agent", "referer",
         "downloaded file", "url category", "web filter",
     )),
@@ -510,9 +509,6 @@ _CATEGORY_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
     ("entra_id", (
         "entra", "azure ad", "azure active directory", "aad", "sign-in", "signin",
         "sign in", "conditional access", "ca policy", "interactive login", "mfa",
-    )),
-    ("zpa", (
-        "zpa", "zscaler private access", "zpn-sess", "private access session",
     )),
 ]
 
@@ -560,13 +556,12 @@ def nl_to_aql_query(question: str, category: str = "auto") -> str:
     - You want pre-built schemas, log-source filters, and AQL guidance applied automatically
 
     Available categories (auto-detected from question; pass explicitly only if you must override):
-    - web_proxy   — Zscaler NSS & Blue Coat web proxy logs
+    - web_proxy   — Blue Coat web proxy logs
     - email       — Area1 & Abnormal email security
     - o365        — Office 365 threat intel (URL clicks, mail data, AIR investigations)
     - paloalto    — Palo Alto firewall threats and traffic
     - endpoint    — CrowdStrike Falcon & Tanium endpoint detections
     - entra_id    — Microsoft Entra ID / Azure AD sign-ins
-    - zpa         — Zscaler Private Access sessions
     - all_events  — Any log source (cross-source searches or when no dataset matches)
 
     NOTE: For raw AQL the user provides verbatim, use run_qradar_aql_query.
