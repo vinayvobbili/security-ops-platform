@@ -234,6 +234,10 @@ def get_config(bot_name: str | None = None):
         qradar_api_url=os.environ.get("QRADAR_API_URL"),
         qradar_api_key=os.environ.get("QRADAR_API_KEY"),
         qradar_console_url=os.environ.get("QRADAR_CONSOLE_URL"),
+        # Microsoft Defender (XDR / Defender for Endpoint) — Microsoft Graph OAuth2 client credentials
+        defender_tenant_id=os.environ.get("DEFENDER_TENANT_ID"),
+        defender_client_id=os.environ.get("DEFENDER_CLIENT_ID"),
+        defender_client_secret=os.environ.get("DEFENDER_CLIENT_SECRET"),
         xsiam_prod_api_auth_id=os.environ.get("XSIAM_PROD_API_AUTH_ID"),
         xsiam_prod_api_key=os.environ.get("XSIAM_PROD_API_KEY"),
         xsiam_prod_api_base_url=os.environ.get("XSIAM_PROD_API_BASE_URL"),
@@ -445,6 +449,10 @@ class Config:
     qradar_api_url: Optional[str] = None
     qradar_api_key: Optional[str] = None
     qradar_console_url: Optional[str] = None
+    # Microsoft Defender (XDR / Defender for Endpoint)
+    defender_tenant_id: Optional[str] = None
+    defender_client_id: Optional[str] = None
+    defender_client_secret: Optional[str] = None
     xsiam_prod_api_auth_id: Optional[str] = None
     xsiam_prod_api_key: Optional[str] = None
     xsiam_prod_api_base_url: Optional[str] = None

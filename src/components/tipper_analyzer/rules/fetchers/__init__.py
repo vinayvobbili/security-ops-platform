@@ -33,4 +33,4 @@ def get_all_platforms() -> List[str]:
 
 
 # Import fetchers to trigger registration
-from . import qradar, crowdstrike, tanium  # noqa: E402, F401
+from . import qradar, crowdstrike, tanium, defender  # noqa: E402, F401
