@@ -168,6 +168,13 @@ Unified API clients for the security ecosystem:
 
 ## Getting Started
 
+> **Just want Claude Code on your own LLM?** If you came here for Anthropic's CLI
+> agent pointed at a self-hosted local model (mlx-lm, Ollama, vLLM, anything
+> behind a LiteLLM shim) instead of the full platform, jump to
+> **[Claude Code + Local LLM Setup](CLAUDE_CODE_SETUP)** — install, env-var
+> config, the protocol shim, and a 2-minute tutorial. The steps below are for
+> running this repo's web app.
+
 ```bash
 # Clone the repository
 git clone https://github.com/vinayvobbili/security-ops-platform.git
