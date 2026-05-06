@@ -1,3 +1,8 @@
+---
+layout: default
+title: Claude Code Setup — User Guide
+---
+
 # 🤖 Claude Code → Our Internal LLM
 
 > **status: live** · **backend: internal** · **corp network only** · **cost: $0**

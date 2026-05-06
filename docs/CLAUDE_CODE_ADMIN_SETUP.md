@@ -1,3 +1,8 @@
+---
+layout: default
+title: Claude Code Setup — Admin Guide
+---
+
 # 🛠️ Claude Code Local Stack — Admin Guide
 
 > **scope: lab-vm1 + Mac fleet** · **consumers: any Claude Code client on corp net** · **status: production**
