@@ -754,7 +754,7 @@ def build_admin_doc() -> Document:
         ["Tunnel port", "Mac", "Engine", "Model"],
         [
             ["8015", "mac-m1",   "vllm-mlx", "mlx-community/GLM-4.7-Flash-8bit"],
-            ["8023", "studio1",  "vllm-mlx", "/Users/vvobbilichetty/models/Qwen3-32B-8bit"],
+            ["8023", "studio1",  "vllm-mlx", "qwen3-32b"],
             ["8022", "studio1",  "Ollama",   "laguna-xs.2:q8_0"],
         ],
         col_widths_cm=[2.5, 3.0, 3.0, 7.5],
@@ -798,7 +798,7 @@ def build_admin_doc() -> Document:
         "  \"Providers\": [\n"
         "    { \"name\": \"qwen\",   \"api_base_url\": \"http://127.0.0.1:8023/v1/chat/completions\",\n"
         "      \"api_key\": \"sk-no-key\",\n"
-        "      \"models\": [\"/Users/vvobbilichetty/models/Qwen3-32B-8bit\"] },\n"
+        "      \"models\": [\"qwen3-32b\"] },\n"
         "    { \"name\": \"glm\",    \"api_base_url\": \"http://127.0.0.1:8015/v1/chat/completions\",\n"
         "      \"api_key\": \"sk-no-key\",\n"
         "      \"models\": [\"glm-4.7-flash\"] },\n"
@@ -807,10 +807,10 @@ def build_admin_doc() -> Document:
         "      \"models\": [\"laguna-xs.2:q8_0\"] }\n"
         "  ],\n"
         "  \"Router\": {\n"
-        "    \"default\":     \"qwen,/Users/vvobbilichetty/models/Qwen3-32B-8bit\",\n"
-        "    \"background\":  \"qwen,/Users/vvobbilichetty/models/Qwen3-32B-8bit\",\n"
-        "    \"think\":       \"qwen,/Users/vvobbilichetty/models/Qwen3-32B-8bit\",\n"
-        "    \"longContext\": \"qwen,/Users/vvobbilichetty/models/Qwen3-32B-8bit\"\n"
+        "    \"default\":     \"qwen,qwen3-32b\",\n"
+        "    \"background\":  \"qwen,qwen3-32b\",\n"
+        "    \"think\":       \"qwen,qwen3-32b\",\n"
+        "    \"longContext\": \"qwen,qwen3-32b\"\n"
         "  }\n"
         "}")
 
@@ -820,7 +820,7 @@ def build_admin_doc() -> Document:
         "ccr providers. Edit, save, restart `ir-claude-router-shim`.")
     add_code_block(doc,
         "MODEL_MAP = {\n"
-        "    \"claude-qwen3-32b\":      \"qwen,/Users/vvobbilichetty/models/Qwen3-32B-8bit\",\n"
+        "    \"claude-qwen3-32b\":      \"qwen,qwen3-32b\",\n"
         "    \"claude-glm-4.7-flash\":  \"glm,glm-4.7-flash\",\n"
         "    \"claude-laguna\":         \"laguna,laguna-xs.2:q8_0\",\n"
         "}\n"
@@ -1362,7 +1362,7 @@ Backends (each lives behind a reverse SSH tunnel from its Mac):
 | Tunnel port | Mac | Engine | Model |
 |---|---|---|---|
 | 8015 | mac-m1 | vllm-mlx | `mlx-community/GLM-4.7-Flash-8bit` |
-| 8023 | studio1 | vllm-mlx | `/Users/vvobbilichetty/models/Qwen3-32B-8bit` |
+| 8023 | studio1 | vllm-mlx | `qwen3-32b` |
 | 8022 | studio1 | Ollama | `laguna-xs.2:q8_0` |
 
 ---
@@ -1407,7 +1407,7 @@ ccr config — providers, model lists, routing rules. Not under git (contains li
   "Providers": [
     { "name": "qwen",   "api_base_url": "http://127.0.0.1:8023/v1/chat/completions",
       "api_key": "sk-no-key",
-      "models": ["/Users/vvobbilichetty/models/Qwen3-32B-8bit"] },
+      "models": ["qwen3-32b"] },
     { "name": "glm",    "api_base_url": "http://127.0.0.1:8015/v1/chat/completions",
       "api_key": "sk-no-key",
       "models": ["glm-4.7-flash"] },
@@ -1416,10 +1416,10 @@ ccr config — providers, model lists, routing rules. Not under git (contains li
       "models": ["laguna-xs.2:q8_0"] }
   ],
   "Router": {
-    "default":     "qwen,/Users/vvobbilichetty/models/Qwen3-32B-8bit",
-    "background":  "qwen,/Users/vvobbilichetty/models/Qwen3-32B-8bit",
-    "think":       "qwen,/Users/vvobbilichetty/models/Qwen3-32B-8bit",
-    "longContext": "qwen,/Users/vvobbilichetty/models/Qwen3-32B-8bit"
+    "default":     "qwen,qwen3-32b",
+    "background":  "qwen,qwen3-32b",
+    "think":       "qwen,qwen3-32b",
+    "longContext": "qwen,qwen3-32b"
   }
 }
 ```
@@ -1429,7 +1429,7 @@ Two dicts at the top decide what shows up in `/v1/models` and how aliases map to
 
 ```python
 MODEL_MAP = {
-    "claude-qwen3-32b":      "qwen,/Users/vvobbilichetty/models/Qwen3-32B-8bit",
+    "claude-qwen3-32b":      "qwen,qwen3-32b",
     "claude-glm-4.7-flash":  "glm,glm-4.7-flash",
     "claude-laguna":         "laguna,laguna-xs.2:q8_0",
 }

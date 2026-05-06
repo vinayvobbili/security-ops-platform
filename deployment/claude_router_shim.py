@@ -27,7 +27,7 @@ SHIM_PORT = int(os.environ.get("CCR_SHIM_PORT", "8051"))
 SHIM_APIKEY = os.environ["CCR_APIKEY"]
 
 MODEL_MAP: dict[str, str] = {
-    "claude-qwen3-32b": "qwen,/Users/vvobbilichetty/models/Qwen3-32B-8bit",
+    "claude-qwen3-32b": "qwen,qwen3-32b",
     "claude-glm-4.7-flash": "glm,glm-4.7-flash",
     "claude-laguna": "laguna,laguna-xs.2:q8_0",
 }

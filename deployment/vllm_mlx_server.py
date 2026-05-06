@@ -18,6 +18,8 @@ Usage:
         --enable-auto-tool-choice   Enable tool call parsing (auto-set if --tool-call-parser given)
         --tool-call-parser NAME     Parser: auto, qwen, llama, hermes, deepseek, glm47, etc.
         --chat-template PATH        Override the model's chat template with a custom Jinja file
+        --served-model-name NAME    Public model id reported via /v1/models and accepted in
+                                    chat completion requests (defaults to the value of --model)
 """
 
 import argparse
@@ -53,6 +55,7 @@ def main():
     pre_parser.add_argument("--enable-auto-tool-choice", action="store_true")
     pre_parser.add_argument("--tool-call-parser", type=str, default=None)
     pre_parser.add_argument("--chat-template", type=str, default=None)
+    pre_parser.add_argument("--served-model-name", type=str, default=None)
     pre_args, remaining = pre_parser.parse_known_args()
 
     # Peek at --model without consuming it (vllm-mlx needs it too)
@@ -78,6 +81,18 @@ def main():
         server._enable_auto_tool_choice = True
         server._tool_call_parser = pre_args.tool_call_parser or "auto"
         print(f"[wrapper] Tool call parsing enabled: {server._tool_call_parser}")
+
+    # vllm-mlx supports served_model_name internally (server.load_model accepts it)
+    # but doesn't expose it via CLI. Wrap load_model to inject it.
+    if pre_args.served_model_name:
+        original_load_model = server.load_model
+
+        def patched_load_model(*args, **kwargs):
+            kwargs["served_model_name"] = pre_args.served_model_name
+            return original_load_model(*args, **kwargs)
+
+        server.load_model = patched_load_model
+        print(f"[wrapper] Served model name: {pre_args.served_model_name}")
 
     # Run the standard server
     server.main()
