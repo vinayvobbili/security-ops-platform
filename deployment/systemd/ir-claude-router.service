@@ -1,0 +1,18 @@
+[Unit]
+Description=IR Claude Code Router (Anthropic Messages API → vllm-mlx/Ollama, port 8050)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/vinay
+EnvironmentFile=/home/vinay/security-ops-platform/data/transient/.env
+ExecStart=/home/vinay/.nvm/versions/node/v25.2.1/bin/node /home/vinay/.nvm/versions/node/v25.2.1/lib/node_modules/@musistudio/claude-code-router/dist/cli.js start
+Restart=on-failure
+KillMode=mixed
+TimeoutStopSec=10
+RestartSec=10
+StandardOutput=append:/home/vinay/security-ops-platform/data/transient/logs/claude_router.log
+StandardError=append:/home/vinay/security-ops-platform/data/transient/logs/claude_router.log
+
+[Install]
+WantedBy=default.target
