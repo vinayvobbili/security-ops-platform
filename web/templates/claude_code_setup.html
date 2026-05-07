@@ -1041,8 +1041,24 @@ curl -s -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \
                 <div class="ccs-faq-a">Occasional issue with the local model — it's noted in the caveats above. Retry the prompt; if it persists, simplify the request (fewer tools, smaller scope) or file a bug with the team lead.</div>
             </div>
             <div class="ccs-faq-item">
-                <button class="ccs-faq-q">First response is slow, later ones are fast. Why?</button>
-                <div class="ccs-faq-a">The model warms up after the first query. Subsequent prompts in the same session reuse the loaded weights and KV cache — that's normal, not a bug.</div>
+                <button class="ccs-faq-q">My first turn took 2 minutes but my second was 8 seconds. What changed?</button>
+                <div class="ccs-faq-a">That's the system-prompt cache doing its job. The first turn prefills the system prompt + tool definitions (a 23–38K-token block) once; every follow-up turn restores that block from cache and only pays compute on your new message. Cold-cache first turn is unavoidable; warm-cache follow-ups are the steady state. If a follow-up is also slow, see the next question.</div>
+            </div>
+            <div class="ccs-faq-item">
+                <button class="ccs-faq-q">One of my follow-up turns was slow even though I'd already warmed the cache.</button>
+                <div class="ccs-faq-a">Three common causes: <strong>(1)</strong> you switched model mid-session — each model has its own cache slot, switching forces a cold prefill; <strong>(2)</strong> someone else's session ran a different model on the same backend and evicted your slot (single-slot cache, mixed traffic contends); <strong>(3)</strong> Claude Code's tool list grew (e.g. an MCP server kicked in) and changed the prefix shape. Stick with one model for the duration of a session if speed matters.</div>
+            </div>
+            <div class="ccs-faq-item">
+                <button class="ccs-faq-q">🪟 PowerShell rejects <code>ANTHROPIC_MODEL=qwen2.5-coder-32b claude</code> with "not recognized".</button>
+                <div class="ccs-faq-a">That syntax is bash-only. PowerShell needs <code>$env:ANTHROPIC_MODEL="qwen2.5-coder-32b"; claude</code> (one line, semicolon between assignment and command), or just <code>claude --model qwen2.5-coder-32b</code>. The <code>--model</code> flag is the easiest cross-shell way to switch models for one session.</div>
+            </div>
+            <div class="ccs-faq-item">
+                <button class="ccs-faq-q">Tool output appeared in one chunk instead of streaming. Is something stuck?</button>
+                <div class="ccs-faq-a">Expected for some models. The Coder alias buffers tool calls because the underlying parser streams JSON as text deltas instead of structured <code>tool_use</code> blocks — we fall back to non-streaming for that alias and synthesize a clean tool block at the end. You lose the typewriter effect on tool calls; chat output still streams. Switch to <code>glm-4.7-flash</code> if streaming during tool use matters.</div>
+            </div>
+            <div class="ccs-faq-item">
+                <button class="ccs-faq-q">It "thinks" for 30 seconds before answering on a reasoning model.</button>
+                <div class="ccs-faq-a">That's generation time, not prefill. The cache eliminates prefill (the constant prefix); it can't shorten how many tokens the model generates before the answer. Reasoning-flavored models (anything with a <code>&lt;think&gt;</code> block) emit hundreds of reasoning tokens before the user-facing answer, every turn. Switch to <code>glm-4.7-flash</code> (non-thinking) for snappy chat; keep thinking models for hard problems.</div>
             </div>
             <div class="ccs-faq-item">
                 <button class="ccs-faq-q">Can I use this for confidential / customer data?</button>
@@ -1050,7 +1066,7 @@ curl -s -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \
             </div>
             <div class="ccs-faq-item">
                 <button class="ccs-faq-q">Can I run two <code>claude</code> sessions at once?</button>
-                <div class="ccs-faq-a">Yes. Open a second terminal in a different repo and go. They're independent — each has its own conversation context.</div>
+                <div class="ccs-faq-a">Yes — but if you're running different models in each, expect cache contention (single-slot cache; the second session's cold prefill evicts the first session's warm slot, and vice versa). Same model in both sessions = no contention.</div>
             </div>
             <div class="ccs-faq-item">
                 <button class="ccs-faq-q">How do I see what env vars Claude Code is actually using?</button>

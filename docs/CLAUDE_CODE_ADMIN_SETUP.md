@@ -236,6 +236,12 @@ systemctl --user restart ir-claude-router ir-claude-router-shim
 | Picker doesn't show models | Stale gateway-models cache on client | Delete `~/.claude/cache/gateway-models.json` on client, restart `claude`. |
 | Tool calls flaky | Model-specific (smaller models drop tool args) | Switch to `glm-4.7-flash` — most reliable for tool use. |
 | Shim restart with no effect | Edited `config.json` but didn't restart ccr | Restart both for any provider change. |
+| Every turn is a cache MISS in the vllm-mlx log | Billing-header strip not applied (shim out of sync), or model alias changed mid-session, or session prefix mutated | tail studio1 log for `System KV cache MISS` lines and compare hashes turn-over-turn. Confirm shim has the `_strip_billing_header` call wired into `/v1/messages`. Restart `ir-claude-router-shim`. |
+| First turn fast, but follow-up turns slow again | Single-slot cache contention from concurrent traffic on the same backend | Check the vllm-mlx log for STORED events between user turns — a different prefix STOREd means another caller evicted the slot. Pin one model per Mac when possible. |
+| Tool calls render as a text blob (raw JSON) instead of a `tool_use` block | vllm-mlx tool-call streaming bug for hermes/qwen parsers — JSON streams as content deltas | Add the alias to `BUFFER_TO_STREAM_ALIASES` in `deployment/claude_router_shim.py`. The shim falls back to non-streaming and synthesizes a clean Anthropic SSE event sequence. |
+| Reasoning model leaks `<think>` prose into the visible answer | Stock Claude Code system prompt doesn't tell the model to wrap reasoning | Use a `-think` alias (e.g. `glm-4.7-flash-think`) — the shim injects a wrap-reasoning-in-think-tags nudge so the upstream's `deepseek_r1` parser routes thinking to `reasoning_content` instead of leaking to user-facing content. |
+| Patch lost after `pip install --upgrade vllm-mlx` | Upgrade overwrote `vllm_mlx/engine/simple.py` | ssh studio1, re-run `deployment/vllm_mlx_patches/apply.sh`, then bounce the launchctl agent. The script is idempotent; safe to run on every upgrade. |
+| Client gets `"fetch failed"` with a Node stack trace exposing the operator's home dir | ccr's default error path used to leak a stack with `/home/<user>/.nvm/.../claude-code-router/dist/cli.js:582:11089` | Already mitigated — the shim's `_sanitized_error_response` returns clean Anthropic-format errors and logs the full upstream body to `data/transient/logs/claude_router_shim.log` for operator debugging. |
 
 ---
 

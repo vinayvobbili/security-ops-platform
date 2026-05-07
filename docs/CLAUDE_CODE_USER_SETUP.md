@@ -50,18 +50,19 @@ Three local models exposed through one endpoint.
 
 ## ⏱️ Speed & latency — what to expect
 
-> **❗ Read this before you judge.** Every turn re-prefills the entire conversation. There is **no prompt cache** locally today. Plan for **1–3 minutes per turn**, not the sub-second feel of anthropic.com. Your first "Hi" can take 2+ minutes — that's the floor, not a bug.
+> **❗ First turn pays for the whole session.** First turn in a fresh `claude` session takes 1–3 minutes — that's the floor, not a bug. Every follow-up turn drops to seconds because we cache the system prompt + tool definitions on the first turn and reuse them. If a follow-up is also slow, see the FAQ below.
 
 Measured on studio1 (Apple Silicon, GLM-4.7-Flash 8-bit) with Claude Code's stock system prompt + ~60 tools:
 
 | Turn | Typical latency | Why |
 |---|---|---|
-| First "Hi" in a fresh session | ≈ 90–150 s | Prefill of system prompt + tool definitions (~9K tokens) at ~90 tok/s. |
-| Tool-using turn (read a file, suggest an edit) | ≈ 90–180 s | Same prefill plus the file you just attached + the prior turns. |
-| Long session (10+ turns, large files in context) | Grows turn-over-turn | Conversation keeps re-prefilling. Use `/compact` and `/clear` proactively. |
+| First "Hi" in a fresh session | ≈ 90–150 s | Cold cache. Prefill of system prompt + tool definitions (≈ 23–38K tokens) at ~150 tok/s. |
+| Follow-up turn (cache hit) | ≈ 5–15 s | System prefix served from cache. Only your new message + generation pays compute. |
+| After switching model mid-session | Back to 1–3 min | Each model has its own cache slot — switching forces a fresh prefill. |
+| Long session (10+ turns, large files in context) | Grows turn-over-turn | The cached prefix stays cheap; what grows is conversation history. `/compact` keeps it lean. |
 
 ### 🤔 Why so much slower than anthropic.com?
-- **Prompt caching** — Anthropic caches your system prompt and tools server-side, so a repeat turn skips prefill entirely (sub-second first token). Our stack doesn't have this yet (the underlying flag is broken in our current mlx-lm version).
+- **Cache scope** — Anthropic caches the entire conversation. We cache only the system prompt + tool definitions (the constant 23–38K-token prefix). Your message and prior turns still pay compute every turn.
 - **Hardware** — a Mac Studio is not a datacenter GPU. Cloud Claude runs on accelerator clusters with orders-of-magnitude more memory bandwidth.
 - **Model size** — GLM-4.7-Flash is ~30 GB on disk; Opus / Sonnet are far larger and run on far bigger machines. Smaller model partly compensates for the slower hardware, but only partly.
 
@@ -335,7 +336,7 @@ Then `claude login` to authenticate.
 
 - Smaller context window than Claude. Use `/compact` often, `/clear` when conversations drift.
 - Tool-call reliability varies by model. If it loops or emits malformed JSON, simplify the prompt.
-- Every turn re-prefills the conversation (no local prompt cache today) — see the Speed & latency section above.
+- First turn is slow (cold cache); follow-up turns are fast — see Speed & latency above.
 - If something's genuinely broken (not just "lower quality than Claude"), file it.
 
 ---
@@ -380,14 +381,26 @@ A: Rephrase. Adding context like "this is my own project, the file is mine to ed
 **Q: Tool calls are failing or producing malformed JSON.**
 A: Simplify the request — break it into smaller steps.
 
-**Q: Every turn feels slow. Why isn't the second one faster?**
-A: Anthropic's cloud caches your system prompt + tools server-side, so repeat turns skip prefill. We don't have that locally yet — every turn re-prefills the conversation. The first turn pays for ~9K tokens of system prompt + tools; each subsequent turn pays for that plus everything since. Use `/compact` and `/clear` to keep context lean. See the Speed & latency section near the top of this doc for measured numbers.
+**Q: My first turn took 2 minutes but my second was 8 seconds. What changed?**
+A: That's the system-prompt cache doing its job. The first turn prefills the system prompt + tool definitions (a 23–38K-token block) once; every follow-up turn restores that block from cache and only pays compute on your new message. Cold-cache first turn is unavoidable; warm-cache follow-ups are the steady state. If a follow-up is also slow, see the next FAQ.
+
+**Q: One of my follow-up turns was slow even though I'd already warmed the cache.**
+A: Three common causes: (1) you switched model mid-session — each model has its own cache slot, switching forces a cold prefill; (2) someone else's session ran a different model on the same backend and evicted your slot (single-slot cache, mixed traffic contends); (3) Claude Code's tool list grew (e.g. an MCP server kicked in) and changed the prefix shape. Stick with one model for the duration of a session if speed matters.
+
+**Q: I'm on PowerShell and `ANTHROPIC_MODEL=qwen2.5-coder-32b claude` errors out with 'not recognized'.**
+A: That syntax is bash-only. PowerShell needs either `$env:ANTHROPIC_MODEL="qwen2.5-coder-32b"; claude` (one line, semicolon between assignment and command) or just `claude --model qwen2.5-coder-32b`. The `--model` flag is the easiest cross-shell way to switch models for one session.
+
+**Q: Tool output appeared in one chunk instead of streaming. Is something stuck?**
+A: Expected for some models. The Coder alias buffers tool calls because the underlying parser streams JSON as text deltas instead of structured `tool_use` blocks — we fall back to non-streaming for that alias and synthesize a clean tool block at the end. You lose the typewriter effect on tool calls; chat output still streams. Switch to `glm-4.7-flash` if streaming during tool use matters.
+
+**Q: It "thinks" for 30 seconds before answering on a reasoning model.**
+A: That's generation time, not prefill. The cache eliminates prefill (the constant prefix); it can't shorten how many tokens the model generates before the answer. Reasoning-flavored models (anything with a `<think>` block) emit hundreds of reasoning tokens before the user-facing answer, every turn. Switch to `glm-4.7-flash` (non-thinking) for snappy chat; keep thinking models for hard problems.
 
 **Q: Can I use this for confidential / customer data?**
 A: Prompts and responses stay on our hardware — nothing is sent to Anthropic or any third party. Follow normal data-handling policy.
 
 **Q: Can I run two `claude` sessions at once?**
-A: Yes. Open a second terminal in a different repo. Independent contexts.
+A: Yes — but if you're running different models in each, expect cache contention (single-slot cache; the second session's cold prefill evicts the first session's warm slot, and vice versa). Same model in both sessions = no contention.
 
 **Q: How do I see what env vars Claude Code is using?**
 A: Type `/status` inside the prompt — shows resolved BASE_URL, model, permission mode, working directory.
