@@ -171,7 +171,7 @@ def notify_webex_suppression(incident, silencer):
                 # Footer
                 {
                     "type": "TextBlock",
-                    "text": "🌐 [View all silencers on web dashboard](http://gdnr.the company.com/ticket-cannon)",
+                    "text": "🌐 [View all silencers on web dashboard](http://gdnr.the-company.com/ticket-cannon)",
                     "spacing": "Medium",
                     "separator": True,
                     "size": "Small",

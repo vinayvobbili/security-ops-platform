@@ -292,7 +292,7 @@ def generate_diagram(mermaid_source: str, title: str = "") -> str:
             Y --> D{🔍 DMARC Check}:::decision
             D -->|❌ FAIL| R[🚫 Rejected 554]:::blocked
             R --> N[📨 NDR Bounce]:::asset
-            N --> M[📥 dclaudio@the company.com]:::system
+            N --> M[📥 analyst@the-company.com]:::system
             subgraph SC[🛡️ Security Controls]
                 direction TB
                 SC1[🛡️ DMARC Policy]:::defender
@@ -332,7 +332,7 @@ def generate_diagram(mermaid_source: str, title: str = "") -> str:
             Y --> D{DMARC Check}:::decision
             D -->|FAIL| R[Rejected 554 5.7.9]:::blocked
             R --> N[NDR Bounce]:::asset
-            N --> M[dclaudio@the company.com]:::system
+            N --> M[analyst@the-company.com]:::system
 
     - For SEQUENCE diagrams, group actors by trust zone with `box` syntax:
         sequenceDiagram

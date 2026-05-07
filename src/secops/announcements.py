@@ -648,7 +648,7 @@ def announce_previous_shift_performance(room_id: str, shift_name: str) -> None:
                     horizontalAlignment=HorizontalAlignment.CENTER,
                 ),
                 TextBlock(
-                    text=f"{prev_shift_name.capitalize()} Shift · {target_date.strftime('%b %d, %Y')} · Score: [{score}/10](http://gdnr.the company.com/shift-performance?shift_id={target_date.strftime('%Y-%m-%d')}_{prev_shift_name})",
+                    text=f"{prev_shift_name.capitalize()} Shift · {target_date.strftime('%b %d, %Y')} · Score: [{score}/10](http://gdnr.the-company.com/shift-performance?shift_id={target_date.strftime('%Y-%m-%d')}_{prev_shift_name})",
                     size=FontSize.SMALL,
                     color=Colors.LIGHT,
                     horizontalAlignment=HorizontalAlignment.CENTER,

@@ -1,6 +1,6 @@
 """Adaptive cards for escalation contacts management."""
 
-CONTACTS_URL = "http://gdnr.the company.com/escalation-contacts"
+CONTACTS_URL = "http://gdnr.the-company.com/escalation-contacts"
 
 CONTACTS_MENU_CARD = {
     "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",

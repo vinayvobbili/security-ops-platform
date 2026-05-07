@@ -274,7 +274,7 @@ def announce_change(entry: dict, action: str, category: str, toggled_by: str = "
             {
                 "type": "Action.OpenUrl",
                 "title": "🌐 View all silencers on web dashboard",
-                "url": "http://gdnr.the company.com/ticket-cannon",
+                "url": "http://gdnr.the-company.com/ticket-cannon",
             },
         ],
     }

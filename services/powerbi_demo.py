@@ -12,9 +12,9 @@ from datetime import datetime, timedelta
 # ── Demo datasets ──
 
 DEMO_DATASETS = [
-    {"id": "demo-endpoint-compliance", "name": "Global Endpoint Compliance", "configuredBy": "chris.mcneilus@the company.com"},
-    {"id": "demo-vuln-management", "name": "Vulnerability Management", "configuredBy": "chris.mcneilus@the company.com"},
-    {"id": "demo-security-incidents", "name": "Security Incidents 2026", "configuredBy": "tgranata@the company.com"},
+    {"id": "demo-endpoint-compliance", "name": "Global Endpoint Compliance", "configuredBy": "pbi-engineer@the-company.com"},
+    {"id": "demo-vuln-management", "name": "Vulnerability Management", "configuredBy": "pbi-engineer@the-company.com"},
+    {"id": "demo-security-incidents", "name": "Security Incidents 2026", "configuredBy": "pbi-engineer@the-company.com"},
 ]
 
 # ── Schemas ──

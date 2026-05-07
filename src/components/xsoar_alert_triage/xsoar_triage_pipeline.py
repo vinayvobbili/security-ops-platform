@@ -90,7 +90,7 @@ the call as a guardrail):
 - (any intent)     + outcome=false_alarm          → false_positive
 
 EXAMPLES:
-- "External IP sent spoofed email impersonating dclaudio@the company.com to a Yahoo recipient. \
+- "External IP sent spoofed email impersonating analyst@the-company.com to a Yahoo recipient. \
 Yahoo rejected it via DMARC, generated an NDR." → intent=malicious, outcome=blocked → \
 true_positive_malicious_contained. (NOT true_positive_benign — DMARC working as designed \
 reduces impact, not intent.)

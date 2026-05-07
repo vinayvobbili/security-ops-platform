@@ -43,7 +43,7 @@ def _build_card(title, subtitle, category_value, create_keyword):
                 "spacing": "Small",
                 "horizontalAlignment": "Center",
                 "actions": [
-                    {"type": "Action.OpenUrl", "title": "📋 View Current Entries", "url": "http://gdnr.the company.com/ticket-cannon"},
+                    {"type": "Action.OpenUrl", "title": "📋 View Current Entries", "url": "http://gdnr.the-company.com/ticket-cannon"},
                 ],
             },
             {

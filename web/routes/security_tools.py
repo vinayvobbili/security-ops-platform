@@ -233,7 +233,7 @@ def api_s3_bucket_scan():
     so heartbeats keep the connection alive through Waitress/nginx.
 
     Query params:
-        domain: Domain to scan (e.g. the company.com) — brand name extracted automatically.
+        domain: Domain to scan (e.g. the-company.com) — brand name extracted automatically.
     """
     domain = request.args.get('domain', '').strip().lower()
     if not domain:
@@ -353,7 +353,7 @@ def api_s3_verify_auth():
 def api_s3_bucket_classify():
     """Classify an S3 bucket as ours/investigate/unknown.
 
-    JSON body: { "domain": "the company.com", "bucket": "the company-cdn", "classification": "ours" }
+    JSON body: { "domain": "the-company.com", "bucket": "the company-cdn", "classification": "ours" }
     Valid classifications: "ours", "investigate", "unknown"
     """
     data = request.get_json(silent=True) or {}

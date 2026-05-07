@@ -11,7 +11,7 @@ import time
 
 from playwright.sync_api import sync_playwright
 
-POWERBI_URL = "http://gdnr.the company.com/powerbi"
+POWERBI_URL = "http://gdnr.the-company.com/powerbi"
 CHROME_PATH = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 TIMEOUT_MS = 120_000  # 2 min max — anything over 60s is useless
 

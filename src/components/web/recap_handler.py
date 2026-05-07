@@ -703,7 +703,7 @@ def _notify_webex(title: str, recap_id: int, meeting_type: str, summary: dict) -
             prefix = f"_(part {i}/{total})_\n\n" if total > 1 else ""
             api.messages.create(roomId=room_id, markdown=prefix + chunk)
 
-        footer = f"\n\n_Recap #{recap_id} · [view full recap](https://gdnr.the company.com/recap)_"
+        footer = f"\n\n_Recap #{recap_id} · [view full recap](https://gdnr.the-company.com/recap)_"
         api.messages.create(roomId=room_id, markdown=footer)
         logger.info(f"Webex summary sent for recap #{recap_id} ({total} chunk(s))")
     except Exception as e:

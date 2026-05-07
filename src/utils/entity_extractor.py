@@ -24,7 +24,7 @@ BENIGN_DOMAINS = {
     'gmail.com', 'hotmail.com', 'yahoo.com', 'outlook.com', 'live.com',
     # Internal/company domains - never hunt for these
     'acme.com', 'internal.local', 'acmecorp.com',
-    'the company.com',
+    'the-company.com',
     # Package registries - legitimate infrastructure, not IOCs
     'npmjs.org', 'registry.npmjs.org', 'yarn.npmjs.org',
     'yarnpkg.com', 'registry.yarnpkg.com',
@@ -265,7 +265,7 @@ def extract_domains(text: str) -> List[str]:
     for candidate in candidates:
         if candidate in seen or candidate in BENIGN_DOMAINS:
             continue
-        # Also skip subdomains of benign domains (e.g., portal.the company.com)
+        # Also skip subdomains of benign domains (e.g., portal.the-company.com)
         if any(candidate.endswith('.' + bd) for bd in BENIGN_DOMAINS):
             continue
 

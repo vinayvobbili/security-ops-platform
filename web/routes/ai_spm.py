@@ -1,7 +1,7 @@
 """AI SPM page — same-origin reverse-proxy to the standalone AISPM sidecar (ir-aispm.service on :8026).
 
 Proxying through Flask (not nginx) keeps a single code path that works whether
-the page is hit via gdnr.the company.com (HTTPS), the lab-vm hostname (HTTP), or
+the page is hit via gdnr.the-company.com (HTTPS), the lab-vm hostname (HTTP), or
 directly on :8080 — and avoids mixed-content blocks on the HTTPS path.
 
 Also hosts the vendor deploy portal at /ai-spm/deploy — token-gated zip upload,

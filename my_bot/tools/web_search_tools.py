@@ -23,7 +23,7 @@ MAX_SNIPPET_CHARS = 200
 
 FETCH_TIMEOUT_SECONDS = 15
 FETCH_MAX_BYTES = 2_000_000
-FETCH_USER_AGENT = "Mozilla/5.0 (compatible; IR-the security assistant bot/1.0; +https://gdnr.the company.com)"
+FETCH_USER_AGENT = "Mozilla/5.0 (compatible; IR-the security assistant bot/1.0; +https://gdnr.the-company.com)"
 RENDER_TIMEOUT_SECONDS = 25
 RENDER_MIN_SIGNAL = 3  # high-signal IOC count below which we retry with headless browser
 
