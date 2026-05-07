@@ -19,6 +19,22 @@ This post is the story of getting it from "100s+ per turn, even on `Hello`" to
 sub-10s on follow-ups, and the surprisingly small thing that was sabotaging
 the cache the whole time.
 
+> **Update (after publishing)**: searching the vllm-mlx tracker turned up
+> [PR #277](https://github.com/waybarrios/vllm-mlx/pull/277) by `janhilgard`,
+> merged 2026-04-11 — the same finding as mine, plus a one-line regex strip
+> in `vllm_mlx/anthropic_adapter.py`. Their numbers (50s → 3.65s, 13.7x) are
+> nearly identical to mine. So this isn't a novel discovery; it's a
+> rediscovery. **What's still useful about my version**: PR #277's strip
+> only fires on direct `/v1/messages` traffic. My setup goes Claude Code →
+> [`claude-code-router`](https://github.com/musistudio/claude-code-router)
+> (translates Anthropic Messages → OpenAI chat completions) → vllm-mlx's
+> `/v1/chat/completions` endpoint. The upstream's adapter-level strip
+> doesn't fire on that path, so I had to do the same strip one layer up in
+> the shim. The rest of this post is the original walkthrough — the
+> rediscovery story still has value if you're routing through a translator
+> layer, and the SimpleEngine KV-cache patch is independently useful since
+> SimpleEngine has no built-in prefix cache.
+
 ## Setup
 
 Two Apple Silicon Mac Studios behind a small front-door:
@@ -186,7 +202,7 @@ Same `54ebf1c946b20c63` system-prefix hash on turns 2 and 3 in the upstream
 logs. The cache is doing what it should — the prefix was always stable
 modulo the billing header.
 
-## Why this is worth a post
+## Why this is still worth posting
 
 Most of the writing on self-hosting Claude Code stops at "use a router, set
 the env vars, point it at your model." That's enough to make it work. It is
@@ -197,20 +213,29 @@ is enormous and the cache hooks aren't there by default.
 There are three traps in a row:
 
 1. **vllm-mlx SimpleEngine has no prefix cache.** The fast engine
-   (`--continuous-batching`) crashes on current mlx-lm because of a thread/stream
-   ownership bug. So you have to bring your own caching to SimpleEngine.
-2. **A naive prefix-hash cache works on synthetic tests but fails against
-   real Claude Code traffic.** Because the prefix isn't actually stable
-   turn-over-turn from the upstream's point of view.
-3. **The thing that's making it unstable is 81 bytes inside a 38K-token
-   block, in a header that's only meaningful to Anthropic's cloud.**
-   Capture-and-diff is the only way I know to find it. No amount of staring
-   at the cache code would have surfaced this.
+   (`--continuous-batching`) crashes on current mlx-lm because of a
+   thread/stream ownership bug
+   ([mlx-lm#1256](https://github.com/ml-explore/mlx-lm/issues/1256) is the
+   open issue tracking it; vllm-mlx's
+   [PR #478](https://github.com/waybarrios/vllm-mlx/pull/478) is the
+   in-flight downstream fix). So if you're stuck on SimpleEngine, you have
+   to bring your own caching.
+2. **A prefix-hash cache works on synthetic tests but fails against real
+   Claude Code traffic** if the upstream sees a rotating header inside the
+   system prompt — `cch=` in `x-anthropic-billing-header` rotates per turn.
+3. **vllm-mlx already strips this**
+   ([PR #277](https://github.com/waybarrios/vllm-mlx/pull/277)), but **only
+   on its `/v1/messages` adapter path.** If your client routes through a
+   translator (Claude Code → ccr → OpenAI chat completions), the strip
+   doesn't fire and you'll see the same cache-miss-every-turn behavior even
+   on a recent vllm-mlx install.
 
 If you're fronting Claude Code with a self-hosted LLM and your "cache hit"
 turns aren't fast, the very first thing to check is whether the system
 block your upstream sees is byte-stable across consecutive turns. A 5-line
-diff of two captured payloads is all it takes to find this.
+diff of two captured payloads is all it takes to find this — whether the
+underlying fix lives in the upstream, in your translator, or one layer up
+in a shim like mine.
 
 ## What to do if you hit this
 
@@ -226,7 +251,12 @@ If you're running Claude Code against a self-hosted model:
    should be stripped.
 3. **Strip the rotating bits.** For Claude Code specifically, the
    `x-anthropic-billing-header` system block is safe to drop — your local
-   model has no use for it. Other clients may have their own equivalents.
+   model has no use for it. If you hit vllm-mlx's
+   [`/v1/messages`](https://github.com/waybarrios/vllm-mlx/pull/277)
+   directly, this is already stripped for you. If you go through a
+   translator (ccr / litellm / similar) into the OpenAI chat completions
+   endpoint, you'll need to strip it yourself. Other clients may have
+   their own equivalents.
 4. **Then enable a prefix cache that actually works.** On vllm-mlx
    SimpleEngine that means a patch like the one linked above; on other
    stacks, use whatever real prefix-cache implementation the engine ships.
