@@ -184,7 +184,10 @@ Unified API clients for the security ecosystem:
 >
 > Includes an mlx-lm SimpleEngine **system-prompt KV-cache patch** that turns
 > 100s+ follow-up turns into sub-10s on Apple Silicon by reusing the rendered
-> system prefix across calls of the same session.
+> system prefix across calls of the same session. Story of how that cache
+> kept missing on real Claude Code traffic — and the 81 bytes that were
+> sabotaging it — is in
+> [The 81 bytes killing my self-hosted Claude Code](blog/claude-code-self-hosted-cache-bust).
 >
 > The steps below are for running this repo's web app.
 
