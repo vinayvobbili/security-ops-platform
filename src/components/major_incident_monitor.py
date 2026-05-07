@@ -4,15 +4,15 @@ Monitor ServiceNow for new Major Incidents assigned to configured groups.
 Polls ServiceNow every 15 minutes for incidents assigned to groups defined in
 data/transient/secOps/assignment_groups.json and sends notifications to Webex.
 
-Asks SNOW for the last 24 hours of incidents per group, then dedupes via a
-per-group seen-ID set so each new INC alerts exactly once. The 24h window is
-wide enough to absorb late-MIM-assignment lag (an INC created hours before
-being assigned to the group still falls inside it).
+Detection model: catch *new MIM assignments*, not new INC creations. SNOW
+returns up to 100 incidents per group; we dedupe against a per-group seen-ID
+set so each INC alerts exactly once when it enters the group's result window.
+No createdDate filter — an incident assigned days after creation must still
+trigger an alert.
 """
 
 import json
 import logging
-from datetime import datetime
 from pathlib import Path
 
 from webexpythonsdk import WebexAPI
@@ -31,11 +31,10 @@ logger = logging.getLogger(__name__)
 CONFIG_FILE = Path(__file__).parent.parent.parent / "data/transient/secOps/assignment_groups.json"
 _SEEN_IDS_FILE = Path(__file__).parent.parent.parent / "data/transient/secOps/mim_seen_ids.json"
 
-# Lookback window for SNOW query. The API has no date-range param, so this is
-# applied client-side in get_recent_incidents. 24h is wide enough to absorb
-# late-assignment lag (an INC created hours before getting assigned to MIM)
-# while excluding historical tickets that cycle through the 100-result window.
-_LOOKBACK_MINUTES = 1440
+# Terminal states — closed tickets that resurface in SNOW's 100-result window
+# (because someone touched them) are not new MIM assignments. Filter them out
+# before the diff so they can't re-alert.
+_TERMINAL_STATES = {"Closed", "Resolved", "Cancelled"}
 
 # Guard to send missing-config Webex alert only once per scheduler lifetime
 _config_missing_notified = False
@@ -321,7 +320,7 @@ def check_for_new_incidents(room_id=None):
             group_name = group.get('name')
 
             try:
-                recent_incidents = client.get_recent_incidents_by_group_name(group_name, minutes=_LOOKBACK_MINUTES)
+                recent_incidents = client.get_recent_incidents_by_group_name(group_name, minutes=0)
                 if isinstance(recent_incidents, dict) and 'error' in recent_incidents:
                     logger.error(f"Error fetching incidents for {group_name}: {recent_incidents.get('error')}")
                     continue  # Don't update seen IDs on error
@@ -329,15 +328,19 @@ def check_for_new_incidents(room_id=None):
                 logger.error(f"Exception fetching incidents for {group_name}: {e}")
                 continue
 
-            current_ids = {inc.get('number') for inc in recent_incidents if inc.get('number')}
-            previously_seen = seen_ids.get(group_name, set())
+            open_incidents = [inc for inc in recent_incidents if inc.get('state') not in _TERMINAL_STATES]
+            current_ids = {inc.get('number') for inc in open_incidents if inc.get('number')}
+            logger.info(f"MIM '{group_name}': {len(open_incidents)} open / {len(recent_incidents)} total")
 
-            # First run for this group: seed the seen set without alerting
-            if not previously_seen:
+            # First run for this group: seed the seen set without alerting.
+            # Check key presence, not truthiness — an empty set means "polled,
+            # had no results", and we must not re-seed (and miss alerts) next time.
+            if group_name not in seen_ids:
                 logger.info(f"First run for {group_name}: seeding {len(current_ids)} seen IDs (no alert)")
                 seen_ids[group_name] = current_ids
                 continue
 
+            previously_seen = seen_ids[group_name]
             new_ids = current_ids - previously_seen
             if new_ids:
                 new_incidents = [inc for inc in recent_incidents if inc.get('number') in new_ids]
@@ -357,8 +360,9 @@ def check_for_new_incidents(room_id=None):
             card = _create_alert_card(incidents_by_group, {})
             fallback_text = f"🚨 {total_count} new Major Incident(s)! Check ServiceNow for details."
 
+            card_sent = None
             try:
-                send_card_with_retry(
+                card_sent = send_card_with_retry(
                     webex_api,
                     room_id,
                     text=fallback_text,
@@ -367,9 +371,15 @@ def check_for_new_incidents(room_id=None):
                         "content": card.to_dict()
                     }]
                 )
-                logger.info("Alert card sent successfully")
             except Exception as e:
-                logger.error(f"Failed to send alert card: {e}")
+                logger.error(f"Exception sending alert card: {e}")
+
+            # send_card_with_retry returns None on failure (it swallows the exception
+            # and logs internally). Treat None as failure so the markdown fallback fires.
+            if card_sent is not None:
+                logger.info("Alert card sent successfully")
+            else:
+                logger.warning("Alert card not delivered, sending markdown fallback")
                 try:
                     message_parts = [f"🚨 **MAJOR INCIDENT ALERT** ({total_count} new)\n"]
                     for group_name, incidents in incidents_by_group.items():

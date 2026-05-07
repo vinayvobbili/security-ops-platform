@@ -5,8 +5,8 @@ AI / LLM index scheduler.
 Runs embedding-dependent index rebuilds and incremental updates for:
 - Tipper similarity index (daily)
 - XSOAR ticket similarity index (daily)
-- the Windows triage agent IR codebase index (weekly)
-- the Windows triage agent XSOAR codebase index (weekly)
+- Win.AI IR codebase index (weekly)
+- Win.AI XSOAR codebase index (weekly)
 
 Isolated from ir_scheduler so embedding-heavy jobs don't block
 operational monitoring and alerting.
@@ -170,13 +170,13 @@ def _check_embeddings_and_rebuild(rebuild_fn, job_name: str, days_back: int = 36
     global _embeddings_down_notified
     import requests as _req
     try:
-        _req.get(f"{config.m3_embeds_base_url}/models", timeout=5)
+        _req.get(f"{config.embeds_base_url}/models", timeout=5)
     except Exception:
-        logger.warning(f"Embedding server unreachable at {config.m3_embeds_base_url} — skipping {job_name}")
+        logger.warning(f"Embedding server unreachable at {config.embeds_base_url} — skipping {job_name}")
         if not _embeddings_down_notified:
             _embeddings_down_notified = True
             notify_access_issue(job_name, [
-                f"Embedding server is unreachable at {config.m3_embeds_base_url}.",
+                f"Embedding server is unreachable at {config.embeds_base_url}.",
                 "Index rebuilds will fail until the server is restored.",
                 "Check LaunchAgent: launchctl list | grep mlx-lm"
             ], room_id=config.webex_room_id_dev_test_space)
@@ -231,25 +231,25 @@ def main() -> None:
         )
     )
 
-    # the Windows triage agent IR codebase index - weekly incremental update (Sunday 03:15 ET)
-    logger.info("Scheduling weekly the Windows triage agent IR codebase index update (Sunday 03:15 ET)...")
+    # Win.AI IR codebase index - weekly incremental update (Sunday 03:15 ET)
+    logger.info("Scheduling weekly Win.AI IR codebase index update (Sunday 03:15 ET)...")
     def _update_ir():
         from my_bot.document.codebase_indexer import update_ir_index
         _check_embeddings_and_rebuild(
             lambda days_back=10: update_ir_index(),
-            "the Windows triage agent IR Codebase Index Update",
+            "Win.AI IR Codebase Index Update",
         )
     schedule.every().sunday.at('03:15', eastern).do(
         lambda: safe_run(_update_ir, name="win_ai_ir_codebase_index_update", timeout=1800)
     )
 
-    # the Windows triage agent XSOAR codebase index - weekly incremental update (Sunday 03:30 ET)
-    logger.info("Scheduling weekly the Windows triage agent XSOAR codebase index update (Sunday 03:30 ET)...")
+    # Win.AI XSOAR codebase index - weekly incremental update (Sunday 03:30 ET)
+    logger.info("Scheduling weekly Win.AI XSOAR codebase index update (Sunday 03:30 ET)...")
     def _update_xsoar():
         from my_bot.document.codebase_indexer import update_xsoar_index
         _check_embeddings_and_rebuild(
             lambda days_back=10: update_xsoar_index(),
-            "the Windows triage agent XSOAR Codebase Index Update",
+            "Win.AI XSOAR Codebase Index Update",
         )
     schedule.every().sunday.at('03:30', eastern).do(
         lambda: safe_run(_update_xsoar, name="win_ai_xsoar_codebase_index_update", timeout=3600)

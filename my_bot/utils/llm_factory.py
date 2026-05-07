@@ -5,11 +5,15 @@ To switch providers (OpenAI-compat, Ollama, Bedrock, etc.) change THIS file only
 """
 
 import logging
+import re
+import time
 from typing import Optional
 
 import httpx
 from langchain_core.language_models import BaseChatModel
 from langchain_core.embeddings import Embeddings
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from my_bot.utils.enhanced_config import ModelConfig
@@ -72,7 +76,7 @@ def create_router_llm(config: ModelConfig = None, **overrides) -> BaseChatModel:
 def create_embeddings(config: ModelConfig = None, **overrides) -> Embeddings:
     """Create the embeddings instance."""
     config = config or ModelConfig()
-    embedding_url = getattr(config, 'm3_embeds_base_url', None) or config.m1_analysis_base_url  # m3 embeddings — Qwen3-Embedding (port 8019)
+    embedding_url = getattr(config, 'embeds_base_url', None) or config.m1_analysis_base_url  # embeddings — Qwen3-Embedding (studio1:8004)
     kwargs = dict(
         model=config.embedding_model_name,
         base_url=embedding_url,

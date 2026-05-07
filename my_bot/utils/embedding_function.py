@@ -18,16 +18,19 @@ logger = logging.getLogger(__name__)
 class OpenAIEmbeddingFunction:
     """ChromaDB-compatible embedding function using OpenAI-compatible API."""
 
-    def __init__(self, model: str = None, base_url: str = None, batch_size: int = 10):
-        if model is None or base_url is None:
+    def __init__(self, model: str = None, base_url: str = None, batch_size: int = 10, api_key: str = None):
+        if model is None or base_url is None or api_key is None:
             from my_config import get_config
             _cfg = get_config()
             model = model or _cfg.embedding_model
-            base_url = base_url or _cfg.m3_embeds_base_url
+            base_url = base_url or _cfg.embeds_base_url
+            if api_key is None:
+                api_key = getattr(_cfg, "embeds_api_key", None)
         self.model = model
         # Ensure base_url ends without trailing slash, then append /embeddings
         self.api_url = f"{base_url.rstrip('/')}/embeddings"
         self.batch_size = batch_size
+        self.headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
 
     def __call__(self, input: List[str]) -> List[List[float]]:
         """Generate embeddings for a list of texts using batch API calls."""
@@ -82,6 +85,7 @@ class OpenAIEmbeddingFunction:
                 response = requests.post(
                     self.api_url,
                     json={"model": self.model, "input": texts},
+                    headers=self.headers,
                     timeout=600,
                 )
                 response.raise_for_status()
@@ -103,6 +107,7 @@ class OpenAIEmbeddingFunction:
                 response = requests.post(
                     self.api_url,
                     json={"model": self.model, "input": [text]},
+                    headers=self.headers,
                     timeout=60,
                 )
                 response.raise_for_status()

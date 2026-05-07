@@ -567,9 +567,9 @@ npm --version</code></pre><button class="ccs-copy-btn">Copy</button></div>
                 <tbody>
                     <tr><td><code>ANTHROPIC_BASE_URL</code></td><td><code>{{ local_llm_public_url }}</code></td></tr>
                     <tr><td><code>ANTHROPIC_AUTH_TOKEN</code></td><td><span class="ccs-pill amber">ask the team lead — not in git</span></td></tr>
-                    <tr><td><code>ANTHROPIC_DEFAULT_OPUS_MODEL</code></td><td><code>glm-4.7-flash</code></td></tr>
-                    <tr><td><code>ANTHROPIC_DEFAULT_SONNET_MODEL</code></td><td><code>glm-4.7-flash</code></td></tr>
-                    <tr><td><code>ANTHROPIC_DEFAULT_HAIKU_MODEL</code></td><td><code>laguna</code></td></tr>
+                    <tr><td><code>ANTHROPIC_DEFAULT_OPUS_MODEL</code></td><td><code>qwen2.5-coder-32b</code></td></tr>
+                    <tr><td><code>ANTHROPIC_DEFAULT_SONNET_MODEL</code></td><td><code>qwen2.5-coder-32b</code></td></tr>
+                    <tr><td><code>ANTHROPIC_DEFAULT_HAIKU_MODEL</code></td><td><code>qwen2.5-coder-32b</code></td></tr>
                 </tbody>
             </table>
         </div>
@@ -592,9 +592,9 @@ npm --version</code></pre><button class="ccs-copy-btn">Copy</button></div>
             <p>Persistent (user-level):</p>
             <div class="ccs-code-wrap"><pre><code>[Environment]::SetEnvironmentVariable("ANTHROPIC_BASE_URL",            "{{ local_llm_public_url }}", "User")
 [Environment]::SetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN",          "REPLACE_WITH_BEARER_TOKEN",    "User")
-[Environment]::SetEnvironmentVariable("ANTHROPIC_DEFAULT_OPUS_MODEL",   "glm-4.7-flash",            "User")
-[Environment]::SetEnvironmentVariable("ANTHROPIC_DEFAULT_SONNET_MODEL", "glm-4.7-flash",            "User")
-[Environment]::SetEnvironmentVariable("ANTHROPIC_DEFAULT_HAIKU_MODEL",  "laguna",               "User")</code></pre><button class="ccs-copy-btn">Copy</button></div>
+[Environment]::SetEnvironmentVariable("ANTHROPIC_DEFAULT_OPUS_MODEL",   "qwen2.5-coder-32b",        "User")
+[Environment]::SetEnvironmentVariable("ANTHROPIC_DEFAULT_SONNET_MODEL", "qwen2.5-coder-32b",        "User")
+[Environment]::SetEnvironmentVariable("ANTHROPIC_DEFAULT_HAIKU_MODEL",  "qwen2.5-coder-32b",        "User")</code></pre><button class="ccs-copy-btn">Copy</button></div>
             <div class="ccs-callout tip">
                 <div class="ccs-callout-icon">💡</div>
                 <div class="ccs-callout-body">
@@ -607,9 +607,9 @@ npm --version</code></pre><button class="ccs-copy-btn">Copy</button></div>
             <p>Persistent (user-level) via <code>setx</code>:</p>
             <div class="ccs-code-wrap"><pre><code>setx ANTHROPIC_BASE_URL            "{{ local_llm_public_url }}"
 setx ANTHROPIC_AUTH_TOKEN          "REPLACE_WITH_BEARER_TOKEN"
-setx ANTHROPIC_DEFAULT_OPUS_MODEL   "glm-4.7-flash"
-setx ANTHROPIC_DEFAULT_SONNET_MODEL "glm-4.7-flash"
-setx ANTHROPIC_DEFAULT_HAIKU_MODEL  "laguna"</code></pre><button class="ccs-copy-btn">Copy</button></div>
+setx ANTHROPIC_DEFAULT_OPUS_MODEL   "qwen2.5-coder-32b"
+setx ANTHROPIC_DEFAULT_SONNET_MODEL "qwen2.5-coder-32b"
+setx ANTHROPIC_DEFAULT_HAIKU_MODEL  "qwen2.5-coder-32b"</code></pre><button class="ccs-copy-btn">Copy</button></div>
             <div class="ccs-callout tip">
                 <div class="ccs-callout-icon">💡</div>
                 <div class="ccs-callout-body">
@@ -625,9 +625,9 @@ setx ANTHROPIC_DEFAULT_HAIKU_MODEL  "laguna"</code></pre><button class="ccs-copy
 # 🤖 Claude Code &rarr; internal LLM
 export ANTHROPIC_BASE_URL="{{ local_llm_public_url }}"
 export ANTHROPIC_AUTH_TOKEN="REPLACE_WITH_BEARER_TOKEN"
-export ANTHROPIC_DEFAULT_OPUS_MODEL="glm-4.7-flash"
-export ANTHROPIC_DEFAULT_SONNET_MODEL="glm-4.7-flash"
-export ANTHROPIC_DEFAULT_HAIKU_MODEL="laguna"
+export ANTHROPIC_DEFAULT_OPUS_MODEL="qwen2.5-coder-32b"
+export ANTHROPIC_DEFAULT_SONNET_MODEL="qwen2.5-coder-32b"
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="qwen2.5-coder-32b"
 EOF
 
 source ~/.zshrc</code></pre><button class="ccs-copy-btn">Copy</button></div>
@@ -1054,11 +1054,11 @@ curl -s -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \
             </div>
             <div class="ccs-faq-item">
                 <button class="ccs-faq-q">Tool output appeared in one chunk instead of streaming. Is something stuck?</button>
-                <div class="ccs-faq-a">Expected for some models. The Coder alias buffers tool calls because the underlying parser streams JSON as text deltas instead of structured <code>tool_use</code> blocks — we fall back to non-streaming for that alias and synthesize a clean tool block at the end. You lose the typewriter effect on tool calls; chat output still streams. Switch to <code>glm-4.7-flash</code> if streaming during tool use matters.</div>
+                <div class="ccs-faq-a">Expected. The Coder alias buffers tool calls because the underlying parser streams JSON as text deltas instead of structured <code>tool_use</code> blocks — we fall back to non-streaming for that alias and synthesize a clean tool block at the end. You lose the typewriter effect on tool calls; chat output still streams.</div>
             </div>
             <div class="ccs-faq-item">
                 <button class="ccs-faq-q">It "thinks" for 30 seconds before answering on a reasoning model.</button>
-                <div class="ccs-faq-a">That's generation time, not prefill. The cache eliminates prefill (the constant prefix); it can't shorten how many tokens the model generates before the answer. Reasoning-flavored models (anything with a <code>&lt;think&gt;</code> block) emit hundreds of reasoning tokens before the user-facing answer, every turn. Switch to <code>glm-4.7-flash</code> (non-thinking) for snappy chat; keep thinking models for hard problems.</div>
+                <div class="ccs-faq-a">That's generation time, not prefill. The cache eliminates prefill (the constant prefix); it can't shorten how many tokens the model generates before the answer. Reasoning-flavored models (anything with a <code>&lt;think&gt;</code> block) emit hundreds of reasoning tokens before the user-facing answer, every turn. The default Coder alias is non-thinking so you shouldn't see this on stock setup — if you do, you've switched to a reasoning model.</div>
             </div>
             <div class="ccs-faq-item">
                 <button class="ccs-faq-q">Can I use this for confidential / customer data?</button>
@@ -1371,18 +1371,18 @@ Available only on the corp network (private 10.x endpoint).
 |---|---|
 | ANTHROPIC_BASE_URL | {{ local_llm_public_url }} |
 | ANTHROPIC_AUTH_TOKEN | (ask the team lead in Webex — not in any doc, never in git) |
-| ANTHROPIC_DEFAULT_OPUS_MODEL | glm-4.7-flash |
-| ANTHROPIC_DEFAULT_SONNET_MODEL | glm-4.7-flash |
-| ANTHROPIC_DEFAULT_HAIKU_MODEL | laguna |
+| ANTHROPIC_DEFAULT_OPUS_MODEL | qwen2.5-coder-32b |
+| ANTHROPIC_DEFAULT_SONNET_MODEL | qwen2.5-coder-32b |
+| ANTHROPIC_DEFAULT_HAIKU_MODEL | qwen2.5-coder-32b |
 
 ### macOS / Linux
 Append to ~/.zshrc (or ~/.bashrc):
 \`\`\`
 export ANTHROPIC_BASE_URL="{{ local_llm_public_url }}"
 export ANTHROPIC_AUTH_TOKEN="REPLACE_WITH_BEARER_TOKEN"
-export ANTHROPIC_DEFAULT_OPUS_MODEL="glm-4.7-flash"
-export ANTHROPIC_DEFAULT_SONNET_MODEL="glm-4.7-flash"
-export ANTHROPIC_DEFAULT_HAIKU_MODEL="laguna"
+export ANTHROPIC_DEFAULT_OPUS_MODEL="qwen2.5-coder-32b"
+export ANTHROPIC_DEFAULT_SONNET_MODEL="qwen2.5-coder-32b"
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="qwen2.5-coder-32b"
 \`\`\`
 Then \`source ~/.zshrc\`.
 
@@ -1390,9 +1390,9 @@ Then \`source ~/.zshrc\`.
 \`\`\`
 [Environment]::SetEnvironmentVariable("ANTHROPIC_BASE_URL", "{{ local_llm_public_url }}", "User")
 [Environment]::SetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN", "REPLACE_WITH_BEARER_TOKEN", "User")
-[Environment]::SetEnvironmentVariable("ANTHROPIC_DEFAULT_OPUS_MODEL", "glm-4.7-flash", "User")
-[Environment]::SetEnvironmentVariable("ANTHROPIC_DEFAULT_SONNET_MODEL", "glm-4.7-flash", "User")
-[Environment]::SetEnvironmentVariable("ANTHROPIC_DEFAULT_HAIKU_MODEL", "laguna", "User")
+[Environment]::SetEnvironmentVariable("ANTHROPIC_DEFAULT_OPUS_MODEL", "qwen2.5-coder-32b", "User")
+[Environment]::SetEnvironmentVariable("ANTHROPIC_DEFAULT_SONNET_MODEL", "qwen2.5-coder-32b", "User")
+[Environment]::SetEnvironmentVariable("ANTHROPIC_DEFAULT_HAIKU_MODEL", "qwen2.5-coder-32b", "User")
 \`\`\`
 Close and reopen PowerShell after setting. For one-off in current shell use \`$env:ANTHROPIC_BASE_URL = "..."\`.
 
@@ -1400,9 +1400,9 @@ Close and reopen PowerShell after setting. For one-off in current shell use \`$e
 \`\`\`
 setx ANTHROPIC_BASE_URL            "{{ local_llm_public_url }}"
 setx ANTHROPIC_AUTH_TOKEN          "REPLACE_WITH_BEARER_TOKEN"
-setx ANTHROPIC_DEFAULT_OPUS_MODEL   "glm-4.7-flash"
-setx ANTHROPIC_DEFAULT_SONNET_MODEL "glm-4.7-flash"
-setx ANTHROPIC_DEFAULT_HAIKU_MODEL  "laguna"
+setx ANTHROPIC_DEFAULT_OPUS_MODEL   "qwen2.5-coder-32b"
+setx ANTHROPIC_DEFAULT_SONNET_MODEL "qwen2.5-coder-32b"
+setx ANTHROPIC_DEFAULT_HAIKU_MODEL  "qwen2.5-coder-32b"
 \`\`\`
 Close and reopen cmd after setting.
 

@@ -16,7 +16,18 @@ from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 
 # Load .env from data/transient
-load_dotenv(os.path.join(os.path.dirname(__file__), '..', 'data', 'transient', '.env'))
+_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+load_dotenv(os.path.join(_ROOT, 'data', 'transient', '.env'))
+
+# Also load encrypted secrets so probe_auth_env entries (e.g. EMBEDS_API_KEY) resolve
+try:
+    import sys as _sys
+    if _ROOT not in _sys.path:
+        _sys.path.insert(0, _ROOT)
+    from src.utils.env_encryption import load_encrypted_env
+    load_encrypted_env(encrypted_path=os.path.join(_ROOT, 'data', 'transient', '.secrets.age'))
+except Exception as _e:
+    print(f"[bot_status_api] could not load encrypted secrets: {_e}")
 
 app = Flask(__name__)
 CORS(app)  # Allow CORS for the frontend
@@ -65,7 +76,7 @@ def _get_cpu_utilization():
 # Bot configuration mapping bot name to process pattern
 BOTS = {
     'pokedex': {
-        'name': 'the security assistant bot',
+        'name': 'Pokedex',
         'emoji': '🔮',
         'process_pattern': 'webex_bots/pokedex',
         'start_script': 'startup_scripts/start_pokedex.sh',
@@ -73,7 +84,7 @@ BOTS = {
         'systemd_service': 'ir-pokedex.service'
     },
     'toodles': {
-        'name': 'the notification service',
+        'name': 'Toodles',
         'emoji': '🎯',
         'process_pattern': 'webex_bots/toodles',
         'start_script': 'startup_scripts/start_toodles.sh',
@@ -81,7 +92,7 @@ BOTS = {
         'systemd_service': 'ir-toodles.service'
     },
     'msoar': {
-        'name': 'the case orchestrator',
+        'name': 'MSOAR',
         'emoji': '🤖',
         'process_pattern': 'webex_bots/msoar',
         'start_script': 'startup_scripts/start_msoar.sh',
@@ -96,13 +107,37 @@ BOTS = {
         'log_port': 8034,
         'systemd_service': 'ir-money-ball.service'
     },
+    'jarvis': {
+        'name': 'Jarvis',
+        'emoji': '🛡️',
+        'process_pattern': 'webex_bots/jarvis',
+        'start_script': 'startup_scripts/start_jarvis.sh',
+        'log_port': 8035,
+        'systemd_service': 'ir-jarvis.service'
+    },
     'barnacles': {
-        'name': 'the alert triage service',
+        'name': 'Barnacles',
         'emoji': '⚓',
         'process_pattern': 'webex_bots/barnacles',
         'start_script': 'startup_scripts/start_barnacles.sh',
         'log_port': 8036,
         'systemd_service': 'ir-barnacles.service'
+    },
+    'tars': {
+        'name': 'TARS',
+        'emoji': '☁️',
+        'process_pattern': 'webex_bots/tars',
+        'start_script': 'startup_scripts/start_tars.sh',
+        'log_port': 8038,
+        'systemd_service': 'ir-tars.service'
+    },
+    'case': {
+        'name': 'CASE',
+        'emoji': '🏢',
+        'process_pattern': 'webex_bots/case',
+        'start_script': 'startup_scripts/start_case.sh',
+        'log_port': 8041,
+        'systemd_service': 'ir-case.service'
     },
     'jobs': {
         'name': 'IR Scheduler',
@@ -135,7 +170,7 @@ BOTS = {
         'systemd_service': 'de-scheduler.service'
     },
     'winai': {
-        'name': 'the Windows triage agent',
+        'name': 'Win.AI',
         'emoji': '📚',
         'process_pattern': 'webex_bots/win_ai',
         'log_port': 8043,
@@ -154,19 +189,22 @@ BOTS = {
 
 LLM_ENDPOINTS = [
     # Analysis / tool-calling: mac-m1 is the ONLY analysis LLM in the fleet.
-    # Powers the security assistant bot, the Windows triage agent, and any caller that needs tools.
+    # Powers Pokedex, Win.AI, and any caller that needs tools.
     {'key': 'm1-analysis', 'label': 'M1 Analysis',   'port': 8015, 'model_size': '30 GB', 'remote': 'M1:8000'},
     {'key': 'm1-router',   'label': 'M1 Router',     'port': 8016, 'model_size': '4.3 GB', 'remote': 'M1:8001'},
-    # Support models on mac-m3: embeddings + reranker. Analysis GLM was
-    # retired from m3 — M3 now serves ONLY the small, cheap models that
-    # the RAG pipeline depends on.
-    {'key': 'm3-embed',    'label': 'M3 Embeds',     'port': 8019, 'display_model': 'Qwen3-Embedding-8B-4bit-DWQ', 'model_size': '4.0 GB', 'health_timeout': 60, 'remote': 'M3:8002'},
+    # Embeddings: served from studio1 (direct dial, no tunnel) since 2026-05-07.
+    # Was on mac-m3:8019 before. Reranker still on mac-m3.
+    {'key': 'embed',       'label': 'Embeddings',    'port': None, 'probe_url': 'http://studio1.lab:8004', 'probe_auth_env': 'EMBEDS_API_KEY', 'display_model': 'Qwen3-Embedding-8B-4bit-DWQ', 'model_size': '4.0 GB', 'health_timeout': 60, 'remote': 'Studio1:8004'},
     {'key': 'm3-reranker', 'label': 'M3 Reranker',   'port': 8020, 'display_model': 'bge-reranker-v2-m3', 'model_size': '2.2 GB', 'remote': 'M3:8020'},
     # Transcription: faster-whisper + pyannote diarization on mac-m3.
     # Uses /health instead of /v1/models — health_path override below.
     {'key': 'm3-transcription', 'label': 'M3 Transcription', 'port': 11437, 'display_model': 'whisper-large-v3-turbo + pyannote', 'model_size': '~3 GB', 'remote': 'M3:11437', 'health_path': '/health'},
     # TTS: kokoro-onnx for demo-video narration (and any other TTS caller).
     {'key': 'm3-tts', 'label': 'M3 TTS', 'port': 8021, 'display_model': 'kokoro-onnx (54 voices)', 'model_size': '~80 MB', 'remote': 'M3:8021', 'health_path': '/health'},
+    # Mac Studio 1 (M3 Ultra, 96GB) — large analysis model via Ollama.
+    # OpenAI-compatible /v1/models is exposed by Ollama natively.
+    {'key': 'studio1-laguna', 'label': 'Studio1 Laguna', 'port': 8022, 'display_model': 'laguna-xs.2:q8_0', 'model_size': '~33 GB', 'remote': 'Studio1:11434'},
+    {'key': 'studio1-qwen', 'label': 'Studio1 Qwen3-32B', 'port': 8023, 'display_model': 'Qwen3-32B-8bit', 'model_size': '~33 GB', 'remote': 'Studio1:8000'},
 ]
 
 # Track when each endpoint was first seen as "up" (reset on transition to down)
@@ -944,23 +982,34 @@ def llm_health():
     import socket
     results = {}
     for ep in LLM_ENDPOINTS:
-        if ep['port'] is None:
-            results[ep['key']] = {'status': 'unknown', 'label': ep['label'], 'port': None, 'error': 'Port not configured'}
+        probe_url = ep.get('probe_url')
+        if probe_url is None and ep['port'] is None:
+            results[ep['key']] = {'status': 'unknown', 'label': ep['label'], 'port': None, 'error': 'Endpoint not configured'}
             continue
-        # TCP tunnel check first
-        tunnel_status = 'down'
-        try:
-            sock = socket.create_connection(('localhost', ep['port']), timeout=3)
-            sock.close()
-            tunnel_status = 'up'
-        except Exception:
-            pass
+        # Direct-dial endpoints skip the local tunnel check
+        probe_headers = {}
+        if ep.get('probe_auth_env'):
+            token = os.environ.get(ep['probe_auth_env'])
+            if token:
+                probe_headers['Authorization'] = f"Bearer {token}"
+        if probe_url:
+            tunnel_status = 'direct'
+            base_target = probe_url.rstrip('/')
+        else:
+            tunnel_status = 'down'
+            try:
+                sock = socket.create_connection(('localhost', ep['port']), timeout=3)
+                sock.close()
+                tunnel_status = 'up'
+            except Exception:
+                pass
+            base_target = f"http://localhost:{ep['port']}"
         # HTTP model health check
         start = time.time()
         try:
             health_timeout = ep.get('health_timeout', 5)
             health_path = ep.get('health_path', '/v1/models')
-            resp = req.get(f"http://localhost:{ep['port']}{health_path}", timeout=health_timeout)
+            resp = req.get(f"{base_target}{health_path}", headers=probe_headers, timeout=health_timeout)
             latency_ms = int((time.time() - start) * 1000)
             if resp.ok:
                 body = resp.json() if health_path == '/v1/models' else {}
@@ -1016,6 +1065,7 @@ def llm_health():
 MAC_HOSTS = [
     {'key': 'mac-m1', 'label': 'Mac M1', 'ssh_host': 'mac-m1', 'total_gb': 64},
     {'key': 'mac-m3', 'label': 'Mac M3', 'ssh_host': 'mac-m3', 'total_gb': 36},
+    {'key': 'studio1', 'label': 'Studio 1', 'ssh_host': 'studio1', 'total_gb': 96},
 ]
 _mac_cache: dict[str, dict] = {}
 _mac_cache_ts: dict[str, float] = {}

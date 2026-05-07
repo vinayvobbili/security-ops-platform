@@ -60,7 +60,7 @@ def get_config(bot_name: str | None = None):
         webex_bot_access_token_dev_xsoar=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_DEV_XSOAR"),
         webex_bot_access_token_toodles=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_TOODLES"),
         webex_bot_access_token_jarvis=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_JARVIS"),
-        webex_bot_access_token_tars=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_the threat-intel service"),
+        webex_bot_access_token_tars=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_TARS"),
         webex_bot_access_token_case=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_CASE"),
         webex_bot_access_token_barnacles=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_BARNACLES"),
         webex_bot_access_token_hal9000=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_HAL9000"),
@@ -71,11 +71,11 @@ def get_config(bot_name: str | None = None):
         webex_bot_email_hal9000=os.environ.get("WEBEX_BOT_EMAIL_HAL9000"),
         webex_bot_email_toodles=os.environ.get("WEBEX_BOT_EMAIL_TOODLES"),
         webex_bot_email_jarvis=os.environ.get("WEBEX_BOT_EMAIL_JARVIS"),
-        webex_bot_email_tars=os.environ.get("WEBEX_BOT_EMAIL_the threat-intel service"),
+        webex_bot_email_tars=os.environ.get("WEBEX_BOT_EMAIL_TARS"),
         webex_bot_email_case=os.environ.get("WEBEX_BOT_EMAIL_CASE"),
         webex_bot_email_barnacles=os.environ.get("WEBEX_BOT_EMAIL_BARNACLES"),
         webex_bot_email_money_ball=os.environ.get("WEBEX_BOT_EMAIL_MONEY_BALL"),
-        webex_bot_email_msoar=os.environ.get("WEBEX_BOT_EMAIL_the case orchestrator"),
+        webex_bot_email_msoar=os.environ.get("WEBEX_BOT_EMAIL_MSOAR"),
         webex_bot_email_pinger=os.environ.get("WEBEX_BOT_EMAIL_PINGER"),
         webex_bot_email_winai=os.environ.get("WEBEX_BOT_EMAIL_WINAI"),
         webex_room_id_aging_tickets=os.environ.get("WEBEX_ROOM_ID_AGING_TICKETS"),
@@ -119,10 +119,14 @@ def get_config(bot_name: str | None = None):
         llm_model=os.environ.get("LLM_MODEL"),
         router_model=os.environ.get("ROUTER_MODEL", os.environ.get("LLM_MODEL")),
         embedding_model=os.environ.get("EMBEDDING_MODEL"),
-        m3_embeds_base_url=_env_with_prefix(bot_name, "M3_EMBEDS_BASE_URL", ""),
+        embeds_base_url=_env_with_prefix(bot_name, "EMBEDS_BASE_URL", ""),
+        embeds_api_key=_env_with_prefix(bot_name, "EMBEDS_API_KEY", ""),
         m1_analysis_base_url=_env_with_prefix(bot_name, "M1_ANALYSIS_BASE_URL", ""),
         m1_router_base_url=_env_with_prefix(bot_name, "M1_ROUTER_BASE_URL", ""),
+        studio1_laguna_base_url=_env_with_prefix(bot_name, "STUDIO1_LAGUNA_BASE_URL", ""),
+        studio1_qwen_base_url=_env_with_prefix(bot_name, "STUDIO1_QWEN_BASE_URL", ""),
         local_llm_public_url=os.environ.get("LOCAL_LLM_PUBLIC_URL", ""),
+        pokedex_web_password=os.environ.get("POKEDEX_WEB_PASSWORD"),
         data_security_upload_token=os.environ.get("DATA_SECURITY_UPLOAD_TOKEN"),
         scanner_upload_token=os.environ.get("SCANNER_UPLOAD_TOKEN"),
         mcp_server_url=os.environ.get("MCP_SERVER_URL", "http://127.0.0.1:8200/mcp"),
@@ -203,7 +207,7 @@ def get_config(bot_name: str | None = None):
         web_server_port=int(os.environ.get("WEB_SERVER_PORT", "8080")),
         ring_tagging_safety_window_minutes=int(os.environ.get("RING_TAGGING_SAFETY_WINDOW_MINUTES", "60")),
         web_server_url=os.environ.get("WEB_SERVER_BASE_URL"),
-        # Microsoft Teams the notification service Bot configuration (from Azure Bot Service)
+        # Microsoft Teams Toodles Bot configuration (from Azure Bot Service)
         teams_toodles_app_id=os.environ.get("TEAMS_TOODLES_APP_ID"),
         teams_toodles_app_password=os.environ.get("TEAMS_TOODLES_APP_PASSWORD"),
         teams_toodles_tenant_id=os.environ.get("TEAMS_TOODLES_TENANT_ID"),
@@ -235,10 +239,6 @@ def get_config(bot_name: str | None = None):
         qradar_api_url=os.environ.get("QRADAR_API_URL"),
         qradar_api_key=os.environ.get("QRADAR_API_KEY"),
         qradar_console_url=os.environ.get("QRADAR_CONSOLE_URL"),
-        # Microsoft Defender (XDR / Defender for Endpoint) — Microsoft Graph OAuth2 client credentials
-        defender_tenant_id=os.environ.get("DEFENDER_TENANT_ID"),
-        defender_client_id=os.environ.get("DEFENDER_CLIENT_ID"),
-        defender_client_secret=os.environ.get("DEFENDER_CLIENT_SECRET"),
         xsiam_prod_api_auth_id=os.environ.get("XSIAM_PROD_API_AUTH_ID"),
         xsiam_prod_api_key=os.environ.get("XSIAM_PROD_API_KEY"),
         xsiam_prod_api_base_url=os.environ.get("XSIAM_PROD_API_BASE_URL"),
@@ -246,6 +246,11 @@ def get_config(bot_name: str | None = None):
         vectra_api_base_url=os.environ.get("VECTRA_API_BASE_URL"),
         vectra_client_id=os.environ.get("VECTRA_API_CLIENT_ID"),
         vectra_api_key=os.environ.get("VECTRA_API_KEY"),
+        # the corporate proxy ZIA configuration
+        proxy_base_url=os.environ.get("CORPORATE_PROXY_API_BASE_URL"),
+        proxy_username=os.environ.get("CORPORATE_PROXY_API_USERNAME"),
+        proxy_password=os.environ.get("CORPORATE_PROXY_API_PASSWORD"),
+        proxy_api_key=os.environ.get("CORPORATE_PROXY_API_KEY"),
         # TheHive
         thehive_url=os.environ.get("THE_HIVE_URL"),
         thehive_api_key=os.environ.get("THE_HIVE_API_KEY"),
@@ -330,10 +335,14 @@ class Config:
     llm_model: Optional[str] = None
     router_model: Optional[str] = None
     embedding_model: Optional[str] = None
-    m3_embeds_base_url: Optional[str] = None
+    embeds_base_url: Optional[str] = None
+    embeds_api_key: Optional[str] = None
     m1_analysis_base_url: Optional[str] = None
     m1_router_base_url: Optional[str] = None
+    studio1_laguna_base_url: Optional[str] = None
+    studio1_qwen_base_url: Optional[str] = None
     local_llm_public_url: Optional[str] = None
+    pokedex_web_password: Optional[str] = None
     data_security_upload_token: Optional[str] = None
     scanner_upload_token: Optional[str] = None
     mcp_server_url: Optional[str] = None
@@ -414,7 +423,7 @@ class Config:
     web_server_port: Optional[int] = None
     ring_tagging_safety_window_minutes: int = 60
     web_server_url: Optional[str] = None
-    # Microsoft Teams the notification service Bot configuration (from Azure Bot Service)
+    # Microsoft Teams Toodles Bot configuration (from Azure Bot Service)
     teams_toodles_app_id: Optional[str] = None
     teams_toodles_app_password: Optional[str] = None
     teams_toodles_tenant_id: Optional[str] = None
@@ -446,10 +455,6 @@ class Config:
     qradar_api_url: Optional[str] = None
     qradar_api_key: Optional[str] = None
     qradar_console_url: Optional[str] = None
-    # Microsoft Defender (XDR / Defender for Endpoint)
-    defender_tenant_id: Optional[str] = None
-    defender_client_id: Optional[str] = None
-    defender_client_secret: Optional[str] = None
     xsiam_prod_api_auth_id: Optional[str] = None
     xsiam_prod_api_key: Optional[str] = None
     xsiam_prod_api_base_url: Optional[str] = None
@@ -457,6 +462,11 @@ class Config:
     vectra_api_base_url: Optional[str] = None
     vectra_client_id: Optional[str] = None
     vectra_api_key: Optional[str] = None
+    # the corporate proxy ZIA configuration
+    proxy_base_url: Optional[str] = None
+    proxy_username: Optional[str] = None
+    proxy_password: Optional[str] = None
+    proxy_api_key: Optional[str] = None
     # TheHive configuration
     thehive_url: Optional[str] = None
     thehive_api_key: Optional[str] = None

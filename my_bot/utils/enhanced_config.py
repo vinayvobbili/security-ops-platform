@@ -164,8 +164,8 @@ class ConfigManager:
             env_config.setdefault('model', {})['m1_analysis_base_url'] = os.getenv('M1_ANALYSIS_BASE_URL')
         if os.getenv('M1_ROUTER_BASE_URL'):
             env_config.setdefault('model', {})['m1_router_base_url'] = os.getenv('M1_ROUTER_BASE_URL')
-        if os.getenv('M3_EMBEDS_BASE_URL'):
-            env_config.setdefault('model', {})['m3_embeds_base_url'] = os.getenv('M3_EMBEDS_BASE_URL')
+        if os.getenv('EMBEDS_BASE_URL'):
+            env_config.setdefault('model', {})['embeds_base_url'] = os.getenv('EMBEDS_BASE_URL')
         if os.getenv('MODEL_TEMPERATURE'):
             env_config.setdefault('model', {})['temperature'] = float(os.getenv('MODEL_TEMPERATURE'))
 
