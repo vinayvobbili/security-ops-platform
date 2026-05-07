@@ -1,5 +1,5 @@
 [Unit]
-Description=IR Claude Router Shim (front door for ir-claude-router; adds /v1/models and claude-* aliases)
+Description=IR Claude Router Shim (front door for ir-claude-router; adds /v1/models discovery, friendly-id rewrite, bearer auth)
 After=network.target ir-claude-router.service
 Wants=ir-claude-router.service
 

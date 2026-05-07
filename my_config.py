@@ -122,6 +122,7 @@ def get_config(bot_name: str | None = None):
         m3_embeds_base_url=_env_with_prefix(bot_name, "M3_EMBEDS_BASE_URL", ""),
         m1_analysis_base_url=_env_with_prefix(bot_name, "M1_ANALYSIS_BASE_URL", ""),
         m1_router_base_url=_env_with_prefix(bot_name, "M1_ROUTER_BASE_URL", ""),
+        local_llm_public_url=os.environ.get("LOCAL_LLM_PUBLIC_URL", ""),
         sahil_upload_token=os.environ.get("SAHIL_UPLOAD_TOKEN"),
         eric_upload_token=os.environ.get("ERIC_UPLOAD_TOKEN"),
         mcp_server_url=os.environ.get("MCP_SERVER_URL", "http://127.0.0.1:8200/mcp"),
@@ -260,11 +261,6 @@ def get_config(bot_name: str | None = None):
         power_bi_dataset_id=os.environ.get("POWER_BI_DATASET_ID"),
         power_bi_cert_path=os.environ.get("POWER_BI_CERT_PATH"),
         power_bi_cert_thumbprint=os.environ.get("POWER_BI_CERT_THUMBPRINT"),
-        # the internal LLM gateway
-        metiq_api_key=os.environ.get("METIQ_API_KEY"),
-        metiq_use_case_id=os.environ.get("METIQ_USE_CASE_ID"),
-        metiq_endpoint=os.environ.get("METIQ_APIM_ENDPOINT"),
-        ocp_apim_subscription_key=os.environ.get("OCP_APIM_SUBSCRIPTION_KEY"),
     )
 
 
@@ -337,6 +333,7 @@ class Config:
     m3_embeds_base_url: Optional[str] = None
     m1_analysis_base_url: Optional[str] = None
     m1_router_base_url: Optional[str] = None
+    local_llm_public_url: Optional[str] = None
     sahil_upload_token: Optional[str] = None
     eric_upload_token: Optional[str] = None
     mcp_server_url: Optional[str] = None
@@ -475,8 +472,3 @@ class Config:
     power_bi_dataset_id: Optional[str] = None
     power_bi_cert_path: Optional[str] = None
     power_bi_cert_thumbprint: Optional[str] = None
-    # the internal LLM gateway configuration
-    metiq_api_key: Optional[str] = None
-    metiq_use_case_id: Optional[str] = None
-    metiq_endpoint: Optional[str] = None
-    ocp_apim_subscription_key: Optional[str] = None

@@ -13,6 +13,7 @@ Run:
 from __future__ import annotations
 
 import io
+import sys
 from pathlib import Path
 
 from docx import Document
@@ -24,6 +25,11 @@ from docx.shared import Cm, Pt, RGBColor
 
 REPO = Path(__file__).resolve().parent.parent
 DOCS = REPO / "docs"
+
+sys.path.insert(0, str(REPO))
+from my_config import get_config
+
+LLM_PUBLIC_URL = get_config().local_llm_public_url or "https://<your-llm-host>/local-llm"
 
 # --- Brand palette (matches web/templates/claude_code_setup.html) -----------
 BLUE = "0046AD"
@@ -319,10 +325,9 @@ USER_TOC = [
     ("✨", "The headline"),
     ("1️⃣", "Install Node.js"),
     ("2️⃣", "Install Claude Code"),
-    ("3️⃣", "Configure two env vars"),
+    ("3️⃣", "Configure five env vars"),
     ("4️⃣", "Take it for a spin"),
-    ("5️⃣", "Pick a model with /model"),
-    ("6️⃣", "Your first real task"),
+    ("5️⃣", "Your first real task"),
     ("🛡️", "Permission model"),
     ("⌨️", "Keyboard shortcuts"),
     ("📖", "Recipe gallery"),
@@ -380,31 +385,86 @@ def build_user_doc() -> Document:
 
     add_section_heading(doc, "✨", "The headline")
     add_para(doc,
-        "Three local models are exposed through one endpoint. Switch between them on the fly with `/model`.")
+        "Three local models are exposed through one endpoint.")
     add_table(doc,
         ["Model id", "Best for", "Notes"],
         [
-            ["claude-qwen3-32b",
-             "Default — balanced reasoning + tool use",
-             "Largest of the three; uses a `<think>` block before answering."],
-            ["claude-glm-4.7-flash",
-             "Fast iteration, code edits",
-             "Quickest first token. Great for inline edits and short tasks."],
-            ["claude-laguna",
+            ["glm-4.7-flash",
+             "Default — coding, tool use, chat",
+             "Quickest first token. The Opus and Sonnet picker tiers both point here."],
+            ["qwen2.5-coder-32b",
+             "Coding-heavy sessions with lots of tool calls",
+             "Code-tuned 32B; alternative if GLM-Flash misbehaves on your task."],
+            ["laguna",
              "Long-form prose, summaries",
-             "Runs via Ollama; slower first hit (cold load)."],
+             "Runs via Ollama; slower first hit (cold load). Wired to Haiku tier."],
         ],
         col_widths_cm=[5.5, 5.5, 5.0],
     )
+    _hr(doc)
+
+    add_section_heading(doc, "⏱️", "Speed & latency — what to expect")
+    add_callout(doc, "important", "❗ READ THIS BEFORE YOU JUDGE",
+        "Every turn re-prefills the entire conversation. There is no prompt cache locally today. "
+        "Plan for 1–3 minutes per turn, not the sub-second feel of anthropic.com. "
+        "Your first \"Hi\" can take 2+ minutes — that's the floor, not a bug.")
+    add_para(doc, "Measured on studio1 (Apple Silicon, GLM-4.7-Flash 8-bit) with Claude Code's stock system prompt + ~60 tools:")
+    add_table(doc,
+        ["Turn", "Typical latency", "Why"],
+        [
+            ["First \"Hi\" in a fresh session",
+             "≈ 90–150 s",
+             "Prefill of system prompt + tool definitions (~9K tokens) at ~90 tok/s."],
+            ["Tool-using turn (read a file, suggest an edit)",
+             "≈ 90–180 s",
+             "Same prefill plus the file you just attached + the prior turns."],
+            ["Long session (10+ turns, large files in context)",
+             "Grows turn-over-turn",
+             "Conversation keeps re-prefilling. Use `/compact` and `/clear` proactively."],
+        ],
+        col_widths_cm=[5.5, 3.5, 7.0],
+    )
+    add_section_heading(doc, "🤔", "Why so much slower than anthropic.com?", level=2)
+    add_bullets(doc, [
+        "Prompt caching — Anthropic caches your system prompt and tools server-side, so a repeat turn skips prefill entirely (sub-second first token). Our stack doesn't have this yet (the underlying flag is broken in our current mlx-lm version).",
+        "Hardware — a Mac Studio is not a datacenter GPU. Cloud Claude runs on accelerator clusters with orders-of-magnitude more memory bandwidth.",
+        "Model size — GLM-4.7-Flash is ~30 GB on disk; Opus / Sonnet are far larger and run on far bigger machines. Smaller model partly compensates for the slower hardware, but only partly.",
+    ])
+    add_section_heading(doc, "✅", "Good fit for", level=2)
+    add_bullets(doc, [
+        "Learning Claude Code's workflow without burning Anthropic credits.",
+        "Single-file edits, code review, explanations of opaque code.",
+        "Pre-PR self-review on small diffs.",
+        "Anything where data shouldn't leave the LAN.",
+    ])
+    add_section_heading(doc, "🚫", "Less good fit for", level=2)
+    add_bullets(doc, [
+        "Tight iterative loops on large files (each turn pays full prefill).",
+        "Multi-file refactors that need long agentic chains.",
+        "Anything where you'd notice a 60-second wait every turn.",
+    ])
+    add_para(doc, "For those, switch back to real Claude — see \"Switching back to real Claude\" below.")
     _hr(doc)
 
     add_section_heading(doc, "1️⃣", "Install Node.js")
     add_para(doc, "You need Node 18+ (LTS recommended).")
 
     add_section_heading(doc, "🪟", "Windows", level=2)
-    add_para(doc, "One-liner via winget (built into Windows 10/11):")
-    add_code_block(doc, "winget install OpenJS.NodeJS.LTS")
-    add_para(doc, "Or download the LTS installer from https://nodejs.org and click through the wizard.")
+    add_callout(doc, "tip", "🏢 CORP-MANAGED LAPTOP — TRY SOFTWARE CENTER FIRST",
+        "Open Software Center (Start menu → 'Software Center'), search for 'Claude', click Install. "
+        "If it's there, you're done — no admin prompt, no PATH wrangling. Skip ahead to Step 3 (env vars). "
+        "The rollout is still in progress though, so most laptops don't have it yet — if Claude isn't "
+        "listed for you, use the winget steps below to install Node, then continue to Step 2 for the "
+        "npm install one-liner.")
+    add_para(doc, "If Software Center doesn't list Claude — install Node manually. "
+                  "The flags below work without admin rights and on corp Wi-Fi:")
+    add_code_block(doc, "winget install OpenJS.NodeJS.LTS --source winget --scope user")
+    add_callout(doc, "note", "📘 WHY THOSE TWO FLAGS",
+        "--source winget pins the Microsoft 'winget' source instead of the default 'msstore', which "
+        "fails with 0x8a15005e (server certificate did not match) on corp Wi-Fi because SSL inspection "
+        "breaks the Microsoft Store source. --scope user installs Node into your profile only and "
+        "modifies your user PATH; no admin elevation needed. Close and reopen your terminal afterwards "
+        "so the new PATH takes effect.")
 
     add_section_heading(doc, "🍎", "macOS", level=2)
     add_code_block(doc, "brew install node")
@@ -417,61 +477,106 @@ def build_user_doc() -> Document:
     _hr(doc)
 
     add_section_heading(doc, "2️⃣", "Install Claude Code")
-    add_para(doc, "Same one-liner everywhere:")
+    add_callout(doc, "tip", "🏢 INSTALLED VIA SOFTWARE CENTER ON WINDOWS?",
+        "You're done — SC installs Claude Code alongside Node. Skip to Step 3 (env vars).")
+    add_para(doc, "Otherwise (Software Center doesn't list Claude yet, or you're on Mac/Linux), "
+                  "same one-liner everywhere:")
     add_code_block(doc, "npm install -g @anthropic-ai/claude-code")
     add_para(doc, "Verify:")
     add_code_block(doc, "claude --version")
     _hr(doc)
 
-    add_section_heading(doc, "3️⃣", "Configure two env vars")
-    add_para(doc, "These point Claude Code at our internal endpoint instead of Anthropic's servers. "
-                  "Get the API key value from the team lead.")
+    add_section_heading(doc, "3️⃣", "Configure five env vars")
+    add_para(doc, "These point Claude Code at our internal endpoint and pick which local model "
+                  "each tier resolves to. Get the API key from the team lead.")
 
     add_section_heading(doc, "🍎🐧", "macOS / Linux — make it permanent", level=2)
-    add_para(doc, "Append to `~/.zshrc` (use `~/.bashrc` if you're on bash):")
+    add_para(doc, "Open `~/.zshrc` (or `~/.bashrc` on bash) in your editor — pick whichever you have:")
     add_code_block(doc,
-        "export ANTHROPIC_BASE_URL=http://lab-vm1:8051\n"
-        "export ANTHROPIC_API_KEY=<your-bearer-token>")
+        "subl ~/.zshrc      # Sublime Text\n"
+        "code ~/.zshrc      # VS Code\n"
+        "nano ~/.zshrc      # nano (no install needed)")
+    add_para(doc, "Append these five lines and save:")
+    add_code_block(doc,
+        f"export ANTHROPIC_BASE_URL={LLM_PUBLIC_URL}\n"
+        "export ANTHROPIC_AUTH_TOKEN=<your-bearer-token>\n"
+        "export ANTHROPIC_DEFAULT_OPUS_MODEL=glm-4.7-flash\n"
+        "export ANTHROPIC_DEFAULT_SONNET_MODEL=glm-4.7-flash\n"
+        "export ANTHROPIC_DEFAULT_HAIKU_MODEL=laguna")
     add_para(doc, "Reload:")
     add_code_block(doc, "source ~/.zshrc")
 
     add_section_heading(doc, "🪟", "Windows — PowerShell, persistent (user-level)", level=2)
     add_code_block(doc,
         "[System.Environment]::SetEnvironmentVariable("
-        "'ANTHROPIC_BASE_URL', 'http://lab-vm1:8051', 'User')\n"
+        f"'ANTHROPIC_BASE_URL', '{LLM_PUBLIC_URL}', 'User')\n"
         "[System.Environment]::SetEnvironmentVariable("
-        "'ANTHROPIC_API_KEY', '<your-bearer-token>', 'User')")
+        "'ANTHROPIC_AUTH_TOKEN', '<your-bearer-token>', 'User')\n"
+        "[System.Environment]::SetEnvironmentVariable("
+        "'ANTHROPIC_DEFAULT_OPUS_MODEL', 'glm-4.7-flash', 'User')\n"
+        "[System.Environment]::SetEnvironmentVariable("
+        "'ANTHROPIC_DEFAULT_SONNET_MODEL', 'glm-4.7-flash', 'User')\n"
+        "[System.Environment]::SetEnvironmentVariable("
+        "'ANTHROPIC_DEFAULT_HAIKU_MODEL', 'laguna', 'User')")
     add_para(doc, "Then close and reopen the terminal.")
 
-    add_callout(doc, "note", "📌 ONLY TWO VARS",
-        "Earlier guides mentioned four env vars (BASE_URL, API_KEY, MODEL, SMALL_FAST_MODEL). "
-        "The lab-vm1 router now handles model selection through the /model picker, so the model "
-        "vars are no longer required.")
+    add_section_heading(doc, "🩺", "Verify — confirm the values are set", level=2)
+    add_para(doc, "Open a fresh terminal (so it picks up the new vars), then run the line for "
+                  "your shell. All five values should print non-empty — if any are blank, the vars "
+                  "didn't persist and `claude` will fall back to api.anthropic.com.")
+    add_para(doc, "🪟 PowerShell")
+    add_code_block(doc,
+        "$env:ANTHROPIC_BASE_URL; $env:ANTHROPIC_AUTH_TOKEN.Substring(0,8) + \"...\"; "
+        "$env:ANTHROPIC_DEFAULT_OPUS_MODEL; $env:ANTHROPIC_DEFAULT_SONNET_MODEL; $env:ANTHROPIC_DEFAULT_HAIKU_MODEL")
+    add_para(doc, "🪟 Windows CMD")
+    add_code_block(doc,
+        "echo %ANTHROPIC_BASE_URL% & echo %ANTHROPIC_AUTH_TOKEN:~0,8%... & "
+        "echo %ANTHROPIC_DEFAULT_OPUS_MODEL% & echo %ANTHROPIC_DEFAULT_SONNET_MODEL% & echo %ANTHROPIC_DEFAULT_HAIKU_MODEL%")
+    add_para(doc, "🍎🐧 macOS / Linux")
+    add_code_block(doc,
+        "echo \"$ANTHROPIC_BASE_URL\"; echo \"${ANTHROPIC_AUTH_TOKEN:0:8}...\"; "
+        "echo \"$ANTHROPIC_DEFAULT_OPUS_MODEL\"; echo \"$ANTHROPIC_DEFAULT_SONNET_MODEL\"; echo \"$ANTHROPIC_DEFAULT_HAIKU_MODEL\"")
+    add_para(doc, "The token is truncated to its first 8 characters so you can sanity-check it's "
+                  "set without echoing the full secret to your terminal scrollback.")
     _hr(doc)
 
     add_section_heading(doc, "4️⃣", "Take it for a spin")
     add_code_block(doc, "cd ~/some/repo\nclaude")
-    add_para(doc, "Inside the prompt, type `/status` — confirm `ANTHROPIC_BASE_URL` shows lab-vm1:8051.")
+    add_para(doc, f"Inside the prompt, type `/status` — confirm `ANTHROPIC_BASE_URL` shows {LLM_PUBLIC_URL}.")
     add_para(doc, "Then say hi:")
     add_code_block(doc, "> hi, what model are you?")
     _hr(doc)
 
-    add_section_heading(doc, "5️⃣", "Pick a model with /model")
-    add_para(doc, "Inside Claude Code, type `/model`. The picker shows three entries — "
-                  "all backed by our hardware:")
-    add_table(doc,
-        ["Pick", "When to use it"],
-        [
-            ["claude-qwen3-32b",   "Default. Multi-step reasoning, tool calls, larger refactors."],
-            ["claude-glm-4.7-flash","Snappy edits, quick questions, repetitive tasks."],
-            ["claude-laguna",      "Long-form writing, doc generation, summaries."],
-        ],
-        col_widths_cm=[5.5, 10.5],
-    )
-    add_para(doc, "Claude Code remembers your pick for the session. To switch back, run `/model` again.")
+    add_section_heading(doc, "🎛️", "Switch models on the fly")
+    add_para(doc,
+        "The five env vars in step 3 set your defaults. To try a different model "
+        "for one session without editing your shell config, override at launch.")
+
+    add_section_heading(doc, "①", "Env-var prefix (one session)", level=2)
+    add_code_block(doc, "ANTHROPIC_MODEL=qwen2.5-coder-32b claude")
+    add_para(doc,
+        "`ANTHROPIC_MODEL` takes precedence over the per-tier vars. Banner will read "
+        "`qwen2.5-coder-32b[1m]` instead of the default. Closes the override when the "
+        "session ends.")
+
+    add_section_heading(doc, "②", "CLI flag (one session)", level=2)
+    add_code_block(doc, "claude --model qwen2.5-coder-32b")
+    add_para(doc, "Same effect as the env-var prefix; pick whichever feels natural.")
+
+    add_section_heading(doc, "③", "/model picker (mid-session)", level=2)
+    add_para(doc,
+        "Inside Claude Code, `/model` switches between the Opus / Sonnet / Haiku tiers. "
+        "Each tier resolves to whichever id you set in `ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL`. "
+        "Useful if you wired Sonnet to `qwen2.5-coder-32b` — `/model` then becomes a "
+        "GLM ↔ Qwen toggle without restarting.")
+
+    add_callout(doc, "tip", "💡 WHEN TO REACH FOR EACH MODEL",
+        "Default to glm-4.7-flash. If a coding turn comes back empty, drops a tool call, or "
+        "the model talks about code instead of writing it, retry with qwen2.5-coder-32b — "
+        "it's code-tuned and doesn't have a thinking-mode prefix that can swallow short answers.")
     _hr(doc)
 
-    add_section_heading(doc, "6️⃣", "Your first real task — a 2-minute tutorial")
+    add_section_heading(doc, "5️⃣", "Your first real task — a 2-minute tutorial")
     add_section_heading(doc, "①", "Open a project (or start fresh)", level=2)
     add_para(doc, "`cd` into an existing repo and run `claude` there — it'll see your code and edit files in place.")
     add_section_heading(doc, "②", "Ask it to build something concrete", level=2)
@@ -490,7 +595,6 @@ def build_user_doc() -> Document:
         ["Slash command", "What it does"],
         [
             ["/status",  "Show the resolved env vars, model, and working directory."],
-            ["/model",   "Pick a model from the local roster (qwen / glm / laguna)."],
             ["/clear",   "Reset the conversation in this session."],
             ["/compact", "Compress earlier turns to free up context."],
             ["/help",    "Full command reference."],
@@ -571,13 +675,18 @@ def build_user_doc() -> Document:
     _hr(doc)
 
     add_section_heading(doc, "🔄", "Switching back to real Claude")
-    add_para(doc, "When you want Opus / Sonnet for the heavy lifting, unset the two env vars:")
+    add_para(doc, "When you want real Opus / Sonnet for the heavy lifting, unset the five env vars:")
     add_section_heading(doc, "🍎🐧", "macOS / Linux", level=2)
-    add_code_block(doc, "unset ANTHROPIC_BASE_URL ANTHROPIC_API_KEY")
+    add_code_block(doc,
+        "unset ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN \\\n"
+        "      ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL")
     add_section_heading(doc, "🪟", "Windows PowerShell", level=2)
     add_code_block(doc,
-        "[System.Environment]::SetEnvironmentVariable('ANTHROPIC_BASE_URL', $null, 'User')\n"
-        "[System.Environment]::SetEnvironmentVariable('ANTHROPIC_API_KEY',  $null, 'User')")
+        "[System.Environment]::SetEnvironmentVariable('ANTHROPIC_BASE_URL',            $null, 'User')\n"
+        "[System.Environment]::SetEnvironmentVariable('ANTHROPIC_AUTH_TOKEN',             $null, 'User')\n"
+        "[System.Environment]::SetEnvironmentVariable('ANTHROPIC_DEFAULT_OPUS_MODEL',   $null, 'User')\n"
+        "[System.Environment]::SetEnvironmentVariable('ANTHROPIC_DEFAULT_SONNET_MODEL', $null, 'User')\n"
+        "[System.Environment]::SetEnvironmentVariable('ANTHROPIC_DEFAULT_HAIKU_MODEL',  $null, 'User')")
     add_para(doc, "Then `claude login` to authenticate with your Anthropic account or API key.")
     _hr(doc)
 
@@ -589,7 +698,7 @@ def build_user_doc() -> Document:
     add_bullets(doc, [
         "Smaller context window than Claude. Use /compact often, /clear when conversations drift.",
         "Tool-call reliability varies by model. If it loops or emits malformed JSON, simplify the prompt.",
-        "First response in a session is slow (model warmup). Subsequent ones reuse the loaded weights.",
+        "Every turn re-prefills the conversation (no local prompt cache today) — see the Speed & latency section above.",
         "If something's genuinely broken (not just \"lower quality than Claude\"), file it.",
     ])
     _hr(doc)
@@ -602,14 +711,20 @@ def build_user_doc() -> Document:
     ])
     add_section_heading(doc, "🩺", "Quick reachability check", level=2)
     add_code_block(doc,
-        "curl -H \"Authorization: Bearer $ANTHROPIC_API_KEY\" "
+        "curl -H \"Authorization: Bearer $ANTHROPIC_AUTH_TOKEN\" "
         "$ANTHROPIC_BASE_URL/v1/models")
-    add_para(doc, "Expected: a JSON list with `claude-qwen3-32b`, `claude-glm-4.7-flash`, `claude-laguna`. "
+    add_para(doc, "Expected: a JSON list with `glm-4.7-flash` and `laguna`. "
                   "If you get 401, the API key is wrong. If the connection times out, you're off-network.")
     _hr(doc)
 
     add_section_heading(doc, "❓", "FAQ — things people ping me about")
     faq = [
+        ("Q: 🪟 What's the easiest way to install on a corp-managed Windows laptop?",
+         "A: Try Software Center first — search for 'Claude'; if it's listed, click Install and you're done (no admin prompt, no PATH fiddling, jump to Step 3). The SC rollout is still in progress though, so most laptops don't have it yet — if Claude isn't there for you, fall back to the winget + npm steps in Step 1 and Step 2."),
+        ("Q: 🪟 winget install fails with 'server certificate did not match' (0x8a15005e).",
+         "A: If Claude is in your Software Center, that path skips winget entirely (search 'Claude' → Install). Otherwise: corp SSL inspection breaks the Microsoft Store source. Pin winget explicitly with --source winget. The error message lists 'winget' as a working source — that's the one to use."),
+        ("Q: 🪟 I don't have admin rights on my Windows laptop — can I still install?",
+         "A: Yes. Easiest path is Software Center if Claude is listed for you (no admin needed). If it isn't, use winget with --scope user: `winget install OpenJS.NodeJS.LTS --source winget --scope user`. Node installs into your profile and only your user PATH is modified. Last-resort fallback is the portable zip from https://nodejs.org/dist/: extract to %USERPROFILE%\\nodejs, then add that folder to your *user* PATH (System Properties → Environment Variables → User variables → Path → New)."),
         ("Q: It told me it can't access the internet. Is something broken?",
          "A: No — that's expected. The local models run fully offline by design. To fetch a webpage, run `!curl ...` and pipe the output back in."),
         ("Q: My output got cut off mid-sentence.",
@@ -619,9 +734,9 @@ def build_user_doc() -> Document:
         ("Q: It refused to do something benign.",
          "A: Rephrase. Adding context like \"this is my own project, the file is mine to edit\" usually unblocks it."),
         ("Q: Tool calls are failing or producing malformed JSON.",
-         "A: Switch to a different model with /model — qwen handles tools more reliably than the others. If it persists, simplify the request."),
-        ("Q: First response is slow, later ones are fast. Why?",
-         "A: The model warms up after the first query. Later prompts in the same session reuse the loaded weights and KV cache."),
+         "A: Simplify the request — break it into smaller steps."),
+        ("Q: Every turn feels slow. Why isn't the second one faster?",
+         "A: Anthropic's cloud caches your system prompt + tools server-side, so repeat turns skip prefill. We don't have that locally yet — every turn re-prefills the conversation. The first turn pays for ~9K tokens of system prompt + tools; each subsequent turn pays for that plus everything since. Use `/compact` and `/clear` to keep context lean. See the Speed & latency section near the top of this doc for measured numbers."),
         ("Q: Can I use this for confidential / customer data?",
          "A: Prompts and responses stay on our hardware — nothing is sent to Anthropic or any third party. Follow normal data-handling policy, but you don't have the \"sending to a vendor\" worry."),
         ("Q: Can I run two `claude` sessions at once?",
@@ -688,8 +803,8 @@ def build_admin_doc() -> Document:
     )
 
     add_kpi_grid(doc, [
-        ("🧠", "3 backends",
-         "m1 GLM, studio1 Qwen (vllm-mlx), studio1 Laguna (Ollama)."),
+        ("🧠", "2 backends",
+         "studio1 GLM-Flash (vllm-mlx), studio1 Laguna (Ollama)."),
         ("🚪", "1 endpoint",
          "lab-vm1:8051 — single URL clients point at; bearer-auth gated."),
         ("⚙️", "2 services",
@@ -705,34 +820,37 @@ def build_admin_doc() -> Document:
 
     add_section_heading(doc, "🧱", "Architecture")
     add_para(doc,
-        "Two services on lab-vm1, three Mac backends. The shim is the public face; ccr is the "
-        "internal translator that ships the requests onward.")
+        "Two services on lab-vm1, two Mac backends — both on studio1. The shim is the public face; "
+        "ccr is the internal translator that ships the requests onward.")
     add_code_block(doc,
         "[claude client]                                                  \n"
         "      │  ANTHROPIC_BASE_URL=http://lab-vm1:8051                   \n"
         "      ▼                                                          \n"
         "  lab-vm1:8051   ir-claude-router-shim   (FastAPI)               \n"
-        "      │   • exposes GET /v1/models with claude-* aliases         \n"
-        "      │   • rewrites alias → provider,model                      \n"
+        "      │   • exposes GET /v1/models for SDK / curl discovery     \n"
+        "      │   • rewrites friendly id → provider,model                \n"
         "      │   • bearer-auth gate                                     \n"
         "      ▼                                                          \n"
         "  127.0.0.1:8050   ir-claude-router      (claude-code-router)    \n"
         "      │   • Anthropic /v1/messages → OpenAI /v1/chat/completions \n"
-        "      │   • routes by `provider,model` to one of three upstreams \n"
+        "      │   • routes by `provider,model` to one of two upstreams   \n"
         "      ▼                                                          \n"
-        "  ┌───────────────┬───────────────────┬──────────────────────┐   \n"
-        "  │ 127.0.0.1:8015│ 127.0.0.1:8023    │ 127.0.0.1:8022       │   \n"
-        "  │ mac-m1 GLM    │ studio1 Qwen      │ studio1 Laguna       │   \n"
-        "  │ vllm-mlx      │ vllm-mlx          │ Ollama               │   \n"
-        "  └───────────────┴───────────────────┴──────────────────────┘   \n"
-        "  (each is a reverse SSH tunnel from the Mac into lab-vm1)       ")
+        "  ┌───────────────┬──────────────────────┐                        \n"
+        "  │ 127.0.0.1:8024│ 127.0.0.1:8022       │                        \n"
+        "  │ studio1 GLM   │ studio1 Laguna       │                        \n"
+        "  │ vllm-mlx      │ Ollama               │                        \n"
+        "  └───────────────┴──────────────────────┘                        \n"
+        "  (each is a reverse SSH tunnel from studio1 into lab-vm1)       ")
 
     add_callout(doc, "note", "📌 WHY TWO LAYERS",
         "ccr (claude-code-router, an npm package) handles the Anthropic↔OpenAI translation and "
-        "multi-provider routing — but it doesn't expose /v1/models, so the /model picker in vanilla "
-        "Claude Code stays empty. The shim adds /v1/models with claude-prefixed aliases, rewrites "
-        "aliases on incoming /v1/messages, and forwards everything else through. ~120 lines of "
-        "FastAPI; no logic of its own beyond the rewrite.")
+        "multi-provider routing — but it expects requests in `provider,model` form and doesn't "
+        "expose /v1/models for discovery. The shim adds /v1/models (for SDK / curl / IDE-plugin "
+        "enumeration), translates friendly model ids to ccr's `provider,model` form on incoming "
+        "/v1/messages, and gates everything behind a bearer token. Note: Claude Code's /model "
+        "picker is hardcoded to Opus / Sonnet / Haiku and does NOT read /v1/models — users wire "
+        "each tier to one of our ids via ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL. ~120 lines "
+        "of FastAPI; no logic of its own beyond the rewrite.")
     _hr(doc)
 
     add_section_heading(doc, "📋", "Components & ports")
@@ -743,18 +861,17 @@ def build_admin_doc() -> Document:
              "claude-code-router (npm). Anthropic↔OpenAI + provider routing.",
              "~/.claude-code-router/config.json"],
             ["ir-claude-router-shim", "8051",
-             "FastAPI front door. /v1/models, alias rewrite, bearer auth.",
+             "FastAPI front door. /v1/models (discovery), id-rewrite, bearer auth.",
              "deployment/claude_router_shim.py"],
         ],
         col_widths_cm=[4.0, 1.5, 6.5, 4.0],
     )
 
-    add_para(doc, "Backends (each lives behind a reverse SSH tunnel from its Mac):")
+    add_para(doc, "Backends (each lives behind a reverse SSH tunnel from studio1):")
     add_table(doc,
         ["Tunnel port", "Mac", "Engine", "Model"],
         [
-            ["8015", "mac-m1",   "vllm-mlx", "mlx-community/GLM-4.7-Flash-8bit"],
-            ["8023", "studio1",  "vllm-mlx", "qwen3-32b"],
+            ["8024", "studio1",  "vllm-mlx", "mlx-community/GLM-4.7-Flash-8bit"],
             ["8022", "studio1",  "Ollama",   "laguna-xs.2:q8_0"],
         ],
         col_widths_cm=[2.5, 3.0, 3.0, 7.5],
@@ -796,10 +913,7 @@ def build_admin_doc() -> Document:
         "  \"PORT\": 8050,\n"
         "  \"APIKEY\": \"$CCR_APIKEY\",\n"
         "  \"Providers\": [\n"
-        "    { \"name\": \"qwen\",   \"api_base_url\": \"http://127.0.0.1:8023/v1/chat/completions\",\n"
-        "      \"api_key\": \"sk-no-key\",\n"
-        "      \"models\": [\"qwen3-32b\"] },\n"
-        "    { \"name\": \"glm\",    \"api_base_url\": \"http://127.0.0.1:8015/v1/chat/completions\",\n"
+        "    { \"name\": \"glm\",    \"api_base_url\": \"http://127.0.0.1:8024/v1/chat/completions\",\n"
         "      \"api_key\": \"sk-no-key\",\n"
         "      \"models\": [\"glm-4.7-flash\"] },\n"
         "    { \"name\": \"laguna\", \"api_base_url\": \"http://127.0.0.1:8022/v1/chat/completions\",\n"
@@ -807,10 +921,10 @@ def build_admin_doc() -> Document:
         "      \"models\": [\"laguna-xs.2:q8_0\"] }\n"
         "  ],\n"
         "  \"Router\": {\n"
-        "    \"default\":     \"qwen,qwen3-32b\",\n"
-        "    \"background\":  \"qwen,qwen3-32b\",\n"
-        "    \"think\":       \"qwen,qwen3-32b\",\n"
-        "    \"longContext\": \"qwen,qwen3-32b\"\n"
+        "    \"default\":     \"glm,glm-4.7-flash\",\n"
+        "    \"background\":  \"glm,glm-4.7-flash\",\n"
+        "    \"think\":       \"glm,glm-4.7-flash\",\n"
+        "    \"longContext\": \"glm,glm-4.7-flash\"\n"
         "  }\n"
         "}")
 
@@ -820,20 +934,18 @@ def build_admin_doc() -> Document:
         "ccr providers. Edit, save, restart `ir-claude-router-shim`.")
     add_code_block(doc,
         "MODEL_MAP = {\n"
-        "    \"claude-qwen3-32b\":      \"qwen,qwen3-32b\",\n"
-        "    \"claude-glm-4.7-flash\":  \"glm,glm-4.7-flash\",\n"
-        "    \"claude-laguna\":         \"laguna,laguna-xs.2:q8_0\",\n"
+        "    \"glm-4.7-flash\":  \"glm,glm-4.7-flash\",\n"
+        "    \"laguna\":         \"laguna,laguna-xs.2:q8_0\",\n"
         "}\n"
         "DISPLAY_NAMES = {\n"
-        "    \"claude-qwen3-32b\":     \"Qwen3 32B\",\n"
-        "    \"claude-glm-4.7-flash\": \"GLM 4.7 Flash\",\n"
-        "    \"claude-laguna\":        \"Laguna xs.2\",\n"
+        "    \"glm-4.7-flash\": \"GLM 4.7 Flash\",\n"
+        "    \"laguna\":        \"Laguna xs.2\",\n"
         "}")
 
     add_section_heading(doc, "③", "data/transient/.env  →  CCR_APIKEY", level=2)
     add_para(doc,
         "Single bearer token validated by both the shim (own check) and ccr (forwarded). Clients send "
-        "the same value as `Authorization: Bearer <CCR_APIKEY>` and as `ANTHROPIC_API_KEY`.")
+        "the same value as `Authorization: Bearer <CCR_APIKEY>` and as `ANTHROPIC_AUTH_TOKEN`.")
     add_callout(doc, "warning", "⚠️ KEEP THE KEY OUT OF GIT",
         "`.env` is gitignored. Don't paste the token into commit messages, PRs, or code. Distribute "
         "out-of-band (1Password, encrypted message) and rotate by regenerating then restarting both services.")
@@ -880,29 +992,30 @@ def build_admin_doc() -> Document:
     _hr(doc)
 
     add_section_heading(doc, "🖥️", "Mac backends")
-    add_para(doc, "Each Mac runs its inference engine under launchd plus a reverse-tunnel session to lab-vm1.")
+    add_para(doc, "All three Claude Code backends now live on studio1, behind a single reverse-tunnel session to lab-vm1. (mac-m1 still runs GLM-4.7-Flash for Pokedex + Win.AI on its own tunnel, but is no longer in the Claude Code path as of 2026-05-06.)")
 
-    add_section_heading(doc, "🍏", "mac-m1 (GLM)", level=2)
+    add_section_heading(doc, "🎙️", "studio1 (GLM + Laguna, two stacks)", level=2)
     add_bullets(doc, [
-        "Engine: vllm-mlx serving `mlx-community/GLM-4.7-Flash-8bit`",
-        "Tool-call parser: `glm47`",
-        "Tunnel: lab-vm1:8015 → mac-m1:8015 (mlx-server local port)",
-        "SSH backchannel: `ssh -p 2223 vinay@127.0.0.1` from lab-vm1",
-        "Reload: `launchctl kickstart -k gui/$(id -u)/com.ir.vllm-mlx-main`",
-    ])
-
-    add_section_heading(doc, "🎙️", "studio1 (Qwen + Laguna, two stacks)", level=2)
-    add_bullets(doc, [
-        "vllm-mlx: Qwen3-32B-8bit, parser `qwen`, tunnel lab-vm1:8023",
-        "Ollama: laguna-xs.2:q8_0, tunnel lab-vm1:8022",
+        "vllm-mlx GLM: `mlx-community/GLM-4.7-Flash-8bit`, parser `glm47`, reasoning `deepseek_r1`, tunnel lab-vm1:8024 → studio1:8002 (~30 GB on disk)",
+        "Ollama: laguna-xs.2:q8_0, tunnel lab-vm1:8022 → studio1:11434 (~40 GB cold, KEEP_ALIVE=30s so unloads when idle)",
         "SSH backchannel: `ssh -p 2224 vvobbilichetty@127.0.0.1` from lab-vm1",
-        "Qwen reload: `launchctl kickstart -k gui/$(id -u)/com.ir.vllm-mlx-qwen`",
+        "GLM reload: `launchctl bootout gui/$(id -u)/com.ir.vllm-mlx-glm && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.ir.vllm-mlx-glm.plist`",
+        "Qwen3-32B vllm-mlx is downloaded (~33 GB) but the launchctl agent is **disabled** (2026-05-06) to avoid memory contention with GLM. Re-enable with `launchctl enable gui/$(id -u)/com.ir.vllm-mlx-qwen && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.ir.vllm-mlx-qwen.plist`.",
     ])
 
     add_callout(doc, "warning", "⚠️ LAUNCHCTL DOMAIN",
-        "studio1's vllm-mlx runs in the `gui/$UID` domain, not `user/$UID` — `launchctl print user/501` "
-        "shows the service \"enabled\" but kickstart there returns \"Could not find service in domain.\" "
-        "Always use `gui/$(id -u)/...` for kickstart and bootout on studio1.")
+        "studio1's vllm-mlx runs in the `gui/$UID` domain, but the tunnel agent is in `user/$UID`. "
+        "`launchctl print user/501` shows the vllm services as \"enabled\" but kickstart/bootout there "
+        "fails with \"Could not find service in domain.\" Use `gui/$(id -u)/...` for vllm; "
+        "`user/$(id -u)/...` for the tunnel.")
+    add_callout(doc, "important", "⚡ SYSTEM-PROMPT KV CACHE PATCH",
+        "vllm-mlx's `--continuous-batching` flag (which gates the engine-level prefix cache) crashes "
+        "mlx-lm on first cache-hit decode with `RuntimeError: There is no Stream(gpu, X) in current thread`. "
+        "We work around it with a local patch to `vllm_mlx/engine/simple.py` that adds single-slot "
+        "system-prompt KV caching to the pure-LLM `stream_chat()` path. Result: ~17x speedup on cache hits "
+        "(measured 9.8s cold → 0.58s hit on Qwen2.5-Coder with a 2.5K-token system prompt). "
+        "Patch + idempotent apply script: `deployment/vllm_mlx_patches/`. "
+        "Re-run `apply.sh` after every `pip install --upgrade vllm-mlx` and bounce the launchctl agent.")
     _hr(doc)
 
     add_section_heading(doc, "🔐", "Security & secrets")
@@ -930,22 +1043,22 @@ def build_admin_doc() -> Document:
         [
             ["401 Unauthorized on /v1/models",
              "Wrong or missing bearer token",
-             "Check `ANTHROPIC_API_KEY` matches `CCR_APIKEY` in `data/transient/.env`."],
+             "Check `ANTHROPIC_AUTH_TOKEN` matches `CCR_APIKEY` in `data/transient/.env`."],
             ["404 Not Found on /v1/models",
              "Client pointing at ccr (8050) instead of shim (8051)",
              "Set `ANTHROPIC_BASE_URL=http://lab-vm1:8051`."],
             ["/v1/messages returns \"fetch failed\"",
              "Upstream Mac unreachable",
              "Check tunnel: `ss -tlnp | grep 80<port>`. SSH the Mac, verify the engine is up."],
-            ["Connection reset on Qwen path",
-             "studio1 vllm-mlx not running",
-             "ssh studio1, `launchctl kickstart -k gui/$(id -u)/com.ir.vllm-mlx-qwen`."],
+            ["Connection reset on GLM path",
+             "studio1 vllm-mlx-glm not running",
+             "ssh studio1, `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.ir.vllm-mlx-glm.plist`."],
             ["Picker doesn't show models",
              "Stale gateway-models cache on client",
              "Delete `~/.claude/cache/gateway-models.json` on client, restart `claude`."],
             ["Tool calls flaky",
              "Model-specific (smaller models drop tool args)",
-             "Switch to claude-qwen3-32b — most reliable for tool use."],
+             "Switch to glm-4.7-flash — most reliable for tool use."],
             ["Shim restart with no effect",
              "Edited `config.json` but didn't restart ccr",
              "Both services restart together for any provider change."],
@@ -994,12 +1107,13 @@ Run Anthropic's Claude Code CLI against our self-hosted models. No API key. No u
 ## 📑 Table of contents
 - [What is Claude Code?](#-what-is-claude-code)
 - [The headline](#-the-headline)
+- [Speed & latency — what to expect](#️-speed--latency--what-to-expect)
 - [1️⃣ Install Node.js](#1️⃣-install-nodejs)
 - [2️⃣ Install Claude Code](#2️⃣-install-claude-code)
-- [3️⃣ Configure two env vars](#3️⃣-configure-two-env-vars)
+- [3️⃣ Configure five env vars](#3️⃣-configure-five-env-vars)
 - [4️⃣ Take it for a spin](#4️⃣-take-it-for-a-spin)
-- [5️⃣ Pick a model with /model](#5️⃣-pick-a-model-with-model)
-- [6️⃣ Your first real task](#6️⃣-your-first-real-task--a-2-minute-tutorial)
+- [Switch models on the fly](#️-switch-models-on-the-fly)
+- [5️⃣ Your first real task](#5️⃣-your-first-real-task--a-2-minute-tutorial)
 - [Permission model](#️-the-permission-model)
 - [Keyboard shortcuts](#️-keyboard-shortcuts-cheat-sheet)
 - [Recipe gallery](#-recipe-gallery)
@@ -1020,13 +1134,45 @@ Claude Code is a terminal AI pair programmer. You run `claude` in a project dire
 With this setup, all of that runs against our self-hosted models instead of Anthropic's cloud. Same CLI, same workflow — just our hardware doing the thinking.
 
 ## ✨ The headline
-Three local models exposed through one endpoint. Switch on the fly with `/model`.
+Three local models exposed through one endpoint.
 
 | Model id | Best for | Notes |
 |---|---|---|
-| `claude-qwen3-32b` | Default — balanced reasoning + tool use | Largest of the three; uses a `<think>` block before answering. |
-| `claude-glm-4.7-flash` | Fast iteration, code edits | Quickest first token. Great for inline edits and short tasks. |
-| `claude-laguna` | Long-form prose, summaries | Runs via Ollama; slower first hit (cold load). |
+| `glm-4.7-flash` | Default — coding, tool use, chat | Quickest first token. The Opus and Sonnet picker tiers both point here. |
+| `qwen2.5-coder-32b` | Coding-heavy sessions with lots of tool calls | Code-tuned 32B; alternative if GLM-Flash misbehaves on your task. |
+| `laguna` | Long-form prose, summaries | Runs via Ollama; slower first hit (cold load). Wired to Haiku tier. |
+
+---
+
+## ⏱️ Speed & latency — what to expect
+
+> **❗ Read this before you judge.** Every turn re-prefills the entire conversation. There is **no prompt cache** locally today. Plan for **1–3 minutes per turn**, not the sub-second feel of anthropic.com. Your first "Hi" can take 2+ minutes — that's the floor, not a bug.
+
+Measured on studio1 (Apple Silicon, GLM-4.7-Flash 8-bit) with Claude Code's stock system prompt + ~60 tools:
+
+| Turn | Typical latency | Why |
+|---|---|---|
+| First "Hi" in a fresh session | ≈ 90–150 s | Prefill of system prompt + tool definitions (~9K tokens) at ~90 tok/s. |
+| Tool-using turn (read a file, suggest an edit) | ≈ 90–180 s | Same prefill plus the file you just attached + the prior turns. |
+| Long session (10+ turns, large files in context) | Grows turn-over-turn | Conversation keeps re-prefilling. Use `/compact` and `/clear` proactively. |
+
+### 🤔 Why so much slower than anthropic.com?
+- **Prompt caching** — Anthropic caches your system prompt and tools server-side, so a repeat turn skips prefill entirely (sub-second first token). Our stack doesn't have this yet (the underlying flag is broken in our current mlx-lm version).
+- **Hardware** — a Mac Studio is not a datacenter GPU. Cloud Claude runs on accelerator clusters with orders-of-magnitude more memory bandwidth.
+- **Model size** — GLM-4.7-Flash is ~30 GB on disk; Opus / Sonnet are far larger and run on far bigger machines. Smaller model partly compensates for the slower hardware, but only partly.
+
+### ✅ Good fit for
+- Learning Claude Code's workflow without burning Anthropic credits.
+- Single-file edits, code review, explanations of opaque code.
+- Pre-PR self-review on small diffs.
+- Anything where data shouldn't leave the LAN.
+
+### 🚫 Less good fit for
+- Tight iterative loops on large files (each turn pays full prefill).
+- Multi-file refactors that need long agentic chains.
+- Anything where you'd notice a 60-second wait every turn.
+
+For those, switch back to real Claude — see "Switching back to real Claude" below.
 
 ---
 
@@ -1034,10 +1180,15 @@ Three local models exposed through one endpoint. Switch on the fly with `/model`
 You need Node 18+ (LTS recommended).
 
 ### 🪟 Windows
+
+> **🏢 Corp-managed laptop? Try Software Center first.** Open Software Center (Start menu → "Software Center"), search for **Claude**, click **Install**. If it's there, you're done — no admin prompt, no PATH wrangling. **Skip ahead to Step 3 (env vars)**. The rollout is still in progress though, so most laptops don't have it yet — if Claude isn't listed for you, use the winget steps below to install Node, then continue to Step 2.
+
+If Software Center doesn't list Claude — install Node manually. The flags below work **without admin rights** and **on corp Wi-Fi**:
 ```powershell
-winget install OpenJS.NodeJS.LTS
+winget install OpenJS.NodeJS.LTS --source winget --scope user
 ```
-Or download the LTS installer from https://nodejs.org and click through the wizard.
+
+> **📘 Why those two flags** — `--source winget` pins the Microsoft *winget* source instead of the default *msstore*, which fails with `0x8a15005e` (server certificate did not match) on corp Wi-Fi because SSL inspection breaks the Microsoft Store source. `--scope user` installs Node into your profile only and modifies your user PATH; no admin elevation needed. Close and reopen your terminal afterwards so the new PATH takes effect.
 
 ### 🍎 macOS
 ```bash
@@ -1057,7 +1208,10 @@ node -v && npm -v
 ---
 
 ## 2️⃣ Install Claude Code
-Same one-liner everywhere:
+
+> **🏢 Installed via Software Center on Windows?** You're done — SC installs Claude Code alongside Node. Skip to Step 3 (env vars).
+
+Otherwise (Software Center doesn't list Claude yet, or you're on Mac/Linux), same one-liner everywhere:
 ```bash
 npm install -g @anthropic-ai/claude-code
 ```
@@ -1068,14 +1222,23 @@ claude --version
 
 ---
 
-## 3️⃣ Configure two env vars
-These point Claude Code at our internal endpoint. Get the API key from the team lead.
+## 3️⃣ Configure five env vars
+These point Claude Code at our internal endpoint and pick which local model each tier resolves to. Get the API key from the team lead.
 
 ### 🍎🐧 macOS / Linux — make it permanent
-Append to `~/.zshrc` (use `~/.bashrc` on bash):
+Open `~/.zshrc` (or `~/.bashrc` on bash) in your editor — pick whichever you have:
 ```bash
-export ANTHROPIC_BASE_URL=http://lab-vm1:8051
-export ANTHROPIC_API_KEY=<your-bearer-token>
+subl ~/.zshrc      # Sublime Text
+code ~/.zshrc      # VS Code
+nano ~/.zshrc      # nano (no install needed)
+```
+Append these five lines and save:
+```bash
+export ANTHROPIC_BASE_URL=__LLM_URL__
+export ANTHROPIC_AUTH_TOKEN=<your-bearer-token>
+export ANTHROPIC_DEFAULT_OPUS_MODEL=glm-4.7-flash
+export ANTHROPIC_DEFAULT_SONNET_MODEL=glm-4.7-flash
+export ANTHROPIC_DEFAULT_HAIKU_MODEL=laguna
 ```
 Reload:
 ```bash
@@ -1084,12 +1247,34 @@ source ~/.zshrc
 
 ### 🪟 Windows — PowerShell, persistent (user-level)
 ```powershell
-[System.Environment]::SetEnvironmentVariable('ANTHROPIC_BASE_URL', 'http://lab-vm1:8051', 'User')
-[System.Environment]::SetEnvironmentVariable('ANTHROPIC_API_KEY', '<your-bearer-token>', 'User')
+[System.Environment]::SetEnvironmentVariable('ANTHROPIC_BASE_URL',            '__LLM_URL__', 'User')
+[System.Environment]::SetEnvironmentVariable('ANTHROPIC_AUTH_TOKEN',           '<your-bearer-token>', 'User')
+[System.Environment]::SetEnvironmentVariable('ANTHROPIC_DEFAULT_OPUS_MODEL',   'glm-4.7-flash',          'User')
+[System.Environment]::SetEnvironmentVariable('ANTHROPIC_DEFAULT_SONNET_MODEL', 'glm-4.7-flash',          'User')
+[System.Environment]::SetEnvironmentVariable('ANTHROPIC_DEFAULT_HAIKU_MODEL',  'laguna',             'User')
 ```
 Then close and reopen the terminal.
 
-> **📌 Only two vars** — earlier guides mentioned four. The lab-vm1 router now handles model selection through the `/model` picker, so the model env vars are no longer required.
+### 🩺 Verify — confirm the values are set
+
+Open a **fresh** terminal (so it picks up the new vars), then run the line for your shell. All five values should print non-empty — if any are blank, the vars didn't persist and `claude` will fall back to api.anthropic.com.
+
+🪟 **PowerShell**
+```powershell
+$env:ANTHROPIC_BASE_URL; $env:ANTHROPIC_AUTH_TOKEN.Substring(0,8) + "..."; $env:ANTHROPIC_DEFAULT_OPUS_MODEL; $env:ANTHROPIC_DEFAULT_SONNET_MODEL; $env:ANTHROPIC_DEFAULT_HAIKU_MODEL
+```
+
+🪟 **Windows CMD**
+```cmd
+echo %ANTHROPIC_BASE_URL% & echo %ANTHROPIC_AUTH_TOKEN:~0,8%... & echo %ANTHROPIC_DEFAULT_OPUS_MODEL% & echo %ANTHROPIC_DEFAULT_SONNET_MODEL% & echo %ANTHROPIC_DEFAULT_HAIKU_MODEL%
+```
+
+🍎🐧 **macOS / Linux**
+```bash
+echo "$ANTHROPIC_BASE_URL"; echo "${ANTHROPIC_AUTH_TOKEN:0:8}..."; echo "$ANTHROPIC_DEFAULT_OPUS_MODEL"; echo "$ANTHROPIC_DEFAULT_SONNET_MODEL"; echo "$ANTHROPIC_DEFAULT_HAIKU_MODEL"
+```
+
+The token is truncated to its first 8 characters so you can sanity-check it's set without echoing the full secret to your terminal scrollback.
 
 ---
 
@@ -1098,27 +1283,37 @@ Then close and reopen the terminal.
 cd ~/some/repo
 claude
 ```
-Inside the prompt, type `/status` — confirm `ANTHROPIC_BASE_URL` shows lab-vm1:8051. Then say hi:
+Inside the prompt, type `/status` — confirm `ANTHROPIC_BASE_URL` shows __LLM_URL__. Then say hi:
 ```
 > hi, what model are you?
 ```
 
 ---
 
-## 5️⃣ Pick a model with /model
-Inside Claude Code, type `/model`. The picker shows three entries:
+## 🎛️ Switch models on the fly
 
-| Pick | When to use it |
-|---|---|
-| `claude-qwen3-32b` | Default. Multi-step reasoning, tool calls, larger refactors. |
-| `claude-glm-4.7-flash` | Snappy edits, quick questions, repetitive tasks. |
-| `claude-laguna` | Long-form writing, doc generation, summaries. |
+The five env vars in step 3 set your defaults. To try a different model for one session without editing your shell config, override at launch.
 
-Claude Code remembers your pick for the session. To switch, run `/model` again.
+### ① Env-var prefix (one session)
+```bash
+ANTHROPIC_MODEL=qwen2.5-coder-32b claude
+```
+`ANTHROPIC_MODEL` takes precedence over the per-tier vars. Banner will read `qwen2.5-coder-32b[1m]` instead of the default. Closes the override when the session ends.
+
+### ② CLI flag (one session)
+```bash
+claude --model qwen2.5-coder-32b
+```
+Same effect as the env-var prefix; pick whichever feels natural.
+
+### ③ `/model` picker (mid-session)
+Inside Claude Code, `/model` switches between the Opus / Sonnet / Haiku tiers. Each tier resolves to whichever id you set in `ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL`. Useful if you wired Sonnet to `qwen2.5-coder-32b` — `/model` then becomes a GLM ↔ Qwen toggle without restarting.
+
+> **💡 When to reach for each model.** Default to `glm-4.7-flash`. If a coding turn comes back empty, drops a tool call, or the model talks about code instead of writing it, retry with `qwen2.5-coder-32b` — it's code-tuned and doesn't have a thinking-mode prefix that can swallow short answers.
 
 ---
 
-## 6️⃣ Your first real task — a 2-minute tutorial
+## 5️⃣ Your first real task — a 2-minute tutorial
 
 ### ① Open a project (or start fresh)
 `cd` into an existing repo and run `claude` there — it'll see your code and edit files in place.
@@ -1141,7 +1336,6 @@ It'll create the test file, run it, and show output. If a test fails, ask it to 
 | Command | What it does |
 |---|---|
 | `/status` | Show the resolved env vars, model, and working directory. |
-| `/model` | Pick a model from the local roster (qwen / glm / laguna). |
 | `/clear` | Reset the conversation in this session. |
 | `/compact` | Compress earlier turns to free up context. |
 | `/help` | Full command reference. |
@@ -1212,17 +1406,21 @@ Install the "Claude Code" extension from the VS Code marketplace. Same env-var c
 ---
 
 ## 🔄 Switching back to real Claude
-When you want Opus / Sonnet for the heavy lifting, unset the two env vars:
+When you want real Opus / Sonnet for the heavy lifting, unset the five env vars:
 
 ### 🍎🐧 macOS / Linux
 ```bash
-unset ANTHROPIC_BASE_URL ANTHROPIC_API_KEY
+unset ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN \
+      ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL
 ```
 
 ### 🪟 Windows PowerShell
 ```powershell
-[System.Environment]::SetEnvironmentVariable('ANTHROPIC_BASE_URL', $null, 'User')
-[System.Environment]::SetEnvironmentVariable('ANTHROPIC_API_KEY',  $null, 'User')
+[System.Environment]::SetEnvironmentVariable('ANTHROPIC_BASE_URL',            $null, 'User')
+[System.Environment]::SetEnvironmentVariable('ANTHROPIC_AUTH_TOKEN',             $null, 'User')
+[System.Environment]::SetEnvironmentVariable('ANTHROPIC_DEFAULT_OPUS_MODEL',   $null, 'User')
+[System.Environment]::SetEnvironmentVariable('ANTHROPIC_DEFAULT_SONNET_MODEL', $null, 'User')
+[System.Environment]::SetEnvironmentVariable('ANTHROPIC_DEFAULT_HAIKU_MODEL',  $null, 'User')
 ```
 Then `claude login` to authenticate.
 
@@ -1234,7 +1432,7 @@ Then `claude login` to authenticate.
 
 - Smaller context window than Claude. Use `/compact` often, `/clear` when conversations drift.
 - Tool-call reliability varies by model. If it loops or emits malformed JSON, simplify the prompt.
-- First response in a session is slow (model warmup). Subsequent ones reuse the loaded weights.
+- Every turn re-prefills the conversation (no local prompt cache today) — see the Speed & latency section above.
 - If something's genuinely broken (not just "lower quality than Claude"), file it.
 
 ---
@@ -1246,13 +1444,22 @@ Then `claude login` to authenticate.
 
 ### 🩺 Quick reachability check
 ```bash
-curl -H "Authorization: Bearer $ANTHROPIC_API_KEY" $ANTHROPIC_BASE_URL/v1/models
+curl -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" $ANTHROPIC_BASE_URL/v1/models
 ```
-Expected: a JSON list with `claude-qwen3-32b`, `claude-glm-4.7-flash`, `claude-laguna`.
+Expected: a JSON list with `glm-4.7-flash` and `laguna`.
 
 ---
 
 ## ❓ FAQ — things people ping me about
+
+**Q: 🪟 What's the easiest way to install on a corp-managed Windows laptop?**
+A: Try **Software Center** first — search for **Claude**; if it's listed, click **Install** and you're done (no admin prompt, no PATH fiddling, jump to Step 3). The SC rollout is still in progress though, so most laptops don't have it yet — if Claude isn't there for you, fall back to the winget + npm steps in Step 1 and Step 2.
+
+**Q: 🪟 winget install fails with "server certificate did not match" (`0x8a15005e`).**
+A: If Claude is in your Software Center, that path skips winget entirely (search "Claude" → Install). Otherwise: corp SSL inspection breaks the Microsoft Store source. Pin winget explicitly: `winget install OpenJS.NodeJS.LTS --source winget`. The error message lists `winget` as a working source — that's the one to use.
+
+**Q: 🪟 I don't have admin rights on my Windows laptop — can I still install?**
+A: Yes. Easiest path is Software Center if Claude is listed for you (no admin needed). If it isn't, use winget with `--scope user`: `winget install OpenJS.NodeJS.LTS --source winget --scope user`. Node installs into your profile and only your user PATH is modified. Last-resort fallback is the portable zip from https://nodejs.org/dist/: extract to `%USERPROFILE%\nodejs`, then add that folder to your **user** PATH (System Properties → Environment Variables → User variables → Path → New).
 
 **Q: It told me it can't access the internet. Is something broken?**
 A: No — that's expected. The local models run fully offline by design. To fetch a webpage, run `!curl ...` and pipe the output back in.
@@ -1267,10 +1474,10 @@ A: Known weakness of smaller models. Always read the diff before accepting. If i
 A: Rephrase. Adding context like "this is my own project, the file is mine to edit" usually unblocks it.
 
 **Q: Tool calls are failing or producing malformed JSON.**
-A: Switch to a different model with `/model` — qwen handles tools more reliably than the others.
+A: Simplify the request — break it into smaller steps.
 
-**Q: First response is slow, later ones are fast. Why?**
-A: The model warms up after the first query. Later prompts in the same session reuse the loaded weights and KV cache.
+**Q: Every turn feels slow. Why isn't the second one faster?**
+A: Anthropic's cloud caches your system prompt + tools server-side, so repeat turns skip prefill. We don't have that locally yet — every turn re-prefills the conversation. The first turn pays for ~9K tokens of system prompt + tools; each subsequent turn pays for that plus everything since. Use `/compact` and `/clear` to keep context lean. See the Speed & latency section near the top of this doc for measured numbers.
 
 **Q: Can I use this for confidential / customer data?**
 A: Prompts and responses stay on our hardware — nothing is sent to Anthropic or any third party. Follow normal data-handling policy.
@@ -1303,9 +1510,9 @@ ADMIN_MD = """# 🛠️ Claude Code Local Stack — Admin Guide
 
 Operating manual for the router that lets Claude Code clients talk to our self-hosted vllm-mlx and Ollama backends.
 
-| 🧠 3 backends | 🚪 1 endpoint | ⚙️ 2 services |
+| 🧠 2 backends | 🚪 1 endpoint | ⚙️ 2 services |
 |---|---|---|
-| m1 GLM, studio1 Qwen (vllm-mlx), studio1 Laguna (Ollama). | `lab-vm1:8051` — single URL, bearer-auth gated. | `ir-claude-router` (8050) + `ir-claude-router-shim` (8051). |
+| studio1 GLM-Flash (vllm-mlx), studio1 Laguna (Ollama). | `lab-vm1:8051` — single URL, bearer-auth gated. | `ir-claude-router` (8050) + `ir-claude-router-shim` (8051). |
 
 ## 📑 Table of contents
 - [Architecture](#-architecture)
@@ -1323,30 +1530,30 @@ Operating manual for the router that lets Claude Code clients talk to our self-h
 
 ## 🧱 Architecture
 
-Two services on lab-vm1, three Mac backends. The shim is the public face; ccr is the internal translator.
+Two services on lab-vm1, two Mac backends — both on studio1. The shim is the public face; ccr is the internal translator.
 
 ```
 [claude client]
       │  ANTHROPIC_BASE_URL=http://lab-vm1:8051
       ▼
   lab-vm1:8051   ir-claude-router-shim   (FastAPI)
-      │   • exposes GET /v1/models with claude-* aliases
-      │   • rewrites alias → provider,model
+      │   • exposes GET /v1/models for SDK / curl discovery
+      │   • rewrites friendly id → provider,model
       │   • bearer-auth gate
       ▼
   127.0.0.1:8050   ir-claude-router      (claude-code-router)
       │   • Anthropic /v1/messages → OpenAI /v1/chat/completions
-      │   • routes by `provider,model` to one of three upstreams
+      │   • routes by `provider,model` to one of two upstreams
       ▼
-  ┌──────────────┬───────────────────┬─────────────────────┐
-  │ 8015         │ 8023              │ 8022                │
-  │ mac-m1 GLM   │ studio1 Qwen      │ studio1 Laguna      │
-  │ vllm-mlx     │ vllm-mlx          │ Ollama              │
-  └──────────────┴───────────────────┴─────────────────────┘
-  (each is a reverse SSH tunnel from the Mac into lab-vm1)
+  ┌──────────────┬─────────────────────┐
+  │ 8024         │ 8022                │
+  │ studio1 GLM  │ studio1 Laguna      │
+  │ vllm-mlx     │ Ollama              │
+  └──────────────┴─────────────────────┘
+  (each is a reverse SSH tunnel from studio1 into lab-vm1)
 ```
 
-> **📌 Why two layers** — ccr handles the Anthropic↔OpenAI translation and multi-provider routing, but doesn't expose `/v1/models`, so the `/model` picker stays empty. The shim adds `/v1/models` with claude-prefixed aliases, rewrites aliases on incoming `/v1/messages`, and forwards everything else through. ~120 lines of FastAPI; no logic of its own beyond the rewrite.
+> **📌 Why two layers** — ccr handles the Anthropic↔OpenAI translation and multi-provider routing, but expects requests in `provider,model` form and doesn't expose `/v1/models` for discovery. The shim adds `/v1/models` (for SDK / curl / IDE-plugin enumeration), translates friendly model ids to ccr's `provider,model` form on incoming `/v1/messages`, and gates everything behind a bearer token. Note: Claude Code's `/model` picker is hardcoded to Opus / Sonnet / Haiku and does NOT read `/v1/models` — users wire each tier to one of our ids via `ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL`. ~120 lines of FastAPI; no logic of its own beyond the rewrite.
 
 ---
 
@@ -1355,14 +1562,13 @@ Two services on lab-vm1, three Mac backends. The shim is the public face; ccr is
 | Service | Port | Purpose | Source |
 |---|---|---|---|
 | `ir-claude-router` | 8050 | claude-code-router (npm). Anthropic↔OpenAI + provider routing. | `~/.claude-code-router/config.json` |
-| `ir-claude-router-shim` | 8051 | FastAPI front door. `/v1/models`, alias rewrite, bearer auth. | `deployment/claude_router_shim.py` |
+| `ir-claude-router-shim` | 8051 | FastAPI front door. `/v1/models` (discovery), id-rewrite, bearer auth. | `deployment/claude_router_shim.py` |
 
 Backends (each lives behind a reverse SSH tunnel from its Mac):
 
 | Tunnel port | Mac | Engine | Model |
 |---|---|---|---|
-| 8015 | mac-m1 | vllm-mlx | `mlx-community/GLM-4.7-Flash-8bit` |
-| 8023 | studio1 | vllm-mlx | `qwen3-32b` |
+| 8024 | studio1 | vllm-mlx | `mlx-community/GLM-4.7-Flash-8bit` |
 | 8022 | studio1 | Ollama | `laguna-xs.2:q8_0` |
 
 ---
@@ -1405,10 +1611,7 @@ ccr config — providers, model lists, routing rules. Not under git (contains li
   "PORT": 8050,
   "APIKEY": "$CCR_APIKEY",
   "Providers": [
-    { "name": "qwen",   "api_base_url": "http://127.0.0.1:8023/v1/chat/completions",
-      "api_key": "sk-no-key",
-      "models": ["qwen3-32b"] },
-    { "name": "glm",    "api_base_url": "http://127.0.0.1:8015/v1/chat/completions",
+    { "name": "glm",    "api_base_url": "http://127.0.0.1:8024/v1/chat/completions",
       "api_key": "sk-no-key",
       "models": ["glm-4.7-flash"] },
     { "name": "laguna", "api_base_url": "http://127.0.0.1:8022/v1/chat/completions",
@@ -1416,10 +1619,10 @@ ccr config — providers, model lists, routing rules. Not under git (contains li
       "models": ["laguna-xs.2:q8_0"] }
   ],
   "Router": {
-    "default":     "qwen,qwen3-32b",
-    "background":  "qwen,qwen3-32b",
-    "think":       "qwen,qwen3-32b",
-    "longContext": "qwen,qwen3-32b"
+    "default":     "glm,glm-4.7-flash",
+    "background":  "glm,glm-4.7-flash",
+    "think":       "glm,glm-4.7-flash",
+    "longContext": "glm,glm-4.7-flash"
   }
 }
 ```
@@ -1429,19 +1632,17 @@ Two dicts at the top decide what shows up in `/v1/models` and how aliases map to
 
 ```python
 MODEL_MAP = {
-    "claude-qwen3-32b":      "qwen,qwen3-32b",
-    "claude-glm-4.7-flash":  "glm,glm-4.7-flash",
-    "claude-laguna":         "laguna,laguna-xs.2:q8_0",
+    "glm-4.7-flash":  "glm,glm-4.7-flash",
+    "laguna":         "laguna,laguna-xs.2:q8_0",
 }
 DISPLAY_NAMES = {
-    "claude-qwen3-32b":     "Qwen3 32B",
-    "claude-glm-4.7-flash": "GLM 4.7 Flash",
-    "claude-laguna":        "Laguna xs.2",
+    "glm-4.7-flash": "GLM 4.7 Flash",
+    "laguna":        "Laguna xs.2",
 }
 ```
 
 ### ③ `data/transient/.env` → `CCR_APIKEY`
-Single bearer token validated by both the shim (own check) and ccr (forwarded). Clients send the same value as `Authorization: Bearer <CCR_APIKEY>` and as `ANTHROPIC_API_KEY`.
+Single bearer token validated by both the shim (own check) and ccr (forwarded). Clients send the same value as `Authorization: Bearer <CCR_APIKEY>` and as `ANTHROPIC_AUTH_TOKEN`.
 
 > **⚠️ Keep the key out of git.** `.env` is gitignored. Distribute out-of-band (1Password, encrypted message). Rotate by regenerating, then restarting both services.
 
@@ -1492,20 +1693,18 @@ Expected: the new `claude-gemma3` entry appears alongside the others.
 
 ## 🖥️ Mac backends
 
-### 🍏 mac-m1 (GLM)
-- Engine: vllm-mlx serving `mlx-community/GLM-4.7-Flash-8bit`
-- Tool-call parser: `glm47`
-- Tunnel: `lab-vm1:8015 → mac-m1:8015`
-- SSH backchannel: `ssh -p 2223 vinay@127.0.0.1` from lab-vm1
-- Reload: `launchctl kickstart -k gui/$(id -u)/com.ir.vllm-mlx-main`
+All three Claude Code backends now live on **studio1**, behind a single reverse-tunnel session to lab-vm1. (mac-m1 still runs GLM-4.7-Flash for Pokedex + Win.AI on its own tunnel, but is no longer in the Claude Code path as of 2026-05-06.)
 
-### 🎙️ studio1 (Qwen + Laguna, two stacks)
-- vllm-mlx: `Qwen3-32B-8bit`, parser `qwen`, tunnel `lab-vm1:8023`
-- Ollama: `laguna-xs.2:q8_0`, tunnel `lab-vm1:8022`
+### 🎙️ studio1 (GLM + Laguna, two stacks)
+- vllm-mlx GLM: `mlx-community/GLM-4.7-Flash-8bit`, parser `glm47`, reasoning `deepseek_r1`, tunnel `lab-vm1:8024 → studio1:8002` (~30 GB on disk)
+- Ollama: `laguna-xs.2:q8_0`, tunnel `lab-vm1:8022 → studio1:11434` (~40 GB cold, `KEEP_ALIVE=30s` so it unloads when idle)
 - SSH backchannel: `ssh -p 2224 vvobbilichetty@127.0.0.1` from lab-vm1
-- Qwen reload: `launchctl kickstart -k gui/$(id -u)/com.ir.vllm-mlx-qwen`
+- GLM reload: `launchctl bootout gui/$(id -u)/com.ir.vllm-mlx-glm && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.ir.vllm-mlx-glm.plist`
+- Qwen3-32B vllm-mlx is downloaded (~33 GB) but the launchctl agent is **disabled** (2026-05-06) to avoid memory contention with GLM. Re-enable with `launchctl enable gui/$(id -u)/com.ir.vllm-mlx-qwen && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.ir.vllm-mlx-qwen.plist`.
 
-> **⚠️ launchctl domain** — studio1's vllm-mlx runs in the `gui/$UID` domain, not `user/$UID`. `launchctl print user/501` shows the service "enabled" but kickstart there returns "Could not find service in domain." Always use `gui/$(id -u)/...` for kickstart and bootout on studio1.
+> **⚠️ launchctl domain** — studio1's vllm-mlx services run in the `gui/$UID` domain, but the tunnel agent is in `user/$UID`. `launchctl print user/501` shows the vllm services as "enabled" but kickstart/bootout there fails with "Could not find service in domain." Use `gui/$(id -u)/...` for vllm; `user/$(id -u)/...` for the tunnel.
+
+> **⚡ System-prompt KV cache patch** — vllm-mlx's `--continuous-batching` flag (which gates the engine-level prefix cache) crashes mlx-lm on first cache-hit decode with `RuntimeError: There is no Stream(gpu, X) in current thread`. We work around it with a local patch to `vllm_mlx/engine/simple.py` that adds single-slot system-prompt KV caching to the pure-LLM `stream_chat()` path. Result: ~17x speedup on cache hits (9.8s cold → 0.58s hit on Qwen2.5-Coder with a 2.5K-token system prompt). Patch + idempotent apply script: `deployment/vllm_mlx_patches/`. Re-run `apply.sh` after every `pip install --upgrade vllm-mlx` and bounce the launchctl agent.
 
 ---
 
@@ -1536,12 +1735,12 @@ systemctl --user restart ir-claude-router ir-claude-router-shim
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| 401 on `/v1/models` | Wrong/missing bearer token | Check `ANTHROPIC_API_KEY` matches `CCR_APIKEY` in `data/transient/.env`. |
+| 401 on `/v1/models` | Wrong/missing bearer token | Check `ANTHROPIC_AUTH_TOKEN` matches `CCR_APIKEY` in `data/transient/.env`. |
 | 404 on `/v1/models` | Client pointing at ccr (8050) instead of shim (8051) | Set `ANTHROPIC_BASE_URL=http://lab-vm1:8051`. |
 | `/v1/messages` "fetch failed" | Upstream Mac unreachable | Check tunnel: `ss -tlnp \\| grep 80<port>`. SSH the Mac, verify the engine is up. |
-| Connection reset on Qwen path | studio1 vllm-mlx not running | ssh studio1, `launchctl kickstart -k gui/$(id -u)/com.ir.vllm-mlx-qwen`. |
+| Connection reset on GLM path | studio1 `vllm-mlx-glm` not running | ssh studio1, `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.ir.vllm-mlx-glm.plist`. |
 | Picker doesn't show models | Stale gateway-models cache on client | Delete `~/.claude/cache/gateway-models.json` on client, restart `claude`. |
-| Tool calls flaky | Model-specific (smaller models drop tool args) | Switch to `claude-qwen3-32b` — most reliable for tool use. |
+| Tool calls flaky | Model-specific (smaller models drop tool args) | Switch to `glm-4.7-flash` — most reliable for tool use. |
 | Shim restart with no effect | Edited `config.json` but didn't restart ccr | Restart both for any provider change. |
 
 ---
@@ -1575,7 +1774,7 @@ def main() -> None:
 
     user_doc = build_user_doc()
     user_doc.save(DOCS / "CLAUDE_CODE_USER_SETUP.docx")
-    (DOCS / "CLAUDE_CODE_USER_SETUP.md").write_text(USER_MD)
+    (DOCS / "CLAUDE_CODE_USER_SETUP.md").write_text(USER_MD.replace("__LLM_URL__", LLM_PUBLIC_URL))
 
     admin_doc = build_admin_doc()
     admin_doc.save(DOCS / "CLAUDE_CODE_ADMIN_SETUP.docx")

@@ -1,0 +1,1547 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'Claude Code on the Local LLM' %}
+{% set page_title_left_icon = '🤖' %}
+{% set page_title_right_icon = '🏢' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/chat_widget.css') }}">
+<style>
+/* --- Claude Code Setup Page --- */
+.ccs-container { max-width: 1100px; margin: 24px auto 80px; padding: 0 20px; color: #1e293b; }
+
+/* ---- Hero ---- */
+.ccs-hero {
+    background: linear-gradient(135deg, #0046ad 0%, #1d4ed8 45%, #00a651 100%);
+    color: #fff; border-radius: 18px; padding: 32px 36px;
+    box-shadow: 0 16px 40px rgba(0,70,173,0.22);
+    margin-bottom: 24px; position: relative; overflow: hidden;
+}
+.ccs-hero::after {
+    content: ''; position: absolute; right: -60px; top: -60px;
+    width: 280px; height: 280px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 70%);
+    pointer-events: none;
+}
+.ccs-hero h1 { margin: 0 0 8px; font-size: 1.85rem; font-weight: 800; letter-spacing: -0.02em; }
+.ccs-hero p  { margin: 0 0 18px; font-size: 1.02rem; opacity: 0.95; line-height: 1.55; max-width: 760px; }
+.ccs-hero-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.ccs-hero-pill {
+    background: rgba(255,255,255,0.18); backdrop-filter: blur(4px);
+    color: #fff; padding: 6px 14px; border-radius: 999px;
+    font-size: 0.82rem; font-weight: 600; letter-spacing: 0.02em;
+    border: 1px solid rgba(255,255,255,0.28);
+}
+
+/* ---- Headline KPI cards ---- */
+.ccs-kpi-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
+    margin-bottom: 28px;
+}
+.ccs-kpi-card {
+    background: linear-gradient(135deg, rgba(0,70,173,0.06) 0%, rgba(0,166,81,0.06) 100%);
+    border: 1px solid rgba(0,70,173,0.18); border-left: 4px solid #0046ad;
+    border-radius: 12px; padding: 18px 20px;
+    box-shadow: 0 2px 6px rgba(15,23,42,0.05);
+}
+.ccs-kpi-card .ccs-kpi-icon { font-size: 1.65rem; }
+.ccs-kpi-card .ccs-kpi-title { font-weight: 800; font-size: 1.05rem; margin: 6px 0 4px; }
+.ccs-kpi-card .ccs-kpi-body { font-size: 0.88rem; color: #475569; line-height: 1.5; }
+
+/* ---- TOC ---- */
+.ccs-toc {
+    background: #fff; border: 1px solid rgba(148,163,184,0.3); border-radius: 12px;
+    padding: 16px 20px; margin-bottom: 28px;
+    box-shadow: 0 2px 6px rgba(15,23,42,0.04);
+}
+.ccs-toc-title {
+    font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: #475569; font-weight: 800; margin-bottom: 10px;
+}
+.ccs-toc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 18px;
+}
+.ccs-toc-grid a {
+    color: #1d4ed8; text-decoration: none; font-size: 0.88rem;
+    padding: 4px 0; border-radius: 4px;
+}
+.ccs-toc-grid a:hover { color: #0046ad; text-decoration: underline; }
+
+/* ---- Section ---- */
+.ccs-section {
+    background: #fff; border: 1px solid rgba(148,163,184,0.25); border-radius: 14px;
+    padding: 26px 30px; margin-bottom: 22px;
+    box-shadow: 0 2px 8px rgba(15,23,42,0.04);
+    scroll-margin-top: 16px;
+}
+.ccs-section h2 {
+    margin: 0 0 14px; font-size: 1.3rem; font-weight: 800;
+    color: #0f172a; letter-spacing: -0.01em;
+    display: flex; align-items: center; gap: 10px;
+}
+.ccs-section h3 {
+    margin: 22px 0 10px; font-size: 1.02rem; font-weight: 700;
+    color: #0046ad;
+    display: flex; align-items: center; gap: 8px;
+}
+.ccs-section p { margin: 0 0 12px; line-height: 1.62; color: #334155; }
+.ccs-section ul, .ccs-section ol { margin: 0 0 12px 20px; line-height: 1.62; color: #334155; }
+.ccs-section li { margin-bottom: 4px; }
+.ccs-section code { background: rgba(0,70,173,0.08); color: #0046ad; padding: 1px 6px; border-radius: 4px; font-size: 0.88em; font-family: 'JetBrains Mono','Menlo','Consolas',monospace; }
+.ccs-section a { color: #1d4ed8; }
+
+/* ---- Step badge for numbered headings ---- */
+.ccs-step {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border-radius: 8px;
+    background: linear-gradient(135deg, #0046ad, #1d4ed8); color: #fff;
+    font-weight: 800; font-size: 0.95rem;
+    box-shadow: 0 2px 6px rgba(0,70,173,0.3);
+}
+
+/* ---- Code block (light mode default) ---- */
+.ccs-code-wrap {
+    position: relative; margin: 12px 0 16px;
+    background: #f1f5f9; border: 1px solid rgba(15,23,42,0.10);
+    border-radius: 10px; overflow: hidden;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.06);
+}
+.ccs-code-wrap pre {
+    margin: 0; padding: 16px 64px 16px 20px;
+    color: #0f172a; font-size: 0.88rem; font-weight: 500; line-height: 1.6;
+    font-family: 'JetBrains Mono','Menlo','Consolas',monospace;
+    overflow-x: auto; white-space: pre;
+}
+.ccs-copy-btn {
+    position: absolute; top: 8px; right: 8px;
+    background: #fff; color: #475569;
+    border: 1px solid rgba(15,23,42,0.15); border-radius: 6px;
+    font-size: 0.75rem; font-weight: 600; padding: 4px 10px;
+    cursor: pointer; transition: all 0.15s ease;
+    font-family: inherit;
+    box-shadow: 0 1px 2px rgba(15,23,42,0.05);
+}
+.ccs-copy-btn:hover { background: #0046ad; color: #fff; border-color: #0046ad; }
+.ccs-copy-btn.ccs-copied { background: #00a651; color: #fff; border-color: #00a651; }
+
+/* ---- OS tabs ---- */
+.ccs-tabs {
+    display: flex; gap: 6px; margin: 8px 0 0;
+    border-bottom: 2px solid rgba(148,163,184,0.25);
+}
+.ccs-tab-btn {
+    background: transparent; border: none; color: #64748b;
+    padding: 9px 18px; font-weight: 600; font-size: 0.9rem; cursor: pointer;
+    border-bottom: 2px solid transparent; margin-bottom: -2px;
+    transition: all 0.15s ease;
+}
+.ccs-tab-btn:hover { color: #1e293b; }
+.ccs-tab-btn.ccs-active {
+    color: #0046ad; border-bottom-color: #0046ad;
+}
+.ccs-tab-panel { display: none; padding-top: 14px; }
+.ccs-tab-panel.ccs-active { display: block; }
+
+/* ---- Callouts ---- */
+.ccs-callout {
+    border-radius: 10px; padding: 14px 18px; margin: 14px 0;
+    display: flex; gap: 12px; align-items: flex-start;
+    border-left: 4px solid;
+}
+.ccs-callout-icon { font-size: 1.2rem; flex: 0 0 auto; line-height: 1.4; }
+.ccs-callout-body { flex: 1; line-height: 1.55; font-size: 0.92rem; }
+.ccs-callout-body strong { display: block; margin-bottom: 4px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.ccs-callout.tip      { background: rgba(0,166,81,0.07);  border-color: #00a651; color: #064e3b; }
+.ccs-callout.note     { background: rgba(0,70,173,0.07);  border-color: #0046ad; color: #1e3a8a; }
+.ccs-callout.warning  { background: rgba(245,158,11,0.10); border-color: #f59e0b; color: #78350f; }
+.ccs-callout.important{ background: rgba(220,38,38,0.07);  border-color: #dc2626; color: #7f1d1d; }
+.ccs-callout.danger   { background: rgba(220,38,38,0.10);  border-color: #dc2626; color: #7f1d1d; }
+
+/* ---- Tables ---- */
+.ccs-table-wrap { overflow-x: auto; margin: 12px 0 18px; border-radius: 10px; border: 1px solid rgba(148,163,184,0.25); }
+.ccs-table {
+    width: 100%; border-collapse: collapse; background: #fff; min-width: 480px;
+}
+.ccs-table thead {
+    background: linear-gradient(135deg, #0046ad 0%, #1d4ed8 100%);
+    color: #fff;
+}
+.ccs-table th {
+    text-align: left; padding: 11px 14px; font-size: 0.84rem;
+    font-weight: 700; letter-spacing: 0.02em;
+}
+.ccs-table td {
+    padding: 11px 14px; border-top: 1px solid rgba(148,163,184,0.18);
+    font-size: 0.9rem; color: #334155;
+    vertical-align: top;
+}
+.ccs-table tbody tr:nth-child(even) { background: rgba(0,70,173,0.025); }
+.ccs-table tbody tr:hover { background: rgba(0,70,173,0.06); }
+.ccs-table code {
+    background: rgba(0,70,173,0.08); color: #0046ad;
+    padding: 1px 6px; border-radius: 4px; font-size: 0.88em;
+    font-family: 'JetBrains Mono','Menlo','Consolas',monospace;
+}
+.ccs-table .ccs-pill {
+    display: inline-block; padding: 2px 9px; border-radius: 999px;
+    font-size: 0.78rem; font-weight: 700; letter-spacing: 0.02em;
+}
+.ccs-pill.green  { background: rgba(0,166,81,0.13);  color: #047857; }
+.ccs-pill.red    { background: rgba(220,38,38,0.10); color: #b91c1c; }
+.ccs-pill.amber  { background: rgba(245,158,11,0.15); color: #b45309; }
+.ccs-pill.blue   { background: rgba(0,70,173,0.10);  color: #1d4ed8; }
+.ccs-pill.gray   { background: rgba(100,116,139,0.13); color: #475569; }
+
+/* ---- Recipe cards ---- */
+.ccs-recipe-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px; margin-top: 14px;
+}
+.ccs-recipe {
+    background: linear-gradient(135deg, rgba(0,70,173,0.04) 0%, rgba(0,166,81,0.04) 100%);
+    border: 1px solid rgba(148,163,184,0.25); border-left: 3px solid #1d4ed8;
+    border-radius: 10px; padding: 14px 16px;
+}
+.ccs-recipe-title { font-weight: 700; font-size: 0.92rem; margin-bottom: 6px; color: #0f172a; }
+.ccs-recipe-body  { font-size: 0.85rem; color: #475569; margin-bottom: 8px; line-height: 1.5; }
+.ccs-recipe pre {
+    margin: 0; background: #f1f5f9; color: #0f172a;
+    border: 1px solid rgba(15,23,42,0.10);
+    padding: 10px 12px; border-radius: 6px;
+    font-size: 0.78rem; font-weight: 500;
+    font-family: 'JetBrains Mono','Menlo','Consolas',monospace;
+    line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+}
+
+/* ---- FAQ accordion ---- */
+.ccs-faq { border: 1px solid rgba(148,163,184,0.28); border-radius: 10px; overflow: hidden; margin-top: 8px; }
+.ccs-faq-item { border-bottom: 1px solid rgba(148,163,184,0.2); }
+.ccs-faq-item:last-child { border-bottom: none; }
+.ccs-faq-q {
+    width: 100%; text-align: left;
+    background: transparent; border: none; cursor: pointer;
+    padding: 14px 50px 14px 18px; position: relative;
+    font-size: 0.95rem; font-weight: 600; color: #1e293b;
+    transition: background 0.15s ease;
+    font-family: inherit;
+}
+.ccs-faq-q:hover { background: rgba(0,70,173,0.04); }
+.ccs-faq-q::after {
+    content: '+'; position: absolute; right: 18px; top: 50%;
+    transform: translateY(-50%); font-size: 1.3rem; color: #0046ad; font-weight: 700;
+    transition: transform 0.2s ease;
+}
+.ccs-faq-item.ccs-open .ccs-faq-q::after { content: '−'; }
+.ccs-faq-a {
+    display: none; padding: 0 18px 16px; color: #334155; line-height: 1.6; font-size: 0.92rem;
+}
+.ccs-faq-item.ccs-open .ccs-faq-a { display: block; }
+
+/* ---- Status line preview ---- */
+.ccs-status-preview {
+    background: #0f172a; color: #94e2d5; font-family: 'JetBrains Mono','Menlo','Consolas',monospace;
+    padding: 12px 16px; border-radius: 8px; font-size: 0.78rem; line-height: 1.55;
+    overflow-x: auto; white-space: nowrap;
+    box-shadow: 0 4px 10px rgba(15,23,42,0.18);
+}
+
+/* ---- Toast ---- */
+.ccs-toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: #0f172a; color: #fff; padding: 10px 18px; border-radius: 999px;
+    font-size: 0.88rem; font-weight: 600;
+    box-shadow: 0 8px 24px rgba(15,23,42,0.25);
+    opacity: 0; pointer-events: none; transition: all 0.25s ease;
+    z-index: 200;
+}
+.ccs-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+@media (max-width: 720px) {
+    .ccs-kpi-grid { grid-template-columns: 1fr; }
+    .ccs-hero { padding: 24px 22px; }
+    .ccs-section { padding: 20px; }
+    .ccs-toc-grid { grid-template-columns: 1fr; }
+}
+
+/* ---- Dark mode (page background comes from common.css) ---- */
+body.dark-mode .ccs-container { color: #e2e8f0; }
+
+body.dark-mode .ccs-hero { box-shadow: 0 16px 40px rgba(0,0,0,0.55); }
+
+body.dark-mode .ccs-kpi-card {
+    background: linear-gradient(135deg, rgba(30,41,59,0.7) 0%, rgba(15,23,42,0.7) 100%);
+    border-color: rgba(148,163,184,0.25);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+body.dark-mode .ccs-kpi-card .ccs-kpi-title { color: #f1f5f9; }
+body.dark-mode .ccs-kpi-card .ccs-kpi-body  { color: #94a3b8; }
+
+body.dark-mode .ccs-toc {
+    background: #1e293b; border-color: rgba(148,163,184,0.25);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+body.dark-mode .ccs-toc-title { color: #94a3b8; }
+body.dark-mode .ccs-toc-grid a { color: #93c5fd; }
+body.dark-mode .ccs-toc-grid a:hover { color: #bfdbfe; }
+
+body.dark-mode .ccs-section {
+    background: #1e293b; border-color: rgba(148,163,184,0.18);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+body.dark-mode .ccs-section h2 { color: #f1f5f9; }
+body.dark-mode .ccs-section h3 { color: #93c5fd; }
+body.dark-mode .ccs-section p,
+body.dark-mode .ccs-section ul,
+body.dark-mode .ccs-section ol { color: #cbd5e1; }
+body.dark-mode .ccs-section a { color: #93c5fd; }
+body.dark-mode .ccs-section code {
+    background: rgba(99,102,241,0.18); color: #c7d2fe;
+}
+
+body.dark-mode .ccs-callout.tip      { background: rgba(0,166,81,0.13);   color: #bbf7d0; }
+body.dark-mode .ccs-callout.note     { background: rgba(59,130,246,0.13); color: #bfdbfe; }
+body.dark-mode .ccs-callout.warning  { background: rgba(245,158,11,0.15); color: #fed7aa; }
+body.dark-mode .ccs-callout.important,
+body.dark-mode .ccs-callout.danger   { background: rgba(220,38,38,0.18);  color: #fecaca; }
+body.dark-mode .ccs-callout code {
+    background: rgba(255,255,255,0.10); color: inherit;
+}
+
+body.dark-mode .ccs-table-wrap { border-color: rgba(148,163,184,0.18); }
+body.dark-mode .ccs-table { background: #1e293b; }
+body.dark-mode .ccs-table td { color: #cbd5e1; border-top-color: rgba(148,163,184,0.13); }
+body.dark-mode .ccs-table tbody tr:nth-child(even) { background: rgba(15,23,42,0.55); }
+body.dark-mode .ccs-table tbody tr:hover { background: rgba(99,102,241,0.13); }
+body.dark-mode .ccs-table code { background: rgba(99,102,241,0.18); color: #c7d2fe; }
+
+body.dark-mode .ccs-pill.green  { background: rgba(0,166,81,0.22);  color: #6ee7b7; }
+body.dark-mode .ccs-pill.red    { background: rgba(220,38,38,0.22); color: #fecaca; }
+body.dark-mode .ccs-pill.amber  { background: rgba(245,158,11,0.22); color: #fed7aa; }
+body.dark-mode .ccs-pill.blue   { background: rgba(59,130,246,0.22); color: #bfdbfe; }
+body.dark-mode .ccs-pill.gray   { background: rgba(148,163,184,0.22); color: #cbd5e1; }
+
+body.dark-mode .ccs-recipe {
+    background: linear-gradient(135deg, rgba(30,41,59,0.7) 0%, rgba(15,23,42,0.7) 100%);
+    border-color: rgba(148,163,184,0.18); border-left-color: #6366f1;
+}
+body.dark-mode .ccs-recipe-title { color: #f1f5f9; }
+body.dark-mode .ccs-recipe-body  { color: #94a3b8; }
+
+body.dark-mode .ccs-faq { border-color: rgba(148,163,184,0.18); }
+body.dark-mode .ccs-faq-item { border-bottom-color: rgba(148,163,184,0.15); }
+body.dark-mode .ccs-faq-q    { color: #e2e8f0; }
+body.dark-mode .ccs-faq-q:hover { background: rgba(99,102,241,0.10); }
+body.dark-mode .ccs-faq-q::after { color: #93c5fd; }
+body.dark-mode .ccs-faq-a    { color: #cbd5e1; }
+
+body.dark-mode .ccs-tab-btn { color: #94a3b8; }
+body.dark-mode .ccs-tab-btn:hover { color: #e2e8f0; }
+body.dark-mode .ccs-tab-btn.ccs-active { color: #93c5fd; border-bottom-color: #6366f1; }
+body.dark-mode .ccs-tabs { border-bottom-color: rgba(148,163,184,0.18); }
+
+/* Code blocks flip to slate-900 in dark mode */
+body.dark-mode .ccs-code-wrap {
+    background: #0f172a; border-color: rgba(148,163,184,0.18);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+body.dark-mode .ccs-code-wrap pre { color: #f1f5f9; }
+body.dark-mode .ccs-copy-btn {
+    background: rgba(255,255,255,0.08); color: #cbd5e1;
+    border-color: rgba(255,255,255,0.15); box-shadow: none;
+}
+body.dark-mode .ccs-copy-btn:hover { background: rgba(99,102,241,0.4); color: #fff; border-color: rgba(99,102,241,0.6); }
+body.dark-mode .ccs-recipe pre {
+    background: #0f172a; color: #f1f5f9;
+    border-color: rgba(148,163,184,0.15);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ccs-container">
+
+    <!-- HERO -->
+    <div class="ccs-hero">
+        <h1>🤖 Claude Code &rarr; Our Internal LLM</h1>
+        <p>Run Anthropic's Claude Code CLI against our self-hosted internal model. No API key, no usage caps, no per-token billing — just point and go.</p>
+        <div class="ccs-hero-pills">
+            <span class="ccs-hero-pill">● status: live</span>
+            <span class="ccs-hero-pill">● backend: internal</span>
+            <span class="ccs-hero-pill">● corp network only</span>
+            <span class="ccs-hero-pill">● cost: $0</span>
+        </div>
+    </div>
+
+    <!-- KPI CARDS -->
+    <div class="ccs-kpi-grid">
+        <div class="ccs-kpi-card">
+            <div class="ccs-kpi-icon">🔒</div>
+            <div class="ccs-kpi-title">100% Local</div>
+            <div class="ccs-kpi-body">Every prompt, every response, every byte of code stays on our hardware. Nothing leaves the corp network.</div>
+        </div>
+        <div class="ccs-kpi-card" style="border-left-color:#00a651;">
+            <div class="ccs-kpi-icon">💰</div>
+            <div class="ccs-kpi-title">$0 Cost</div>
+            <div class="ccs-kpi-body">No API key. No per-token billing. No usage caps. Free for the whole team, forever.</div>
+        </div>
+        <div class="ccs-kpi-card" style="border-left-color:#7c3aed;">
+            <div class="ccs-kpi-icon">🏢</div>
+            <div class="ccs-kpi-title">Our Infra</div>
+            <div class="ccs-kpi-body">Runs on hardware we own, behind our firewall, under our control. No external vendor in the loop.</div>
+        </div>
+    </div>
+
+    <!-- TOC -->
+    <div class="ccs-toc">
+        <div class="ccs-toc-title">📑 On this page</div>
+        <div class="ccs-toc-grid">
+            <a href="#what-is">🧠 What is Claude Code?</a>
+            <a href="#getting">🎯 What you're getting</a>
+            <a href="#install-node">1️⃣ Install Node.js</a>
+            <a href="#install-claude">2️⃣ Install Claude Code</a>
+            <a href="#configure">3️⃣ Configure env vars</a>
+            <a href="#spin">4️⃣ Take it for a spin</a>
+            <a href="#tutorial">5️⃣ First real task</a>
+            <a href="#permissions">🛡️ Permission model</a>
+            <a href="#shortcuts">⌨️ Keyboard shortcuts</a>
+            <a href="#recipes">📖 Recipe gallery</a>
+            <a href="#claudemd">📝 The CLAUDE.md trick</a>
+            <a href="#vscode">🆚 VS Code extension</a>
+            <a href="#switch-back">🔄 Switching back to real Claude</a>
+            <a href="#caveats">⚠️ Caveats</a>
+            <a href="#network">🌐 Network gotchas</a>
+            <a href="#faq">❓ FAQ</a>
+            <a href="#help">🆘 Where to get help</a>
+            <a href="#status-line">📊 Status line</a>
+            <a href="#cowork">👥 Claude Cowork</a>
+            <a href="#python">🐍 Test from Python</a>
+        </div>
+    </div>
+
+    <!-- IMPORTANT BANNERS -->
+    <div class="ccs-section">
+        <div class="ccs-callout important">
+            <div class="ccs-callout-icon">⚠️</div>
+            <div class="ccs-callout-body">
+                <strong>Important — Privacy posture</strong>
+                Prompts and responses are processed entirely on internal hardware and are <em>never</em> sent to Anthropic, OpenAI, Google, or any third party. The model runs fully offline. No telemetry, no cloud round-trips.
+            </div>
+        </div>
+        <div class="ccs-callout tip">
+            <div class="ccs-callout-icon">💡</div>
+            <div class="ccs-callout-body">
+                <strong>Cost posture</strong>
+                Zero per-query cost. Compared to typical hosted-LLM pricing, every query the team runs locally is pure savings.
+            </div>
+        </div>
+    </div>
+
+    <!-- WHAT IS CLAUDE CODE -->
+    <div class="ccs-section" id="what-is">
+        <h2>🧠 What is Claude Code?</h2>
+        <p>Claude Code is a terminal-based AI pair-programmer. You run <code>claude</code> inside a project directory, type what you want in plain English, and it reads files, writes code, runs commands, and shows you a diff before saving. Think "a teammate who pair-programs with you in your repo" — not "a chatbot in a browser tab."</p>
+        <p>With this setup, all of that runs against our internal model instead of Anthropic's cloud. Same CLI, same workflow — just our hardware doing the thinking.</p>
+    </div>
+
+    <!-- WHAT YOU'RE GETTING -->
+    <div class="ccs-section" id="getting">
+        <h2>🎯 What you're getting</h2>
+        <div class="ccs-table-wrap">
+            <table class="ccs-table">
+                <thead>
+                    <tr>
+                        <th>Aspect</th>
+                        <th>Claude Code on Anthropic API</th>
+                        <th>Claude Code on our LLM</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>Cost</strong></td><td>💵 per token</td><td><span class="ccs-pill green">🆓 free</span></td></tr>
+                    <tr><td><strong>Network</strong></td><td>🌍 internet</td><td>🏢 corp network only</td></tr>
+                    <tr><td><strong>Auth</strong></td><td>Anthropic key</td><td>shared bearer token</td></tr>
+                    <tr><td><strong>Backend</strong></td><td>Claude (Opus / Sonnet / Haiku)</td><td>internal model</td></tr>
+                    <tr><td><strong>Quality</strong></td><td>🟢🟢🟢🟢🟢</td><td>🟢🟢🟢⚪⚪</td></tr>
+                    <tr><td><strong>Privacy</strong></td><td>sent to Anthropic</td><td><span class="ccs-pill green">stays on our network</span></td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="ccs-callout tip">
+            <div class="ccs-callout-icon">💡</div>
+            <div class="ccs-callout-body">
+                <strong>Tip</strong>
+                3 minutes to first prompt. Three steps: install Node.js → install Claude Code → set 5 env vars. That's it.
+            </div>
+        </div>
+    </div>
+
+    <!-- STEP 1 - INSTALL NODE -->
+    <div class="ccs-section" id="install-node">
+        <h2><span class="ccs-step">1</span> Install Node.js</h2>
+        <p>You need Node 18+ (LTS recommended).</p>
+
+        <div class="ccs-tabs" role="tablist">
+            <button class="ccs-tab-btn ccs-active" data-tab-group="node" data-tab="win">🪟 Windows</button>
+            <button class="ccs-tab-btn" data-tab-group="node" data-tab="mac">🍎 macOS</button>
+            <button class="ccs-tab-btn" data-tab-group="node" data-tab="lin">🐧 Linux</button>
+        </div>
+
+        <div class="ccs-tab-panel ccs-active" data-tab-group="node" data-tab="win">
+            <div class="ccs-callout tip">
+                <div class="ccs-callout-icon">🏢</div>
+                <div class="ccs-callout-body">
+                    <strong>Corp-managed laptop? Try Software Center first</strong>
+                    <ol style="margin-top:6px;">
+                        <li>Open <strong>Software Center</strong> (Start menu → "Software Center").</li>
+                        <li>Search for <strong>Claude</strong>.</li>
+                        <li>Click <strong>Install</strong>.</li>
+                    </ol>
+                    If it's there, you're done — the package is pre-approved (no admin prompt, no PATH wrangling). <strong>Skip ahead to <a href="#configure">Step 3 (env vars)</a></strong>.
+                    <div style="margin-top:8px;"><strong>Don't see Claude in Software Center?</strong> The rollout is still in progress, so most laptops don't have it yet. Use the winget steps below to install Node, then continue to Step 2 for the <code>npm install</code> one-liner.</div>
+                </div>
+            </div>
+            <h3 style="margin-top:18px;">If Software Center doesn't list Claude — install Node manually</h3>
+            <p>One-liner via winget (built into Windows 10/11). The flags below work <strong>without admin rights</strong> and <strong>on corp Wi-Fi</strong>:</p>
+            <div class="ccs-code-wrap"><pre><code>winget install OpenJS.NodeJS.LTS --source winget --scope user</code></pre><button class="ccs-copy-btn">Copy</button></div>
+            <div class="ccs-callout note">
+                <div class="ccs-callout-icon">📘</div>
+                <div class="ccs-callout-body">
+                    <strong>Why those two flags</strong>
+                    <ul style="margin-top:6px;">
+                        <li><code>--source winget</code> — pins the Microsoft <em>winget</em> source instead of the default <em>msstore</em>, which fails with <code>0x8a15005e</code> (server certificate did not match) on corp Wi-Fi because SSL inspection breaks the Microsoft Store source.</li>
+                        <li><code>--scope user</code> — installs Node into your profile only and modifies your user PATH. No admin elevation needed.</li>
+                    </ul>
+                    Close and reopen your terminal after install so the new PATH takes effect.
+                </div>
+            </div>
+        </div>
+        <div class="ccs-tab-panel" data-tab-group="node" data-tab="mac">
+            <div class="ccs-code-wrap"><pre><code>brew install node          # if you have Homebrew
+# or download the .pkg from https://nodejs.org</code></pre><button class="ccs-copy-btn">Copy</button></div>
+        </div>
+        <div class="ccs-tab-panel" data-tab-group="node" data-tab="lin">
+            <div class="ccs-code-wrap"><pre><code>curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+sudo apt install -y nodejs</code></pre><button class="ccs-copy-btn">Copy</button></div>
+        </div>
+
+        <h3>🩺 Sanity check</h3>
+        <div class="ccs-code-wrap"><pre><code>node --version    # &rarr; v20.x.x or later  ✅
+npm --version</code></pre><button class="ccs-copy-btn">Copy</button></div>
+    </div>
+
+    <!-- STEP 2 - INSTALL CLAUDE CODE -->
+    <div class="ccs-section" id="install-claude">
+        <h2><span class="ccs-step">2</span> Install Claude Code</h2>
+        <div class="ccs-callout tip">
+            <div class="ccs-callout-icon">🏢</div>
+            <div class="ccs-callout-body">
+                <strong>Installed via Software Center on Windows?</strong>
+                You're done — SC installs Claude Code alongside Node. Skip to <a href="#configure">Step 3 (env vars)</a>.
+            </div>
+        </div>
+        <p>Otherwise (Software Center doesn't list Claude yet, or you're on Mac/Linux), same one-liner everywhere:</p>
+        <div class="ccs-code-wrap"><pre><code>npm install -g @anthropic-ai/claude-code</code></pre><button class="ccs-copy-btn">Copy</button></div>
+        <p>Verify the install:</p>
+        <div class="ccs-code-wrap"><pre><code>claude --version    # &rarr; claude-code v1.x.x  ✅</code></pre><button class="ccs-copy-btn">Copy</button></div>
+        <div class="ccs-callout warning">
+            <div class="ccs-callout-icon">🚨</div>
+            <div class="ccs-callout-body">
+                <strong>Warning — claude: command not found?</strong>
+                Your global npm bin isn't on PATH.
+                <ul style="margin-top:6px;">
+                    <li><strong>Windows:</strong> run <code>npm config get prefix</code> → add the resulting path (e.g. <code>%AppData%\npm</code>) to your user PATH in System Settings.</li>
+                    <li><strong>macOS / Linux:</strong> run <code>npm config get prefix</code> → add <code>$(that path)/bin</code> to your shell rc.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- STEP 3 - CONFIGURE ENV VARS -->
+    <div class="ccs-section" id="configure">
+        <h2><span class="ccs-step">3</span> Configure the five magic env vars</h2>
+        <p>These point Claude Code at our internal endpoint and pick which local model each tier resolves to.</p>
+
+        <div class="ccs-table-wrap">
+            <table class="ccs-table">
+                <thead>
+                    <tr><th>Variable</th><th>Value</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>ANTHROPIC_BASE_URL</code></td><td><code>{{ local_llm_public_url }}</code></td></tr>
+                    <tr><td><code>ANTHROPIC_AUTH_TOKEN</code></td><td><span class="ccs-pill amber">ask the team lead — not in git</span></td></tr>
+                    <tr><td><code>ANTHROPIC_DEFAULT_OPUS_MODEL</code></td><td><code>glm-4.7-flash</code></td></tr>
+                    <tr><td><code>ANTHROPIC_DEFAULT_SONNET_MODEL</code></td><td><code>glm-4.7-flash</code></td></tr>
+                    <tr><td><code>ANTHROPIC_DEFAULT_HAIKU_MODEL</code></td><td><code>laguna</code></td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="ccs-callout important">
+            <div class="ccs-callout-icon">🔐</div>
+            <div class="ccs-callout-body">
+                <strong>Important — bearer token</strong>
+                The token is <em>not</em> in this doc. Ping the team lead in Webex for it. If it leaks, we have to rotate it for everyone.
+            </div>
+        </div>
+
+        <div class="ccs-tabs" role="tablist" style="margin-top:18px;">
+            <button class="ccs-tab-btn ccs-active" data-tab-group="env" data-tab="win">🪟 Windows PowerShell</button>
+            <button class="ccs-tab-btn" data-tab-group="env" data-tab="cmd">🪟 Windows CMD</button>
+            <button class="ccs-tab-btn" data-tab-group="env" data-tab="unix">🍎🐧 macOS / Linux</button>
+        </div>
+
+        <div class="ccs-tab-panel ccs-active" data-tab-group="env" data-tab="win">
+            <p>Persistent (user-level):</p>
+            <div class="ccs-code-wrap"><pre><code>[Environment]::SetEnvironmentVariable("ANTHROPIC_BASE_URL",            "{{ local_llm_public_url }}", "User")
+[Environment]::SetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN",          "REPLACE_WITH_BEARER_TOKEN",    "User")
+[Environment]::SetEnvironmentVariable("ANTHROPIC_DEFAULT_OPUS_MODEL",   "glm-4.7-flash",            "User")
+[Environment]::SetEnvironmentVariable("ANTHROPIC_DEFAULT_SONNET_MODEL", "glm-4.7-flash",            "User")
+[Environment]::SetEnvironmentVariable("ANTHROPIC_DEFAULT_HAIKU_MODEL",  "laguna",               "User")</code></pre><button class="ccs-copy-btn">Copy</button></div>
+            <div class="ccs-callout tip">
+                <div class="ccs-callout-icon">💡</div>
+                <div class="ccs-callout-body">
+                    <strong>Tip</strong>
+                    Close and reopen PowerShell for the new env vars to take effect. For a one-off in the current shell, use <code>$env:ANTHROPIC_BASE_URL = "..."</code> instead.
+                </div>
+            </div>
+        </div>
+        <div class="ccs-tab-panel" data-tab-group="env" data-tab="cmd">
+            <p>Persistent (user-level) via <code>setx</code>:</p>
+            <div class="ccs-code-wrap"><pre><code>setx ANTHROPIC_BASE_URL            "{{ local_llm_public_url }}"
+setx ANTHROPIC_AUTH_TOKEN          "REPLACE_WITH_BEARER_TOKEN"
+setx ANTHROPIC_DEFAULT_OPUS_MODEL   "glm-4.7-flash"
+setx ANTHROPIC_DEFAULT_SONNET_MODEL "glm-4.7-flash"
+setx ANTHROPIC_DEFAULT_HAIKU_MODEL  "laguna"</code></pre><button class="ccs-copy-btn">Copy</button></div>
+            <div class="ccs-callout tip">
+                <div class="ccs-callout-icon">💡</div>
+                <div class="ccs-callout-body">
+                    <strong>Tip</strong>
+                    <code>setx</code> writes to the user environment but doesn't update the <em>current</em> cmd window — close and reopen for the new values to take effect. For a one-off in the current shell, use <code>set ANTHROPIC_BASE_URL=...</code> (no quotes around the value) instead.
+                </div>
+            </div>
+        </div>
+        <div class="ccs-tab-panel" data-tab-group="env" data-tab="unix">
+            <p>Append to <code>~/.zshrc</code> (use <code>~/.bashrc</code> if you're on bash):</p>
+            <div class="ccs-code-wrap"><pre><code>cat &gt;&gt; ~/.zshrc &lt;&lt;'EOF'
+
+# 🤖 Claude Code &rarr; internal LLM
+export ANTHROPIC_BASE_URL="{{ local_llm_public_url }}"
+export ANTHROPIC_AUTH_TOKEN="REPLACE_WITH_BEARER_TOKEN"
+export ANTHROPIC_DEFAULT_OPUS_MODEL="glm-4.7-flash"
+export ANTHROPIC_DEFAULT_SONNET_MODEL="glm-4.7-flash"
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="laguna"
+EOF
+
+source ~/.zshrc</code></pre><button class="ccs-copy-btn">Copy</button></div>
+        </div>
+
+        <h3 style="margin-top:18px;">🩺 Verify — confirm the values are set</h3>
+        <p>Open a <strong>fresh</strong> terminal (so it picks up the new vars), then run the line for your shell. All five values should print non-empty — if any are blank, the vars didn't persist and <code>claude</code> will fall back to api.anthropic.com.</p>
+
+        <div class="ccs-tabs" role="tablist">
+            <button class="ccs-tab-btn ccs-active" data-tab-group="verify" data-tab="win">🪟 Windows PowerShell</button>
+            <button class="ccs-tab-btn" data-tab-group="verify" data-tab="cmd">🪟 Windows CMD</button>
+            <button class="ccs-tab-btn" data-tab-group="verify" data-tab="unix">🍎🐧 macOS / Linux</button>
+        </div>
+
+        <div class="ccs-tab-panel ccs-active" data-tab-group="verify" data-tab="win">
+            <div class="ccs-code-wrap"><pre><code>$env:ANTHROPIC_BASE_URL; $env:ANTHROPIC_AUTH_TOKEN.Substring(0,8) + "..."; $env:ANTHROPIC_DEFAULT_OPUS_MODEL; $env:ANTHROPIC_DEFAULT_SONNET_MODEL; $env:ANTHROPIC_DEFAULT_HAIKU_MODEL</code></pre><button class="ccs-copy-btn">Copy</button></div>
+        </div>
+        <div class="ccs-tab-panel" data-tab-group="verify" data-tab="cmd">
+            <div class="ccs-code-wrap"><pre><code>echo %ANTHROPIC_BASE_URL% &amp; echo %ANTHROPIC_AUTH_TOKEN:~0,8%... &amp; echo %ANTHROPIC_DEFAULT_OPUS_MODEL% &amp; echo %ANTHROPIC_DEFAULT_SONNET_MODEL% &amp; echo %ANTHROPIC_DEFAULT_HAIKU_MODEL%</code></pre><button class="ccs-copy-btn">Copy</button></div>
+        </div>
+        <div class="ccs-tab-panel" data-tab-group="verify" data-tab="unix">
+            <div class="ccs-code-wrap"><pre><code>echo "$ANTHROPIC_BASE_URL"; echo "${ANTHROPIC_AUTH_TOKEN:0:8}..."; echo "$ANTHROPIC_DEFAULT_OPUS_MODEL"; echo "$ANTHROPIC_DEFAULT_SONNET_MODEL"; echo "$ANTHROPIC_DEFAULT_HAIKU_MODEL"</code></pre><button class="ccs-copy-btn">Copy</button></div>
+        </div>
+
+        <div class="ccs-callout note">
+            <div class="ccs-callout-icon">📘</div>
+            <div class="ccs-callout-body">
+                The token is truncated to its first 8 characters so you can sanity-check it's set without echoing the full secret to your terminal scrollback.
+            </div>
+        </div>
+    </div>
+
+    <!-- STEP 4 - TAKE IT FOR A SPIN -->
+    <div class="ccs-section" id="spin">
+        <h2><span class="ccs-step">4</span> Take it for a spin 🚗💨</h2>
+        <p>Open a fresh terminal in any directory and run:</p>
+        <div class="ccs-code-wrap"><pre><code>claude</code></pre><button class="ccs-copy-btn">Copy</button></div>
+        <p>Inside the prompt, type <code>/status</code> — you should see your custom <code>ANTHROPIC_BASE_URL</code> listed. Then say hi:</p>
+        <div class="ccs-code-wrap"><pre><code>&gt; hi! introduce yourself in one sentence.</code></pre><button class="ccs-copy-btn">Copy</button></div>
+        <div class="ccs-callout tip">
+            <div class="ccs-callout-icon">💡</div>
+            <div class="ccs-callout-body">
+                <strong>Tip</strong>
+                A telltale sign you're on the local model: it won't claim to be Claude. That confirms the routing is correct. 🎉
+            </div>
+        </div>
+    </div>
+
+    <!-- STEP 5 - TUTORIAL -->
+    <div class="ccs-section" id="tutorial">
+        <h2><span class="ccs-step">5</span> Your first real task — a 2-minute tutorial</h2>
+        <p>"Hello" is fine, but Claude Code is meant to write and edit code in real repos. Here's a quick walkthrough.</p>
+
+        <h3>① Open a project (or start fresh)</h3>
+        <div class="ccs-code-wrap"><pre><code>mkdir hello-claude && cd hello-claude
+claude</code></pre><button class="ccs-copy-btn">Copy</button></div>
+        <p>Or <code>cd</code> into an existing repo and run <code>claude</code> there — it'll see your code and can edit files in place.</p>
+
+        <h3>② Ask it to build something concrete</h3>
+        <p>At the prompt, paste:</p>
+        <div class="ccs-code-wrap"><pre><code>&gt; write a Python script `weather.py` that takes a city name on the
+  command line and prints today's forecast. Use the open-meteo public
+  API (no key needed). Add a --json flag for machine-readable output.</code></pre><button class="ccs-copy-btn">Copy</button></div>
+        <p>Claude Code will plan the file, write it, show you the diff, and ask before saving. Press <code>y</code> to accept, <code>e</code> to edit inline, or describe what you want changed and it'll redo the diff.</p>
+
+        <h3>③ Iterate</h3>
+        <div class="ccs-code-wrap"><pre><code>&gt; nice. now add a unit test that mocks the HTTP call,
+  then run it.</code></pre><button class="ccs-copy-btn">Copy</button></div>
+        <p>It'll create the test file, run it, and show you the output. If the test fails, ask it to fix and re-run — it can read its own errors.</p>
+
+        <h3>④ Useful slash commands</h3>
+        <div class="ccs-table-wrap">
+            <table class="ccs-table">
+                <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+                <tbody>
+                    <tr><td><code>/status</code></td><td>Show current model, env vars, and working directory</td></tr>
+                    <tr><td><code>/clear</code></td><td>Clear the conversation and start fresh</td></tr>
+                    <tr><td><code>/compact</code></td><td>Compress earlier turns to free up context</td></tr>
+                    <tr><td><code>/init</code></td><td>Generate a CLAUDE.md describing this repo's conventions</td></tr>
+                    <tr><td><code>/help</code></td><td>Full command list</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <h3>Tips for getting good results from the internal model</h3>
+        <ul>
+            <li><strong>Be specific.</strong> "Refactor this function for clarity, keep the public signature" beats "make it better."</li>
+            <li><strong>Smaller scopes win.</strong> One file at a time. Long multi-file refactors are where the local model struggles.</li>
+            <li><strong>Show, don't tell.</strong> Pasting a small example of the desired output usually gets you there faster than describing it.</li>
+            <li><strong>Verify the diff.</strong> The model occasionally hallucinates an import or path — read the diff before accepting.</li>
+            <li><strong>If it gets stuck in a loop,</strong> <code>/clear</code> and rephrase. Don't keep nudging a confused conversation back on track.</li>
+        </ul>
+    </div>
+
+    <!-- PERMISSIONS -->
+    <div class="ccs-section" id="permissions">
+        <h2>🛡️ The permission model — what it asks before doing</h2>
+        <p>Claude Code never silently edits files or runs commands. Every side-effect goes through a prompt:</p>
+        <div class="ccs-table-wrap">
+            <table class="ccs-table">
+                <thead><tr><th>Key</th><th>What it does</th></tr></thead>
+                <tbody>
+                    <tr><td><code>y</code> (yes)</td><td>Accept the proposed change / run the command</td></tr>
+                    <tr><td><code>n</code> (no)</td><td>Reject it; the model will adjust based on your reasoning</td></tr>
+                    <tr><td><code>e</code> (edit)</td><td>Open the proposed diff and tweak it before saving</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <p>It will ask before:</p>
+        <ul>
+            <li>Writing to or deleting a file</li>
+            <li>Running shell commands (especially anything destructive)</li>
+            <li>Installing packages or making network calls</li>
+        </ul>
+        <div class="ccs-callout tip">
+            <div class="ccs-callout-icon">💡</div>
+            <div class="ccs-callout-body">
+                <strong>Tip</strong>
+                Press <code>Shift+Tab</code> inside Claude Code to cycle permission modes. "Auto-accept edits" stops the y/n prompt for file edits — great for fast iteration, but only flip it on once you trust what the model is doing in the current task.
+            </div>
+        </div>
+    </div>
+
+    <!-- SHORTCUTS -->
+    <div class="ccs-section" id="shortcuts">
+        <h2>⌨️ Keyboard shortcuts cheat-sheet</h2>
+        <p>These speed things up dramatically once you know them:</p>
+        <div class="ccs-table-wrap">
+            <table class="ccs-table">
+                <thead><tr><th>Shortcut</th><th>What it does</th></tr></thead>
+                <tbody>
+                    <tr><td><code>Esc</code></td><td>Interrupt a running generation (model is rambling? stop it)</td></tr>
+                    <tr><td><code>Ctrl+C</code></td><td>Quit Claude Code</td></tr>
+                    <tr><td><code>↑</code> / <code>↓</code></td><td>Cycle through your previous prompts</td></tr>
+                    <tr><td><code>Tab</code></td><td>Autocomplete file paths</td></tr>
+                    <tr><td><code>Shift+Tab</code></td><td>Cycle permission modes (ask / auto-edit / plan-only)</td></tr>
+                    <tr><td><code>@filename</code></td><td>Reference a file — model reads it as context</td></tr>
+                    <tr><td><code>!command</code></td><td>Run a shell command in this session, pipe output to the model</td></tr>
+                    <tr><td><code>#text</code></td><td>Save <code>text</code> as a memory line (sticks across turns in this session)</td></tr>
+                    <tr><td><code>/</code></td><td>Browse slash commands (/status, /clear, /help, /compact, /init …)</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="ccs-callout tip">
+            <div class="ccs-callout-icon">💡</div>
+            <div class="ccs-callout-body">
+                <strong>Tip</strong>
+                <code>@</code> and <code>!</code> are the two biggest force-multipliers. <code>@src/auth.py explain this</code> is faster than copy-pasting the file. <code>!pytest -x</code> lets the model see the test failure and fix it.
+            </div>
+        </div>
+    </div>
+
+    <!-- RECIPES -->
+    <div class="ccs-section" id="recipes">
+        <h2>📖 Recipe gallery — what people actually use this for</h2>
+        <p>"Write a script" is the obvious one. Here are the high-value uses that newcomers usually don't think to try:</p>
+        <div class="ccs-recipe-grid">
+            <div class="ccs-recipe">
+                <div class="ccs-recipe-title">▸ Onboard yourself to an unfamiliar repo</div>
+                <pre>&gt; walk me through the architecture of this codebase. start with the
+  entry points and how requests flow through the system.</pre>
+            </div>
+            <div class="ccs-recipe">
+                <div class="ccs-recipe-title">▸ Diagnose a failing test</div>
+                <pre>&gt; !pytest tests/test_auth.py -x
+&gt; the failure above — figure out what's wrong and fix it.</pre>
+            </div>
+            <div class="ccs-recipe">
+                <div class="ccs-recipe-title">▸ Write tests for code you didn't write</div>
+                <pre>&gt; @src/billing/invoice.py write pytest unit tests for the
+  `calculate_total` function. cover the discount edge cases.</pre>
+            </div>
+            <div class="ccs-recipe">
+                <div class="ccs-recipe-title">▸ Pre-PR self-review</div>
+                <pre>&gt; !git diff main...HEAD
+&gt; review this diff like a senior engineer. flag bugs, missing
+  edge cases, and anything you'd push back on in a PR review.</pre>
+            </div>
+            <div class="ccs-recipe">
+                <div class="ccs-recipe-title">▸ Refactor with intent</div>
+                <pre>&gt; @src/utils/parser.py refactor the parse_event function for
+  clarity. keep the public signature identical and don't change
+  behavior — i'll diff it.</pre>
+            </div>
+            <div class="ccs-recipe">
+                <div class="ccs-recipe-title">▸ Explain something opaque</div>
+                <pre>&gt; @scripts/migrate_v3.sql explain what this migration does and
+  what could go wrong if i run it on a 50M-row table.</pre>
+            </div>
+            <div class="ccs-recipe">
+                <div class="ccs-recipe-title">▸ Add docstrings to legacy code</div>
+                <pre>&gt; @src/legacy/sync_engine.py add Google-style docstrings to every
+  public method. don't change the code itself.</pre>
+            </div>
+            <div class="ccs-recipe">
+                <div class="ccs-recipe-title">▸ Translate between languages</div>
+                <pre>&gt; @scripts/cleanup.sh port this bash script to Python with argparse.
+  preserve the same flags and exit codes.</pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- CLAUDE.md -->
+    <div class="ccs-section" id="claudemd">
+        <h2>📝 The CLAUDE.md trick — make it know your project</h2>
+        <p>Drop a <code>CLAUDE.md</code> file at the root of your repo and Claude Code reads it on every run. This is where you teach it your project's conventions so you don't have to repeat yourself in every prompt.</p>
+        <p>Generate a starter automatically:</p>
+        <div class="ccs-code-wrap"><pre><code>&gt; /init</code></pre><button class="ccs-copy-btn">Copy</button></div>
+        <p>Or hand-write something like:</p>
+        <div class="ccs-code-wrap"><pre><code># Project: payments-service
+
+## Conventions
+- Python 3.11, formatted with `ruff format`
+- All DB access goes through `db/repository.py` — never raw SQL
+- Tests live next to the code: `foo.py` &rarr; `foo_test.py`
+
+## Commands
+- Run tests:   `make test`
+- Lint:        `make lint`</code></pre><button class="ccs-copy-btn">Copy</button></div>
+        <div class="ccs-callout tip">
+            <div class="ccs-callout-icon">💡</div>
+            <div class="ccs-callout-body">
+                <strong>Tip</strong>
+                The bigger the repo, the more CLAUDE.md pays off. A 20-line conventions file saves you from typing "and use ruff format" in every prompt for the rest of your life.
+            </div>
+        </div>
+
+        <h3>…and what is AGENTS.md?</h3>
+        <p>AGENTS.md is the cross-tool version of the same idea — an emerging open convention that's read by Claude Code, Cursor, Aider, OpenAI Codex CLI, Gemini CLI, and a growing list of others. Same file format and intent as CLAUDE.md, just a neutral name so one file serves every AI assistant the team uses. Most repos now ship AGENTS.md as the source of truth and keep a tiny CLAUDE.md that just says "see AGENTS.md."</p>
+
+        <p>A minimal example:</p>
+        <div class="ccs-code-wrap"><pre><code># AGENTS.md
+
+## About this repo
+Internal data-pipeline service. Python 3.11, Postgres, deployed via
+GitHub Actions to AWS ECS.
+
+## Setup
+- `make install` — set up the venv and install deps
+- `make test`    — run the test suite
+- `make lint`    — ruff + mypy
+
+## Conventions
+- Tests live next to the code (`foo.py` &rarr; `foo_test.py`)
+- All DB access through `db/repository.py`
+- New endpoints go under `app/routes/v2/`</code></pre><button class="ccs-copy-btn">Copy</button></div>
+
+        <div class="ccs-callout note">
+            <div class="ccs-callout-icon">📘</div>
+            <div class="ccs-callout-body">
+                <strong>Note</strong>
+                If both CLAUDE.md and AGENTS.md exist, Claude Code reads both. Pick whichever fits your workflow — AGENTS.md if your team uses multiple AI tools, CLAUDE.md if it's just Claude Code.
+            </div>
+        </div>
+    </div>
+
+    <!-- VS CODE -->
+    <div class="ccs-section" id="vscode">
+        <h2>🆚 Prefer an IDE? Use the VS Code extension</h2>
+        <p>If living in a terminal isn't your thing, install the "Claude Code" extension from the VS Code marketplace. It opens Claude Code as a side panel inside VS Code, with the same env-var config you set up above — point it at our internal endpoint and it works identically.</p>
+        <ul>
+            <li>Diffs render inline in the editor instead of in the terminal</li>
+            <li>Selected code is auto-attached as context</li>
+            <li>Same slash commands, same permission model</li>
+        </ul>
+        <div class="ccs-callout note">
+            <div class="ccs-callout-icon">📘</div>
+            <div class="ccs-callout-body">
+                <strong>Note</strong>
+                JetBrains IDEs have an equivalent plugin. Same env vars, same behavior — search the JetBrains Marketplace for "Claude Code."
+            </div>
+        </div>
+    </div>
+
+    <!-- SWITCH BACK -->
+    <div class="ccs-section" id="switch-back">
+        <h2>🔄 Switching back to real Claude</h2>
+        <p>When you want real Opus / Sonnet for the heavy lifting, just unset the five vars:</p>
+
+        <div class="ccs-tabs" role="tablist">
+            <button class="ccs-tab-btn ccs-active" data-tab-group="unset" data-tab="win">🪟 Windows PowerShell</button>
+            <button class="ccs-tab-btn" data-tab-group="unset" data-tab="cmd">🪟 Windows CMD</button>
+            <button class="ccs-tab-btn" data-tab-group="unset" data-tab="unix">🍎🐧 macOS / Linux</button>
+        </div>
+        <div class="ccs-tab-panel ccs-active" data-tab-group="unset" data-tab="win">
+            <div class="ccs-code-wrap"><pre><code>[Environment]::SetEnvironmentVariable("ANTHROPIC_BASE_URL",            $null, "User")
+[Environment]::SetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN",          $null, "User")
+[Environment]::SetEnvironmentVariable("ANTHROPIC_DEFAULT_OPUS_MODEL",   $null, "User")
+[Environment]::SetEnvironmentVariable("ANTHROPIC_DEFAULT_SONNET_MODEL", $null, "User")
+[Environment]::SetEnvironmentVariable("ANTHROPIC_DEFAULT_HAIKU_MODEL",  $null, "User")</code></pre><button class="ccs-copy-btn">Copy</button></div>
+        </div>
+        <div class="ccs-tab-panel" data-tab-group="unset" data-tab="cmd">
+            <p>Wipe the values from your user environment:</p>
+            <div class="ccs-code-wrap"><pre><code>reg delete "HKCU\Environment" /F /V ANTHROPIC_BASE_URL
+reg delete "HKCU\Environment" /F /V ANTHROPIC_AUTH_TOKEN
+reg delete "HKCU\Environment" /F /V ANTHROPIC_DEFAULT_OPUS_MODEL
+reg delete "HKCU\Environment" /F /V ANTHROPIC_DEFAULT_SONNET_MODEL
+reg delete "HKCU\Environment" /F /V ANTHROPIC_DEFAULT_HAIKU_MODEL</code></pre><button class="ccs-copy-btn">Copy</button></div>
+            <p>Close and reopen cmd so the changes take effect.</p>
+        </div>
+        <div class="ccs-tab-panel" data-tab-group="unset" data-tab="unix">
+            <p>Comment out or delete the export block from <code>~/.zshrc</code> / <code>~/.bashrc</code>, then source it again — or in the current shell:</p>
+            <div class="ccs-code-wrap"><pre><code>unset ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN \
+      ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL</code></pre><button class="ccs-copy-btn">Copy</button></div>
+        </div>
+
+        <p>You'll then need to authenticate with your Anthropic API key, or run <code>claude login</code> to use your Claude.ai subscription.</p>
+    </div>
+
+    <!-- CAVEATS -->
+    <div class="ccs-section" id="caveats">
+        <h2>⚠️ Caveats — read this once</h2>
+        <p>This is an internal model. It is <em>not</em> Claude.</p>
+        <div class="ccs-table-wrap">
+            <table class="ccs-table">
+                <thead>
+                    <tr>
+                        <th>Works ✅</th>
+                        <th>Degraded ⚠️</th>
+                        <th>Not supported ❌</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>Code Q&amp;A</td><td>Multi-file refactors</td><td>Prompt caching</td></tr>
+                    <tr><td>Single-file edits</td><td>Long tool-use chains</td><td>Extended thinking</td></tr>
+                    <tr><td>Short chats</td><td>Subtle reasoning over big contexts</td><td>Citations</td></tr>
+                    <tr><td>Basic tool calls</td><td>Occasional malformed tool calls</td><td>Batch / Files API</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="ccs-callout warning">
+            <div class="ccs-callout-icon">🚨</div>
+            <div class="ccs-callout-body">
+                <strong>Warning</strong>
+                Context window is smaller than Claude's 200K / 1M. Don't paste a 50K-line file and expect it to fit.
+            </div>
+        </div>
+        <p>If something's genuinely broken (not just "lower quality than Claude"), file it — the bridge between Claude Code and our endpoint can be patched.</p>
+    </div>
+
+    <!-- NETWORK -->
+    <div class="ccs-section" id="network">
+        <h2>🌐 Network gotchas</h2>
+        <div class="ccs-callout important">
+            <div class="ccs-callout-icon">🌐</div>
+            <div class="ccs-callout-body">
+                <strong>Important</strong>
+                The endpoint lives on a private corp-network address. Any corp-network path works — office WiFi/LAN, corp VPN from home, or the corporate proxy. Off-network won't reach it.
+            </div>
+        </div>
+        <div class="ccs-table-wrap">
+            <table class="ccs-table">
+                <thead><tr><th>Where you are</th><th>Will it work?</th></tr></thead>
+                <tbody>
+                    <tr><td>🏢 In the office, on corp WiFi or ethernet</td><td><span class="ccs-pill green">✅ Yes</span></td></tr>
+                    <tr><td>🏠 Working from home, on corp VPN or the corporate proxy</td><td><span class="ccs-pill green">✅ Yes</span></td></tr>
+                    <tr><td>☕ Coffee shop, hotel, off-network</td><td><span class="ccs-pill red">❌ No — connect to corp VPN/the corporate proxy first</span></td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <h3>🩺 Quick reachability check</h3>
+        <div class="ccs-code-wrap"><pre><code># Should return 401 without token
+curl -s -o /dev/null -w "%{http_code}\n" {{ local_llm_public_url }}/v1/models
+
+# Should return 200 with token
+curl -s -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \
+     -o /dev/null -w "%{http_code}\n" \
+     {{ local_llm_public_url }}/v1/models</code></pre><button class="ccs-copy-btn">Copy</button></div>
+    </div>
+
+    <!-- FAQ -->
+    <div class="ccs-section" id="faq">
+        <h2>❓ FAQ — things people Webex me about</h2>
+        <p>Click any question to expand. Stuck on something not listed here? <strong>Use the chat widget at bottom-right</strong> to ask.</p>
+        <div class="ccs-faq" id="ccsFaq">
+            <div class="ccs-faq-item">
+                <button class="ccs-faq-q">🪟 What's the easiest way to install on a corp-managed Windows laptop?</button>
+                <div class="ccs-faq-a">Try <strong>Software Center</strong> first — search for <strong>Claude</strong>; if it's listed, click <strong>Install</strong> and you're done (no admin prompt, no PATH fiddling, jump to Step 3). The SC rollout is still in progress though, so most laptops don't have it yet — if Claude isn't there for you, fall back to the winget + npm steps in <a href="#install-node">Step 1</a> and <a href="#install-claude">Step 2</a>.</div>
+            </div>
+            <div class="ccs-faq-item">
+                <button class="ccs-faq-q">🪟 Should I run Claude in Command Prompt or Windows Terminal?</button>
+                <div class="ccs-faq-a"><strong>Use Windows Terminal</strong> (Start menu → "Terminal"). It's the modern app and runs CLI tools more reliably on managed laptops than the legacy Command Prompt. Terminal opens to PowerShell by default, which is what the env-var commands above use anyway. If <code>claude</code> won't launch in <code>cmd.exe</code>, try it in Terminal — that usually does the trick.</div>
+            </div>
+            <div class="ccs-faq-item">
+                <button class="ccs-faq-q">🪟 winget install fails with "server certificate did not match" (0x8a15005e).</button>
+                <div class="ccs-faq-a">If Claude is in your Software Center, that path skips winget entirely (search "Claude" → Install). Otherwise: corp SSL inspection breaks the Microsoft Store source. Pin winget explicitly: <code>winget install OpenJS.NodeJS.LTS --source winget</code>. The error message lists <code>winget</code> as a working source — that's the one to use.</div>
+            </div>
+            <div class="ccs-faq-item">
+                <button class="ccs-faq-q">🪟 I don't have admin rights on my Windows laptop — can I still install?</button>
+                <div class="ccs-faq-a">Yes. Easiest path is Software Center if Claude is listed for you (no admin needed). If it isn't, use winget with <code>--scope user</code>: <code>winget install OpenJS.NodeJS.LTS --source winget --scope user</code>. Node installs into your profile and only your user PATH is modified. Last-resort fallback is the portable zip from <a href="https://nodejs.org/dist/" target="_blank" rel="noopener">nodejs.org/dist</a>: extract to <code>%USERPROFILE%\nodejs</code>, then add that folder to your <strong>user</strong> PATH (System Properties → Environment Variables → User variables → Path → New).</div>
+            </div>
+            <div class="ccs-faq-item">
+                <button class="ccs-faq-q">It told me it can't access the internet. Is something broken?</button>
+                <div class="ccs-faq-a">No — that's expected. The local model runs fully offline by design. If you need to fetch a webpage or hit an external API, run the command yourself with <code>!curl ...</code> and pipe the output back in.</div>
+            </div>
+            <div class="ccs-faq-item">
+                <button class="ccs-faq-q">My output got cut off mid-sentence.</button>
+                <div class="ccs-faq-a">You hit the context window. Run <code>/compact</code> to compress earlier turns, or <code>/clear</code> to start fresh. The local model has a smaller window than Claude — keep conversations focused.</div>
+            </div>
+            <div class="ccs-faq-item">
+                <button class="ccs-faq-q">It hallucinated a function / import / file path.</button>
+                <div class="ccs-faq-a">Known weakness of smaller models. Always read the diff before accepting (press <code>e</code> to edit). If it keeps inventing things, scope down — ask about one file at a time and use <code>@filename</code> to anchor it.</div>
+            </div>
+            <div class="ccs-faq-item">
+                <button class="ccs-faq-q">It refused to do something benign.</button>
+                <div class="ccs-faq-a">Rephrase. The model can be over-cautious. Adding context like "this is my own project, the file is mine to edit" usually unblocks it.</div>
+            </div>
+            <div class="ccs-faq-item">
+                <button class="ccs-faq-q">Tool calls are failing or producing malformed JSON.</button>
+                <div class="ccs-faq-a">Occasional issue with the local model — it's noted in the caveats above. Retry the prompt; if it persists, simplify the request (fewer tools, smaller scope) or file a bug with the team lead.</div>
+            </div>
+            <div class="ccs-faq-item">
+                <button class="ccs-faq-q">First response is slow, later ones are fast. Why?</button>
+                <div class="ccs-faq-a">The model warms up after the first query. Subsequent prompts in the same session reuse the loaded weights and KV cache — that's normal, not a bug.</div>
+            </div>
+            <div class="ccs-faq-item">
+                <button class="ccs-faq-q">Can I use this for confidential / customer data?</button>
+                <div class="ccs-faq-a">Prompts and responses stay on our hardware — nothing is sent to Anthropic or any third party. Follow your normal data-handling policy (don't paste PII you wouldn't paste into an internal Confluence page), but you don't have the "sending to a vendor" worry here.</div>
+            </div>
+            <div class="ccs-faq-item">
+                <button class="ccs-faq-q">Can I run two <code>claude</code> sessions at once?</button>
+                <div class="ccs-faq-a">Yes. Open a second terminal in a different repo and go. They're independent — each has its own conversation context.</div>
+            </div>
+            <div class="ccs-faq-item">
+                <button class="ccs-faq-q">How do I see what env vars Claude Code is actually using?</button>
+                <div class="ccs-faq-a">Inside the prompt, type <code>/status</code>. It shows the resolved <code>ANTHROPIC_BASE_URL</code>, model, working directory, and permission mode.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- HELP -->
+    <div class="ccs-section" id="help">
+        <h2>🆘 Where to get help</h2>
+        <ul>
+            <li><strong>Inside Claude Code:</strong> type <code>/help</code> to see the full command list.</li>
+            <li><strong>Setup or routing issues</strong> ("my requests aren't going to the internal endpoint"): ping the team lead in Webex.</li>
+            <li><strong>Bugs in the model itself</strong> (refused a reasonable task, kept hallucinating, malformed tool calls): file with the team lead so we can patch the bridge or tweak the model config.</li>
+            <li><strong>Questions about Claude Code itself</strong> (CLI flags, slash commands, extensions): <a href="https://docs.anthropic.com/en/docs/claude-code" target="_blank" rel="noopener">https://docs.anthropic.com/en/docs/claude-code</a> — the public docs apply, just substitute our endpoint for the Anthropic API.</li>
+            <li><strong>Or use the chat widget</strong> at the bottom-right of this page — it knows everything in this guide and can help you debug.</li>
+        </ul>
+    </div>
+
+    <!-- STATUS LINE -->
+    <div class="ccs-section" id="status-line">
+        <h2>📊 Status line — what's at the bottom</h2>
+        <p>Claude Code shows a one-line status bar at the bottom of the terminal with at-a-glance info about your session. Mine looks like this:</p>
+        <div class="ccs-status-preview">host (machine-label) you@example.com project-name $0.42 1h20m (main) [Opus 4.7 (1M context)] ctx:12% (120k/1M) in:1 out:53k t/s:68.9
+⏵⏵ accept edits on (shift+tab to cycle)</div>
+        <p>Field by field:</p>
+        <ul>
+            <li><code>host (machine-label)</code> — hostname / machine label</li>
+            <li><code>you@example.com</code> — current Claude account</li>
+            <li><code>project-name</code> — project (current working directory)</li>
+            <li><code>$0.42</code> — session cost so far</li>
+            <li><code>1h20m</code> — session duration</li>
+            <li><code>(main)</code> — current git branch</li>
+            <li><code>[Opus 4.7 (1M context)]</code> — model in use (will read "default" when pointed at our internal LLM)</li>
+            <li><code>ctx:12% (120k/1M)</code> — context window usage</li>
+            <li><code>in:1 out:53k</code> — input / output token counts for the session</li>
+            <li><code>t/s:68.9</code> — output tokens per second</li>
+            <li><code>⏵⏵ accept edits on</code> — current permission mode (Shift+Tab cycles between ask / auto-accept / plan-only)</li>
+        </ul>
+        <p>Customize via <code>/statusline</code> inside the prompt, or hand-edit the <code>statusLine</code> key in <code>~/.claude/settings.json</code>. You can pick which fields to show, reorder them, or plug in a custom shell command for fully bespoke output.</p>
+    </div>
+
+    <!-- COWORK -->
+    <div class="ccs-section" id="cowork">
+        <h2>👥 What about Claude Cowork?</h2>
+        <p>Claude Cowork is the autonomous task agent inside the Claude desktop app — it plans, calls tools, reads results, and handles multi-step work across your local files and apps. Common question: can we point it at the internal LLM the same way we point Claude Code? <strong>Yes — and you don't need IT or MDM to do it.</strong></p>
+
+        <h3>🛠️ Configure Cowork — per-user, no MDM</h3>
+        <p>In the Claude desktop app:</p>
+        <ul>
+            <li>Help &rarr; Troubleshooting &rarr; <strong>Enable Developer Mode</strong></li>
+            <li>Developer menu &rarr; <strong>Configure third-party inference</strong></li>
+            <li>Connection type: <code>Gateway</code></li>
+            <li>Base URL: <code>{{ local_llm_public_url }}</code></li>
+            <li>API key: <em>(the bearer token — same one you used for Claude Code)</em></li>
+            <li>Auth scheme: <code>bearer</code></li>
+            <li>Custom headers: leave empty</li>
+            <li>Save &rarr; restart the app</li>
+        </ul>
+
+        <div class="ccs-callout note">
+            <div class="ccs-callout-icon">📘</div>
+            <div class="ccs-callout-body">
+                <strong>Note</strong>
+                Cowork accepts any gateway that exposes <code>/v1/messages</code> and forwards the <code>anthropic-beta</code> and <code>anthropic-version</code> headers. Our internal proxy already does (Claude Code wouldn't work otherwise), so the same endpoint just works.
+            </div>
+        </div>
+
+        <h3>⚙️ What MDM gives you (for IT awareness)</h3>
+        <p>MDM is just the enterprise auto-push version of the same dialog. The dialog has an "Export configuration" button that produces <code>.mobileconfig</code> (macOS) or <code>.reg</code> (Windows) so IT can deploy it fleet-wide. The underlying keys are the same:</p>
+        <ul>
+            <li><code>inferenceGatewayBaseUrl</code> &rarr; the gateway URL</li>
+            <li><code>inferenceGatewayApiKey</code> &rarr; the bearer token</li>
+            <li><code>inferenceGatewayAuthScheme</code> &rarr; <code>auto</code> / <code>x-api-key</code> / <code>bearer</code></li>
+            <li><code>inferenceGatewayHeaders</code> &rarr; array of "Name: Value" strings</li>
+        </ul>
+
+        <div class="ccs-callout tip">
+            <div class="ccs-callout-icon">💡</div>
+            <div class="ccs-callout-body">
+                <strong>Tip</strong>
+                Cowork and Claude Code share <code>~/.claude/settings.json</code> on the same machine, so the auth token you pasted in Claude Code is reused — you only need to enter the gateway URL and auth scheme in the Cowork dialog.
+            </div>
+        </div>
+
+        <h3>⚠️ Caveats specific to Cowork</h3>
+        <ul>
+            <li><strong>Quality drop is more painful here.</strong> Cowork's pitch is autonomous multi-step orchestration — exactly the workload our local model struggles with (long tool-use chains, multi-file reasoning, big-context inference).</li>
+            <li><strong>Tool calling is flakier than Claude Code.</strong> Reported across the community on non-Claude backends. If a Cowork session goes off the rails, simplify the prompt or fall back to Claude Code.</li>
+            <li><strong>Corp DNS required to resolve the hostname.</strong> Reachable from any corp-network path: office WiFi/LAN, corp VPN from home, or the corporate proxy. Not reachable when fully off-network.</li>
+            <li><strong>Some Cowork-vs-Code config keys don't propagate identically yet.</strong> If a setting "feels off" in Cowork after working fine in Code, re-check the Developer-mode dialog rather than assuming the gateway is broken.</li>
+        </ul>
+
+        <h3>🆚 Claude Code vs Claude Cowork on the internal LLM</h3>
+        <div class="ccs-table-wrap">
+            <table class="ccs-table">
+                <thead>
+                    <tr><th>Aspect</th><th>Claude Code</th><th>Claude Cowork</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>Setup</strong></td><td>4 env vars in shell rc</td><td>Developer-mode dialog (per user)</td></tr>
+                    <tr><td><strong>Backend protocol</strong></td><td><code>/v1/messages</code> (Anthropic)</td><td><code>/v1/messages</code> (Anthropic)</td></tr>
+                    <tr><td><strong>Network</strong></td><td>Corp only</td><td>Corp only</td></tr>
+                    <tr><td><strong>Local-model fit</strong></td><td>🟢🟢🟢🟢⚪ focused edits</td><td>🟢🟢⚪⚪⚪ multi-step loops degrade</td></tr>
+                    <tr><td><strong>Tool-call reliability</strong></td><td>🟢🟢🟢🟢⚪</td><td>🟢🟢🟢⚪⚪ flakier</td></tr>
+                    <tr><td><strong>Best for</strong></td><td>Code Q&amp;A, single-file edits, tests</td><td>Hands-off multi-step tasks (when it works)</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="ccs-callout tip">
+            <div class="ccs-callout-icon">💡</div>
+            <div class="ccs-callout-body">
+                <strong>Tip</strong>
+                For most workflows, prefer Claude Code with the internal endpoint over Cowork. Same backend either way, and Claude Code's tighter scope (one repo, focused edits) plays to the local model's strengths.
+            </div>
+        </div>
+    </div>
+
+    <!-- PYTHON SMOKE TEST -->
+    <div class="ccs-section" id="python">
+        <h2>🐍 Test from Python</h2>
+        <p>Once your env is set up, this scratch script confirms end-to-end reachability of the gateway from a Python client. Replace <code>REPLACE_WITH_BEARER_TOKEN</code> with your token. <code>verify=False</code> skips TLS trust validation — fine for a quick smoke test, but for production scripts install the truststore package (<code>pip install truststore</code>) and call <code>truststore.inject_into_ssl()</code> so Python uses your system keychain.</p>
+        <div class="ccs-code-wrap"><pre><code>import requests
+
+response = requests.post(
+    "{{ local_llm_public_url }}/v1/chat/completions",
+    headers={"Authorization": "Bearer REPLACE_WITH_BEARER_TOKEN"},
+    json={
+        "model": "default",
+        "messages": [{"role": "user", "content": "hi! one sentence intro."}],
+    },
+    verify=False,
+    timeout=30,
+)
+print(response.status_code)
+print(response.json())</code></pre><button class="ccs-copy-btn">Copy</button></div>
+    </div>
+
+    <!-- REFERENCES -->
+    <div class="ccs-section" id="references">
+        <h2>📚 References</h2>
+        <ul>
+            <li><a href="https://docs.anthropic.com/en/docs/claude-code" target="_blank" rel="noopener">Claude Code official documentation</a></li>
+            <li><a href="https://support.claude.com/en/articles/14680729-use-claude-cowork-with-third-party-platforms" target="_blank" rel="noopener">Use Claude Cowork with third-party platforms — Anthropic Help Center</a></li>
+        </ul>
+        <p style="margin-top:14px; font-style: italic; color:#475569;">Happy hacking. 🎉  Questions, broken stuff, feature requests &rarr; ping the team lead.</p>
+    </div>
+
+</div>
+
+<!-- Toast for copy -->
+<div class="ccs-toast" id="ccsToast">Copied!</div>
+
+{% include '_chat_widget.html' %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    // ----- OS / config tabs (with cross-group propagation) -----
+    // Maps each tab name to an OS class. Click → switch to the matching tab in every other group.
+    // - `node` group has win/mac/lin (Windows / macOS / Linux).
+    // - `env`/`verify`/`unset` groups have win/cmd/unix (Windows PS / Windows CMD / macOS+Linux).
+    var TAB_TO_OS = { win: 'windows', cmd: 'windows-cmd', mac: 'mac', lin: 'linux', unix: 'unix' };
+
+    function pickTab(osClass, group) {
+        var map = (group === 'node')
+            ? { windows: 'win',  'windows-cmd': 'win',  mac: 'mac',  linux: 'lin',  unix: 'mac'  }
+            : { windows: 'win',  'windows-cmd': 'cmd',  mac: 'unix', linux: 'unix', unix: 'unix' };
+        return map[osClass];
+    }
+
+    function activateTab(group, tab) {
+        document.querySelectorAll('.ccs-tab-btn[data-tab-group="' + group + '"]').forEach(function(b) {
+            b.classList.toggle('ccs-active', b.getAttribute('data-tab') === tab);
+        });
+        document.querySelectorAll('.ccs-tab-panel[data-tab-group="' + group + '"]').forEach(function(p) {
+            p.classList.toggle('ccs-active', p.getAttribute('data-tab') === tab);
+        });
+    }
+
+    var allGroups = Array.from(new Set(
+        Array.from(document.querySelectorAll('.ccs-tab-btn')).map(function(b) {
+            return b.getAttribute('data-tab-group');
+        })
+    ));
+
+    document.querySelectorAll('.ccs-tab-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var group   = btn.getAttribute('data-tab-group');
+            var tab     = btn.getAttribute('data-tab');
+            var osClass = TAB_TO_OS[tab];
+            activateTab(group, tab);
+            if (!osClass) return;
+            allGroups.forEach(function(g) {
+                if (g === group) return;
+                var targetTab = pickTab(osClass, g);
+                if (targetTab) activateTab(g, targetTab);
+            });
+        });
+    });
+
+    // ----- Copy buttons -----
+    var toast = document.getElementById('ccsToast');
+    function flashToast(msg) {
+        toast.textContent = msg;
+        toast.classList.add('show');
+        setTimeout(function() { toast.classList.remove('show'); }, 1400);
+    }
+    document.querySelectorAll('.ccs-copy-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var pre = btn.parentElement.querySelector('pre');
+            if (!pre) return;
+            var text = pre.innerText;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(function() {
+                    btn.classList.add('ccs-copied');
+                    btn.textContent = 'Copied!';
+                    flashToast('Copied to clipboard');
+                    setTimeout(function() {
+                        btn.classList.remove('ccs-copied');
+                        btn.textContent = 'Copy';
+                    }, 1400);
+                }).catch(function() { flashToast('Copy failed — select and Ctrl+C'); });
+            } else {
+                // Fallback: select the text
+                var range = document.createRange();
+                range.selectNodeContents(pre);
+                var sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+                flashToast('Selected — press Ctrl+C / Cmd+C');
+            }
+        });
+    });
+
+    // ----- FAQ accordion -----
+    document.querySelectorAll('.ccs-faq-q').forEach(function(q) {
+        q.addEventListener('click', function() {
+            q.parentElement.classList.toggle('ccs-open');
+        });
+    });
+
+    // ----- Smooth scroll on TOC anchors -----
+    document.querySelectorAll('.ccs-toc-grid a').forEach(function(a) {
+        a.addEventListener('click', function(e) {
+            var id = a.getAttribute('href');
+            if (!id || !id.startsWith('#')) return;
+            var target = document.querySelector(id);
+            if (!target) return;
+            e.preventDefault();
+            target.scrollIntoView({behavior: 'smooth', block: 'start'});
+            history.replaceState(null, '', id);
+        });
+    });
+})();
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="{{ url_for('static', filename='js/chat_widget.js') }}"></script>
+<script>
+// Page-context for the chat widget. The widget posts this string as `report_md`
+// on /api/page-chat/stream so the LLM can answer questions about the guide
+// (errors, env vars, FAQ, troubleshooting) using exactly what users see here.
+const CLAUDE_CODE_SETUP_CONTEXT = `# Claude Code → Internal LLM — Setup Guide
+
+Run Anthropic's Claude Code CLI against our self-hosted internal model.
+No API key. No usage caps. No per-token billing. Free for the whole team.
+Available only on the corp network (private 10.x endpoint).
+
+## Headline guarantees
+- 100% Local: every prompt/response stays on our hardware. Nothing goes to Anthropic, OpenAI, Google, or any third party.
+- $0 cost: no API key, no per-token billing, no usage caps.
+- Runs on hardware we own, behind our firewall.
+
+## What you're getting (vs Claude on Anthropic API)
+- Cost: free vs per-token
+- Network: corp-network only vs internet
+- Auth: shared bearer token vs Anthropic key
+- Backend: internal model vs Claude (Opus / Sonnet / Haiku)
+- Quality: 3/5 vs 5/5
+- Privacy: stays on our network vs sent to Anthropic
+
+## Step 1 — Install Node.js (LTS, v18+)
+- Windows: Software Center → "Claude" → Install (if listed). Otherwise: \`winget install OpenJS.NodeJS.LTS --source winget --scope user\` (no admin, no corp-SSL cert issue).
+- macOS:   \`brew install node\` (or .pkg from https://nodejs.org)
+- Linux:   \`curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -\` then \`sudo apt install -y nodejs\`
+- Verify:  \`node --version\` (≥ v20 ✅) and \`npm --version\`
+
+## Step 2 — Install Claude Code
+- One-liner everywhere: \`npm install -g @anthropic-ai/claude-code\`
+- Verify: \`claude --version\`
+- TROUBLE: "claude: command not found" → global npm bin not on PATH.
+  - Windows: \`npm config get prefix\` → add that path (e.g. %AppData%\\npm) to user PATH.
+  - macOS/Linux: \`npm config get prefix\` → add \`<prefix>/bin\` to shell rc.
+
+## Step 3 — Configure the five env vars
+| Variable | Value |
+|---|---|
+| ANTHROPIC_BASE_URL | {{ local_llm_public_url }} |
+| ANTHROPIC_AUTH_TOKEN | (ask the team lead in Webex — not in any doc, never in git) |
+| ANTHROPIC_DEFAULT_OPUS_MODEL | glm-4.7-flash |
+| ANTHROPIC_DEFAULT_SONNET_MODEL | glm-4.7-flash |
+| ANTHROPIC_DEFAULT_HAIKU_MODEL | laguna |
+
+### macOS / Linux
+Append to ~/.zshrc (or ~/.bashrc):
+\`\`\`
+export ANTHROPIC_BASE_URL="{{ local_llm_public_url }}"
+export ANTHROPIC_AUTH_TOKEN="REPLACE_WITH_BEARER_TOKEN"
+export ANTHROPIC_DEFAULT_OPUS_MODEL="glm-4.7-flash"
+export ANTHROPIC_DEFAULT_SONNET_MODEL="glm-4.7-flash"
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="laguna"
+\`\`\`
+Then \`source ~/.zshrc\`.
+
+### Windows PowerShell (persistent, user-level)
+\`\`\`
+[Environment]::SetEnvironmentVariable("ANTHROPIC_BASE_URL", "{{ local_llm_public_url }}", "User")
+[Environment]::SetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN", "REPLACE_WITH_BEARER_TOKEN", "User")
+[Environment]::SetEnvironmentVariable("ANTHROPIC_DEFAULT_OPUS_MODEL", "glm-4.7-flash", "User")
+[Environment]::SetEnvironmentVariable("ANTHROPIC_DEFAULT_SONNET_MODEL", "glm-4.7-flash", "User")
+[Environment]::SetEnvironmentVariable("ANTHROPIC_DEFAULT_HAIKU_MODEL", "laguna", "User")
+\`\`\`
+Close and reopen PowerShell after setting. For one-off in current shell use \`$env:ANTHROPIC_BASE_URL = "..."\`.
+
+### Windows CMD (persistent, user-level)
+\`\`\`
+setx ANTHROPIC_BASE_URL            "{{ local_llm_public_url }}"
+setx ANTHROPIC_AUTH_TOKEN          "REPLACE_WITH_BEARER_TOKEN"
+setx ANTHROPIC_DEFAULT_OPUS_MODEL   "glm-4.7-flash"
+setx ANTHROPIC_DEFAULT_SONNET_MODEL "glm-4.7-flash"
+setx ANTHROPIC_DEFAULT_HAIKU_MODEL  "laguna"
+\`\`\`
+Close and reopen cmd after setting.
+
+## Step 4 — Take it for a spin
+- Open a fresh terminal. Run \`claude\`.
+- Inside the prompt: \`/status\` — should show the custom ANTHROPIC_BASE_URL.
+- Say hi: \`> hi! introduce yourself in one sentence.\`
+- Sign of success: it WON'T claim to be Claude (because it isn't — it's our local model).
+
+## Step 5 — First real task tutorial
+1. \`mkdir hello-claude && cd hello-claude && claude\`
+2. Ask it to build something concrete (e.g. a small Python script using the open-meteo public API).
+3. It plans, writes, shows a diff, asks before saving. Press y to accept, n to reject, e to edit.
+4. Iterate: ask it to add tests, run them, fix failures. Use \`!pytest -x\` so it can see the output.
+
+### Useful slash commands
+- /status — current model, env vars, working dir
+- /clear — clear conversation
+- /compact — compress earlier turns to free context
+- /init — generate a starter CLAUDE.md
+- /help — full command list
+
+### Tips for the local model
+- Be specific. "Refactor for clarity, keep the public signature" beats "make it better."
+- Smaller scopes win. One file at a time.
+- Show, don't tell — paste a small example of desired output.
+- Verify the diff. Local models occasionally hallucinate imports/paths.
+- If stuck in a loop, /clear and rephrase.
+
+## Permission model
+- Asks before writing files, running shell commands, installing packages.
+- Keys: y = accept, n = reject, e = edit the diff inline.
+- Shift+Tab cycles permission modes (ask / auto-accept / plan-only).
+
+## Keyboard shortcuts
+- Esc — interrupt a generation
+- Ctrl+C — quit
+- ↑ / ↓ — cycle previous prompts
+- Tab — autocomplete file paths
+- Shift+Tab — cycle permission modes
+- @filename — reference a file as context
+- !command — run a shell command and pipe output to the model
+- #text — save text as a session memory line
+- / — browse slash commands
+
+## CLAUDE.md / AGENTS.md
+- Drop CLAUDE.md or AGENTS.md at the repo root — Claude Code reads it on every run.
+- Generate a starter: \`/init\` inside the prompt.
+- AGENTS.md is the cross-tool open convention (Claude Code, Cursor, Aider, Codex CLI, Gemini CLI all read it).
+- If both files exist, both are read. Pick whichever — most teams use AGENTS.md.
+
+## VS Code extension
+- "Claude Code" extension in the marketplace.
+- Same env vars, same permission model. Diffs render inline. Selected code auto-attached as context.
+- JetBrains has an equivalent plugin in the JetBrains Marketplace.
+
+## Switching back to real Claude (Opus/Sonnet)
+- macOS/Linux: \`unset ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL\`
+- Windows PS: set the same five vars to \`$null\` at "User" scope.
+- Windows CMD: \`reg delete "HKCU\\Environment" /F /V <name>\` for each of the five vars.
+- Then authenticate with your own Anthropic API key, or run \`claude login\` for a Claude.ai subscription.
+
+## Caveats — local model is NOT Claude
+- Works ✅: code Q&A, single-file edits, short chats, basic tool calls.
+- Degraded ⚠️: multi-file refactors, long tool-use chains, subtle reasoning over big contexts, occasional malformed tool calls.
+- Not supported ❌: prompt caching, extended thinking, citations, batch / files API.
+- Context window is smaller than Claude's 200K/1M. Don't paste a 50K-line file.
+
+## Network gotchas
+- Endpoint is on the corp network. Reachable from any corp-network path: office WiFi/LAN, corp VPN from home, or the corporate proxy.
+- Off-network (coffee shop, hotel, no VPN/the corporate proxy): ❌ — connect to corp VPN or the corporate proxy first.
+
+### Reachability check
+\`\`\`
+# Should return 401 without token
+curl -s -o /dev/null -w "%{http_code}\\n" {{ local_llm_public_url }}/v1/models
+
+# Should return 200 with token
+curl -s -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \\
+     -o /dev/null -w "%{http_code}\\n" {{ local_llm_public_url }}/v1/models
+\`\`\`
+
+## FAQ — common errors and questions
+- "It told me it can't access the internet." Expected. Local model is fully offline. Fetch URLs via \`!curl ...\` and pipe output back in.
+- "Output got cut off mid-sentence." Hit the context window. Run /compact or /clear.
+- "It hallucinated a function/import/file path." Known local-model weakness. Read the diff before accepting (press e). Scope down with @filename.
+- "It refused to do something benign." Rephrase. The model can be over-cautious. Add context like "this is my own project, the file is mine to edit."
+- "Tool calls are failing or producing malformed JSON." Local model occasional issue. Retry; if persistent, simplify the request or file a bug.
+- "First response slow, later ones fast." Normal — model warms up after first query (KV cache).
+- "Can I use this for confidential / customer data?" Stays on our hardware, never sent to a third party. Follow normal data-handling policy.
+- "Can I run two claude sessions at once?" Yes — independent contexts.
+- "How do I see what env vars Claude Code is actually using?" Type /status inside the prompt.
+
+## Common error symptoms and fixes
+- "claude: command not found" → npm global bin not on PATH (see Step 2).
+- "/status shows the wrong base URL" → env vars not loaded; reopen the terminal, or check your shell rc / Windows User-scope vars.
+- 401 from \`curl ... /v1/models\` → token wrong/missing.
+- 200 from curl but Claude Code still fails → most often a stale ANTHROPIC_AUTH_TOKEN env var in the current shell. Reopen terminal.
+- Connection refused / timeout → not on the corp network. Connect to corp VPN/the corporate proxy, or move to office WiFi/wired LAN.
+- Tool/JSON malformed → simplify the prompt (fewer tools, smaller scope), retry; persistent issue → file a bug with team lead.
+
+## Status line — bottom-of-terminal display
+Format: host (machine-label) you@example.com project-name $cost duration (branch) [model] ctx:N% in:N out:N t/s:N
+Permission mode line: ⏵⏵ accept edits on (shift+tab to cycle)
+- Customize via /statusline or hand-edit ~/.claude/settings.json (statusLine key).
+
+## Claude Cowork on the internal LLM
+- Works the same way as Claude Code — no IT or MDM needed.
+- In the desktop app: Help → Troubleshooting → Enable Developer Mode.
+- Developer menu → Configure third-party inference.
+- Connection type: Gateway. Base URL: {{ local_llm_public_url }}. API key: same bearer token. Auth scheme: bearer. Custom headers: empty. Save → restart app.
+- Cowork and Claude Code share ~/.claude/settings.json on the same machine, so the auth token is reused.
+- Quality drop on Cowork is more painful than Claude Code (multi-step orchestration is the local model's weak spot). Tool calling is flakier. Prefer Claude Code for most workflows.
+- For MDM auto-push, the underlying keys are inferenceGatewayBaseUrl, inferenceGatewayApiKey, inferenceGatewayAuthScheme, inferenceGatewayHeaders.
+
+## Where to get help
+- /help inside Claude Code — full command list.
+- Setup or routing issues, bugs in the model itself → ping the team lead in Webex.
+- Generic CLI questions → https://docs.anthropic.com/en/docs/claude-code
+
+## Python smoke test
+\`\`\`python
+import requests
+response = requests.post(
+    "{{ local_llm_public_url }}/v1/chat/completions",
+    headers={"Authorization": "Bearer REPLACE_WITH_BEARER_TOKEN"},
+    json={"model": "default", "messages": [{"role": "user", "content": "hi! one sentence intro."}]},
+    verify=False, timeout=30,
+)
+print(response.status_code)
+print(response.json())
+\`\`\`
+For production scripts, install \`truststore\` (\`pip install truststore\`) and call \`truststore.inject_into_ssl()\` instead of \`verify=False\`.
+`;
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof initChatWidget !== 'function') return;
+    initChatWidget({
+        title: 'Stuck on setup? Ask me.',
+        greeting: "Hi! I know this entire setup guide. Tell me the error you're seeing or what's not working — I'll walk you through it.",
+        loadingMessages: [
+            'Reading the setup guide…',
+            'Looking up the symptom…',
+            'Cross-referencing the FAQ…',
+            'Drafting a fix…'
+        ],
+        chips: [
+            {label: '"command not found"', q: 'I get "claude: command not found" after npm install. How do I fix it?'},
+            {label: '/status wrong URL',   q: 'I ran /status but it shows the wrong ANTHROPIC_BASE_URL. What am I missing?'},
+            {label: '401 Unauthorized',    q: 'My curl test returns 401. What\'s wrong with my token setup?'},
+            {label: 'Connection refused',  q: 'I get connection refused when running claude. What network requirements am I missing?'},
+            {label: 'Switch back to Claude', q: 'How do I switch back to the real Claude (Opus/Sonnet) when I want to?'}
+        ],
+        getContext: function() { return CLAUDE_CODE_SETUP_CONTEXT; }
+    });
+});
+</script>
+{% endblock %}
