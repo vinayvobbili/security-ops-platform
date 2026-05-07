@@ -117,7 +117,7 @@ Analyze the submission thoroughly with a SECURITY FOCUS. Respond with ONLY a val
 PROMPT_REGISTRY: Dict[str, Dict[str, Any]] = {
     "review": {
         "name": "AI Screening Review Prompt",
-        "description": "System prompt sent to the internal LLM gateway when reviewing a submitted AI use case.",
+        "description": "System prompt sent to the LLM when reviewing a submitted AI use case.",
         "placeholders": [
             "USE_CASE_NAME", "STAGE", "OWNER_NAME", "OWNER_EMAIL",
             "LOB", "DEVELOPMENT", "SUBMISSION_DATA", "REFERENCE_DOCS",

@@ -30,7 +30,7 @@ ExecStart=/usr/bin/docker run --rm --name ir-db-config \
   --add-host=host.docker.internal:host-gateway \
   -e AZURE_OPENAI_ENDPOINT=http://host.docker.internal:8011 \
   -e AZURE_OPENAI_KEY=dummy \
-  -e AZURE_OPENAI_DEPLOYMENT=metiq-gpt-4.1 \
+  -e AZURE_OPENAI_DEPLOYMENT=local-llm \
   -e AZURE_OPENAI_API_VERSION=2024-08-01-preview \
   -v /home/vinay/security-ops-platform/external/db_config/backup:/app/backup \
   ir-db-config:current

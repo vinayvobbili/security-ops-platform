@@ -154,13 +154,9 @@ BOTS = {
 
 LLM_ENDPOINTS = [
     # Analysis / tool-calling: mac-m1 is the ONLY analysis LLM in the fleet.
-    # Powers the security assistant bot, the Windows triage agent, and any caller that needs tools. Also the
-    # graceful fallback for the the internal LLM gateway shim.
+    # Powers the security assistant bot, the Windows triage agent, and any caller that needs tools.
     {'key': 'm1-analysis', 'label': 'M1 Analysis',   'port': 8015, 'model_size': '30 GB', 'remote': 'M1:8000'},
     {'key': 'm1-router',   'label': 'M1 Router',     'port': 8016, 'model_size': '4.3 GB', 'remote': 'M1:8001'},
-    # RAG / non-tool analysis: the internal LLM gateway shim on lab-vm1 → the internal LLM gateway (GPT-4.1) with
-    # m1-analysis as automatic fallback on tools/stream/5xx/timeout.
-    {'key': 'metiq-shim',  'label': 'the internal LLM gateway Shim',    'port': 8011, 'display_model': 'metiq-gpt-4.1', 'model_size': 'remote', 'remote': 'local svc'},
     # Support models on mac-m3: embeddings + reranker. Analysis GLM was
     # retired from m3 — M3 now serves ONLY the small, cheap models that
     # the RAG pipeline depends on.
@@ -989,21 +985,6 @@ def llm_health():
                     'tunnel': tunnel_status,
                     'remote': ep.get('remote'),
                 }
-                # the internal LLM gateway shim: the /v1/models probe only checks the shim process
-                # is alive. The shim itself tracks the health of its upstream
-                # (the internal LLM gateway API) and reports it alongside the models list. If the
-                # upstream is degraded, the shim is still serving traffic — via
-                # the m1 fallback — but callers that require the internal LLM gateway-only (e.g.
-                # RUAI) will be failing. Surface that as `degraded` so the
-                # dashboard doesn't show a green light while things are broken.
-                if ep.get('key') == 'metiq-shim':
-                    upstream = (body.get('metiq_shim') or {}).get('upstream') or {}
-                    u_status = upstream.get('status') or 'unknown'
-                    entry['upstream_status'] = u_status
-                    if u_status == 'degraded':
-                        entry['status'] = 'degraded'
-                        entry['upstream_error'] = upstream.get('last_failure_reason')
-                        entry['upstream_seconds_since_success'] = upstream.get('seconds_since_success')
                 results[ep['key']] = entry
             else:
                 _llm_up_since.pop(ep['key'], None)

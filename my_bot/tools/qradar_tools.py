@@ -471,8 +471,8 @@ def _get_nl_to_aql_llm():
     """Lazy-init a small failover LLM dedicated to NL→AQL translation."""
     global _nl_to_aql_llm
     if _nl_to_aql_llm is None:
-        from my_bot.utils.llm_factory import create_metiq_llm
-        _nl_to_aql_llm = create_metiq_llm(
+        from my_bot.utils.llm_factory import create_llm
+        _nl_to_aql_llm = create_llm(
             max_tokens=2048, timeout=300,
             extra_body={"chat_template_kwargs": {"enable_thinking": False}},
         )

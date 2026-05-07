@@ -23,7 +23,7 @@
     <div class="ca-tip-card">
         <div class="ca-tip-card-icon">?</div>
         <div>
-            <strong>What is the KB for?</strong> Every AI-generated draft is grounded in these documents. When a question comes in, we retrieve the most relevant chunks, pass them to the internal LLM gateway, and require the LLM to answer only from the retrieved context. No policies in here = no real grounding = the tool falls back to canned demo answers.
+            <strong>What is the KB for?</strong> Every AI-generated draft is grounded in these documents. When a question comes in, we retrieve the most relevant chunks, pass them to the LLM, and require the LLM to answer only from the retrieved context. No policies in here = no real grounding = the tool falls back to canned demo answers.
             <br><br>
             <span class="ca-next-ribbon">What to do next</span>
             &nbsp;Upload real policies below, then click <strong>Reindex</strong>. Or click <strong>Load Demo KB</strong> to populate placeholder files for demos.
@@ -84,7 +84,7 @@
                 <button type="button" class="ca-btn ca-btn-ghost ca-btn-sm" id="ca-kb-clear" data-tip="Remove all source files from the KB folder. The existing vector index is preserved — run Reindex after clearing to rebuild.">Clear Sources</button>
             </div>
             <p style="font-size:11px;color:var(--ca-text-muted);margin:10px 0 0;">
-                <strong>Load Demo KB</strong> creates placeholder files so the page looks populated for a demo. Use real documents to enable the internal LLM gateway-grounded drafts.
+                <strong>Load Demo KB</strong> creates placeholder files so the page looks populated for a demo. Use real documents to enable LLM-grounded drafts.
             </p>
         </form>
     </div>
@@ -109,7 +109,7 @@
             </div>
             <div class="ca-flow-step">
                 <div class="ca-flow-num">4</div>
-                <h4>the internal LLM gateway draft</h4>
+                <h4>AI draft</h4>
                 <p>LLM writes answer grounded in retrieved chunks</p>
             </div>
             <div class="ca-flow-step">

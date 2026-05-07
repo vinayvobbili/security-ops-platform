@@ -44,9 +44,6 @@
     "services/crowdstrike.py": [
       "ir-jarvis", "ir-epp-scheduler", "ir-toodles"
     ],
-    "services/metiq.py": [
-      "ir-metiq-shim", "ir-money-ball", "ir-bot-status-api", "ir-web-app"
-    ],
     "services/recorded_future.py": [
       "ir-scheduler"
     ],
@@ -144,9 +141,6 @@
 
     "deployment/bot_status_api.py": [
       "ir-bot-status-api"
-    ],
-    "deployment/metiq_shim_server.py": [
-      "ir-metiq-shim"
     ],
     "deployment/reranker_server.py": [
       "ir-reranker"

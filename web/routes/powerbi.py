@@ -48,8 +48,8 @@ def _get_pbi_client():
 def _get_pbi_llm():
     global _pbi_llm
     if _pbi_llm is None:
-        from my_bot.utils.llm_factory import create_metiq_llm
-        _pbi_llm = create_metiq_llm(
+        from my_bot.utils.llm_factory import create_llm
+        _pbi_llm = create_llm(
             max_tokens=2048, timeout=300,
             extra_body={"chat_template_kwargs": {"enable_thinking": False}},
         )

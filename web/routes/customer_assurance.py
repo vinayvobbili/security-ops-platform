@@ -138,14 +138,14 @@ def workspace(request_id: int):
     for entry in audit:
         if entry.get("action") == "drafted":
             detail = (entry.get("detail") or "")
-            if "metiq" in detail:
-                last_draft_source = "metiq"
+            if "gateway" in detail:
+                last_draft_source = "gateway"
             elif "demo fallback" in detail:
                 last_draft_source = "fallback"
             elif "demo mode" in detail:
                 last_draft_source = "demo"
             else:
-                last_draft_source = "metiq"  # plain "drafted" = real path
+                last_draft_source = "gateway"  # plain "drafted" = real path
             break
 
     return render_template(

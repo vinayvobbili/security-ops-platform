@@ -1533,14 +1533,14 @@ def _run_ai_review(submission_id: int, final_status: str = 'ai_reviewed') -> Non
     try:
         _review_phases[submission_id] = 'connecting_llm'
         import time as _time
-        from my_bot.utils.llm_factory import create_metiq_llm, extract_token_metrics
+        from my_bot.utils.llm_factory import create_llm, extract_token_metrics
 
-        llm = create_metiq_llm(
+        llm = create_llm(
             temperature=0.2,
             max_tokens=8192,
             model_kwargs={'response_format': {'type': 'json_object'}},
         )
-        # Fallback to m1 (GLM-4.7-Flash) on the internal LLM gateway failure. The JSON parser
+        # Fallback to m1 (GLM-4.7-Flash) on the LLM failure. The JSON parser
         # below tolerates non-strict output from either model (strips
         # code fences, regex-finds JSON block, strips control chars).
 
@@ -1591,7 +1591,7 @@ def _run_ai_review(submission_id: int, final_status: str = 'ai_reviewed') -> Non
             else:
                 raise ValueError(f"No JSON object found in LLM response. Starts with: {raw_text[:200]}")
 
-        # Strip ALL control chars — the internal LLM gateway emits literal newlines/tabs
+        # Strip ALL control chars — the LLM emits literal newlines/tabs
         # inside JSON string values which breaks parsers.  JSON structure
         # doesn't need literal newlines (they're just formatting whitespace),
         # and properly escaped \n sequences are two chars (\ + n), unaffected.

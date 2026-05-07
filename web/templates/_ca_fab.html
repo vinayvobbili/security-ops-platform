@@ -1,8 +1,8 @@
 {# Shared chrome: mode toggle, floating help button, global tooltip listener. #}
 <div class="ca-mode-toggle" role="radiogroup" aria-label="Drafting mode">
-    <button type="button" class="ca-mode-label demo" data-mode="demo" data-tip="DEMO MODE: drafts use pre-written canned answers. Safe to click around — no the internal LLM gateway calls, no real KB retrieval. Use for first-look demos and walkthroughs."
+    <button type="button" class="ca-mode-label demo" data-mode="demo" data-tip="DEMO MODE: drafts use pre-written canned answers. Safe to click around — no the LLM calls, no real KB retrieval. Use for first-look demos and walkthroughs."
             role="radio">Demo</button>
-    <button type="button" class="ca-mode-label live" data-mode="live" data-tip="LIVE MODE: drafts call the internal LLM gateway with real KB retrieval. If KB is empty or the internal LLM gateway is unreachable, drafts fall back to canned with a clear warning so you can see what happened."
+    <button type="button" class="ca-mode-label live" data-mode="live" data-tip="LIVE MODE: drafts call the LLM with real KB retrieval. If KB is empty or the LLM is unreachable, drafts fall back to canned with a clear warning so you can see what happened."
             role="radio">Live</button>
 </div>
 <button type="button" class="ca-fab" id="ca-fab-btn" title="Take the tour" aria-label="Take the tour">

@@ -62,7 +62,7 @@ def _new_version_id(digest_hex: str) -> str:
 
 
 def _require_token():
-    expected = get_config().eric_upload_token
+    expected = get_config().scanner_upload_token
     if not expected:
         abort(500, description="Upload token not configured on server")
     provided = (

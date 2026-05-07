@@ -39,7 +39,7 @@ for _p in (DATA_DIR, UPLOADS_DIR, KB_SOURCE_DIR, CHROMA_KB_PATH):
 KB_COLLECTION_NAME = "customer_assurance_kb"
 
 # Past-answer reuse thresholds (cosine similarity over question embeddings).
-# At/above HIGH: reuse the past final_answer verbatim, skip the internal LLM gateway.
+# At/above HIGH: reuse the past final_answer verbatim, skip the LLM.
 # Between MED and HIGH: include the past answer as a priority context block.
 # Below MED: ignore.
 PAST_ANSWER_HIGH_THRESHOLD = float(os.environ.get("CA_PAST_ANSWER_HIGH_THRESHOLD", "0.88"))
@@ -907,10 +907,10 @@ def draft_question(question_id: int, force_demo: bool = False) -> Dict[str, Any]
     Retrieval priority:
       Tier 0 — Past approved answers. If a prior analyst-approved answer for a
         semantically similar question exists (cosine >= PAST_ANSWER_HIGH_THRESHOLD),
-        reuse its text verbatim and skip the internal LLM gateway. Medium matches are folded into
-        the the internal LLM gateway prompt as a priority context block.
-      Tier 1 — KB chunks via hybrid Chroma+BM25 retrieval, drafted by the internal LLM gateway.
-      Tier 2 — Canned demo drafts (KB empty / the internal LLM gateway unreachable / force_demo).
+        reuse its text verbatim and skip the LLM. Medium matches are folded into
+        the LLM gateway prompt as a priority context block.
+      Tier 1 — KB chunks via hybrid Chroma+BM25 retrieval, drafted by the LLM.
+      Tier 2 — Canned demo drafts (KB empty / the LLM unreachable / force_demo).
 
     Returns the saved draft dict (answer, confidence, citations, source).
     """
@@ -953,14 +953,14 @@ def draft_question(question_id: int, force_demo: bool = False) -> Dict[str, Any]
             "source": "past_answer",
         }
 
-    # Medium-confidence past answers become a priority block in the the internal LLM gateway prompt.
+    # Medium-confidence past answers become a priority block in the LLM gateway prompt.
     past_context = [m for m in past_matches if m["score"] >= PAST_ANSWER_MED_THRESHOLD]
 
     # Side-channel Chroma query to recover a real retrieval-confidence signal.
     # LangChain's EnsembleRetriever loses the underlying distance through RRF
     # fusion, so we run a direct vector query here. Cheap (tens of ms). Used
     # for both the Tier 1 SME gate below and the confidence value saved on
-    # successful the internal LLM gateway drafts so analysts see retrieval strength in the UI.
+    # successful AI drafts so analysts see retrieval strength in the UI.
     kb_score_hits: List[Dict[str, Any]] = []
     top_kb_score: Optional[float] = None
     if not force_demo:
@@ -1039,7 +1039,7 @@ def draft_question(question_id: int, force_demo: bool = False) -> Dict[str, Any]
                   f"q#{question['seq']} (demo mode)")
         return result
 
-    # Real path — retrieve from KB + rerank + draft via the internal LLM gateway
+    # Real path — retrieve from KB + rerank + draft via the LLM
     try:
         docs = retriever.invoke(question["question"])
     except Exception as e:
@@ -1051,7 +1051,7 @@ def draft_question(question_id: int, force_demo: bool = False) -> Dict[str, Any]
         return result
 
     # Cross-encoder rerank: trades wide hybrid recall (k=20) for precision in
-    # the 5 chunks the internal LLM gateway actually sees. Gracefully returns input unchanged if
+    # the 5 chunks the LLM actually sees. Gracefully returns input unchanged if
     # the reranker endpoint is down.
     try:
         from my_bot.document.document_processor import rerank_documents
@@ -1061,13 +1061,14 @@ def draft_question(question_id: int, force_demo: bool = False) -> Dict[str, Any]
         docs = docs[:5]
 
     try:
-        from services.metiq import the internal LLM gatewayClient
+        from my_bot.utils.llm_factory import create_llm
+        from langchain_core.messages import HumanMessage
     except Exception as e:
-        logger.warning(f"[customer_assurance] the internal LLM gateway client unavailable, using demo: {e}")
+        logger.warning(f"[customer_assurance] the LLM client unavailable, using demo: {e}")
         result = generate_demo_draft(question["question"])
         save_draft(question_id, result["answer"], result["confidence"], result["citations"])
         log_audit(question["request_id"], "drafted",
-                  f"q#{question['seq']} (demo fallback — the internal LLM gateway unavailable)")
+                  f"q#{question['seq']} (demo fallback — the LLM unavailable)")
         return result
 
     context_blocks = []
@@ -1101,34 +1102,26 @@ def draft_question(question_id: int, force_demo: bool = False) -> Dict[str, Any]
         past_answers=past_context,
     )
 
-    metiq = the internal LLM gatewayClient()
-    if not metiq.is_configured():
-        logger.warning("[customer_assurance] the internal LLM gateway not configured — demo fallback")
-        result = generate_demo_draft(question["question"])
-        save_draft(question_id, result["answer"], result["confidence"], result["citations"])
-        log_audit(question["request_id"], "drafted",
-                  f"q#{question['seq']} (demo fallback — the internal LLM gateway not configured)")
-        return result
-
     try:
-        resp = metiq.chat(prompt, history=[], timeout=90)
-        answer = (resp.get("content") or "").strip()
+        llm = create_llm(timeout=90)
+        resp = llm.invoke([HumanMessage(content=prompt)])
+        answer = (resp.content or "").strip()
     except Exception as e:
-        logger.error(f"[customer_assurance] the internal LLM gateway chat failed: {e}")
+        logger.error(f"[customer_assurance] the LLM chat failed: {e}")
         result = generate_demo_draft(question["question"])
         save_draft(question_id, result["answer"], result["confidence"], result["citations"])
         log_audit(question["request_id"], "drafted",
-                  f"q#{question['seq']} (demo fallback — the internal LLM gateway error)")
+                  f"q#{question['seq']} (demo fallback — the LLM error)")
         return result
 
     if not answer:
         result = generate_demo_draft(question["question"])
         save_draft(question_id, result["answer"], result["confidence"], result["citations"])
         log_audit(question["request_id"], "drafted",
-                  f"q#{question['seq']} (demo fallback — empty the internal LLM gateway response)")
+                  f"q#{question['seq']} (demo fallback — empty the LLM response)")
         return result
 
-    source_tag = "metiq+past_context" if past_context else "metiq"
+    source_tag = "llm+past_context" if past_context else "llm"
     # Pick whichever retrieval signal is strongest for the analyst-facing
     # confidence percentage: a past-answer match beats a KB match beats nothing.
     effective_confidence: Optional[float] = None

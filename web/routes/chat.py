@@ -22,8 +22,8 @@ _dp_llm = None
 def _get_dp_llm():
     global _dp_llm
     if _dp_llm is None:
-        from my_bot.utils.llm_factory import create_metiq_llm
-        _dp_llm = create_metiq_llm(temperature=0.1)
+        from my_bot.utils.llm_factory import create_llm
+        _dp_llm = create_llm(temperature=0.1)
     return _dp_llm
 
 # Lazy imports for the security assistant bot components

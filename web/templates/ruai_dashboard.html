@@ -193,7 +193,7 @@
                 <div class="ruai-info-icon">🤖</div>
                 <div>
                     <h4>2. AI Security Review</h4>
-                    <p>An LLM (GPT-4.1 via the internal LLM gateway) automatically reviews the submission. It evaluates <strong>6 threat boundaries</strong> (User, Application, Model, Tool/Agent, Data, Infrastructure) and <strong>6 AI-specific threats</strong> (Prompt Injection, Data Poisoning, Model Inversion, Hallucination, Model Misuse, Autonomous Actions). It checks security controls against each boundary and rates them as Present, Partial, or Missing.</p>
+                    <p>An LLM (the LLM) automatically reviews the submission. It evaluates <strong>6 threat boundaries</strong> (User, Application, Model, Tool/Agent, Data, Infrastructure) and <strong>6 AI-specific threats</strong> (Prompt Injection, Data Poisoning, Model Inversion, Hallucination, Model Misuse, Autonomous Actions). It checks security controls against each boundary and rates them as Present, Partial, or Missing.</p>
                 </div>
             </div>
             <div class="ruai-info-section">
@@ -241,7 +241,7 @@
                 <div class="ruai-info-icon">⚙️</div>
                 <div>
                     <h4>LLM Configuration</h4>
-                    <p><strong>Model:</strong> GPT-4.1 via the internal LLM gateway (the company Innovation API)<br>
+                    <p><strong>Model:</strong> the LLM<br>
                     <strong>Temperature:</strong> 0.2 (low randomness for consistent analysis)<br>
                     <strong>Max tokens:</strong> 8,192<br>
                     <strong>Response format:</strong> JSON enforced, validated against a Pydantic schema before storage<br>
@@ -409,7 +409,7 @@ RESPONSE STYLE:
 --- PAGE DATA ---
 {the visible table/stats on the current page, scraped as markdown}
 --- END PAGE DATA ---</pre>
-                    <p style="margin-top:8px;">The chat maintains up to 10 turns of conversation history per session. It uses <code style="font-size:0.8rem; background:var(--ruai-glass-bg); padding:2px 6px; border-radius:4px;">llm.invoke()</code> (non-streaming) through the same the internal LLM gateway GPT-4.1 model.</p>
+                    <p style="margin-top:8px;">The chat maintains up to 10 turns of conversation history per session. It uses <code style="font-size:0.8rem; background:var(--ruai-glass-bg); padding:2px 6px; border-radius:4px;">llm.invoke()</code> (non-streaming) through the same the LLM GPT-4.1 model.</p>
                 </div>
             </div>
         </div>

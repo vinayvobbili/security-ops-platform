@@ -480,7 +480,7 @@
                     <strong>Rolling window:</strong> 90 days<br>
                     <strong>Detection sources:</strong> 17 active (XSOAR-integrated)<br>
                     <strong>Analysis split:</strong> CIRs and run metadata are computed deterministically in Python; the LLM only produces judgment-heavy sections (failure modes, fixes, signals, gaps, quality checks).<br>
-                    <strong>AI model:</strong> GPT-4.1 via the internal LLM gateway, structured output (Pydantic-validated) with explicit enumerations and confidence ratings.<br>
+                    <strong>AI model:</strong> the LLM, structured output (Pydantic-validated) with explicit enumerations and confidence ratings.<br>
                     <strong>Storage:</strong> Full control-efficacy JSON (<code>ai_analysis</code>) plus derived markdown, written alongside KPIs under <code>web/static/charts/</code>.<br>
                     <strong>Fallback:</strong> If the LLM is unreachable, the previous run's analysis is carried forward so leadership always sees current-state evidence.</p>
                 </div>

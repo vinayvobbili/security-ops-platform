@@ -64,7 +64,7 @@ def handle_chat_stream(
     start = time.time()
 
     # Use invoke (non-streaming) — streaming over SSH tunnels to mlx-lm
-    # is unreliable (connection resets). the internal LLM gateway shim returns full responses
+    # is unreliable (connection resets). the LLM shim returns full responses
     # quickly enough that the UX difference is negligible.
     result = llm.invoke(msgs)
     text = result.content or ''

@@ -59,7 +59,7 @@
             </div>
         </div>
         <div class="ca-ws-actions" id="ca-tour-ws-actions">
-            <button type="button" class="ca-btn ca-btn-primary" id="ca-draft-all" data-tip="Generate AI drafts for every question that doesn't have one yet. Each question gets its own evidence retrieval and the internal LLM gateway call. Takes ~2-3 seconds per question.">✨ AI Draft All</button>
+            <button type="button" class="ca-btn ca-btn-primary" id="ca-draft-all" data-tip="Generate AI drafts for every question that doesn't have one yet. Each question gets its own evidence retrieval and the LLM call. Takes ~2-3 seconds per question.">✨ AI Draft All</button>
             <button type="button" class="ca-btn ca-btn-accent" id="ca-approve-all" data-tip="Mark every drafted answer as the final response and move this request to READY status. Use this after you've reviewed the drafts.">✓ Approve All</button>
             <button type="button" class="ca-btn ca-btn-ghost" id="ca-flag-legal" data-tip="Route this request to Legal for review. Opens a dialog where you explain what Legal needs to look at. Sets status to NEEDS LEGAL.">⚖ Flag Legal</button>
             <button type="button" class="ca-btn ca-btn-ghost" id="ca-copy-all" data-tip="Copy the full Q&amp;A as plain text to your clipboard. Handy for pasting into an email reply without formatting.">📋 Copy All</button>
@@ -83,7 +83,7 @@
     {% elif mode == 'live' and last_draft_source == 'fallback' %}
         <div class="ca-mode-banner live-fallback">
             <div>
-                <strong>Live mode — drafts fell back to canned.</strong> the internal LLM gateway or the KB couldn't be reached. Check <a href="/customer-assurance/kb" style="font-weight:800;color:#7a5800;">KB</a> contents and proxy connectivity.
+                <strong>Live mode — drafts fell back to canned.</strong> the LLM or the KB couldn't be reached. Check <a href="/customer-assurance/kb" style="font-weight:800;color:#7a5800;">KB</a> contents and proxy connectivity.
             </div>
         </div>
     {% elif mode == 'live' and not kb_has_docs %}
@@ -135,7 +135,7 @@
                 <span id="ca-center-status"></span>
             </div>
             <div class="ca-ws-btns">
-                <button type="button" class="ca-btn ca-btn-primary ca-btn-sm" id="ca-btn-draft" data-tip="Generate an AI draft for this single question. Retrieves the most relevant policy chunks and asks the internal LLM gateway to write a grounded answer.">✨ AI Draft</button>
+                <button type="button" class="ca-btn ca-btn-primary ca-btn-sm" id="ca-btn-draft" data-tip="Generate an AI draft for this single question. Retrieves the most relevant policy chunks and asks the LLM to write a grounded answer.">✨ AI Draft</button>
                 <button type="button" class="ca-btn ca-btn-ghost ca-btn-sm" id="ca-btn-redraft" data-tip="Regenerate the draft. Your current edits will be overwritten. Use this if the first draft missed the mark.">↻ Redraft</button>
                 <button type="button" class="ca-btn ca-btn-accent ca-btn-sm" id="ca-btn-approve" data-tip="Save your edits and mark this answer as APPROVED. Ready for export.">✓ Approve</button>
                 <button type="button" class="ca-btn ca-btn-warn ca-btn-sm" id="ca-btn-sme" data-tip="Flag this answer as needing Subject Matter Expert review. Use for questions where the AI draft isn't trustworthy enough to release without a human expert's sign-off.">Needs SME</button>

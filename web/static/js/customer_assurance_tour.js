@@ -39,7 +39,7 @@
             },
             {
                 title: "Step 3 — Draft with AI",
-                body: "For each question, the system retrieves the most relevant chunks from our Knowledge Base (policies, SOC 2, standard responses), then the internal LLM gateway drafts an answer grounded in those chunks, with source citations.",
+                body: "For each question, the system retrieves the most relevant chunks from our Knowledge Base (policies, SOC 2, standard responses), then AI drafts an answer grounded in those chunks, with source citations.",
                 target: "#ca-tour-flow-3",
                 placement: "top",
             },
@@ -111,7 +111,7 @@
             },
             {
                 title: "Draft editor (center)",
-                body: "The draft answer appears here. You can freely edit, redraft, approve, or mark as needing SME review. the internal LLM gateway generates the initial draft from the Knowledge Base.",
+                body: "The draft answer appears here. You can freely edit, redraft, approve, or mark as needing SME review. the LLM generates the initial draft from the Knowledge Base.",
                 target: "#ca-tour-ws-center",
                 placement: "top",
             },

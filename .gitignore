@@ -93,7 +93,7 @@ models/
 *.db
 
 # CTI Tipper remote/local LLM variants (contain API keys in .env)
-src/components/the internal LLM gateway_RemoteVersion/
+src/components/the LLM_RemoteVersion/
 src/components/CyberIQ_RemoteVersion/
 src/components/CyberIQ_RemoteVersion.zip
 src/components/cti_tipper_assistant/

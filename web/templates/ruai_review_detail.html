@@ -227,8 +227,8 @@
                     <div class="ruai-stat-chip ruai-stat-model">
                         <span class="ruai-stat-icon">&#129302;</span>
                         <span class="ruai-stat-value">
-                            {%- if meta.model.startswith('metiq-') -%}
-                                {{ meta.model.replace('metiq-', 'the internal LLM gateway · ') }}
+                            {%- if meta.model.startswith('gateway-') -%}
+                                {{ meta.model.replace('gateway-', 'Gateway · ') }}
                             {%- else -%}
                                 Local LLM
                             {%- endif -%}
@@ -884,7 +884,7 @@ function pollReviewStatus(submissionId) {
                             if (toks) chips.push('&#9889; ' + toks.toLocaleString() + ' tokens');
                             if (data.stats.model) {
                                 var _m = String(data.stats.model);
-                                var _label = _m.indexOf('metiq-') === 0 ? _m.replace('metiq-', 'the internal LLM gateway · ') : 'Local LLM';
+                                var _label = _m.indexOf('gateway-') === 0 ? _m.replace('gateway-', 'Gateway · ') : 'Local LLM';
                                 chips.push('&#129302; ' + _label);
                             }
                             if (chips.length) html += '<br><span style="font-size:0.82em; opacity:0.7;">' + chips.join(' &nbsp;·&nbsp; ') + '</span>';

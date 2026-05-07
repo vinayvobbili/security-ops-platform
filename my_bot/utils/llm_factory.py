@@ -5,19 +5,30 @@ To switch providers (OpenAI-compat, Ollama, Bedrock, etc.) change THIS file only
 """
 
 import logging
-import re
-import time
 from typing import Optional
 
+import httpx
 from langchain_core.language_models import BaseChatModel
 from langchain_core.embeddings import Embeddings
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from my_bot.utils.enhanced_config import ModelConfig
 
 logger = logging.getLogger(__name__)
+
+
+def _no_keepalive_http_client(timeout: float = 600.0) -> httpx.Client:
+    """httpx.Client with keepalive disabled.
+
+    Long-lived bot processes have been observed hanging for ~115s on iter-2 LLM
+    calls when openai's pool reuses an idle keepalive connection that the mlx-lm
+    server has already torn down — TCP retransmits expire before the client
+    notices. Forcing a fresh connection per request side-steps the whole class.
+    """
+    return httpx.Client(
+        timeout=timeout,
+        limits=httpx.Limits(max_keepalive_connections=0, max_connections=10),
+    )
 
 
 def create_llm(config: ModelConfig = None, **overrides) -> BaseChatModel:
@@ -34,6 +45,7 @@ def create_llm(config: ModelConfig = None, **overrides) -> BaseChatModel:
         base_url=config.m1_analysis_base_url,  # m1 analysis — GLM-4.7-Flash (port 8015)
         api_key="not-needed",
         timeout=300.0,
+        http_client=_no_keepalive_http_client(timeout=600.0),
         extra_body={
             "chat_template_kwargs": {"enable_thinking": False},
         },
@@ -51,6 +63,7 @@ def create_router_llm(config: ModelConfig = None, **overrides) -> BaseChatModel:
         base_url=config.m1_router_base_url,  # m1 router — Qwen3-8B (port 8016)
         api_key="not-needed",
         timeout=300.0,
+        http_client=_no_keepalive_http_client(timeout=300.0),
     )
     kwargs.update(overrides)
     return ChatOpenAI(**kwargs)
@@ -67,157 +80,6 @@ def create_embeddings(config: ModelConfig = None, **overrides) -> Embeddings:
     )
     kwargs.update(overrides)
     return OpenAIEmbeddings(**kwargs)
-
-
-# ---------------------------------------------------------------------------
-# the internal LLM gateway Chat Model — GPT-4.1 via the company's the internal LLM gateway gateway, m1 fallback
-# ---------------------------------------------------------------------------
-
-_metiq_client = None
-
-
-def _get_metiq_client():
-    """Lazy-init a shared the internal LLM gateway client (singleton)."""
-    global _metiq_client
-    if _metiq_client is None:
-        from services.metiq import the internal LLM gatewayClient
-        _metiq_client = the internal LLM gatewayClient()
-        logger.info("the internal LLM gateway client configured=%s", _metiq_client.is_configured())
-    return _metiq_client
-
-
-def _sanitize_metiq(text: str) -> str:
-    """Strip control chars that break JSON parsers downstream.
-
-    the internal LLM gateway (GPT-4.1) doesn't honour response_format and may emit literal
-    control chars inside JSON string values.  Preserves \\n, \\r, \\t.
-    """
-    return re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', text)
-
-
-def _split_langchain_messages(messages):
-    """Convert LangChain messages into the internal LLM gateway's (prompt, history) format.
-
-    the internal LLM gateway has no system role — system messages are merged as a prefix to
-    the last user turn.  Prior messages become history entries with
-    User/Agent capitalisation.
-    """
-    systems, conv = [], []
-    for m in messages:
-        content = m.content
-        if isinstance(content, list):
-            content = "\n".join(
-                p.get("text", "") for p in content
-                if isinstance(p, dict) and p.get("type") == "text"
-            )
-        if isinstance(m, SystemMessage):
-            if content:
-                systems.append(content)
-        elif isinstance(m, HumanMessage):
-            conv.append({"role": "User", "content": content})
-        elif isinstance(m, AIMessage):
-            conv.append({"role": "Agent", "content": content})
-
-    if not conv:
-        return "", []
-
-    last = conv[-1]
-    history = conv[:-1]
-    prompt = last["content"] if last["role"] == "User" else ""
-    if systems:
-        prompt = "\n\n".join(systems) + ("\n\n" + prompt if prompt else "")
-    return prompt, history
-
-
-class the internal LLM gatewayChatModel(BaseChatModel):
-    """LangChain chat model: the internal LLM gateway (GPT-4.1) primary, m1 fallback.
-
-    - _generate (invoke): the internal LLM gateway first, m1 on any failure
-    - _stream:            m1 directly (the internal LLM gateway doesn't support streaming)
-    - Sanitizes the internal LLM gateway responses (strips control characters)
-    """
-
-    fallback: BaseChatModel
-    model_name: str = "metiq-gpt-4.1"
-    metiq_timeout: int = 60
-    fallback_enabled: bool = True
-
-    class Config:
-        arbitrary_types_allowed = True
-
-    @property
-    def _llm_type(self) -> str:
-        return "metiq"
-
-    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
-        try:
-            client = _get_metiq_client()
-            if not client.is_configured():
-                raise RuntimeError("the internal LLM gateway not configured")
-
-            prompt, history = _split_langchain_messages(messages)
-            if not prompt:
-                raise ValueError("No user message in conversation")
-
-            t0 = time.time()
-            resp = client.chat(message=prompt, history=history,
-                               timeout=self.metiq_timeout)
-            dt_ms = (time.time() - t0) * 1000.0
-
-            content = _sanitize_metiq((resp.get("content") or "").strip())
-            tokens = resp.get("tokensUsed") or 0
-            logger.info("the internal LLM gateway: tokens=%d took=%.0fms", tokens, dt_ms)
-
-            return ChatResult(
-                generations=[ChatGeneration(message=AIMessage(content=content))],
-                llm_output={
-                    "token_usage": {
-                        "completion_tokens": tokens,
-                        "prompt_tokens": 0,
-                        "total_tokens": tokens,
-                    },
-                    "model_name": self.model_name,
-                },
-            )
-        except Exception as exc:
-            if not self.fallback_enabled:
-                raise
-            logger.warning("the internal LLM gateway failed (%s: %s), falling back to m1",
-                           type(exc).__name__, exc)
-            return self.fallback._generate(
-                messages, stop=stop, run_manager=run_manager, **kwargs)
-
-    def _stream(self, messages, stop=None, run_manager=None, **kwargs):
-        """the internal LLM gateway doesn't support streaming — delegate to m1."""
-        yield from self.fallback._stream(
-            messages, stop=stop, run_manager=run_manager, **kwargs)
-
-
-def create_metiq_llm(config: ModelConfig = None, metiq_timeout: int = 60,
-                     **fallback_overrides) -> the internal LLM gatewayChatModel:
-    """Create a the internal LLM gateway chat model with automatic m1 fallback.
-
-    the internal LLM gateway (GPT-4.1) handles non-streaming requests.  Streaming and the internal LLM gateway
-    failures fall back to m1 analysis (GLM-4.7-Flash, port 8015).
-
-    Args:
-        config: ModelConfig (uses defaults if None)
-        metiq_timeout: Timeout for the internal LLM gateway API calls (default 60s)
-        **fallback_overrides: kwargs for the m1 fallback ChatOpenAI
-            (e.g. temperature, max_tokens, extra_body)
-    """
-    config = config or ModelConfig()
-    fallback_kwargs = dict(
-        model=config.llm_model_name,
-        base_url=config.m1_analysis_base_url,  # m1 analysis — GLM-4.7-Flash (port 8015)
-        api_key="not-needed",
-        timeout=300.0,
-    )
-    fallback_kwargs.update(fallback_overrides)
-    return the internal LLM gatewayChatModel(
-        fallback=ChatOpenAI(**fallback_kwargs),
-        metiq_timeout=metiq_timeout,
-    )
 
 
 class FailoverChatModel(BaseChatModel):

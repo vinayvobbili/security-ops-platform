@@ -29,8 +29,8 @@ def _get_qr_client():
 def _get_qr_llm():
     global _qr_llm
     if _qr_llm is None:
-        from my_bot.utils.llm_factory import create_metiq_llm
-        _qr_llm = create_metiq_llm(
+        from my_bot.utils.llm_factory import create_llm
+        _qr_llm = create_llm(
             max_tokens=2048, timeout=300,
             extra_body={"chat_template_kwargs": {"enable_thinking": False}},
         )
