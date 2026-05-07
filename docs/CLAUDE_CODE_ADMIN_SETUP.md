@@ -1,17 +1,12 @@
----
-layout: default
-title: Claude Code Setup — Admin Guide
----
-
 # 🛠️ Claude Code Local Stack — Admin Guide
 
 > **scope: lab-vm1 + Mac fleet** · **consumers: any Claude Code client on corp net** · **status: production**
 
 Operating manual for the router that lets Claude Code clients talk to our self-hosted vllm-mlx and Ollama backends.
 
-| 🧠 3 backends | 🚪 1 endpoint | ⚙️ 2 services |
+| 🧠 2 backends | 🚪 1 endpoint | ⚙️ 2 services |
 |---|---|---|
-| m1 GLM, studio1 Qwen (vllm-mlx), studio1 Laguna (Ollama). | `lab-vm1:8051` — single URL, bearer-auth gated. | `ir-claude-router` (8050) + `ir-claude-router-shim` (8051). |
+| studio1 GLM-Flash (vllm-mlx), studio1 Laguna (Ollama). | `lab-vm1:8051` — single URL, bearer-auth gated. | `ir-claude-router` (8050) + `ir-claude-router-shim` (8051). |
 
 ## 📑 Table of contents
 - [Architecture](#-architecture)
@@ -29,30 +24,30 @@ Operating manual for the router that lets Claude Code clients talk to our self-h
 
 ## 🧱 Architecture
 
-Two services on lab-vm1, three Mac backends. The shim is the public face; ccr is the internal translator.
+Two services on lab-vm1, two Mac backends — both on studio1. The shim is the public face; ccr is the internal translator.
 
 ```
 [claude client]
       │  ANTHROPIC_BASE_URL=http://lab-vm1:8051
       ▼
   lab-vm1:8051   ir-claude-router-shim   (FastAPI)
-      │   • exposes GET /v1/models with claude-* aliases
-      │   • rewrites alias → provider,model
+      │   • exposes GET /v1/models for SDK / curl discovery
+      │   • rewrites friendly id → provider,model
       │   • bearer-auth gate
       ▼
   127.0.0.1:8050   ir-claude-router      (claude-code-router)
       │   • Anthropic /v1/messages → OpenAI /v1/chat/completions
-      │   • routes by `provider,model` to one of three upstreams
+      │   • routes by `provider,model` to one of two upstreams
       ▼
-  ┌──────────────┬───────────────────┬─────────────────────┐
-  │ 8015         │ 8023              │ 8022                │
-  │ mac-m1 GLM   │ studio1 Qwen      │ studio1 Laguna      │
-  │ vllm-mlx     │ vllm-mlx          │ Ollama              │
-  └──────────────┴───────────────────┴─────────────────────┘
-  (each is a reverse SSH tunnel from the Mac into lab-vm1)
+  ┌──────────────┬─────────────────────┐
+  │ 8024         │ 8022                │
+  │ studio1 GLM  │ studio1 Laguna      │
+  │ vllm-mlx     │ Ollama              │
+  └──────────────┴─────────────────────┘
+  (each is a reverse SSH tunnel from studio1 into lab-vm1)
 ```
 
-> **📌 Why two layers** — ccr handles the Anthropic↔OpenAI translation and multi-provider routing, but doesn't expose `/v1/models`, so the `/model` picker stays empty. The shim adds `/v1/models` with claude-prefixed aliases, rewrites aliases on incoming `/v1/messages`, and forwards everything else through. ~120 lines of FastAPI; no logic of its own beyond the rewrite.
+> **📌 Why two layers** — ccr handles the Anthropic↔OpenAI translation and multi-provider routing, but expects requests in `provider,model` form and doesn't expose `/v1/models` for discovery. The shim adds `/v1/models` (for SDK / curl / IDE-plugin enumeration), translates friendly model ids to ccr's `provider,model` form on incoming `/v1/messages`, and gates everything behind a bearer token. Note: Claude Code's `/model` picker is hardcoded to Opus / Sonnet / Haiku and does NOT read `/v1/models` — users wire each tier to one of our ids via `ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL`. ~120 lines of FastAPI; no logic of its own beyond the rewrite.
 
 ---
 
@@ -61,14 +56,13 @@ Two services on lab-vm1, three Mac backends. The shim is the public face; ccr is
 | Service | Port | Purpose | Source |
 |---|---|---|---|
 | `ir-claude-router` | 8050 | claude-code-router (npm). Anthropic↔OpenAI + provider routing. | `~/.claude-code-router/config.json` |
-| `ir-claude-router-shim` | 8051 | FastAPI front door. `/v1/models`, alias rewrite, bearer auth. | `deployment/claude_router_shim.py` |
+| `ir-claude-router-shim` | 8051 | FastAPI front door. `/v1/models` (discovery), id-rewrite, bearer auth. | `deployment/claude_router_shim.py` |
 
 Backends (each lives behind a reverse SSH tunnel from its Mac):
 
 | Tunnel port | Mac | Engine | Model |
 |---|---|---|---|
-| 8015 | mac-m1 | vllm-mlx | `mlx-community/GLM-4.7-Flash-8bit` |
-| 8023 | studio1 | vllm-mlx | `qwen3-32b` |
+| 8024 | studio1 | vllm-mlx | `mlx-community/GLM-4.7-Flash-8bit` |
 | 8022 | studio1 | Ollama | `laguna-xs.2:q8_0` |
 
 ---
@@ -111,10 +105,7 @@ ccr config — providers, model lists, routing rules. Not under git (contains li
   "PORT": 8050,
   "APIKEY": "$CCR_APIKEY",
   "Providers": [
-    { "name": "qwen",   "api_base_url": "http://127.0.0.1:8023/v1/chat/completions",
-      "api_key": "sk-no-key",
-      "models": ["qwen3-32b"] },
-    { "name": "glm",    "api_base_url": "http://127.0.0.1:8015/v1/chat/completions",
+    { "name": "glm",    "api_base_url": "http://127.0.0.1:8024/v1/chat/completions",
       "api_key": "sk-no-key",
       "models": ["glm-4.7-flash"] },
     { "name": "laguna", "api_base_url": "http://127.0.0.1:8022/v1/chat/completions",
@@ -122,10 +113,10 @@ ccr config — providers, model lists, routing rules. Not under git (contains li
       "models": ["laguna-xs.2:q8_0"] }
   ],
   "Router": {
-    "default":     "qwen,qwen3-32b",
-    "background":  "qwen,qwen3-32b",
-    "think":       "qwen,qwen3-32b",
-    "longContext": "qwen,qwen3-32b"
+    "default":     "glm,glm-4.7-flash",
+    "background":  "glm,glm-4.7-flash",
+    "think":       "glm,glm-4.7-flash",
+    "longContext": "glm,glm-4.7-flash"
   }
 }
 ```
@@ -135,19 +126,17 @@ Two dicts at the top decide what shows up in `/v1/models` and how aliases map to
 
 ```python
 MODEL_MAP = {
-    "claude-qwen3-32b":      "qwen,qwen3-32b",
-    "claude-glm-4.7-flash":  "glm,glm-4.7-flash",
-    "claude-laguna":         "laguna,laguna-xs.2:q8_0",
+    "glm-4.7-flash":  "glm,glm-4.7-flash",
+    "laguna":         "laguna,laguna-xs.2:q8_0",
 }
 DISPLAY_NAMES = {
-    "claude-qwen3-32b":     "Qwen3 32B",
-    "claude-glm-4.7-flash": "GLM 4.7 Flash",
-    "claude-laguna":        "Laguna xs.2",
+    "glm-4.7-flash": "GLM 4.7 Flash",
+    "laguna":        "Laguna xs.2",
 }
 ```
 
 ### ③ `data/transient/.env` → `CCR_APIKEY`
-Single bearer token validated by both the shim (own check) and ccr (forwarded). Clients send the same value as `Authorization: Bearer <CCR_APIKEY>` and as `ANTHROPIC_API_KEY`.
+Single bearer token validated by both the shim (own check) and ccr (forwarded). Clients send the same value as `Authorization: Bearer <CCR_APIKEY>` and as `ANTHROPIC_AUTH_TOKEN`.
 
 > **⚠️ Keep the key out of git.** `.env` is gitignored. Distribute out-of-band (1Password, encrypted message). Rotate by regenerating, then restarting both services.
 
@@ -198,20 +187,18 @@ Expected: the new `claude-gemma3` entry appears alongside the others.
 
 ## 🖥️ Mac backends
 
-### 🍏 mac-m1 (GLM)
-- Engine: vllm-mlx serving `mlx-community/GLM-4.7-Flash-8bit`
-- Tool-call parser: `glm47`
-- Tunnel: `lab-vm1:8015 → mac-m1:8015`
-- SSH backchannel: `ssh -p 2223 vinay@127.0.0.1` from lab-vm1
-- Reload: `launchctl kickstart -k gui/$(id -u)/com.ir.vllm-mlx-main`
+All three Claude Code backends now live on **studio1**, behind a single reverse-tunnel session to lab-vm1. (mac-m1 still runs GLM-4.7-Flash for Pokedex + Win.AI on its own tunnel, but is no longer in the Claude Code path as of 2026-05-06.)
 
-### 🎙️ studio1 (Qwen + Laguna, two stacks)
-- vllm-mlx: `Qwen3-32B-8bit`, parser `qwen`, tunnel `lab-vm1:8023`
-- Ollama: `laguna-xs.2:q8_0`, tunnel `lab-vm1:8022`
+### 🎙️ studio1 (GLM + Laguna, two stacks)
+- vllm-mlx GLM: `mlx-community/GLM-4.7-Flash-8bit`, parser `glm47`, reasoning `deepseek_r1`, tunnel `lab-vm1:8024 → studio1:8002` (~30 GB on disk)
+- Ollama: `laguna-xs.2:q8_0`, tunnel `lab-vm1:8022 → studio1:11434` (~40 GB cold, `KEEP_ALIVE=30s` so it unloads when idle)
 - SSH backchannel: `ssh -p 2224 vvobbilichetty@127.0.0.1` from lab-vm1
-- Qwen reload: `launchctl kickstart -k gui/$(id -u)/com.ir.vllm-mlx-qwen`
+- GLM reload: `launchctl bootout gui/$(id -u)/com.ir.vllm-mlx-glm && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.ir.vllm-mlx-glm.plist`
+- Qwen3-32B vllm-mlx is downloaded (~33 GB) but the launchctl agent is **disabled** (2026-05-06) to avoid memory contention with GLM. Re-enable with `launchctl enable gui/$(id -u)/com.ir.vllm-mlx-qwen && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.ir.vllm-mlx-qwen.plist`.
 
-> **⚠️ launchctl domain** — studio1's vllm-mlx runs in the `gui/$UID` domain, not `user/$UID`. `launchctl print user/501` shows the service "enabled" but kickstart there returns "Could not find service in domain." Always use `gui/$(id -u)/...` for kickstart and bootout on studio1.
+> **⚠️ launchctl domain** — studio1's vllm-mlx services run in the `gui/$UID` domain, but the tunnel agent is in `user/$UID`. `launchctl print user/501` shows the vllm services as "enabled" but kickstart/bootout there fails with "Could not find service in domain." Use `gui/$(id -u)/...` for vllm; `user/$(id -u)/...` for the tunnel.
+
+> **⚡ System-prompt KV cache patch** — vllm-mlx's `--continuous-batching` flag (which gates the engine-level prefix cache) crashes mlx-lm on first cache-hit decode with `RuntimeError: There is no Stream(gpu, X) in current thread`. We work around it with a local patch to `vllm_mlx/engine/simple.py` that adds single-slot system-prompt KV caching to the pure-LLM `stream_chat()` path. Result: ~17x speedup on cache hits (9.8s cold → 0.58s hit on Qwen2.5-Coder with a 2.5K-token system prompt). Patch + idempotent apply script: `deployment/vllm_mlx_patches/`. Re-run `apply.sh` after every `pip install --upgrade vllm-mlx` and bounce the launchctl agent.
 
 ---
 
@@ -242,12 +229,12 @@ systemctl --user restart ir-claude-router ir-claude-router-shim
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| 401 on `/v1/models` | Wrong/missing bearer token | Check `ANTHROPIC_API_KEY` matches `CCR_APIKEY` in `data/transient/.env`. |
+| 401 on `/v1/models` | Wrong/missing bearer token | Check `ANTHROPIC_AUTH_TOKEN` matches `CCR_APIKEY` in `data/transient/.env`. |
 | 404 on `/v1/models` | Client pointing at ccr (8050) instead of shim (8051) | Set `ANTHROPIC_BASE_URL=http://lab-vm1:8051`. |
 | `/v1/messages` "fetch failed" | Upstream Mac unreachable | Check tunnel: `ss -tlnp \| grep 80<port>`. SSH the Mac, verify the engine is up. |
-| Connection reset on Qwen path | studio1 vllm-mlx not running | ssh studio1, `launchctl kickstart -k gui/$(id -u)/com.ir.vllm-mlx-qwen`. |
+| Connection reset on GLM path | studio1 `vllm-mlx-glm` not running | ssh studio1, `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.ir.vllm-mlx-glm.plist`. |
 | Picker doesn't show models | Stale gateway-models cache on client | Delete `~/.claude/cache/gateway-models.json` on client, restart `claude`. |
-| Tool calls flaky | Model-specific (smaller models drop tool args) | Switch to `claude-qwen3-32b` — most reliable for tool use. |
+| Tool calls flaky | Model-specific (smaller models drop tool args) | Switch to `glm-4.7-flash` — most reliable for tool use. |
 | Shim restart with no effect | Edited `config.json` but didn't restart ccr | Restart both for any provider change. |
 
 ---

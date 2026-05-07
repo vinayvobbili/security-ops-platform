@@ -14,7 +14,7 @@ An enterprise-grade security operations platform that automates and orchestrates
 | Metric | Value |
 |--------|-------|
 | **Security Tool Integrations** | 30+ |
-| **MCP Server Tools** | 31 |
+| **MCP Server Tools** | 30 |
 | **LLM Investigation Tools** | 36 |
 | **Production Chat Bots** | 14 (Webex + Teams) |
 | **Web App Pages** | 80+ |
@@ -172,12 +172,19 @@ Unified API clients for the security ecosystem:
 > agent pointed at a self-hosted local model (mlx-lm, Ollama, vLLM, anything
 > behind an Anthropic-compatible front door) instead of the full platform, jump to:
 >
-> - **[User Setup](CLAUDE_CODE_USER_SETUP)** — install, two env vars, picking
->   models from the `/model` picker, recipes and FAQ.
+> - **[User Setup](CLAUDE_CODE_USER_SETUP)** — install, env vars for the three
+>   tier slots (Opus / Sonnet / Haiku → local model ids), on-the-fly model
+>   switching (`ANTHROPIC_MODEL=… claude`, `--model`, `/model` picker), recipes
+>   and FAQ.
 > - **[Admin Guide](CLAUDE_CODE_ADMIN_SETUP)** — the two-service router + shim
->   architecture (claude-code-router behind a small `/v1/models` shim that
->   exposes `claude-*` aliases), day-2 ops, and a step-by-step recipe for
->   adding a new model.
+>   architecture (claude-code-router behind a small front-door shim that
+>   handles model-id rewriting, error sanitization, and a buffer-to-stream
+>   path for parsers that don't stream tool calls cleanly), day-2 ops, and a
+>   step-by-step recipe for adding a new model.
+>
+> Includes an mlx-lm SimpleEngine **system-prompt KV-cache patch** that turns
+> 100s+ follow-up turns into sub-10s on Apple Silicon by reusing the rendered
+> system prefix across calls of the same session.
 >
 > The steps below are for running this repo's web app.
 

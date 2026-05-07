@@ -1,8 +1,3 @@
----
-layout: default
-title: Claude Code Setup — User Guide
----
-
 # 🤖 Claude Code → Our Internal LLM
 
 > **status: live** · **backend: internal** · **corp network only** · **cost: $0**
@@ -16,12 +11,13 @@ Run Anthropic's Claude Code CLI against our self-hosted models. No API key. No u
 ## 📑 Table of contents
 - [What is Claude Code?](#-what-is-claude-code)
 - [The headline](#-the-headline)
+- [Speed & latency — what to expect](#️-speed--latency--what-to-expect)
 - [1️⃣ Install Node.js](#1️⃣-install-nodejs)
 - [2️⃣ Install Claude Code](#2️⃣-install-claude-code)
-- [3️⃣ Configure two env vars](#3️⃣-configure-two-env-vars)
+- [3️⃣ Configure five env vars](#3️⃣-configure-five-env-vars)
 - [4️⃣ Take it for a spin](#4️⃣-take-it-for-a-spin)
-- [5️⃣ Pick a model with /model](#5️⃣-pick-a-model-with-model)
-- [6️⃣ Your first real task](#6️⃣-your-first-real-task--a-2-minute-tutorial)
+- [Switch models on the fly](#️-switch-models-on-the-fly)
+- [5️⃣ Your first real task](#5️⃣-your-first-real-task--a-2-minute-tutorial)
 - [Permission model](#️-the-permission-model)
 - [Keyboard shortcuts](#️-keyboard-shortcuts-cheat-sheet)
 - [Recipe gallery](#-recipe-gallery)
@@ -42,13 +38,45 @@ Claude Code is a terminal AI pair programmer. You run `claude` in a project dire
 With this setup, all of that runs against our self-hosted models instead of Anthropic's cloud. Same CLI, same workflow — just our hardware doing the thinking.
 
 ## ✨ The headline
-Three local models exposed through one endpoint. Switch on the fly with `/model`.
+Three local models exposed through one endpoint.
 
 | Model id | Best for | Notes |
 |---|---|---|
-| `claude-qwen3-32b` | Default — balanced reasoning + tool use | Largest of the three; uses a `<think>` block before answering. |
-| `claude-glm-4.7-flash` | Fast iteration, code edits | Quickest first token. Great for inline edits and short tasks. |
-| `claude-laguna` | Long-form prose, summaries | Runs via Ollama; slower first hit (cold load). |
+| `glm-4.7-flash` | Default — coding, tool use, chat | Quickest first token. The Opus and Sonnet picker tiers both point here. |
+| `qwen2.5-coder-32b` | Coding-heavy sessions with lots of tool calls | Code-tuned 32B; alternative if GLM-Flash misbehaves on your task. |
+| `laguna` | Long-form prose, summaries | Runs via Ollama; slower first hit (cold load). Wired to Haiku tier. |
+
+---
+
+## ⏱️ Speed & latency — what to expect
+
+> **❗ Read this before you judge.** Every turn re-prefills the entire conversation. There is **no prompt cache** locally today. Plan for **1–3 minutes per turn**, not the sub-second feel of anthropic.com. Your first "Hi" can take 2+ minutes — that's the floor, not a bug.
+
+Measured on studio1 (Apple Silicon, GLM-4.7-Flash 8-bit) with Claude Code's stock system prompt + ~60 tools:
+
+| Turn | Typical latency | Why |
+|---|---|---|
+| First "Hi" in a fresh session | ≈ 90–150 s | Prefill of system prompt + tool definitions (~9K tokens) at ~90 tok/s. |
+| Tool-using turn (read a file, suggest an edit) | ≈ 90–180 s | Same prefill plus the file you just attached + the prior turns. |
+| Long session (10+ turns, large files in context) | Grows turn-over-turn | Conversation keeps re-prefilling. Use `/compact` and `/clear` proactively. |
+
+### 🤔 Why so much slower than anthropic.com?
+- **Prompt caching** — Anthropic caches your system prompt and tools server-side, so a repeat turn skips prefill entirely (sub-second first token). Our stack doesn't have this yet (the underlying flag is broken in our current mlx-lm version).
+- **Hardware** — a Mac Studio is not a datacenter GPU. Cloud Claude runs on accelerator clusters with orders-of-magnitude more memory bandwidth.
+- **Model size** — GLM-4.7-Flash is ~30 GB on disk; Opus / Sonnet are far larger and run on far bigger machines. Smaller model partly compensates for the slower hardware, but only partly.
+
+### ✅ Good fit for
+- Learning Claude Code's workflow without burning Anthropic credits.
+- Single-file edits, code review, explanations of opaque code.
+- Pre-PR self-review on small diffs.
+- Anything where data shouldn't leave the LAN.
+
+### 🚫 Less good fit for
+- Tight iterative loops on large files (each turn pays full prefill).
+- Multi-file refactors that need long agentic chains.
+- Anything where you'd notice a 60-second wait every turn.
+
+For those, switch back to real Claude — see "Switching back to real Claude" below.
 
 ---
 
@@ -56,10 +84,15 @@ Three local models exposed through one endpoint. Switch on the fly with `/model`
 You need Node 18+ (LTS recommended).
 
 ### 🪟 Windows
+
+> **🏢 Corp-managed laptop? Try Software Center first.** Open Software Center (Start menu → "Software Center"), search for **Claude**, click **Install**. If it's there, you're done — no admin prompt, no PATH wrangling. **Skip ahead to Step 3 (env vars)**. The rollout is still in progress though, so most laptops don't have it yet — if Claude isn't listed for you, use the winget steps below to install Node, then continue to Step 2.
+
+If Software Center doesn't list Claude — install Node manually. The flags below work **without admin rights** and **on corp Wi-Fi**:
 ```powershell
-winget install OpenJS.NodeJS.LTS
+winget install OpenJS.NodeJS.LTS --source winget --scope user
 ```
-Or download the LTS installer from https://nodejs.org and click through the wizard.
+
+> **📘 Why those two flags** — `--source winget` pins the Microsoft *winget* source instead of the default *msstore*, which fails with `0x8a15005e` (server certificate did not match) on corp Wi-Fi because SSL inspection breaks the Microsoft Store source. `--scope user` installs Node into your profile only and modifies your user PATH; no admin elevation needed. Close and reopen your terminal afterwards so the new PATH takes effect.
 
 ### 🍎 macOS
 ```bash
@@ -79,7 +112,10 @@ node -v && npm -v
 ---
 
 ## 2️⃣ Install Claude Code
-Same one-liner everywhere:
+
+> **🏢 Installed via Software Center on Windows?** You're done — SC installs Claude Code alongside Node. Skip to Step 3 (env vars).
+
+Otherwise (Software Center doesn't list Claude yet, or you're on Mac/Linux), same one-liner everywhere:
 ```bash
 npm install -g @anthropic-ai/claude-code
 ```
@@ -90,14 +126,23 @@ claude --version
 
 ---
 
-## 3️⃣ Configure two env vars
-These point Claude Code at our internal endpoint. Get the API key from the team lead.
+## 3️⃣ Configure five env vars
+These point Claude Code at our internal endpoint and pick which local model each tier resolves to. Get the API key from the team lead.
 
 ### 🍎🐧 macOS / Linux — make it permanent
-Append to `~/.zshrc` (use `~/.bashrc` on bash):
+Open `~/.zshrc` (or `~/.bashrc` on bash) in your editor — pick whichever you have:
 ```bash
-export ANTHROPIC_BASE_URL=http://lab-vm1:8051
-export ANTHROPIC_API_KEY=<your-bearer-token>
+subl ~/.zshrc      # Sublime Text
+code ~/.zshrc      # VS Code
+nano ~/.zshrc      # nano (no install needed)
+```
+Append these five lines and save:
+```bash
+export ANTHROPIC_BASE_URL=https://<your-llm-host>/local-llm
+export ANTHROPIC_AUTH_TOKEN=<your-bearer-token>
+export ANTHROPIC_DEFAULT_OPUS_MODEL=glm-4.7-flash
+export ANTHROPIC_DEFAULT_SONNET_MODEL=glm-4.7-flash
+export ANTHROPIC_DEFAULT_HAIKU_MODEL=laguna
 ```
 Reload:
 ```bash
@@ -106,12 +151,34 @@ source ~/.zshrc
 
 ### 🪟 Windows — PowerShell, persistent (user-level)
 ```powershell
-[System.Environment]::SetEnvironmentVariable('ANTHROPIC_BASE_URL', 'http://lab-vm1:8051', 'User')
-[System.Environment]::SetEnvironmentVariable('ANTHROPIC_API_KEY', '<your-bearer-token>', 'User')
+[System.Environment]::SetEnvironmentVariable('ANTHROPIC_BASE_URL',            'https://<your-llm-host>/local-llm', 'User')
+[System.Environment]::SetEnvironmentVariable('ANTHROPIC_AUTH_TOKEN',           '<your-bearer-token>', 'User')
+[System.Environment]::SetEnvironmentVariable('ANTHROPIC_DEFAULT_OPUS_MODEL',   'glm-4.7-flash',          'User')
+[System.Environment]::SetEnvironmentVariable('ANTHROPIC_DEFAULT_SONNET_MODEL', 'glm-4.7-flash',          'User')
+[System.Environment]::SetEnvironmentVariable('ANTHROPIC_DEFAULT_HAIKU_MODEL',  'laguna',             'User')
 ```
 Then close and reopen the terminal.
 
-> **📌 Only two vars** — earlier guides mentioned four. The lab-vm1 router now handles model selection through the `/model` picker, so the model env vars are no longer required.
+### 🩺 Verify — confirm the values are set
+
+Open a **fresh** terminal (so it picks up the new vars), then run the line for your shell. All five values should print non-empty — if any are blank, the vars didn't persist and `claude` will fall back to api.anthropic.com.
+
+🪟 **PowerShell**
+```powershell
+$env:ANTHROPIC_BASE_URL; $env:ANTHROPIC_AUTH_TOKEN.Substring(0,8) + "..."; $env:ANTHROPIC_DEFAULT_OPUS_MODEL; $env:ANTHROPIC_DEFAULT_SONNET_MODEL; $env:ANTHROPIC_DEFAULT_HAIKU_MODEL
+```
+
+🪟 **Windows CMD**
+```cmd
+echo %ANTHROPIC_BASE_URL% & echo %ANTHROPIC_AUTH_TOKEN:~0,8%... & echo %ANTHROPIC_DEFAULT_OPUS_MODEL% & echo %ANTHROPIC_DEFAULT_SONNET_MODEL% & echo %ANTHROPIC_DEFAULT_HAIKU_MODEL%
+```
+
+🍎🐧 **macOS / Linux**
+```bash
+echo "$ANTHROPIC_BASE_URL"; echo "${ANTHROPIC_AUTH_TOKEN:0:8}..."; echo "$ANTHROPIC_DEFAULT_OPUS_MODEL"; echo "$ANTHROPIC_DEFAULT_SONNET_MODEL"; echo "$ANTHROPIC_DEFAULT_HAIKU_MODEL"
+```
+
+The token is truncated to its first 8 characters so you can sanity-check it's set without echoing the full secret to your terminal scrollback.
 
 ---
 
@@ -120,27 +187,37 @@ Then close and reopen the terminal.
 cd ~/some/repo
 claude
 ```
-Inside the prompt, type `/status` — confirm `ANTHROPIC_BASE_URL` shows lab-vm1:8051. Then say hi:
+Inside the prompt, type `/status` — confirm `ANTHROPIC_BASE_URL` shows https://<your-llm-host>/local-llm. Then say hi:
 ```
 > hi, what model are you?
 ```
 
 ---
 
-## 5️⃣ Pick a model with /model
-Inside Claude Code, type `/model`. The picker shows three entries:
+## 🎛️ Switch models on the fly
 
-| Pick | When to use it |
-|---|---|
-| `claude-qwen3-32b` | Default. Multi-step reasoning, tool calls, larger refactors. |
-| `claude-glm-4.7-flash` | Snappy edits, quick questions, repetitive tasks. |
-| `claude-laguna` | Long-form writing, doc generation, summaries. |
+The five env vars in step 3 set your defaults. To try a different model for one session without editing your shell config, override at launch.
 
-Claude Code remembers your pick for the session. To switch, run `/model` again.
+### ① Env-var prefix (one session)
+```bash
+ANTHROPIC_MODEL=qwen2.5-coder-32b claude
+```
+`ANTHROPIC_MODEL` takes precedence over the per-tier vars. Banner will read `qwen2.5-coder-32b[1m]` instead of the default. Closes the override when the session ends.
+
+### ② CLI flag (one session)
+```bash
+claude --model qwen2.5-coder-32b
+```
+Same effect as the env-var prefix; pick whichever feels natural.
+
+### ③ `/model` picker (mid-session)
+Inside Claude Code, `/model` switches between the Opus / Sonnet / Haiku tiers. Each tier resolves to whichever id you set in `ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL`. Useful if you wired Sonnet to `qwen2.5-coder-32b` — `/model` then becomes a GLM ↔ Qwen toggle without restarting.
+
+> **💡 When to reach for each model.** Default to `glm-4.7-flash`. If a coding turn comes back empty, drops a tool call, or the model talks about code instead of writing it, retry with `qwen2.5-coder-32b` — it's code-tuned and doesn't have a thinking-mode prefix that can swallow short answers.
 
 ---
 
-## 6️⃣ Your first real task — a 2-minute tutorial
+## 5️⃣ Your first real task — a 2-minute tutorial
 
 ### ① Open a project (or start fresh)
 `cd` into an existing repo and run `claude` there — it'll see your code and edit files in place.
@@ -163,7 +240,6 @@ It'll create the test file, run it, and show output. If a test fails, ask it to 
 | Command | What it does |
 |---|---|
 | `/status` | Show the resolved env vars, model, and working directory. |
-| `/model` | Pick a model from the local roster (qwen / glm / laguna). |
 | `/clear` | Reset the conversation in this session. |
 | `/compact` | Compress earlier turns to free up context. |
 | `/help` | Full command reference. |
@@ -234,17 +310,20 @@ Install the "Claude Code" extension from the VS Code marketplace. Same env-var c
 ---
 
 ## 🔄 Switching back to real Claude
-When you want Opus / Sonnet for the heavy lifting, unset the two env vars:
+When you want real Opus / Sonnet for the heavy lifting, unset the five env vars:
 
 ### 🍎🐧 macOS / Linux
 ```bash
-unset ANTHROPIC_BASE_URL ANTHROPIC_API_KEY
+unset ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN       ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL
 ```
 
 ### 🪟 Windows PowerShell
 ```powershell
-[System.Environment]::SetEnvironmentVariable('ANTHROPIC_BASE_URL', $null, 'User')
-[System.Environment]::SetEnvironmentVariable('ANTHROPIC_API_KEY',  $null, 'User')
+[System.Environment]::SetEnvironmentVariable('ANTHROPIC_BASE_URL',            $null, 'User')
+[System.Environment]::SetEnvironmentVariable('ANTHROPIC_AUTH_TOKEN',             $null, 'User')
+[System.Environment]::SetEnvironmentVariable('ANTHROPIC_DEFAULT_OPUS_MODEL',   $null, 'User')
+[System.Environment]::SetEnvironmentVariable('ANTHROPIC_DEFAULT_SONNET_MODEL', $null, 'User')
+[System.Environment]::SetEnvironmentVariable('ANTHROPIC_DEFAULT_HAIKU_MODEL',  $null, 'User')
 ```
 Then `claude login` to authenticate.
 
@@ -256,7 +335,7 @@ Then `claude login` to authenticate.
 
 - Smaller context window than Claude. Use `/compact` often, `/clear` when conversations drift.
 - Tool-call reliability varies by model. If it loops or emits malformed JSON, simplify the prompt.
-- First response in a session is slow (model warmup). Subsequent ones reuse the loaded weights.
+- Every turn re-prefills the conversation (no local prompt cache today) — see the Speed & latency section above.
 - If something's genuinely broken (not just "lower quality than Claude"), file it.
 
 ---
@@ -268,13 +347,23 @@ Then `claude login` to authenticate.
 
 ### 🩺 Quick reachability check
 ```bash
-curl -H "Authorization: Bearer $ANTHROPIC_API_KEY" $ANTHROPIC_BASE_URL/v1/models
+curl -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" $ANTHROPIC_BASE_URL/v1/models
 ```
-Expected: a JSON list with `claude-qwen3-32b`, `claude-glm-4.7-flash`, `claude-laguna`.
+Expected: a JSON list with `glm-4.7-flash` and `laguna`.
 
 ---
 
 ## ❓ FAQ — things people ping me about
+
+**Q: 🪟 What's the easiest way to install on a corp-managed Windows laptop?**
+A: Try **Software Center** first — search for **Claude**; if it's listed, click **Install** and you're done (no admin prompt, no PATH fiddling, jump to Step 3). The SC rollout is still in progress though, so most laptops don't have it yet — if Claude isn't there for you, fall back to the winget + npm steps in Step 1 and Step 2.
+
+**Q: 🪟 winget install fails with "server certificate did not match" (`0x8a15005e`).**
+A: If Claude is in your Software Center, that path skips winget entirely (search "Claude" → Install). Otherwise: corp SSL inspection breaks the Microsoft Store source. Pin winget explicitly: `winget install OpenJS.NodeJS.LTS --source winget`. The error message lists `winget` as a working source — that's the one to use.
+
+**Q: 🪟 I don't have admin rights on my Windows laptop — can I still install?**
+A: Yes. Easiest path is Software Center if Claude is listed for you (no admin needed). If it isn't, use winget with `--scope user`: `winget install OpenJS.NodeJS.LTS --source winget --scope user`. Node installs into your profile and only your user PATH is modified. Last-resort fallback is the portable zip from https://nodejs.org/dist/: extract to `%USERPROFILE%
+odejs`, then add that folder to your **user** PATH (System Properties → Environment Variables → User variables → Path → New).
 
 **Q: It told me it can't access the internet. Is something broken?**
 A: No — that's expected. The local models run fully offline by design. To fetch a webpage, run `!curl ...` and pipe the output back in.
@@ -289,10 +378,10 @@ A: Known weakness of smaller models. Always read the diff before accepting. If i
 A: Rephrase. Adding context like "this is my own project, the file is mine to edit" usually unblocks it.
 
 **Q: Tool calls are failing or producing malformed JSON.**
-A: Switch to a different model with `/model` — qwen handles tools more reliably than the others.
+A: Simplify the request — break it into smaller steps.
 
-**Q: First response is slow, later ones are fast. Why?**
-A: The model warms up after the first query. Later prompts in the same session reuse the loaded weights and KV cache.
+**Q: Every turn feels slow. Why isn't the second one faster?**
+A: Anthropic's cloud caches your system prompt + tools server-side, so repeat turns skip prefill. We don't have that locally yet — every turn re-prefills the conversation. The first turn pays for ~9K tokens of system prompt + tools; each subsequent turn pays for that plus everything since. Use `/compact` and `/clear` to keep context lean. See the Speed & latency section near the top of this doc for measured numbers.
 
 **Q: Can I use this for confidential / customer data?**
 A: Prompts and responses stay on our hardware — nothing is sent to Anthropic or any third party. Follow normal data-handling policy.
