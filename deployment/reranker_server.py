@@ -6,15 +6,12 @@ them as relevance probabilities.
 
 This is the app-agnostic reranker used by every IR RAG path that opts in via
 `my_bot.document.document_processor.rerank_documents`. First consumer is the
-Customer Assurance drafting flow; other RAG apps (the security assistant bot ticket search,
-the Windows triage agent code search, docs_library, detection rules catalog) can opt in with
+Customer Assurance drafting flow; other RAG apps (Pokedex ticket search,
+Win.AI code search, docs_library, detection rules catalog) can opt in with
 a one-line call at their retrieval site.
 
-Runs on lab-vm1 today using a small CPU-friendly model. When mac-m3 is
-freed up from the retiring GLM analysis process, a bigger model (e.g.
-BGE-reranker-v2-m3 via the mlx-community port) moves to mac-m3, exposed
-over SSH reverse tunnel on the same port, and lab-vm1 .env flips
-RERANKER_BASE_URL to point at the tunneled port. Zero client code change.
+Runs on studio1 (was mac-m3 until 2026-05-07) hosting the BGE-reranker-v2-m3
+fine-tune on MPS. Exposed to lab-vm1 over SSH reverse tunnel on the same port.
 
 Env vars:
   RERANKER_MODEL            HF model id. Default: cross-encoder/ms-marco-MiniLM-L-6-v2
@@ -43,7 +40,7 @@ MODEL_NAME = os.environ.get("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6
 HOST = os.environ.get("RERANKER_HOST", "127.0.0.1")
 PORT = int(os.environ.get("RERANKER_PORT", "8020"))
 MAX_CANDIDATES = int(os.environ.get("RERANKER_MAX_CANDIDATES", "100"))
-DEVICE = os.environ.get("RERANKER_DEVICE")  # "mps" on mac-m3, None = auto (CPU) on lab-vm1
+DEVICE = os.environ.get("RERANKER_DEVICE")  # "mps" on studio1, None = auto (CPU) on lab-vm1
 
 app = Flask(__name__)
 _model: CrossEncoder = None

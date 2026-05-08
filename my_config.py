@@ -218,7 +218,7 @@ def get_config(bot_name: str | None = None):
         wiki_edit_password=os.environ.get("WIKI_EDIT_PASSWORD"),
         favorites_edit_password=os.environ.get("FAVORITES_EDIT_PASSWORD"),
         scan_s3_password=os.environ.get("SCAN_S3_PASSWORD"),
-        m3_proxy=os.environ.get("M3_PROXY"),
+        corp_proxy=os.environ.get("CORP_PROXY"),
         flask_secret_key=os.environ.get("FLASK_SECRET_KEY"),
         analyst_hourly_cost=int(os.environ.get("ANALYST_HOURLY_COST", "20")),
         abnormal_security_api_key=os.environ.get("ABNORMAL_SECURITY_API_KEY"),
@@ -434,7 +434,7 @@ class Config:
     wiki_edit_password: Optional[str] = None
     favorites_edit_password: Optional[str] = None
     scan_s3_password: Optional[str] = None
-    m3_proxy: Optional[str] = None
+    corp_proxy: Optional[str] = None
     analyst_hourly_cost: int = 20
     flask_secret_key: Optional[str] = None
     abnormal_security_api_key: Optional[str] = None

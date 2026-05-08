@@ -203,7 +203,7 @@ def _new_session() -> requests.Session:
         "Accept": "*/*",
     })
     from my_config import get_config
-    proxy = (get_config().m3_proxy or "").strip()
+    proxy = (get_config().corp_proxy or "").strip()
     if proxy:
         s.proxies = {"http": proxy, "https": proxy}
     return s

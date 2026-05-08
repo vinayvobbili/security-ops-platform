@@ -192,19 +192,19 @@ LLM_ENDPOINTS = [
     # Powers Pokedex, Win.AI, and any caller that needs tools.
     {'key': 'm1-analysis', 'label': 'M1 Analysis',   'port': 8015, 'model_size': '30 GB', 'remote': 'M1:8000'},
     {'key': 'm1-router',   'label': 'M1 Router',     'port': 8016, 'model_size': '4.3 GB', 'remote': 'M1:8001'},
-    # Embeddings: served from studio1 (direct dial, no tunnel) since 2026-05-07.
-    # Was on mac-m3:8019 before. Reranker still on mac-m3.
-    {'key': 'embed',       'label': 'Embeddings',    'port': None, 'probe_url': 'http://studio1.lab:8004', 'probe_auth_env': 'EMBEDS_API_KEY', 'display_model': 'Qwen3-Embedding-8B-4bit-DWQ', 'model_size': '4.0 GB', 'health_timeout': 60, 'remote': 'Studio1:8004'},
-    {'key': 'm3-reranker', 'label': 'M3 Reranker',   'port': 8020, 'display_model': 'bge-reranker-v2-m3', 'model_size': '2.2 GB', 'remote': 'M3:8020'},
-    # Transcription: faster-whisper + pyannote diarization on mac-m3.
+    # Embeddings, reranker, transcription, TTS: all on studio1 since 2026-05-07.
+    # mac-m3 retired (converted to a workstation) — its services migrated here.
+    {'key': 'embed',       'label': 'S1 Embeddings', 'port': None, 'probe_url': 'http://studio1.lab:8004', 'probe_auth_env': 'EMBEDS_API_KEY', 'display_model': 'Qwen3-Embedding-8B-4bit-DWQ', 'model_size': '4.0 GB', 'health_timeout': 60, 'remote': 'Studio1:8004'},
+    {'key': 's1-reranker', 'label': 'S1 Reranker',   'port': 8020, 'display_model': 'bge-reranker-v2-m3-finetuned', 'model_size': '2.2 GB', 'remote': 'Studio1:8020'},
+    # Transcription: faster-whisper-large-v3-turbo + pyannote diarization on studio1.
     # Uses /health instead of /v1/models — health_path override below.
-    {'key': 'm3-transcription', 'label': 'M3 Transcription', 'port': 11437, 'display_model': 'whisper-large-v3-turbo + pyannote', 'model_size': '~3 GB', 'remote': 'M3:11437', 'health_path': '/health'},
+    {'key': 's1-transcription', 'label': 'S1 Transcription', 'port': 11437, 'display_model': 'whisper-large-v3-turbo + pyannote', 'model_size': '~3 GB', 'remote': 'Studio1:11437', 'health_path': '/health'},
     # TTS: kokoro-onnx for demo-video narration (and any other TTS caller).
-    {'key': 'm3-tts', 'label': 'M3 TTS', 'port': 8021, 'display_model': 'kokoro-onnx (54 voices)', 'model_size': '~80 MB', 'remote': 'M3:8021', 'health_path': '/health'},
+    {'key': 's1-tts', 'label': 'S1 TTS', 'port': 8021, 'display_model': 'kokoro-onnx (54 voices)', 'model_size': '~80 MB', 'remote': 'Studio1:8021', 'health_path': '/health'},
     # Mac Studio 1 (M3 Ultra, 96GB) — large analysis model via Ollama.
     # OpenAI-compatible /v1/models is exposed by Ollama natively.
-    {'key': 'studio1-laguna', 'label': 'Studio1 Laguna', 'port': 8022, 'display_model': 'laguna-xs.2:q8_0', 'model_size': '~33 GB', 'remote': 'Studio1:11434'},
-    {'key': 'studio1-qwen', 'label': 'Studio1 Qwen3-32B', 'port': 8023, 'display_model': 'Qwen3-32B-8bit', 'model_size': '~33 GB', 'remote': 'Studio1:8000'},
+    {'key': 's1-laguna', 'label': 'S1 Laguna', 'port': 8022, 'display_model': 'laguna-xs.2:q8_0', 'model_size': '~33 GB', 'remote': 'Studio1:11434'},
+    {'key': 's1-qwen', 'label': 'S1 Qwen3-32B', 'port': 8023, 'display_model': 'Qwen3-32B-8bit', 'model_size': '~33 GB', 'remote': 'Studio1:8000'},
 ]
 
 # Track when each endpoint was first seen as "up" (reset on transition to down)
@@ -1064,7 +1064,6 @@ def llm_health():
 
 MAC_HOSTS = [
     {'key': 'mac-m1', 'label': 'Mac M1', 'ssh_host': 'mac-m1', 'total_gb': 64},
-    {'key': 'mac-m3', 'label': 'Mac M3', 'ssh_host': 'mac-m3', 'total_gb': 36},
     {'key': 'studio1', 'label': 'Studio 1', 'ssh_host': 'studio1', 'total_gb': 96},
 ]
 _mac_cache: dict[str, dict] = {}

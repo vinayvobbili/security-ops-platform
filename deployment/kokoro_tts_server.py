@@ -1,6 +1,6 @@
 """Kokoro TTS HTTP server — OpenAI-compatible /v1/audio/speech endpoint.
 
-Runs on mac-m3, exposed to lab-vm via SSH reverse tunnel (port 8021).
+Runs on studio1 (was mac-m3 until 2026-05-07), exposed to lab-vm1 via SSH reverse tunnel (port 8021).
 
 Environment:
     KOKORO_MODEL_PATH  path to kokoro-v1.0.onnx  (default: ~/models/kokoro/kokoro-v1.0.onnx)
