@@ -5,7 +5,7 @@ title: Home
 
 # Security Operations Automation Platform
 
-An enterprise-grade security operations platform that automates and orchestrates security workflows across 30+ integrated tools, featuring LLM-powered intelligence, an MCP-based agent toolbox, self-healing bot architecture, and 35 n8n automation workflows.
+An enterprise-grade security operations platform that automates and orchestrates security workflows across 30+ integrated tools, featuring LLM-powered intelligence, an MCP-based agent toolbox, self-healing bot architecture, and 33 n8n automation workflows.
 
 ---
 
@@ -15,10 +15,10 @@ An enterprise-grade security operations platform that automates and orchestrates
 |--------|-------|
 | **Security Tool Integrations** | 30+ |
 | **MCP Server Tools** | 30 |
-| **LLM Investigation Tools** | 36 |
-| **Production Chat Bots** | 14 (Webex + Teams) |
-| **Web App Pages** | 80+ |
-| **n8n Automation Workflows** | 35 |
+| **LLM Investigation Tools** | 35 |
+| **Production Chat Bots** | 10 (Webex + Teams) |
+| **Web App Pages** | 35+ |
+| **n8n Automation Workflows** | 33 |
 
 ---
 
@@ -72,8 +72,10 @@ single uniform schema.
 ### Customer Assurance Workspace
 
 Web-based intake + LLM-assisted drafting for customer security questionnaires.
-Routes incoming requests, generates first-pass answers grounded in your
-existing controls knowledge base, and lets reviewers refine before export.
+Auto-extracts questions from uploaded vendor `.xlsx` files, drafts first-pass
+answers grounded in your controls knowledge base, lets reviewers refine, and
+round-trips final answers back into the customer's original spreadsheet at
+the same row + response column they came from.
 
 ### Real-Time SOC Dashboard
 
@@ -88,7 +90,7 @@ Interactive web dashboard providing:
 
 ### n8n Workflow Automation
 
-35 ready-to-import automation workflows covering the full SOC lifecycle:
+33 ready-to-import automation workflows covering the full SOC lifecycle:
 
 - Alert routing and deduplication
 - Incident escalation and war room creation

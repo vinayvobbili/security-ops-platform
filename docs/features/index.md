@@ -13,13 +13,13 @@ Explore the core capabilities of the Security Operations Automation Platform.
 
 | Feature | Description |
 |---------|-------------|
-| [LLM-Powered Assistant](llm-assistant) | AI investigation engine with 36 security tools |
-| [MCP Server](mcp-server) | 31 tools exposed via Model Context Protocol |
-| [Self-Healing Bots](webex-bots) | 14 production chat bots (Webex + Teams) with enterprise reliability |
-| [SOC Dashboard](soc-dashboard) | Real-time metrics, dashboards, and 80+ web app pages |
+| [LLM-Powered Assistant](llm-assistant) | AI investigation engine with 35 security tools |
+| [MCP Server](mcp-server) | 30 tools exposed via Model Context Protocol |
+| [Self-Healing Bots](webex-bots) | 10 production chat bots (Webex + Teams) with enterprise reliability |
+| [SOC Dashboard](soc-dashboard) | Real-time metrics, dashboards, and 35+ web app pages |
 | [30+ Integrations](integrations) | Unified security tool ecosystem |
-| [Customer Assurance](customer-assurance) | LLM-assisted questionnaire response drafting |
-| [n8n Workflows](n8n-workflows) | 35 automation workflows for SOC operations |
+| [Customer Assurance](customer-assurance) | LLM-assisted questionnaire drafting with `.xlsx` round-trip |
+| [n8n Workflows](n8n-workflows) | 33 automation workflows for SOC operations |
 | [Domain Monitoring](domain-monitoring) | Multi-source domain threat monitoring |
 
 ---
@@ -30,13 +30,13 @@ Explore the core capabilities of the Security Operations Automation Platform.
 
 AI-powered investigation using RAG and LangChain:
 - Natural language security queries
-- 36 specialized investigation tools (CrowdStrike, DFIR-IRIS, TheHive, XSOAR, and more)
+- 35 specialized investigation tools (CrowdStrike, DFIR-IRIS, TheHive, XSOAR, and more)
 - Automated IOC enrichment
 - LLM-powered threat intel novelty analysis
 
 ### [Self-Healing Bot Architecture →](webex-bots)
 
-14 production chat bots (Webex + Microsoft Teams) with:
+10 production chat bots (Webex + Microsoft Teams) with:
 - WebSocket keep-alive and auto-reconnect
 - Connection pooling and circuit breakers
 - Bot Status REST API for monitoring and control
@@ -61,7 +61,7 @@ Interactive web interface providing:
 
 ### [Model Context Protocol (MCP) Server →](mcp-server)
 
-A standalone MCP server (`mcp_server/`) exposing 31 security tools to any
+A standalone MCP server (`mcp_server/`) exposing 30 security tools to any
 MCP-compatible client. One uniform schema across the entire stack — drop
 into Claude Desktop, Cline, or any agent framework that speaks MCP and
 get instant access to the full investigation toolbox.
@@ -69,12 +69,14 @@ get instant access to the full investigation toolbox.
 ### [Customer Assurance Workspace →](customer-assurance)
 
 Web-based intake + LLM-assisted drafting for customer security questionnaires.
-Routes incoming requests, generates first-pass answers grounded in your
-existing controls knowledge base, and lets reviewers refine before export.
+Auto-extracts questions from uploaded vendor `.xlsx` files, drafts first-pass
+answers grounded in your controls knowledge base, lets reviewers refine, and
+round-trips final answers back into the customer's original spreadsheet at
+the same row + response column they came from.
 
 ### [n8n Workflow Automation →](n8n-workflows)
 
-35 ready-to-import workflows covering:
+33 ready-to-import workflows covering:
 - Alert routing, deduplication, and escalation
 - Threat intel IOC sync and dark web monitoring
 - Scheduled threat hunting and detection testing

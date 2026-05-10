@@ -34,7 +34,7 @@ Vendor security questionnaires are a tax on security teams: 100–300 question E
 ```
 
 ### 1. Intake
-Sales or account management drops the questionnaire (and customer context) into the intake form. The submission lands in a queue page where the security team triages.
+Sales or account management drops the questionnaire (and customer context) into the intake form. Uploaded `.xlsx` files are auto-parsed: each sheet is scanned for a question column (a `Question` / `Question Text` / `Assessment Question` header, or — when the vendor template skips that label — the column immediately to the left of `Vendor Response`). Section headers like `Sub Domain`, `Control Category`, or `Privacy Domain` are preserved, and the source sheet/row/response-column for each question is recorded so the export step can write answers back into the original spreadsheet. PDFs and Word docs still require pasting the text. The submission lands in a queue page where the security team triages.
 
 ### 2. Draft
 For each question, the LLM retrieves the most relevant entries from the controls knowledge base and produces a first-pass answer with cited sources. The intent isn't to replace the reviewer — it's to skip the 70% of answers that are mechanical lookups.
@@ -43,7 +43,7 @@ For each question, the LLM retrieves the most relevant entries from the controls
 Reviewers work in the workspace page: each question shows the draft, the retrieved context, and a free-form editor. Accepting or revising is one click. Questions that need policy input get flagged.
 
 ### 4. Export
-Once reviewed, the workspace exports the responses back into a format the customer can ingest (CSV, Excel, or filled-in template).
+Once reviewed, the workspace exports the responses. When the questionnaire was uploaded as `.xlsx`, the export round-trips: a copy of the customer's original spreadsheet is written with each final answer placed at the same `(sheet, row, response_col)` the question was extracted from. Empty answers leave the original cell untouched rather than being overwritten with placeholder text, so partial responses ship cleanly. Pasted-text intakes (no source coords) fall back to a `.docx` export.
 
 ---
 
