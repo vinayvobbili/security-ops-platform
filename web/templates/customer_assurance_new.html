@@ -105,8 +105,8 @@
 
         <!-- Upload -->
         <div class="ca-field">
-            <label>Or upload a file <span class="ca-tip" data-tip="Attach the original questionnaire (PDF / Word / Excel / text). We store it alongside the request but today you still need to paste the text above for auto-splitting. In v2 we'll auto-extract from uploads."></span></label>
-            <div class="hint">PDF, Word, or Excel. The original file is saved alongside the request.</div>
+            <label>Or upload a questionnaire <span class="ca-tip" data-tip="Attach the original questionnaire. .xlsx files are auto-parsed: each sheet is scanned for a question column (Question / Question Text / Assessment Question, or — failing that — the column to the left of the Vendor Response). Section headers like Sub Domain, Control Category, or Privacy Domain are preserved. PDF and Word still require pasting the text above for now."></span></label>
+            <div class="hint">.xlsx is auto-extracted into questions on submit. PDF / Word still need the text pasted above.</div>
             <input type="file" name="documents" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt">
         </div>
 

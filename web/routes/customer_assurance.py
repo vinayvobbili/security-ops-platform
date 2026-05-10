@@ -138,14 +138,14 @@ def workspace(request_id: int):
     for entry in audit:
         if entry.get("action") == "drafted":
             detail = (entry.get("detail") or "")
-            if "gateway" in detail:
-                last_draft_source = "gateway"
+            if "llm" in detail:
+                last_draft_source = "llm"
             elif "demo fallback" in detail:
                 last_draft_source = "fallback"
             elif "demo mode" in detail:
                 last_draft_source = "demo"
             else:
-                last_draft_source = "gateway"  # plain "drafted" = real path
+                last_draft_source = "llm"  # plain "drafted" = real path
             break
 
     return render_template(
@@ -200,15 +200,37 @@ def submit_request():
         logger.error(f"[customer_assurance] create_request failed: {e}", exc_info=True)
         return jsonify({"status": "error", "message": "Failed to create request"}), 500
 
-    # Split questions from raw_text (or from an uploaded file, handled separately)
+    # Build the question list from BOTH pasted text and any uploaded
+    # questionnaire files. Order: raw_text first (analyst's intent), then
+    # auto-extracted questions from each .xlsx upload.
     raw = (form.get("raw_text") or "").strip()
     items = _split_into_questions(raw)
+
+    extracted_count = 0
+    for f in request.files.getlist("documents"):
+        saved = handler.save_upload(rid, f, kind="inbound_questionnaire")
+        if not saved:
+            continue
+        if saved["filename"].lower().endswith(".xlsx"):
+            try:
+                extracted = handler.extract_questions_from_xlsx(saved["path"])
+                items.extend(extracted)
+                extracted_count += len(extracted)
+            except Exception as e:
+                logger.error(
+                    f"[customer_assurance] xlsx extraction failed for {saved['filename']}: {e}",
+                    exc_info=True,
+                )
+
     if items:
         handler.add_questions(rid, items)
 
-    # Also save any uploaded files
-    for f in request.files.getlist("documents"):
-        handler.save_upload(rid, f, kind="inbound_questionnaire")
+    if extracted_count:
+        handler.log_audit(
+            rid,
+            "extracted",
+            f"auto-extracted {extracted_count} question(s) from uploaded .xlsx",
+        )
 
     return jsonify({
         "status": "success",
@@ -335,9 +357,15 @@ def flag_legal(request_id: int):
 @customer_assurance_bp.route("/customer-assurance/requests/<int:request_id>/export", methods=["POST"])
 @log_web_activity
 def export_request(request_id: int):
-    path = handler.export_request_docx(request_id)
+    # Prefer round-trip .xlsx export (writes answers back into the customer's
+    # original spreadsheet) when the request has questions with source
+    # coordinates and the original inbound .xlsx is still on disk. Fall back
+    # to the .docx export for pasted-text intakes or legacy demo requests.
+    path = handler.export_request_xlsx(request_id)
     if not path:
-        return jsonify({"status": "error", "message": "Export failed (python-docx may be missing)"}), 500
+        path = handler.export_request_docx(request_id)
+    if not path:
+        return jsonify({"status": "error", "message": "Export failed"}), 500
     return send_file(str(path), as_attachment=True, download_name=path.name)
 
 

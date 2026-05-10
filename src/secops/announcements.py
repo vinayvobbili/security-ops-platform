@@ -658,10 +658,12 @@ def announce_previous_shift_performance(room_id: str, shift_name: str) -> None:
         )
 
         # ── Team ──────────────────────────────────────────────────
+        seniors = previous_shift_staffing_data.get('senior_analysts') or []
+        shift_lead_value = seniors[0] if seniors else "No Lead Assigned"
         team_section = FactSet(
             separator=True,
             facts=[
-                Fact(title="👤 Shift Lead", value=previous_shift_staffing_data['senior_analysts'][0]),
+                Fact(title="👤 Shift Lead", value=shift_lead_value),
                 Fact(title="👥 Analysts", value=analysts_str),
             ]
         )

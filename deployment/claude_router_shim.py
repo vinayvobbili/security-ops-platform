@@ -209,9 +209,10 @@ def _strip_billing_header(payload: dict) -> None:
     billing/conversation tracking; local upstreams (vllm-mlx) just see it as
     81 bytes of system text. With our SimpleEngine prefix-KV cache, that
     rotating field changes the system-prefix hash each turn → every turn is
-    a cache miss → 200s prefill on a 38K-token system block. Removing this
-    block makes the system prefix byte-stable turn-over-turn so the cache
-    actually hits.
+    a cache miss → 100s+ prefill on the ~23K-token system+tools prefix
+    (measured: ~5.6K system + ~17.6K tools at 23-tool toolset; tiktoken
+    cl100k_base, ≈ Qwen2 within ~5%). Removing this block makes the system
+    prefix byte-stable turn-over-turn so the cache actually hits.
     """
     system = payload.get("system")
     if not isinstance(system, list):

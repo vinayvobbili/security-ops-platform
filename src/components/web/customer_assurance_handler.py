@@ -158,6 +158,20 @@ def init_db():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_citations_question ON citations(question_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_uploads_request ON uploads(request_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_request ON audit_log(request_id)")
+
+        # Migration: source coordinates for round-trip xlsx export. Questions
+        # extracted from an uploaded .xlsx remember the (sheet, row,
+        # response_col) they came from so the export can write final answers
+        # back into the customer's original spreadsheet instead of producing
+        # a fresh .docx. Older rows / pasted-text questions leave these NULL
+        # and fall back to the .docx export path.
+        existing_cols = {r["name"] for r in conn.execute("PRAGMA table_info(questions)").fetchall()}
+        if "source_sheet" not in existing_cols:
+            conn.execute("ALTER TABLE questions ADD COLUMN source_sheet TEXT")
+        if "source_row" not in existing_cols:
+            conn.execute("ALTER TABLE questions ADD COLUMN source_row INTEGER")
+        if "source_response_col" not in existing_cols:
+            conn.execute("ALTER TABLE questions ADD COLUMN source_response_col INTEGER")
     logger.info(f"Customer Assurance database initialized at {DB_PATH}")
 
 
@@ -296,9 +310,13 @@ def add_questions(request_id: int, items: List[Dict[str, Any]]) -> List[int]:
             seq = item.get("seq") or next_seq
             next_seq = seq + 1
             cur = conn.execute(
-                """INSERT INTO questions (request_id, seq, section, question)
-                   VALUES (?, ?, ?, ?)""",
-                (request_id, seq, item.get("section"), item["question"]),
+                """INSERT INTO questions
+                   (request_id, seq, section, question,
+                    source_sheet, source_row, source_response_col)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (request_id, seq, item.get("section"), item["question"],
+                 item.get("source_sheet"), item.get("source_row"),
+                 item.get("source_response_col")),
             )
             ids.append(cur.lastrowid)
     return ids
@@ -411,6 +429,240 @@ def list_uploads(request_id: int) -> List[Dict[str, Any]]:
             (request_id,),
         ).fetchall()
         return [dict(r) for r in rows]
+
+
+# ------------------------------------------------------------------ Questionnaire extraction
+
+# Header keywords used to locate the question / section columns inside an
+# uploaded vendor security questionnaire .xlsx. Vendor templates vary widely
+# (HCL VRA, DOL Cyber, the company TPRM, Farmers Group CRQ all look different) so
+# detection is keyword-based, not positional. We use word-boundary regex so
+# "question" doesn't substring-match "questionnaire" in banner/title rows.
+import re as _re
+
+_Q_HEADER_RE = _re.compile(
+    r"\b(?:question text|assessment question|questions?)\b", _re.IGNORECASE
+)
+_SECTION_HEADER_RE = _re.compile(
+    r"\b(?:sub[- ]?domain|control category|privacy domain|category|domain)\b",
+    _re.IGNORECASE,
+)
+# Response-column keywords. Only used to back into the question column on
+# sheets that lack a labeled question header (DOL CHECKLIST, Farmers Default
+# Questions): the question is whatever's immediately to the left of the first
+# response column.
+_RESPONSE_HEADER_RE = _re.compile(
+    r"\b(?:vendor response|vendor answers?|yes/no|responses?|answers?)\b",
+    _re.IGNORECASE,
+)
+
+
+def _scan_for_xlsx_header(ws, max_scan: int = 10) -> Optional[Dict[str, Any]]:
+    """Find the header row + question/section column indices for one sheet.
+
+    Strategy:
+      1. Scan rows 1..max_scan.
+      2. If any cell's header text contains a question keyword, that's the
+         question column.
+      3. Else, if any cell contains a response keyword, the question column is
+         the cell immediately to its left (vendors who skip a "Question" label
+         still consistently put a "Response" column right after the question).
+      4. The section column is any cell whose header contains a section
+         keyword. Sometimes a sheet has a generic "Section" header that
+         actually holds row numbers — we filter those out post-hoc by
+         checking that section values look like text.
+
+    Returns a dict {row, q_col, section_col, headers} or None.
+    """
+    rows = []
+    try:
+        for r_idx, row in enumerate(ws.iter_rows(min_row=1, max_row=max_scan, values_only=True), start=1):
+            cells = ["" if c is None else str(c).strip() for c in row]
+            rows.append((r_idx, cells))
+    except Exception:
+        return None
+
+    def _is_label_cell(c: str) -> bool:
+        # Headers are short labels. Real keyword-bearing headers across all
+        # four sample questionnaires (HCL VRA, DOL Cyber, the company TPRM,
+        # Farmers CRQ) max out at ~32 chars / 4 words ("YES/NO       In
+        # Process  Partial" on the DOL sheet). Tighten beyond that to keep
+        # narrative cells like "Full assessment (High Default Questions &
+        # CGRX)" — found inside risk-tier reference tables — from hijacking
+        # detection just because they happen to contain the word "questions".
+        if not c or len(c) > 35:
+            return False
+        return len(c.split()) <= 4
+
+    def _find_section_col(cells):
+        for i, c in enumerate(cells):
+            if not _is_label_cell(c):
+                continue
+            if _SECTION_HEADER_RE.search(c):
+                return i
+        return None
+
+    # Real header rows have multiple labeled columns. Skip banner / title rows
+    # like "Default Questions (Low IR)" sitting alone in row 1 — they hijack
+    # Pass 1 because they happen to contain a question keyword.
+    def _looks_like_header_row(cells) -> bool:
+        return sum(1 for c in cells if c) >= 3
+
+    def _find_response_col(cells, after_col: int) -> Optional[int]:
+        """Locate the response column (Vendor Response / Yes-No / Answers /
+        Responses) somewhere to the right of `after_col`. Used by Pass 1 so
+        round-trip export knows which cell to write the final answer into."""
+        for i, c in enumerate(cells):
+            if i <= after_col or not _is_label_cell(c):
+                continue
+            if _RESPONSE_HEADER_RE.search(c):
+                return i
+        return None
+
+    # Pass 1: explicit question header
+    for r_idx, cells in rows:
+        if not _looks_like_header_row(cells):
+            continue
+        for i, c in enumerate(cells):
+            if not _is_label_cell(c):
+                continue
+            if _Q_HEADER_RE.search(c):
+                resp_col = _find_response_col(cells, after_col=i)
+                # Fallback: most templates put the response right after the
+                # question — q_col + 1 is a safe default if no labeled column
+                # is found.
+                if resp_col is None:
+                    resp_col = i + 1
+                return {
+                    "row": r_idx,
+                    "q_col": i,
+                    "response_col": resp_col,
+                    "section_col": _find_section_col(cells),
+                    "headers": cells,
+                }
+
+    # Pass 2: derive question column from a response column header
+    for r_idx, cells in rows:
+        if not _looks_like_header_row(cells):
+            continue
+        resp_col = None
+        for i, c in enumerate(cells):
+            if not _is_label_cell(c):
+                continue
+            if _RESPONSE_HEADER_RE.search(c):
+                resp_col = i
+                break
+        if resp_col is None or resp_col == 0:
+            continue
+        return {
+            "row": r_idx,
+            "q_col": resp_col - 1,
+            "response_col": resp_col,
+            "section_col": _find_section_col(cells),
+            "headers": cells,
+        }
+
+    return None
+
+
+def _is_questionable_text(text: str) -> bool:
+    """Return True if `text` looks like a real question (not a number, junk, or yes/no)."""
+    if not text:
+        return False
+    t = text.strip()
+    if len(t) < 5:
+        return False
+    # Pure numbering / lettering tokens (e.g. "1)", "i.1", "1.2.3")
+    if all(ch.isdigit() or ch in ".)(- " for ch in t):
+        return False
+    junk = {"yes", "no", "n/a", "na", "tbd", "true", "false", "pass", "gap", "the company"}
+    if t.lower() in junk:
+        return False
+    return True
+
+
+def extract_questions_from_xlsx(path: str) -> List[Dict[str, Any]]:
+    """Extract questions from an uploaded vendor security questionnaire .xlsx.
+
+    Returns a list of {section, question} dicts in spreadsheet order, ready to
+    pass into `add_questions`. Sheets whose layout we can't decipher are
+    skipped silently — the analyst can still paste raw text or edit afterward.
+
+    Sheet section values carry forward across rows so questions under a merged
+    section cell still get tagged correctly.
+    """
+    from openpyxl import load_workbook
+
+    try:
+        wb = load_workbook(path, data_only=True, read_only=True)
+    except Exception as e:
+        logger.warning(f"[customer_assurance] openpyxl failed on {path}: {e}")
+        return []
+
+    out: List[Dict[str, Any]] = []
+    seen: set = set()
+
+    try:
+        for sheet_name in wb.sheetnames:
+            try:
+                ws = wb[sheet_name]
+            except Exception:
+                continue
+
+            header = _scan_for_xlsx_header(ws)
+            if not header:
+                continue
+
+            q_col = header["q_col"]
+            section_col = header["section_col"]
+            response_col = header["response_col"]
+            start_row = header["row"] + 1
+            last_section = None
+
+            try:
+                row_iter = ws.iter_rows(min_row=start_row, values_only=True)
+            except Exception:
+                continue
+
+            for r_idx, row in enumerate(row_iter, start=start_row):
+                cells = ["" if c is None else str(c).strip() for c in (row or [])]
+                if q_col >= len(cells):
+                    continue
+                q_text = cells[q_col]
+                if not _is_questionable_text(q_text):
+                    continue
+
+                section_val = None
+                if section_col is not None and section_col < len(cells):
+                    raw = cells[section_col]
+                    # Reject section values that look like row numbers / bullets
+                    if raw and not all(ch.isdigit() or ch in ".)(- " for ch in raw):
+                        section_val = raw
+                if section_val:
+                    last_section = section_val
+                composed_section = sheet_name
+                if last_section:
+                    composed_section = f"{sheet_name} / {last_section}"
+
+                key = q_text.strip().lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+
+                out.append({
+                    "section": composed_section,
+                    "question": q_text.strip(),
+                    "source_sheet": sheet_name,
+                    "source_row": r_idx,
+                    "source_response_col": response_col,
+                })
+    finally:
+        try:
+            wb.close()
+        except Exception:
+            pass
+
+    return out
 
 
 # ------------------------------------------------------------------ Audit log
@@ -908,7 +1160,7 @@ def draft_question(question_id: int, force_demo: bool = False) -> Dict[str, Any]
       Tier 0 — Past approved answers. If a prior analyst-approved answer for a
         semantically similar question exists (cosine >= PAST_ANSWER_HIGH_THRESHOLD),
         reuse its text verbatim and skip the LLM. Medium matches are folded into
-        the LLM gateway prompt as a priority context block.
+        the LLM prompt as a priority context block.
       Tier 1 — KB chunks via hybrid Chroma+BM25 retrieval, drafted by the LLM.
       Tier 2 — Canned demo drafts (KB empty / the LLM unreachable / force_demo).
 
@@ -953,14 +1205,14 @@ def draft_question(question_id: int, force_demo: bool = False) -> Dict[str, Any]
             "source": "past_answer",
         }
 
-    # Medium-confidence past answers become a priority block in the LLM gateway prompt.
+    # Medium-confidence past answers become a priority block in the LLM prompt.
     past_context = [m for m in past_matches if m["score"] >= PAST_ANSWER_MED_THRESHOLD]
 
     # Side-channel Chroma query to recover a real retrieval-confidence signal.
     # LangChain's EnsembleRetriever loses the underlying distance through RRF
     # fusion, so we run a direct vector query here. Cheap (tens of ms). Used
     # for both the Tier 1 SME gate below and the confidence value saved on
-    # successful AI drafts so analysts see retrieval strength in the UI.
+    # successful LLM drafts so analysts see retrieval strength in the UI.
     kb_score_hits: List[Dict[str, Any]] = []
     top_kb_score: Optional[float] = None
     if not force_demo:
@@ -1202,6 +1454,102 @@ Draft answer:"""
 
 
 # ------------------------------------------------------------------ Export
+
+def export_request_xlsx(request_id: int) -> Optional[Path]:
+    """Round-trip export: write final answers back into the customer's
+    original .xlsx, in the same row + response column the question was
+    extracted from. Returns the saved path, or None if round-trip isn't
+    possible (no source coords on questions, or no inbound .xlsx upload).
+
+    Empty cells are skipped — if a question has no final/draft answer, the
+    customer's original cell is left as-is rather than being overwritten with
+    "[No response drafted]".
+    """
+    from openpyxl import load_workbook
+    from datetime import datetime
+    import shutil
+
+    req = get_request(request_id)
+    if not req:
+        return None
+
+    questions = list_questions(request_id)
+    coord_qs = [q for q in questions
+                if q.get("source_sheet") and q.get("source_row")
+                and q.get("source_response_col") is not None]
+    if not coord_qs:
+        return None
+
+    # Find the original inbound xlsx upload.
+    inbound = [u for u in list_uploads(request_id)
+               if (u.get("kind") == "inbound_questionnaire"
+                   and u.get("filename", "").lower().endswith(".xlsx"))]
+    if not inbound:
+        return None
+    src_path = Path(inbound[-1]["path"])
+    if not src_path.exists():
+        return None
+
+    exports_dir = UPLOADS_DIR / str(request_id)
+    exports_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_name = req["customer_name"].replace(" ", "_").replace("/", "_")
+    out_path = exports_dir / f"response_{safe_name}_{stamp}.xlsx"
+
+    try:
+        shutil.copy2(src_path, out_path)
+        wb = load_workbook(out_path)
+    except Exception as e:
+        logger.error(f"[customer_assurance] xlsx export copy/open failed: {e}", exc_info=True)
+        try:
+            out_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+        return None
+
+    written = 0
+    skipped_no_answer = 0
+    skipped_missing_sheet = 0
+    try:
+        for q in coord_qs:
+            sheet = q["source_sheet"]
+            row = q["source_row"]
+            # Stored as 0-indexed (the position inside the cells list);
+            # openpyxl cell coordinates are 1-indexed.
+            resp_col = q["source_response_col"] + 1
+            answer = (q.get("final_answer") or q.get("draft_answer") or "").strip()
+            if not answer:
+                skipped_no_answer += 1
+                continue
+            if sheet not in wb.sheetnames:
+                skipped_missing_sheet += 1
+                continue
+            try:
+                wb[sheet].cell(row=row, column=resp_col, value=answer)
+                written += 1
+            except Exception as e:
+                logger.warning(f"[customer_assurance] failed to write {sheet}!R{row}C{resp_col}: {e}")
+
+        wb.save(str(out_path))
+    finally:
+        try:
+            wb.close()
+        except Exception:
+            pass
+
+    with _get_connection() as conn:
+        conn.execute(
+            """INSERT INTO uploads (request_id, filename, path, kind)
+               VALUES (?, ?, ?, ?)""",
+            (request_id, out_path.name, str(out_path), "response_export"),
+        )
+    detail = (f"{out_path.name} (round-trip xlsx, {written} answer(s) written"
+              + (f", {skipped_no_answer} skipped no-answer" if skipped_no_answer else "")
+              + (f", {skipped_missing_sheet} skipped missing-sheet" if skipped_missing_sheet else "")
+              + ")")
+    log_audit(request_id, "exported", detail)
+    return out_path
+
 
 def export_request_docx(request_id: int) -> Optional[Path]:
     """Export approved/drafted answers to a .docx file. Returns the path."""
