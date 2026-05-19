@@ -2,10 +2,10 @@
 
 v1 scope: a crosswalk of regulations (GDPR / CCPA / HIPAA) against NIST CSF 2.0
 control families, with a handful of cells backed by live evidence pulled from
-CrowdStrike and ServiceNow. Everything else is seeded so Patrick can react to
+CrowdStrike and ServiceNow. Everything else is seeded so the stakeholder can react to
 shape, not numbers.
 
-v2 questions (kept on-page so Patrick can answer in one place) live in
+v2 questions (kept on-page so stakeholders can answer in one place) live in
 ``V2_QUESTIONS`` below.
 """
 
@@ -104,7 +104,7 @@ CROSSWALK: Dict[str, Dict[str, Dict[str, Any]]] = {
 }
 
 # Evidence registry: 'live' entries call a getter (cached); 'seeded' entries
-# return a static placeholder so the cell still has a number for Patrick.
+# return a static placeholder so the cell still has a number for the stakeholder.
 EVIDENCE_TTL_SECONDS = 600  # 10 minutes
 _EVIDENCE_CACHE: Dict[str, Dict[str, Any]] = {}
 _EVIDENCE_LOCK = Lock()
@@ -445,7 +445,7 @@ def get_pulse_feed() -> List[Dict[str, Any]]:
     return PULSE_FEED
 
 
-# Cached LLM impact analyses, keyed by pulse id. Patrick should see the AI
+# Cached LLM impact analyses, keyed by pulse id. the stakeholder should see the AI
 # output upfront (per his ask) — the cache lets us pre-render on the page
 # instead of forcing a click + 30s wait every time.
 _IMPACT_CACHE: Dict[str, Dict[str, Any]] = {}
