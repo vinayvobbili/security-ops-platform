@@ -3,7 +3,7 @@
 v1: a crosswalk of GDPR / CCPA / HIPAA against NIST CSF 2.0 control families with
 real evidence pulled from CrowdStrike + ServiceNow on a handful of cells. See
 ``src/components/web/regulatory_matrix_handler.py`` for the data model and the
-v2 questions panel that Patrick should answer to drive the next iteration.
+v2 questions panel that the stakeholder should answer to drive the next iteration.
 """
 
 from flask import Blueprint, jsonify, render_template, request
