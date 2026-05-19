@@ -13,12 +13,14 @@ Explore the core capabilities of the Security Operations Automation Platform.
 
 | Feature | Description |
 |---------|-------------|
-| [LLM-Powered Assistant](llm-assistant) | AI investigation engine with 35 security tools |
-| [MCP Server](mcp-server) | 30 tools exposed via Model Context Protocol |
+| [LLM-Powered Assistant](llm-assistant) | AI investigation engine with 38 security tools |
+| [MCP Server](mcp-server) | 30 tools exposed via Model Context Protocol; public mode with per-user PATs |
 | [Self-Healing Bots](webex-bots) | 10 production chat bots (Webex + Teams) with enterprise reliability |
-| [SOC Dashboard](soc-dashboard) | Real-time metrics, dashboards, and 35+ web app pages |
+| [SOC Dashboard](soc-dashboard) | Real-time metrics, dashboards, and 40+ web app pages |
 | [30+ Integrations](integrations) | Unified security tool ecosystem |
 | [Customer Assurance](customer-assurance) | LLM-assisted questionnaire drafting with `.xlsx` round-trip |
+| Person-of-Interest OSINT | Streaming investigation page with HIBP, holehe, maigret, dorks + LLM commentary |
+| Self-Serve Auth + PATs | Register/login/verify, per-user PATs, admin console, role-gated routes |
 | [n8n Workflows](n8n-workflows) | 33 automation workflows for SOC operations |
 | [Domain Monitoring](domain-monitoring) | Multi-source domain threat monitoring |
 
@@ -30,7 +32,7 @@ Explore the core capabilities of the Security Operations Automation Platform.
 
 AI-powered investigation using RAG and LangChain:
 - Natural language security queries
-- 35 specialized investigation tools (CrowdStrike, DFIR-IRIS, TheHive, XSOAR, and more)
+- 38 specialized investigation tools (CrowdStrike, DFIR-IRIS, TheHive, XSOAR, and more)
 - Automated IOC enrichment
 - LLM-powered threat intel novelty analysis
 
@@ -89,6 +91,31 @@ Multi-source domain security monitoring:
 - Domain lookalike and typosquat detection
 - WHOIS registration change tracking
 - Dark web and abuse feed correlation
+
+### Person-of-Interest OSINT Tool
+
+Streaming OSINT investigation page that pivots from a single seed identifier
+(name, email, username, or domain) to a multi-source profile:
+
+- HIBP breach lookups for exposed credentials
+- `holehe` and `maigret` account-existence probing across 100+ sites
+- Targeted Google dorks generated per seed type
+- LLM-driven results commentary as the scan completes
+- Force-directed graph view of discovered identities with a custom
+  spoke-wheel layout for readability
+
+### Self-Serve Auth + Personal Access Tokens
+
+Production-grade auth layer fronting the platform:
+
+- Register / verify-email / login / forgot-password flow
+- Per-user Personal Access Tokens minted from `/account`
+- Same PAT unlocks the Claude-Code local-LLM proxy and the public MCP
+  endpoint — no service-bearer sharing
+- Admin role with `/admin-users` console: PAT activity, role pills,
+  one-click MCP setup snippets for bash / PowerShell / cmd shells
+- 7-day sliding session, audit-trail webhooks for new logins and new
+  PATs
 
 ---
 

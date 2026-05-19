@@ -15,9 +15,9 @@ An enterprise-grade security operations platform that automates and orchestrates
 |--------|-------|
 | **Security Tool Integrations** | 30+ |
 | **MCP Server Tools** | 30 |
-| **LLM Investigation Tools** | 35 |
+| **LLM Investigation Tools** | 38 |
 | **Production Chat Bots** | 10 (Webex + Teams) |
-| **Web App Pages** | 35+ |
+| **Web App Pages** | 40+ |
 | **n8n Automation Workflows** | 33 |
 
 ---
@@ -67,7 +67,25 @@ Production-grade chat bots with enterprise reliability features:
 A standalone MCP server that exposes the full security toolbox to any
 MCP-compatible client (Claude Desktop, Cline, etc.). 30 tools spanning EDR,
 SIEM, SOAR, threat intel, ITSM, identity, and email security — all using a
-single uniform schema.
+single uniform schema. A second `--public` mode runs a fail-closed readonly
+subset behind per-user Personal Access Tokens for team-wide access without
+sharing a service bearer.
+
+### Self-Serve Auth + Personal Access Tokens
+
+Full register / verify-email / login / password-reset flow with per-user
+PATs minted from `/account`. Same token unlocks the Claude-Code local-LLM
+proxy and the public MCP endpoint. Admin role gates a `/admin-users`
+console with PAT activity, role pills, and one-click MCP setup snippets
+for bash / PowerShell / cmd shells.
+
+### Person-of-Interest OSINT Tool
+
+Streaming investigation page that pivots from a single identifier
+(name, email, username, or domain) through HIBP breach checks,
+account-existence probing (holehe + maigret), Google dorks, and
+LLM-driven commentary. Renders a force-directed graph of discovered
+identities with custom spoke-wheel layouts.
 
 ### Customer Assurance Workspace
 
