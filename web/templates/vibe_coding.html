@@ -1,0 +1,1242 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'Vibe Coding' %}
+{% set page_title_left_icon = '🎧' %}
+{% set page_title_right_icon = '✨' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/chat_widget.css') }}">
+<style>
+/* Page-scoped synthwave background — gives the white section cards contrast. */
+body:not(.dark-mode) { background: linear-gradient(180deg, #fdf2f8 0%, #f5f3ff 55%, #ecfeff 100%); }
+
+/* Vibe-palette scrollbar — light mode, thick & multi-colored from the page palette */
+::-webkit-scrollbar { width: 16px; height: 16px; }
+::-webkit-scrollbar-track {
+    background: linear-gradient(180deg, rgba(236,72,153,0.08), rgba(139,92,246,0.10) 50%, rgba(6,182,212,0.08));
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #f59e0b 0%, #ec4899 22%, #d946ef 45%, #8b5cf6 65%, #6366f1 80%, #06b6d4 100%);
+    border-radius: 10px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35);
+}
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #06b6d4 0%, #6366f1 22%, #8b5cf6 45%, #d946ef 65%, #ec4899 80%, #f59e0b 100%);
+    background-clip: padding-box;
+}
+::-webkit-scrollbar-corner { background: transparent; }
+/* Force classic always-on scrollbars on Chromium (Edge/Chrome) so the
+   ::-webkit-scrollbar rules render — without this, Edge's overlay-scrollbar
+   path renders only the single-color Firefox-style fallback (thin + purple). */
+html { scrollbar-gutter: stable; }
+
+.vc-container { flex: 1 1 auto; min-width: 0; max-width: 1100px; margin: 24px auto 80px; padding: 0 20px; color: #1e293b; }
+.vc-page-wrap > .vc-container { margin: 24px 0 80px; }
+
+/* HERO */
+.vc-hero {
+    background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 55%, #06b6d4 100%);
+    color: #fff; border-radius: 18px; padding: 32px 36px;
+    box-shadow: 0 16px 40px rgba(139,92,246,0.28);
+    margin-bottom: 24px; position: relative; overflow: hidden;
+}
+.vc-hero::after {
+    content: ''; position: absolute; right: -60px; top: -60px;
+    width: 280px; height: 280px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 70%);
+    pointer-events: none;
+}
+.vc-hero h1 { margin: 0 0 8px; font-size: 1.85rem; font-weight: 800; letter-spacing: -0.02em; }
+.vc-hero p  { margin: 0 0 18px; font-size: 1.02rem; opacity: 0.95; line-height: 1.55; max-width: 760px; }
+.vc-hero-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.vc-hero-pill {
+    background: rgba(255,255,255,0.18); backdrop-filter: blur(4px);
+    color: #fff; padding: 6px 14px; border-radius: 999px;
+    font-size: 0.82rem; font-weight: 600; letter-spacing: 0.02em;
+    border: 1px solid rgba(255,255,255,0.28);
+}
+
+/* PREREQ STRIP — the cross-link to /gitlab + /claude-code-with-local-models */
+.vc-prereq {
+    display: grid; grid-template-columns: auto 1fr 1fr; gap: 14px;
+    align-items: stretch;
+    margin-bottom: 24px;
+}
+.vc-prereq-label {
+    background: linear-gradient(135deg, #8b5cf6, #ec4899);
+    color: #fff; border-radius: 12px; padding: 14px 18px;
+    font-weight: 800; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em;
+    display: flex; align-items: center; justify-content: center;
+    min-width: 140px; text-align: center;
+    box-shadow: 0 4px 12px rgba(139,92,246,0.25);
+}
+.vc-prereq-card {
+    display: flex; align-items: center; gap: 14px;
+    background: #fff; border: 1px solid rgba(148,163,184,0.28); border-radius: 12px;
+    padding: 12px 18px; text-decoration: none; color: inherit;
+    transition: all 0.18s ease;
+    box-shadow: 0 2px 6px rgba(15,23,42,0.05);
+}
+.vc-prereq-card:hover {
+    transform: translateY(-2px); border-color: #8b5cf6;
+    box-shadow: 0 8px 18px rgba(139,92,246,0.18);
+    color: inherit; text-decoration: none;
+}
+.vc-prereq-card-icon { font-size: 1.7rem; flex: 0 0 auto; }
+.vc-prereq-card-text { flex: 1; min-width: 0; }
+.vc-prereq-card-label { font-size: 0.72rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.vc-prereq-card-title { font-weight: 800; font-size: 0.98rem; color: #0f172a; margin-top: 2px; }
+.vc-prereq-card-sub   { font-size: 0.82rem; color: #475569; margin-top: 2px; line-height: 1.4; }
+.vc-prereq-card-arrow { color: #8b5cf6; font-weight: 800; font-size: 1.3rem; flex: 0 0 auto; }
+@media (max-width: 760px) {
+    .vc-prereq { grid-template-columns: 1fr; }
+}
+
+/* KPI CARDS */
+.vc-kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 28px; }
+.vc-kpi-card {
+    background: linear-gradient(135deg, rgba(236,72,153,0.08) 0%, rgba(6,182,212,0.06) 100%);
+    border: 1px solid rgba(139,92,246,0.20); border-left: 4px solid #ec4899;
+    border-radius: 12px; padding: 18px 20px;
+    box-shadow: 0 2px 6px rgba(15,23,42,0.05);
+}
+.vc-kpi-icon { font-size: 1.65rem; }
+.vc-kpi-title { font-weight: 800; font-size: 1.05rem; margin: 6px 0 4px; }
+.vc-kpi-body { font-size: 0.88rem; color: #475569; line-height: 1.5; }
+
+/* PAGE WRAP — flex container so sidebar sits flush left of content */
+.vc-page-wrap {
+    display: flex;
+    align-items: flex-start;
+    max-width: 1380px;
+    margin: 0 auto;
+    gap: 0;
+}
+
+/* SIDEBAR TOC — sticky, scroll-spy */
+.vc-side-toc {
+    position: sticky;
+    top: 96px;
+    flex: 0 0 260px;
+    align-self: flex-start;
+    margin-top: 24px;
+    max-height: calc(100vh - 116px);
+    overflow: hidden;
+    background: linear-gradient(165deg, #fdf2f8 0%, #ede9fe 50%, #cffafe 100%);
+    border: 1px solid rgba(139,92,246,0.30);
+    border-right: 4px solid #8b5cf6;
+    border-radius: 14px 0 0 14px;
+    box-shadow: 0 6px 18px rgba(139,92,246,0.18);
+    z-index: 9;
+    transition: max-height 0.25s ease;
+}
+.vc-side-toc-inner {
+    max-height: calc(100vh - 116px);
+    overflow-y: auto;
+    display: flex; flex-direction: column;
+}
+.vc-side-toc-header {
+    background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 55%, #06b6d4 100%);
+    color: #fff;
+    padding: 12px 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer; user-select: none;
+    font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em;
+    font-weight: 800;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.18);
+    flex-shrink: 0;
+}
+.vc-side-toc-header:hover { filter: brightness(1.06); }
+.vc-side-toc-header-icon {
+    font-size: 1.05rem; color: #fff; font-weight: 800;
+    transition: transform 0.25s ease; line-height: 1;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+}
+.vc-side-toc.vc-collapsed .vc-side-toc-header-icon { transform: rotate(-90deg); }
+.vc-side-toc.vc-collapsed { max-height: 50px; }
+.vc-side-toc.vc-collapsed .vc-side-toc-list { display: none; }
+.vc-side-toc-list {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 10px 10px 12px;
+    overflow-y: auto;
+}
+.vc-side-toc-list a {
+    color: #581c87; text-decoration: none;
+    font-size: 0.86rem; line-height: 1.35; font-weight: 600;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border-left: 3px solid transparent;
+    transition: all 0.15s ease;
+    display: block;
+    background: rgba(255,255,255,0.45);
+}
+.vc-side-toc-list a:hover {
+    background: rgba(236,72,153,0.18);
+    color: #9d174d;
+    transform: translateX(2px);
+}
+.vc-side-toc-list a.vc-active {
+    background: linear-gradient(90deg, #ec4899 0%, #8b5cf6 70%, #06b6d4 100%);
+    color: #fff;
+    border-left-color: #06b6d4;
+    font-weight: 800;
+    box-shadow: 0 2px 6px rgba(139,92,246,0.32);
+    text-shadow: 0 1px 1px rgba(0,0,0,0.18);
+}
+.vc-side-toc-list a.vc-active:hover { transform: translateX(2px); filter: brightness(1.05); }
+
+@media (max-width: 1320px) {
+    .vc-side-toc { display: none; }
+    .vc-page-wrap { display: block; }
+}
+@media (min-width: 1321px) {
+    .vc-toc { display: none; }
+}
+
+/* TOC */
+.vc-toc {
+    background: #fff; border: 1px solid rgba(148,163,184,0.3); border-radius: 12px;
+    padding: 16px 20px; margin-bottom: 28px;
+    box-shadow: 0 2px 6px rgba(15,23,42,0.04);
+}
+.vc-toc-title {
+    font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: #475569; font-weight: 800; margin-bottom: 10px;
+}
+.vc-toc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 18px; }
+.vc-toc-grid a { color: #8b5cf6; text-decoration: none; font-size: 0.88rem; padding: 4px 0; border-radius: 4px; }
+.vc-toc-grid a:hover { color: #ec4899; text-decoration: underline; }
+
+/* SECTION */
+.vc-section {
+    background: #fff; border: 1px solid rgba(148,163,184,0.25); border-radius: 14px;
+    padding: 26px 30px; margin-bottom: 22px;
+    box-shadow: 0 2px 8px rgba(15,23,42,0.04);
+    scroll-margin-top: 16px;
+}
+.vc-section h2 {
+    margin: 0 0 14px; font-size: 1.3rem; font-weight: 800;
+    color: #0f172a; letter-spacing: -0.01em;
+    display: flex; align-items: center; gap: 10px;
+}
+.vc-section h3 {
+    margin: 22px 0 10px; font-size: 1.02rem; font-weight: 700;
+    color: #ec4899;
+    display: flex; align-items: center; gap: 8px;
+}
+.vc-section p { margin: 0 0 12px; line-height: 1.62; color: #334155; }
+.vc-section ul, .vc-section ol { margin: 0 0 12px 20px; line-height: 1.62; color: #334155; }
+.vc-section li { margin-bottom: 4px; }
+.vc-section code {
+    background: rgba(236,72,153,0.10); color: #9d174d;
+    padding: 1px 6px; border-radius: 4px; font-size: 0.88em;
+    font-family: 'JetBrains Mono','Menlo','Consolas',monospace;
+}
+.vc-section a { color: #8b5cf6; }
+.vc-section a:hover { color: #ec4899; }
+
+/* STEP BADGE */
+.vc-step {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border-radius: 8px;
+    background: linear-gradient(135deg, #ec4899, #8b5cf6); color: #fff;
+    font-weight: 800; font-size: 0.95rem;
+    box-shadow: 0 2px 6px rgba(139,92,246,0.3);
+}
+
+/* PROMPT CARD — quoted text inside a soft tinted card with a copy button */
+.vc-prompt {
+    position: relative;
+    background: linear-gradient(135deg, rgba(236,72,153,0.05) 0%, rgba(139,92,246,0.05) 50%, rgba(6,182,212,0.05) 100%);
+    border: 1px solid rgba(139,92,246,0.22);
+    border-left: 4px solid #ec4899;
+    border-radius: 10px;
+    padding: 16px 64px 16px 20px;
+    margin: 10px 0 16px;
+    font-size: 0.95rem; line-height: 1.6;
+    color: #1e293b;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+.vc-prompt-label {
+    display: inline-block;
+    font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;
+    color: #8b5cf6; margin-bottom: 6px;
+}
+.vc-prompt-body { white-space: pre-wrap; }
+.vc-prompt .vc-copy-btn { right: 10px; top: 10px; }
+
+/* CODE BLOCK */
+.vc-code-wrap {
+    position: relative; margin: 12px 0 16px;
+    background: #f1f5f9; border: 1px solid rgba(15,23,42,0.10);
+    border-radius: 10px; overflow: hidden;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.06);
+}
+.vc-code-wrap pre {
+    margin: 0; padding: 16px 64px 16px 20px;
+    color: #0f172a; font-size: 0.88rem; font-weight: 500; line-height: 1.6;
+    font-family: 'JetBrains Mono','Menlo','Consolas',monospace;
+    overflow-x: auto; white-space: pre;
+}
+.vc-copy-btn {
+    position: absolute; top: 8px; right: 8px;
+    background: #fff; color: #475569;
+    border: 1px solid rgba(15,23,42,0.15); border-radius: 6px;
+    font-size: 0.75rem; font-weight: 600; padding: 4px 10px;
+    cursor: pointer; transition: all 0.15s ease; font-family: inherit;
+}
+.vc-copy-btn:hover { background: #ec4899; color: #fff; border-color: #ec4899; }
+.vc-copy-btn.vc-copied { background: #16a34a; color: #fff; border-color: #16a34a; }
+
+/* CALLOUTS */
+.vc-callout {
+    border-radius: 10px; padding: 14px 18px; margin: 14px 0;
+    display: flex; gap: 12px; align-items: flex-start;
+    border-left: 4px solid;
+}
+.vc-callout-icon { font-size: 1.2rem; flex: 0 0 auto; line-height: 1.4; }
+.vc-callout-body { flex: 1; line-height: 1.55; font-size: 0.92rem; }
+.vc-callout-body strong { display: block; margin-bottom: 4px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.vc-callout.tip      { background: rgba(0,166,81,0.07);   border-color: #00a651; color: #064e3b; }
+.vc-callout.note     { background: rgba(139,92,246,0.08); border-color: #8b5cf6; color: #312e81; }
+.vc-callout.warning  { background: rgba(245,158,11,0.10); border-color: #f59e0b; color: #78350f; }
+.vc-callout.timer    { background: rgba(6,182,212,0.10);  border-color: #06b6d4; color: #155e75; }
+
+/* DETOUR — collapsed side-track (e.g. "how to get an API key") */
+.vc-detour {
+    margin: 14px 0 18px;
+    border: 1px solid rgba(139,92,246,0.30);
+    border-left: 4px solid #06b6d4;
+    border-radius: 10px;
+    background: linear-gradient(135deg, rgba(6,182,212,0.05), rgba(139,92,246,0.05));
+    overflow: hidden;
+}
+.vc-detour > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 12px 18px;
+    display: flex; align-items: center; gap: 10px;
+    font-weight: 700; color: #155e75; font-size: 0.95rem;
+    user-select: none;
+    transition: background 0.15s ease;
+}
+.vc-detour > summary::-webkit-details-marker { display: none; }
+.vc-detour > summary::before {
+    content: '▸'; color: #06b6d4; font-weight: 800;
+    transition: transform 0.2s ease;
+    display: inline-block; flex: 0 0 auto;
+}
+.vc-detour[open] > summary::before { transform: rotate(90deg); }
+.vc-detour > summary:hover { background: rgba(6,182,212,0.06); }
+.vc-detour-tag {
+    font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: #0891b2; font-weight: 800;
+    background: rgba(6,182,212,0.14); border-radius: 999px;
+    padding: 3px 9px;
+}
+.vc-detour-body {
+    padding: 4px 20px 16px;
+    line-height: 1.6; color: #334155; font-size: 0.92rem;
+}
+.vc-detour-body p { margin: 0 0 10px; }
+.vc-detour-body ol, .vc-detour-body ul { margin: 0 0 10px 20px; }
+.vc-detour-body li { margin-bottom: 4px; }
+.vc-detour-body code {
+    background: rgba(6,182,212,0.12); color: #0e7490;
+    padding: 1px 6px; border-radius: 4px; font-size: 0.88em;
+    font-family: 'JetBrains Mono','Menlo','Consolas',monospace;
+}
+.vc-detour-body a { color: #0891b2; }
+.vc-detour-body a:hover { color: #ec4899; }
+
+/* PART HEADER (Part 1 / Part 2 etc.) — a gradient banner above each phase */
+.vc-part-banner {
+    background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 55%, #06b6d4 100%);
+    color: #fff; border-radius: 12px; padding: 14px 22px;
+    margin: 0 0 14px;
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    box-shadow: 0 4px 12px rgba(139,92,246,0.22);
+}
+.vc-part-banner .vc-part-title { font-weight: 800; font-size: 1.05rem; }
+.vc-part-banner .vc-part-time {
+    background: rgba(255,255,255,0.22); border: 1px solid rgba(255,255,255,0.32);
+    padding: 4px 12px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em;
+}
+
+/* NEXT-STEP / SIBLING-PAGE LINK CARDS at the bottom */
+.vc-next-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+    margin-top: 16px;
+}
+.vc-next-card {
+    display: flex; align-items: center; gap: 14px;
+    background: linear-gradient(135deg, rgba(236,72,153,0.08), rgba(6,182,212,0.08));
+    border: 1px solid rgba(139,92,246,0.22);
+    border-radius: 12px; padding: 14px 18px;
+    text-decoration: none; color: inherit;
+    transition: all 0.18s ease;
+}
+.vc-next-card:hover {
+    transform: translateY(-2px); border-color: #8b5cf6;
+    box-shadow: 0 8px 18px rgba(139,92,246,0.18);
+    color: inherit; text-decoration: none;
+}
+.vc-next-card-icon { font-size: 1.7rem; flex: 0 0 auto; }
+.vc-next-card-text { flex: 1; }
+.vc-next-card-label { font-size: 0.72rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.vc-next-card-title { font-weight: 800; color: #0f172a; }
+@media (max-width: 720px) { .vc-next-grid { grid-template-columns: 1fr; } }
+
+/* TOAST */
+.vc-toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: #0f172a; color: #fff; padding: 10px 18px; border-radius: 999px;
+    font-size: 0.88rem; font-weight: 600;
+    box-shadow: 0 8px 24px rgba(15,23,42,0.25);
+    opacity: 0; pointer-events: none; transition: all 0.25s ease; z-index: 200;
+}
+.vc-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+@media (max-width: 720px) {
+    .vc-kpi-grid { grid-template-columns: 1fr; }
+    .vc-hero { padding: 24px 22px; }
+    .vc-section { padding: 20px; }
+    .vc-toc-grid { grid-template-columns: 1fr; }
+}
+
+/* DARK MODE */
+body.dark-mode .vc-container { color: #e2e8f0; }
+body.dark-mode .vc-hero { box-shadow: 0 16px 40px rgba(0,0,0,0.55); }
+body.dark-mode .vc-kpi-card {
+    background: linear-gradient(135deg, rgba(30,41,59,0.7) 0%, rgba(15,23,42,0.7) 100%);
+    border-color: rgba(148,163,184,0.25);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+body.dark-mode .vc-kpi-title { color: #f1f5f9; }
+body.dark-mode .vc-kpi-body  { color: #94a3b8; }
+body.dark-mode .vc-toc { background: #1e293b; border-color: rgba(148,163,184,0.25); box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+body.dark-mode .vc-toc-title { color: #94a3b8; }
+body.dark-mode .vc-toc-grid a { color: #c4b5fd; }
+body.dark-mode .vc-toc-grid a:hover { color: #f9a8d4; }
+body.dark-mode .vc-section { background: #1e293b; border-color: rgba(148,163,184,0.18); box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+body.dark-mode .vc-section h2 { color: #f1f5f9; }
+body.dark-mode .vc-section h3 { color: #f9a8d4; }
+body.dark-mode .vc-section p,
+body.dark-mode .vc-section ul,
+body.dark-mode .vc-section ol { color: #cbd5e1; }
+body.dark-mode .vc-section a { color: #c4b5fd; }
+body.dark-mode .vc-section a:hover { color: #f9a8d4; }
+body.dark-mode .vc-section code { background: rgba(236,72,153,0.18); color: #fbcfe8; }
+body.dark-mode .vc-prompt {
+    background: linear-gradient(135deg, rgba(236,72,153,0.10) 0%, rgba(139,92,246,0.10) 50%, rgba(6,182,212,0.10) 100%);
+    border-color: rgba(139,92,246,0.35);
+    color: #e2e8f0;
+}
+body.dark-mode .vc-prompt-label { color: #c4b5fd; }
+body.dark-mode .vc-callout.tip      { background: rgba(0,166,81,0.13);   color: #bbf7d0; }
+body.dark-mode .vc-callout.note     { background: rgba(139,92,246,0.18); color: #ddd6fe; }
+body.dark-mode .vc-callout.warning  { background: rgba(245,158,11,0.15); color: #fed7aa; }
+body.dark-mode .vc-callout.timer    { background: rgba(6,182,212,0.18);  color: #a5f3fc; }
+body.dark-mode .vc-callout code { background: rgba(255,255,255,0.10); color: inherit; }
+body.dark-mode .vc-code-wrap { background: #0f172a; border-color: rgba(148,163,184,0.18); box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+body.dark-mode .vc-code-wrap pre { color: #f1f5f9; }
+body.dark-mode .vc-copy-btn { background: rgba(255,255,255,0.08); color: #cbd5e1; border-color: rgba(255,255,255,0.15); box-shadow: none; }
+body.dark-mode .vc-copy-btn:hover { background: #ec4899; color: #fff; border-color: #ec4899; }
+body.dark-mode .vc-prereq-card { background: #1e293b; border-color: rgba(148,163,184,0.25); }
+body.dark-mode .vc-prereq-card-title { color: #f1f5f9; }
+body.dark-mode .vc-prereq-card-sub   { color: #94a3b8; }
+body.dark-mode .vc-prereq-card-label { color: #94a3b8; }
+body.dark-mode .vc-next-card { background: linear-gradient(135deg, rgba(236,72,153,0.15), rgba(6,182,212,0.15)); border-color: rgba(139,92,246,0.35); }
+body.dark-mode .vc-next-card-title { color: #f1f5f9; }
+body.dark-mode .vc-next-card-label { color: #94a3b8; }
+body.dark-mode .vc-side-toc {
+    background: linear-gradient(165deg, #2a1133 0%, #1f1442 50%, #0a3340 100%);
+    border-color: rgba(139,92,246,0.45);
+    border-right-color: #ec4899;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+}
+body.dark-mode .vc-side-toc-list a { color: #fbcfe8; background: rgba(255,255,255,0.04); }
+body.dark-mode .vc-side-toc-list a:hover { background: rgba(236,72,153,0.22); color: #fff; }
+body.dark-mode .vc-side-toc-list a.vc-active {
+    background: linear-gradient(90deg, #ec4899 0%, #8b5cf6 70%, #06b6d4 100%);
+    color: #fff; border-left-color: #cffafe;
+}
+body.dark-mode .vc-detour {
+    background: linear-gradient(135deg, rgba(6,182,212,0.12), rgba(139,92,246,0.12));
+    border-color: rgba(139,92,246,0.40);
+}
+body.dark-mode .vc-detour > summary { color: #a5f3fc; }
+body.dark-mode .vc-detour > summary:hover { background: rgba(6,182,212,0.10); }
+body.dark-mode .vc-detour-body { color: #cbd5e1; }
+body.dark-mode .vc-detour-body code { background: rgba(6,182,212,0.22); color: #a5f3fc; }
+body.dark-mode .vc-detour-body a { color: #67e8f9; }
+body.dark-mode .vc-detour-tag { background: rgba(6,182,212,0.25); color: #a5f3fc; }
+
+/* Vibe-palette scrollbar — dark mode, thick & multi-colored */
+body.dark-mode ::-webkit-scrollbar-track {
+    background: linear-gradient(180deg, rgba(249,168,212,0.08), rgba(196,181,253,0.10) 50%, rgba(103,232,249,0.08));
+}
+body.dark-mode ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #fcd34d 0%, #f9a8d4 22%, #f0abfc 45%, #c4b5fd 65%, #a5b4fc 80%, #67e8f9 100%);
+    background-clip: padding-box;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18);
+}
+body.dark-mode ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #67e8f9 0%, #a5b4fc 22%, #c4b5fd 45%, #f0abfc 65%, #f9a8d4 80%, #fcd34d 100%);
+    background-clip: padding-box;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="vc-page-wrap">
+
+    <!-- SIDEBAR TOC -->
+    <aside class="vc-side-toc" id="vcSideToc">
+        <div class="vc-side-toc-header" id="vcSideTocHeader" role="button" tabindex="0" aria-expanded="true">
+            <span>🎧 On this page</span>
+            <span class="vc-side-toc-header-icon">▾</span>
+        </div>
+        <nav class="vc-side-toc-list" id="vcSideTocList">
+            <a href="#what-is">💡 What is vibe coding?</a>
+            <a href="#before-you-start">🛠️ Before you start</a>
+            <a href="#warmup">🌐 Language-agnostic warm-up</a>
+            <a href="#part-1">1️⃣ Warm-up prompts</a>
+            <a href="#part-2">2️⃣ Weather API client</a>
+            <a href="#part-3">3️⃣ Flask web app</a>
+            <a href="#part-4">4️⃣ Visual polish</a>
+            <a href="#part-5">5️⃣ Bonus</a>
+            <a href="#stretch">🏆 Stretch goals</a>
+            <a href="#closing">🎬 Closing</a>
+            <a href="#demo-tips">💡 Demo tips</a>
+            <a href="#whats-next">🔗 What's next</a>
+        </nav>
+    </aside>
+
+<div class="vc-container">
+
+    <!-- HERO -->
+    <div class="vc-hero">
+        <h1>🎧 Vibe Coding — From Zero to Enterprise App in 15 Minutes</h1>
+        <p>A copy-paste workshop: 15 prompts, one weather app, a Flask UI, and a Webex bot at the end. Drive it all from the <strong>Claude Code CLI</strong> running against your local LLM — no cloud, no Copilot, just <code>claude</code> in your terminal.</p>
+        <div class="vc-hero-pills">
+            <span class="vc-hero-pill">⏱️ ~15 min</span>
+            <span class="vc-hero-pill">🤖 Claude Code CLI</span>
+            <span class="vc-hero-pill">🏠 Local LLM, no cloud</span>
+            <span class="vc-hero-pill">📋 Copy any prompt</span>
+        </div>
+    </div>
+
+    <!-- PREREQ STRIP — the cross-link to /gitlab + /claude-code-with-local-models -->
+    <div class="vc-prereq">
+        <div class="vc-prereq-label">Need these<br>first ▸</div>
+        <a class="vc-prereq-card" href="/gitlab">
+            <div class="vc-prereq-card-icon">🦊</div>
+            <div class="vc-prereq-card-text">
+                <div class="vc-prereq-card-label">Step 1 — Repo</div>
+                <div class="vc-prereq-card-title">GitLab Onboarding</div>
+                <div class="vc-prereq-card-sub">Self-serve a repo on the internal GitLab so you can push what you build.</div>
+            </div>
+            <div class="vc-prereq-card-arrow">→</div>
+        </a>
+        <a class="vc-prereq-card" href="/claude-code-with-local-models">
+            <div class="vc-prereq-card-icon">🤖</div>
+            <div class="vc-prereq-card-text">
+                <div class="vc-prereq-card-label">Step 2 — AI</div>
+                <div class="vc-prereq-card-title">Claude Code on the Local LLM</div>
+                <div class="vc-prereq-card-sub">Wire <code>claude</code> CLI to the internal local LLM. No API key, no cloud.</div>
+            </div>
+            <div class="vc-prereq-card-arrow">→</div>
+        </a>
+    </div>
+
+    <!-- KPI CARDS -->
+    <div class="vc-kpi-grid">
+        <div class="vc-kpi-card">
+            <div class="vc-kpi-icon">⏱️</div>
+            <div class="vc-kpi-title">15 minutes, end to end</div>
+            <div class="vc-kpi-body">5 parts, ~3 minutes each. Start a timer at <a href="https://www.timeanddate.com/timer/" target="_blank" rel="noopener">timeanddate.com/timer</a> and pace yourself.</div>
+        </div>
+        <div class="vc-kpi-card" style="border-left-color:#8b5cf6;">
+            <div class="vc-kpi-icon">🤖</div>
+            <div class="vc-kpi-title">CLI-first, agentic by default</div>
+            <div class="vc-kpi-body">Claude Code edits files, runs commands, iterates on its own output. No "Ask vs Agent" mode toggle — it's always doing the work.</div>
+        </div>
+        <div class="vc-kpi-card" style="border-left-color:#06b6d4;">
+            <div class="vc-kpi-icon">🏠</div>
+            <div class="vc-kpi-title">Stays on corp infra</div>
+            <div class="vc-kpi-body">Routes through the internal local LLM. Your prompts, your code, your weather joke — none of it leaves the network.</div>
+        </div>
+    </div>
+
+    <!-- TOC (inline, shown on narrow screens) -->
+    <div class="vc-toc">
+        <div class="vc-toc-title">📑 On this page</div>
+        <div class="vc-toc-grid">
+            <a href="#what-is">💡 What is vibe coding?</a>
+            <a href="#before-you-start">🛠️ Before you start</a>
+            <a href="#warmup">🌐 Language-agnostic warm-up</a>
+            <a href="#part-1">1️⃣ Warm-up prompts</a>
+            <a href="#part-2">2️⃣ Weather API client</a>
+            <a href="#part-3">3️⃣ Flask web app</a>
+            <a href="#part-4">4️⃣ Visual polish</a>
+            <a href="#part-5">5️⃣ Bonus</a>
+            <a href="#stretch">🏆 Stretch goals</a>
+            <a href="#closing">🎬 Closing</a>
+            <a href="#demo-tips">💡 Demo tips</a>
+            <a href="#whats-next">🔗 What's next</a>
+        </div>
+    </div>
+
+    <!-- WHAT IS -->
+    <div class="vc-section" id="what-is">
+        <h2>💡 What is vibe coding?</h2>
+        <p>Loose term for low-ceremony, idea-first coding — describe what you want in plain English, let the AI write the heavy stuff, iterate fast. The point of this workshop is to feel the loop: prompt → working code → run → improve → repeat, until you've shipped something real in under 15 minutes.</p>
+        <p>Everything here is driven from the terminal with <code>claude</code> — the Claude Code CLI — pointed at the internal local LLM. The prompts work just as well with Copilot or any other agent; the IDE doesn't matter, the loop does.</p>
+        <div class="vc-callout note">
+            <div class="vc-callout-icon">🧭</div>
+            <div class="vc-callout-body">
+                <strong>How to use this page</strong>
+                Open your terminal, run <code>claude</code> in a fresh directory, then click <em>Copy</em> on each prompt below and paste it into the Claude Code chat. That's the entire workflow.
+            </div>
+        </div>
+    </div>
+
+    <!-- BEFORE YOU START -->
+    <div class="vc-section" id="before-you-start">
+        <h2><span class="vc-step">0</span> Before you start</h2>
+
+        <h3>📋 Prereqs</h3>
+        <ul>
+            <li>A GitLab account on the internal instance — see <a href="/gitlab">🦊 GitLab Onboarding</a>.</li>
+            <li>Claude Code CLI installed and pointed at the local LLM — see <a href="/claude-code-with-local-models">🤖 Claude Code on the Local LLM</a>.</li>
+            <li>A free OpenWeatherMap API key — there's a step-by-step in <a href="#part-2">Part 2</a>.</li>
+            <li><em>Optional, for stretch goals:</em> a Webex bot access token and a Webex room/space ID — step-by-step in <a href="#stretch">Stretch goals</a>.</li>
+        </ul>
+
+        <h3>📁 Start a fresh directory</h3>
+        <div class="vc-code-wrap"><pre><code>mkdir vibe-and-chill &amp;&amp; cd vibe-and-chill
+claude</code></pre><button class="vc-copy-btn">Copy</button></div>
+        <p>You should land in a Claude Code session inside an empty folder. From here, every prompt you paste lets the agent create files, run commands, and edit code in this directory.</p>
+
+        <div class="vc-callout tip">
+            <div class="vc-callout-icon">🧹</div>
+            <div class="vc-callout-body">
+                <strong>Reset between parts</strong>
+                When you move from one big phase to the next, type <code>/clear</code> in the Claude Code session to drop conversation context. You can also tell it "delete the previous file" in plain English.
+            </div>
+        </div>
+    </div>
+
+    <!-- LANGUAGE AGNOSTIC -->
+    <div class="vc-section" id="warmup">
+        <h2>🌐 Language-agnostic warm-up</h2>
+        <p>Claude Code understands you in any language. Drop one of these in to break the ice:</p>
+
+        <div class="vc-prompt">
+            <div class="vc-prompt-label">Prompt (Spanish)</div>
+            <div class="vc-prompt-body">Hola, ¿puedes crear un script de Python simple que imprima los números del 1 al 10?</div>
+            <button class="vc-copy-btn">Copy</button>
+        </div>
+
+        <div class="vc-prompt">
+            <div class="vc-prompt-label">Prompt (Telugu)</div>
+            <div class="vc-prompt-body">పైతాన్ లో ఫర్ లూప్ ఎలా వాడాలి</div>
+            <button class="vc-copy-btn">Copy</button>
+        </div>
+
+        <p>Same prompt works in English, Hindi, Tamil, Mandarin — anything your audience speaks. Whatever language you ask in, Claude Code writes back valid Python.</p>
+    </div>
+
+    <!-- PART 1 -->
+    <div class="vc-section" id="part-1">
+        <div class="vc-part-banner">
+            <div class="vc-part-title">Part 1 — Simple Warm-Up Examples</div>
+            <div class="vc-part-time">⏱️ 1–2 min</div>
+        </div>
+
+        <h3>Prompt 1 — Print numbers</h3>
+        <div class="vc-prompt">
+            <div class="vc-prompt-label">Prompt</div>
+            <div class="vc-prompt-body">Hey, can you create a simple Python script that prints numbers 1 through 10?</div>
+            <button class="vc-copy-btn">Copy</button>
+        </div>
+
+        <h3>Prompt 2 — Calculate ages</h3>
+        <div class="vc-prompt">
+            <div class="vc-prompt-label">Prompt</div>
+            <div class="vc-prompt-body">I want to create a program that shows people's ages. Can you make one that displays Alice (date of birth 07/01/2000), Bob (05/01/1995), and Carol (03/21/1972) in a nice table?</div>
+            <button class="vc-copy-btn">Copy</button>
+        </div>
+
+        <h3>Prompt 3 — Simple calculator</h3>
+        <div class="vc-prompt">
+            <div class="vc-prompt-label">Prompt</div>
+            <div class="vc-prompt-body">Let's build a simple calculator. Can you write a function that adds two numbers and test it with some examples? Show me the results.</div>
+            <button class="vc-copy-btn">Copy</button>
+        </div>
+
+        <div class="vc-callout timer">
+            <div class="vc-callout-icon">⏱️</div>
+            <div class="vc-callout-body">
+                <strong>Start your timer</strong>
+                Open <a href="https://www.timeanddate.com/timer/" target="_blank" rel="noopener">timeanddate.com/timer</a> for a clean visual timer the audience can see. Aim for ~12–13 minutes from here.
+            </div>
+        </div>
+    </div>
+
+    <!-- PART 2 -->
+    <div class="vc-section" id="part-2">
+        <div class="vc-part-banner">
+            <div class="vc-part-title">Part 2 — Weather API client</div>
+            <div class="vc-part-time">⏱️ 3–4 min</div>
+        </div>
+
+        <p>Time to pull real data from the internet. You'll need a free OpenWeatherMap API key — the step-by-step is below if you don't already have one.</p>
+
+        <details class="vc-detour">
+            <summary><span class="vc-detour-tag">setup</span> How to get a free OpenWeatherMap API key</summary>
+            <div class="vc-detour-body">
+                <ol>
+                    <li>Go to <a href="https://openweathermap.org/api" target="_blank" rel="noopener">openweathermap.org/api</a> and click <strong>Sign In</strong> (top-right). New user? Click <strong>Create an Account</strong> instead.</li>
+                    <li>Sign up with any email — it's a public service, you don't need a corp email.</li>
+                    <li>Confirm the email link they send you.</li>
+                    <li>Sign in → click your username (top-right) → <strong>My API keys</strong>.</li>
+                    <li>A default key is created for you automatically. Click <strong>copy</strong> next to it.</li>
+                    <li>Heads up: new keys take a few minutes (sometimes up to ~2 hours) to activate. Quick test once you have it:
+                        <br><code>curl "https://api.openweathermap.org/data/2.5/weather?zip=10001,US&amp;appid=YOUR_KEY"</code>
+                        <br>HTTP 200 → ready. HTTP 401 with "Invalid API key" → wait a bit longer and retry.</li>
+                </ol>
+                <p>Free tier gives you 60 calls/minute and 1M/month — way more than this workshop will use.</p>
+                <p><strong>Handling it:</strong> don't paste the key into code that gets committed. When Claude Code asks for it, drop it in a local <code>.env</code> file or pass it as an environment variable. The agent already knows the pattern — just say "use an env var for the API key".</p>
+            </div>
+        </details>
+
+        <h3>Prompt 4 — Create weather API client</h3>
+        <p>Before pasting this one, tell Claude Code to start fresh: <code>/clear</code> the conversation, and ask it to delete the previous file.</p>
+        <div class="vc-prompt">
+            <div class="vc-prompt-label">Prompt</div>
+            <div class="vc-prompt-body">I need a weather app! Can you create a Python function that gets weather data for any ZIP code using the OpenWeatherMap API? Include error handling and make sure it returns the temperature, weather description, and city name. Then test it with a ZIP code like 10001.</div>
+            <button class="vc-copy-btn">Copy</button>
+        </div>
+
+        <h3>Prompt 5 — Enhanced terminal client</h3>
+        <div class="vc-prompt">
+            <div class="vc-prompt-label">Prompt</div>
+            <div class="vc-prompt-body">That's great! Now can you improve it to work from the command line? I want to be able to run it and enter a ZIP code to get nicely formatted weather information. Test it with a few different ZIP codes.</div>
+            <button class="vc-copy-btn">Copy</button>
+        </div>
+
+        <h3>Prompt 6 — Show multiple cities</h3>
+        <div class="vc-prompt">
+            <div class="vc-prompt-label">Prompt</div>
+            <div class="vc-prompt-body">Nice! Can you modify it to show weather for multiple cities at once? Try it with New York (10001), Los Angeles (90210), and Chicago (60601) to show how it works.</div>
+            <button class="vc-copy-btn">Copy</button>
+        </div>
+    </div>
+
+    <!-- PART 3 -->
+    <div class="vc-section" id="part-3">
+        <div class="vc-part-banner">
+            <div class="vc-part-title">Part 3 — Basic Flask Web App</div>
+            <div class="vc-part-time">⏱️ 4–5 min</div>
+        </div>
+
+        <h3>Prompt 7 — Create Flask weather app</h3>
+        <div class="vc-prompt">
+            <div class="vc-prompt-label">Prompt</div>
+            <div class="vc-prompt-body">Now let's turn this into a web app! Can you create a Flask application where people can enter their ZIP code on a webpage and see the weather? Include a simple form and a results page. Use the OpenWeatherMap API we've been working with.</div>
+            <button class="vc-copy-btn">Copy</button>
+        </div>
+
+        <h3>Prompt 8 — Add better structure</h3>
+        <div class="vc-prompt">
+            <div class="vc-prompt-label">Prompt</div>
+            <div class="vc-prompt-body">That's working well! Can you improve it by creating separate pages — one for the home page with the ZIP code form, and another for showing the weather results? Also add some error handling for invalid ZIP codes.</div>
+            <button class="vc-copy-btn">Copy</button>
+        </div>
+
+        <div class="vc-callout tip">
+            <div class="vc-callout-icon">🌐</div>
+            <div class="vc-callout-body">
+                <strong>Run it</strong>
+                Claude Code will offer to start the Flask server itself. Approve it, then open <code>http://127.0.0.1:5000</code> in your browser and try a ZIP code.
+            </div>
+        </div>
+    </div>
+
+    <!-- PART 4 -->
+    <div class="vc-section" id="part-4">
+        <div class="vc-part-banner">
+            <div class="vc-part-title">Part 4 — Visual Enhancements</div>
+            <div class="vc-part-time">⏱️ 2–3 min</div>
+        </div>
+
+        <h3>Prompt 9 — Style the web app</h3>
+        <div class="vc-prompt">
+            <div class="vc-prompt-label">Prompt</div>
+            <div class="vc-prompt-body">This is functional, but let's make it look amazing! Can you add beautiful CSS styling to both home and results pages to make them look professional? I want modern colors, nice typography.</div>
+            <button class="vc-copy-btn">Copy</button>
+        </div>
+
+        <h3>Prompt 10 — Weather icons + animations</h3>
+        <div class="vc-prompt">
+            <div class="vc-prompt-label">Prompt</div>
+            <div class="vc-prompt-body">Looking great! Now can you add some visual flair? I'd love to see weather icons or emojis that match the conditions, maybe some smooth animations, and different background colors based on the weather — like blue for rain, yellow for sunny days.</div>
+            <button class="vc-copy-btn">Copy</button>
+        </div>
+
+        <p>Good demo ZIP codes for showing different conditions:</p>
+        <ul>
+            <li><code>94102</code> — San Francisco</li>
+            <li><code>89044</code> — Las Vegas</li>
+            <li><code>85001</code> — Phoenix</li>
+        </ul>
+
+        <h3>Prompt 11 — Final polish</h3>
+        <div class="vc-prompt">
+            <div class="vc-prompt-label">Prompt</div>
+            <div class="vc-prompt-body">Almost perfect! Can you add some final touches to make this look like a real app? Maybe add a nice header, show the current time, add a greeting based on time of day, and make the temperature prominent. Also throw in a fun weather tip or fact!</div>
+            <button class="vc-copy-btn">Copy</button>
+        </div>
+    </div>
+
+    <!-- PART 5 -->
+    <div class="vc-section" id="part-5">
+        <div class="vc-part-banner">
+            <div class="vc-part-title">Part 5 — Bonus (optional)</div>
+            <div class="vc-part-time">⏱️ time-permitting</div>
+        </div>
+
+        <h3>Prompt 12 — Multiple-cities dashboard</h3>
+        <div class="vc-prompt">
+            <div class="vc-prompt-label">Prompt</div>
+            <div class="vc-prompt-body">This is so cool! Can you modify it to create a weather dashboard? I want users to be able to enter multiple ZIP codes separated by commas and see all the weather information in a nice grid layout.</div>
+            <button class="vc-copy-btn">Copy</button>
+        </div>
+
+        <h3>Prompt 13 — Falling notes</h3>
+        <p>Reference for the effect: <a href="https://lyricfinder.net/" target="_blank" rel="noopener">lyricfinder.net</a>.</p>
+        <div class="vc-prompt">
+            <div class="vc-prompt-label">Prompt</div>
+            <div class="vc-prompt-body">Look at https://lyricfinder.net. Implement those falling notes on my results page.</div>
+            <button class="vc-copy-btn">Copy</button>
+        </div>
+
+        <h3>Prompt 14 — Music</h3>
+        <p>First, create a <code>static/</code> folder in the project and drop an mp3 file into it.</p>
+        <div class="vc-prompt">
+            <div class="vc-prompt-label">Prompt</div>
+            <div class="vc-prompt-body">Use the music file in the static folder. Show a speaker icon at the top right corner of the results page, clicking which should play it.</div>
+            <button class="vc-copy-btn">Copy</button>
+        </div>
+
+        <h3>Prompt 15 — Audience suggestion</h3>
+        <div class="vc-prompt">
+            <div class="vc-prompt-label">Prompt</div>
+            <div class="vc-prompt-body">What additional feature would you like to see? (← ask the room, then paste their idea here as the prompt.)</div>
+            <button class="vc-copy-btn">Copy</button>
+        </div>
+    </div>
+
+    <!-- STRETCH -->
+    <div class="vc-section" id="stretch">
+        <div class="vc-part-banner">
+            <div class="vc-part-title">🏆 Stretch goals — Automation + Webex</div>
+            <div class="vc-part-time">⏱️ if time allows</div>
+        </div>
+
+        <p>Take the weather app off the page and turn it into a scheduled bot that posts to Webex.</p>
+
+        <h3>Stretch 1 — Scheduled weather updates</h3>
+        <div class="vc-prompt">
+            <div class="vc-prompt-label">Prompt</div>
+            <div class="vc-prompt-body">Let's make this even more useful! Can you create a Python script that automatically checks the weather for a specific ZIP code every 5 seconds and prints the results? Use a scheduler so it runs continuously in the background.</div>
+            <button class="vc-copy-btn">Copy</button>
+        </div>
+
+        <h3>Stretch 2 — Webex bot integration</h3>
+        <p>You'll need two values from Webex — an access token for a bot you own, and the room/space ID you want it to post into. Step-by-steps below; expand the one you need.</p>
+
+        <details class="vc-detour">
+            <summary><span class="vc-detour-tag">setup</span> How to create a Webex bot &amp; copy its access token</summary>
+            <div class="vc-detour-body">
+                <ol>
+                    <li>Sign in to <a href="https://developer.webex.com/my-apps" target="_blank" rel="noopener">developer.webex.com/my-apps</a> with your Webex account.</li>
+                    <li>Click <strong>Create a New App</strong> → <strong>Create a Bot</strong>.</li>
+                    <li>Fill in:
+                        <ul>
+                            <li><strong>Bot name</strong> — display name shown in chat.</li>
+                            <li><strong>Bot username</strong> — must end in <code>@webex.bot</code> and be globally unique. If your first choice is taken, add a suffix.</li>
+                            <li><strong>Icon</strong> — pick a default or upload one (any 512×512 PNG works).</li>
+                            <li><strong>Description</strong> — short blurb.</li>
+                        </ul>
+                    </li>
+                    <li>Click <strong>Add Bot</strong>.</li>
+                    <li>The confirmation page shows a <strong>Bot Access Token</strong>. Copy it now — it's only displayed once. If you lose it, you can regenerate (which invalidates the old token).</li>
+                </ol>
+                <p><strong>Handling it:</strong> treat the token like a password. Put it in <code>.env</code> or an env var, never paste it into committed code. Anyone who has it can post as your bot.</p>
+            </div>
+        </details>
+
+        <details class="vc-detour">
+            <summary><span class="vc-detour-tag">setup</span> How to find the room (space) ID to post into</summary>
+            <div class="vc-detour-body">
+                <p>Webex room IDs are long base64-encoded strings — you'll get them via the API.</p>
+                <ol>
+                    <li>In the Webex app (desktop or web), add your new bot to the space you want it to post into. Easiest path for testing: <strong>create a 1:1 space with the bot by DMing it</strong> from your own account — that auto-creates a space.</li>
+                    <li>Open the Webex API explorer at <a href="https://developer.webex.com/docs/api/v1/rooms/list-rooms" target="_blank" rel="noopener">developer.webex.com/docs/api/v1/rooms/list-rooms</a>.</li>
+                    <li>Make sure you're signed in (top-right). Use either your own Webex account <em>or</em> swap the token to your bot's token (top of the page → click the token chip). Bot tokens only see rooms the bot is a member of, which is usually what you want.</li>
+                    <li>Click <strong>Run</strong>. The response is JSON listing every space.</li>
+                    <li>Find your space by <code>title</code> and copy its <code>id</code> field. That's <code>webex_room_id</code>.</li>
+                </ol>
+                <p>Quick sanity check from the terminal (replace both values):</p>
+                <p><code>curl -H "Authorization: Bearer YOUR_BOT_TOKEN" -H "Content-Type: application/json" -d '{"roomId":"YOUR_ROOM_ID","text":"hi"}' https://webexapis.com/v1/messages</code></p>
+                <p>HTTP 200 with a JSON body → wired up. HTTP 404 on room → the bot isn't a member of that space; add it and retry.</p>
+            </div>
+        </details>
+
+        <div class="vc-prompt">
+            <div class="vc-prompt-label">Prompt</div>
+            <div class="vc-prompt-body">I have a Webex bot access token. Can you modify the weather scheduler to send the weather updates directly to my Webex space instead of just printing them? Send it as plain text messages.</div>
+            <button class="vc-copy-btn">Copy</button>
+        </div>
+
+        <h3>Stretch 3 — Adaptive Cards for Webex</h3>
+        <div class="vc-prompt">
+            <div class="vc-prompt-label">Prompt</div>
+            <div class="vc-prompt-body">That's working great! Now can you make it even more professional by sending the weather information as a beautiful Webex Adaptive Card instead of plain text? Include the temperature, conditions, and maybe a weather icon in a nicely formatted card.</div>
+            <button class="vc-copy-btn">Copy</button>
+        </div>
+
+        <h3>Stretch 4 — Multi-city bot</h3>
+        <div class="vc-prompt">
+            <div class="vc-prompt-label">Prompt</div>
+            <div class="vc-prompt-body">Perfect! As a final touch, can you modify the bot to send weather updates for multiple cities at once? I want it to check weather for New York (10001), Los Angeles (90210), and Chicago (60601) and send them all in one comprehensive update.</div>
+            <button class="vc-copy-btn">Copy</button>
+        </div>
+    </div>
+
+    <!-- CLOSING -->
+    <div class="vc-section" id="closing">
+        <h2>🎬 Closing</h2>
+        <p>Check the timer. Take a breath. Then close with a smile:</p>
+
+        <div class="vc-prompt">
+            <div class="vc-prompt-label">Prompt</div>
+            <div class="vc-prompt-body">That was impressive, and I really loved it. I think this is the beginning of a beautiful friendship. Let's end this coding session on a fun note — tell me a weather joke!</div>
+            <button class="vc-copy-btn">Copy</button>
+        </div>
+    </div>
+
+    <!-- DEMO TIPS -->
+    <div class="vc-section" id="demo-tips">
+        <h2>💡 Demo tips</h2>
+        <h3>Before you start</h3>
+        <ul>
+            <li>Have your OpenWeatherMap API key ready in your clipboard.</li>
+            <li>Have your Webex bot token + room ID ready if you plan to do stretch goals.</li>
+            <li>Pre-open a browser tab on <a href="https://www.timeanddate.com/timer/" target="_blank" rel="noopener">timeanddate.com/timer</a> set to 15:00.</li>
+            <li>Confirm Claude Code is actually pointed at the local LLM — run <code>claude</code>, ask "what model are you?", and verify the answer matches the expected internal model.</li>
+        </ul>
+        <h3>During the demo</h3>
+        <ul>
+            <li>Don't fight the agent. If it goes sideways, paste the next prompt and keep moving — vibe coding is about momentum.</li>
+            <li>Show the diffs Claude Code proposes before approving them. The audience sees AI <em>and</em> human-in-the-loop, which is the whole point.</li>
+            <li>Read the prompt out loud as you paste it. The audience needs to understand <em>what</em> you asked for to appreciate <em>what</em> came back.</li>
+        </ul>
+        <h3>If the model stalls or returns junk</h3>
+        <ul>
+            <li>Type <code>/clear</code> to drop context, then re-paste the last prompt with one more sentence of guidance.</li>
+            <li>If the local LLM is slow, drop the temperature down in your Claude Code config or fall back to a smaller model — see <a href="/claude-code-with-local-models">/claude-code-with-local-models</a> for the routing options.</li>
+        </ul>
+
+        <h3>Further reading</h3>
+        <ul>
+            <li><a href="https://www.kdnuggets.com/7-steps-to-mastering-vibe-coding" target="_blank" rel="noopener">7 steps to mastering vibe coding (KDnuggets)</a></li>
+            <li><a href="https://cloud.google.com/discover/what-is-vibe-coding" target="_blank" rel="noopener">What is vibe coding? (Google Cloud)</a></li>
+            <li><a href="https://www.maginative.com/article/amazon-takes-on-github-copilot-with-kiro-an-ide-that-goes-beyond-vibe-coding/" target="_blank" rel="noopener">Amazon Kiro vs. Copilot (Maginative)</a></li>
+        </ul>
+    </div>
+
+    <!-- WHAT'S NEXT -->
+    <div class="vc-section" id="whats-next">
+        <h2>🔗 What's next</h2>
+        <p>Now push what you built. Then come back here next time you want a quick warm-up loop.</p>
+        <div class="vc-next-grid">
+            <a class="vc-next-card" href="/gitlab">
+                <div class="vc-next-card-icon">🦊</div>
+                <div class="vc-next-card-text">
+                    <div class="vc-next-card-label">Ship it</div>
+                    <div class="vc-next-card-title">Push to internal GitLab</div>
+                </div>
+            </a>
+            <a class="vc-next-card" href="/claude-code-with-local-models">
+                <div class="vc-next-card-icon">🤖</div>
+                <div class="vc-next-card-text">
+                    <div class="vc-next-card-label">Tune your setup</div>
+                    <div class="vc-next-card-title">Claude Code routing &amp; models</div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+</div>
+</div>
+
+<div class="vc-toast" id="vcToast">Copied!</div>
+
+{% include '_chat_widget.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    var toast = document.getElementById('vcToast');
+    function flashToast(msg) {
+        toast.textContent = msg;
+        toast.classList.add('show');
+        setTimeout(function() { toast.classList.remove('show'); }, 1400);
+    }
+    document.querySelectorAll('.vc-copy-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var parent = btn.parentElement;
+            // Prompt cards: copy the .vc-prompt-body text; code blocks: copy the <pre> innerText.
+            var src = parent.querySelector('.vc-prompt-body') || parent.querySelector('pre');
+            if (!src) return;
+            var text = src.innerText;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(function() {
+                    btn.classList.add('vc-copied');
+                    btn.textContent = 'Copied!';
+                    flashToast('Copied to clipboard');
+                    setTimeout(function() {
+                        btn.classList.remove('vc-copied');
+                        btn.textContent = 'Copy';
+                    }, 1400);
+                }).catch(function() { flashToast('Copy failed — select and Ctrl+C'); });
+            } else {
+                var range = document.createRange();
+                range.selectNodeContents(src);
+                var sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+                flashToast('Selected — press Ctrl+C / Cmd+C');
+            }
+        });
+    });
+
+    document.querySelectorAll('.vc-toc-grid a').forEach(function(a) {
+        a.addEventListener('click', function(e) {
+            var id = a.getAttribute('href');
+            if (!id || !id.startsWith('#')) return;
+            var target = document.querySelector(id);
+            if (!target) return;
+            e.preventDefault();
+            target.scrollIntoView({behavior: 'smooth', block: 'start'});
+            history.replaceState(null, '', id);
+        });
+    });
+
+    // Sidebar TOC: accordion toggle
+    var sideToc       = document.getElementById('vcSideToc');
+    var sideTocHeader = document.getElementById('vcSideTocHeader');
+    if (sideToc && sideTocHeader) {
+        var STORAGE_KEY = 'vc_side_toc_collapsed';
+        try {
+            if (localStorage.getItem(STORAGE_KEY) === '1') {
+                sideToc.classList.add('vc-collapsed');
+                sideTocHeader.setAttribute('aria-expanded', 'false');
+            }
+        } catch (e) {}
+
+        function toggleSideToc() {
+            sideToc.classList.toggle('vc-collapsed');
+            var collapsed = sideToc.classList.contains('vc-collapsed');
+            sideTocHeader.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            try { localStorage.setItem(STORAGE_KEY, collapsed ? '1' : '0'); } catch (e) {}
+        }
+        sideTocHeader.addEventListener('click', toggleSideToc);
+        sideTocHeader.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSideToc(); }
+        });
+    }
+
+    // Sidebar TOC: smooth-scroll on click
+    document.querySelectorAll('.vc-side-toc-list a').forEach(function(a) {
+        a.addEventListener('click', function(e) {
+            var id = a.getAttribute('href');
+            if (!id || !id.startsWith('#')) return;
+            var target = document.querySelector(id);
+            if (!target) return;
+            e.preventDefault();
+            target.scrollIntoView({behavior: 'smooth', block: 'start'});
+            history.replaceState(null, '', id);
+        });
+    });
+
+    // Sidebar TOC: scroll-spy — highlight the section currently in view
+    var sideLinks = Array.from(document.querySelectorAll('.vc-side-toc-list a'));
+    if (sideLinks.length && 'IntersectionObserver' in window) {
+        var visible = new Set();
+        var observer = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry) {
+                if (entry.isIntersecting) visible.add('#' + entry.target.id);
+                else                      visible.delete('#' + entry.target.id);
+            });
+            var activeHash = null;
+            for (var i = 0; i < sideLinks.length; i++) {
+                var h = sideLinks[i].getAttribute('href');
+                if (visible.has(h)) { activeHash = h; break; }
+            }
+            sideLinks.forEach(function(a) {
+                a.classList.toggle('vc-active', a.getAttribute('href') === activeHash);
+            });
+        }, { rootMargin: '-20% 0px -60% 0px', threshold: 0 });
+
+        sideLinks.forEach(function(a) {
+            var t = document.querySelector(a.getAttribute('href'));
+            if (t) observer.observe(t);
+        });
+    }
+})();
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="{{ url_for('static', filename='js/chat_widget.js') }}"></script>
+<script>
+// Page-context for the chat widget. The LLM gets this so it can answer
+// questions about the workshop using exactly what's on the page.
+const VIBE_CODING_CONTEXT = `# Vibe Coding Workshop — Claude Code CLI + Local LLM
+
+A 15-minute live workshop. Goal: feel the loop of prompt → working code → run → improve → ship, end-to-end. Built on the Claude Code CLI pointed at the internal local LLM. No cloud, no Copilot — just \`claude\` in a terminal.
+
+Sister pages on the same site:
+- /gitlab — sign up for the internal GitLab so you have a repo to push to.
+- /claude-code-with-local-models — install Claude Code CLI and point it at the local LLM.
+
+## Prerequisites
+- Internal GitLab account.
+- Claude Code CLI installed and routed to the local LLM (see /claude-code-with-local-models).
+- Free OpenWeatherMap API key — get one in Part 2 (collapsed how-to on the page).
+- Optional, for stretch goals: Webex bot access token + Webex room/space ID — collapsed how-tos in the Stretch section.
+
+## How to get a free OpenWeatherMap API key
+1) Go to https://openweathermap.org/api → Sign In (or Create an Account).
+2) Use any email — it's a public service.
+3) Confirm the email link.
+4) Sign in → username (top-right) → "My API keys". A default key is already created — copy it.
+5) New keys take a few minutes (sometimes up to ~2 hours) to activate. Test:
+   curl "https://api.openweathermap.org/data/2.5/weather?zip=10001,US&appid=YOUR_KEY"
+   200 = ready. 401 with "Invalid API key" = wait longer.
+6) Free tier: 60 calls/min, 1M/month — plenty for this workshop.
+7) Don't commit the key. Put it in .env or pass as env var; tell Claude Code "use an env var for the API key".
+
+## How to create a Webex bot and copy its access token
+1) Sign in to https://developer.webex.com/my-apps with your Webex account.
+2) Create a New App → Create a Bot.
+3) Fill in: bot name, bot username (must end in @webex.bot and be globally unique), icon, short description.
+4) Click Add Bot.
+5) Copy the Bot Access Token shown on the confirmation page — it's displayed only once. If lost, you can regenerate (which invalidates the old token).
+6) Treat the token like a password — anyone with it can post as your bot. Put it in .env, never commit.
+
+## How to find the Webex room (space) ID
+1) In the Webex app, add your bot to the space you want it to post into. Easiest test path: DM the bot from your own account — that auto-creates a 1:1 space.
+2) Go to https://developer.webex.com/docs/api/v1/rooms/list-rooms — the API explorer.
+3) Signed in (top-right). Optionally swap to your bot's token at the top of the page (it'll only see rooms the bot belongs to — usually what you want).
+4) Click Run. Find your space by title, copy the "id" field. That's webex_room_id.
+5) Sanity check from terminal:
+   curl -H "Authorization: Bearer YOUR_BOT_TOKEN" -H "Content-Type: application/json" \
+        -d '{"roomId":"YOUR_ROOM_ID","text":"hi"}' \
+        https://webexapis.com/v1/messages
+   200 = wired. 404 on room = bot isn't a member; add it.
+
+## Getting started
+- Open a terminal, run: mkdir vibe-and-chill && cd vibe-and-chill && claude
+- Every prompt below is meant to be pasted into the Claude Code session.
+- Between major phases, type /clear in the Claude Code session to drop context. You can also tell it "delete the previous file" in plain English.
+
+## Language-agnostic warm-up
+The model speaks your language. Two examples from the workshop:
+- Spanish: "Hola, ¿puedes crear un script de Python simple que imprima los números del 1 al 10?"
+- Telugu: "పైతాన్ లో ఫర్ లూప్ ఎలా వాడాలి"
+Same idea works in English/Hindi/Tamil/Mandarin/etc.
+
+## Part 1 — Simple warm-up examples (1–2 min)
+1) Print numbers: "Hey, can you create a simple Python script that prints numbers 1 through 10?"
+2) Calculate ages: "I want to create a program that shows people's ages. Can you make one that displays Alice (07/01/2000), Bob (05/01/1995), and Carol (03/21/1972) in a nice table?"
+3) Simple calculator: "Let's build a simple calculator. Can you write a function that adds two numbers and test it with some examples? Show me the results."
+After this, start a 15-min timer at https://www.timeanddate.com/timer/
+
+## Part 2 — Weather API client (3–4 min)
+Needs an OpenWeatherMap API key. Don't commit it — put it in .env or env var.
+Tell Claude Code to /clear context and delete the previous file before this part.
+4) "I need a weather app! Can you create a Python function that gets weather data for any ZIP code using the OpenWeatherMap API? Include error handling and make sure it returns the temperature, weather description, and city name. Then test it with a ZIP code like 10001."
+5) "That's great! Now can you improve it to work from the command line? I want to be able to run it and enter a ZIP code to get nicely formatted weather information. Test it with a few different ZIP codes."
+6) "Nice! Can you modify it to show weather for multiple cities at once? Try it with New York (10001), Los Angeles (90210), and Chicago (60601) to show how it works."
+
+## Part 3 — Basic Flask web app (4–5 min)
+7) "Now let's turn this into a web app! Can you create a Flask application where people can enter their ZIP code on a webpage and see the weather? Include a simple form and a results page. Use the OpenWeatherMap API we've been working with."
+8) "That's working well! Can you improve it by creating separate pages — one for the home page with the ZIP code form, and another for showing the weather results? Also add some error handling for invalid ZIP codes."
+Then run it: Flask serves on http://127.0.0.1:5000 — Claude Code will offer to start the server.
+
+## Part 4 — Visual enhancements (2–3 min)
+9) Style: "This is functional, but let's make it look amazing! Can you add beautiful CSS styling to both home and results pages to make them look professional? I want modern colors, nice typography."
+10) Icons/animations: "Looking great! Now can you add some visual flair? I'd love to see weather icons or emojis that match the conditions, maybe some smooth animations, and different background colors based on the weather — like blue for rain, yellow for sunny days."
+Demo ZIPs: 94102 (San Francisco), 89044 (Las Vegas), 85001 (Phoenix).
+11) Polish: "Almost perfect! Can you add some final touches to make this look like a real app? Maybe add a nice header, show the current time, add a greeting based on time of day, and make the temperature prominent. Also throw in a fun weather tip or fact!"
+
+## Part 5 — Bonus, optional
+12) Multi-city dashboard: "This is so cool! Can you modify it to create a weather dashboard? I want users to be able to enter multiple ZIP codes separated by commas and see all the weather information in a nice grid layout."
+13) Falling notes (reference https://lyricfinder.net/): "Look at https://lyricfinder.net. Implement those falling notes on my results page."
+14) Music: First put an mp3 in static/. Then: "Use the music file in the static folder. Show a speaker icon at the top right corner of the results page, clicking which should play it."
+15) Audience suggestion: ask the room for a feature, paste their idea as the prompt.
+
+## Stretch goals — Automation + Webex
+Needs webex_bot_access_token + webex_room_id.
+S1) Scheduled: "Let's make this even more useful! Can you create a Python script that automatically checks the weather for a specific ZIP code every 5 seconds and prints the results? Use a scheduler so it runs continuously in the background."
+S2) Webex plain-text: "I have a Webex bot access token. Can you modify the weather scheduler to send the weather updates directly to my Webex space instead of just printing them? Send it as plain text messages."
+S3) Adaptive Card: "That's working great! Now can you make it even more professional by sending the weather information as a beautiful Webex Adaptive Card instead of plain text? Include the temperature, conditions, and maybe a weather icon in a nicely formatted card."
+S4) Multi-city bot: "Perfect! As a final touch, can you modify the bot to send weather updates for multiple cities at once? I want it to check weather for New York (10001), Los Angeles (90210), and Chicago (60601) and send them all in one comprehensive update."
+
+## Closing
+"That was impressive, and I really loved it. I think this is the beginning of a beautiful friendship. Let's end this coding session on a fun note — tell me a weather joke!"
+
+## Demo tips
+- Pre-stage: OpenWeatherMap key in clipboard, Webex token + room ID handy, timer tab pre-opened at https://www.timeanddate.com/timer/
+- During: read prompts out loud as you paste them. Show diffs Claude Code proposes before approving.
+- If the agent goes sideways: paste the next prompt and keep moving — momentum is the point.
+- If the model stalls/returns junk: /clear context, re-paste the last prompt with one more sentence of guidance. If the local LLM is slow, drop temperature or fall back to a smaller model (see /claude-code-with-local-models).
+- Confirm Claude Code is routed to the local LLM: run "claude", ask "what model are you?".
+
+## Further reading
+- https://www.kdnuggets.com/7-steps-to-mastering-vibe-coding
+- https://cloud.google.com/discover/what-is-vibe-coding
+- https://www.maginative.com/article/amazon-takes-on-github-copilot-with-kiro-an-ide-that-goes-beyond-vibe-coding/
+`;
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof initChatWidget !== 'function') return;
+    initChatWidget({
+        title: 'New to vibe coding? Ask me.',
+        greeting: "Hi! I know this whole workshop. Tell me which part you're on (or which prompt) and I'll walk you through it, point at the next prompt, or help you debug what the agent gave you back.",
+        loadingMessages: [
+            'Reading the workshop script…',
+            'Pulling up the right prompt…',
+            'Cross-referencing the demo tips…',
+            'Drafting a response…'
+        ],
+        chips: [
+            {label: 'How do I start?',          q: "I'm at the terminal. What do I do first?"},
+            {label: 'OpenWeatherMap key',       q: "Where do I get an OpenWeatherMap API key and how do I use it safely?"},
+            {label: 'Claude Code went sideways',q: "The agent's output went off the rails. How do I recover without restarting from scratch?"},
+            {label: 'Run the Flask app',        q: "How do I actually run the Flask app once the agent has written it?"},
+            {label: 'Webex bot setup',          q: "How do I set up the Webex bot token and room ID for the stretch goals?"}
+        ],
+        getContext: function() { return VIBE_CODING_CONTEXT; }
+    });
+});
+</script>
+{% endblock %}

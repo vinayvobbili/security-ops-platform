@@ -1,0 +1,41 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'Sign up' %}
+{% from 'auth/_form_styles.html' import auth_styles %}
+
+{% block extra_css %}{{ auth_styles() }}{% endblock %}
+
+{% block content %}
+<div class="auth-shell">
+    <h1>Get started</h1>
+    <p class="lead">Use your the company email address.</p>
+
+    {% if ok %}
+    <div class="auth-ok">
+        Check your inbox at <b>{{ email }}</b> for a verification link
+        — it will come from <b>XSOAR</b>. The link expires in 24 hours.
+    </div>
+    {% else %}
+    <form method="POST" action="/register" autocomplete="off">
+        <label for="email">the company email</label>
+        <input type="email" id="email" name="email" required value="{{ email or '' }}" placeholder="<redacted-email>">
+        <label for="role">Role</label>
+        <select id="role" name="role" required>
+            <option value="" disabled {% if not selected_role %}selected{% endif %}>Select your role…</option>
+            {% for key, label in public_roles %}
+            <option value="{{ key }}" {% if selected_role == key %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" required minlength="6" autocomplete="new-password">
+        <label for="password2">Confirm password</label>
+        <input type="password" id="password2" name="password2" required minlength="6" autocomplete="new-password">
+        {% if error %}<div class="auth-err">{{ error }}</div>{% endif %}
+        <button class="primary" type="submit">Create account</button>
+    </form>
+    <div class="auth-links">
+        <span>Already registered?</span>
+        <a href="/login">Sign in</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

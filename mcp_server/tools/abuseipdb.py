@@ -17,7 +17,7 @@ def _get_client():
     return _client
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def abuseipdb_check_ip(ip_address: str) -> dict:
     """Check an IP address against AbuseIPDB for community-reported abuse.
 
@@ -31,7 +31,7 @@ def abuseipdb_check_ip(ip_address: str) -> dict:
     return client.check_ip(ip_address.strip())
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def abuseipdb_check_domain(domain: str) -> dict:
     """Check a domain's IPs against AbuseIPDB for abuse reports.
 

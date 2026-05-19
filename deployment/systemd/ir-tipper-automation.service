@@ -1,0 +1,45 @@
+[Unit]
+Description=Tipper Automation Sidecar (containerized) — vendor app serving on :8033
+After=network.target
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=60
+TimeoutStopSec=20
+
+# Best-effort cleanup of any leftover container from a previous run.
+ExecStartPre=-/usr/bin/docker stop ir-tipper-automation
+ExecStartPre=-/usr/bin/docker rm ir-tipper-automation
+
+# AttackIQ creds (and any other runtime config) live in this env file.
+# The leading dash makes it optional — service still starts even if creds
+# haven't been populated yet. Vendor's app should fall back to seeded
+# demo data + show a DEMO badge when these are absent.
+EnvironmentFile=-/home/vinay/security-ops-platform/external/tipper_automation_secrets.env
+
+# Run the current image. The :current tag is updated by the deploy portal on
+# activate/rollback. Only 127.0.0.1 is exposed — external access is via the
+# Flask reverse proxy at /tipper-automation-app/*.
+ExecStart=/usr/bin/docker run --rm --name ir-tipper-automation \
+  -p 127.0.0.1:8033:8033 \
+  -e ATTACKIQ_BASE_URL \
+  -e ATTACKIQ_API_TOKEN \
+  -e ATTACKIQ_DEFAULT_ASSET_IDS \
+  -e ATTACKIQ_DEFAULT_TEMPLATE_ID \
+  -e ATTACKIQ_TARGET_PLATFORM \
+  -e ATTACKIQ_MAX_SCENARIOS_PER_TECHNIQUE \
+  -e ATTACKIQ_MAX_TOTAL_SCENARIOS \
+  --read-only \
+  --tmpfs /tmp:rw,size=64M \
+  --tmpfs /run:rw,size=16M \
+  --memory=512m --cpus=1.0 --pids-limit=128 \
+  --security-opt no-new-privileges \
+  --cap-drop=ALL \
+  ir-tipper-automation:current
+
+ExecStop=/usr/bin/docker stop ir-tipper-automation
+
+[Install]
+WantedBy=default.target

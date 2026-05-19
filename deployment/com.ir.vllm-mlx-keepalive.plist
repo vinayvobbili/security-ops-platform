@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.ir.vllm-mlx-keepalive</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/vvobbilichetty/vllm-venv/bin/python</string>
+		<string>/Users/vvobbilichetty/vllm_keepalive.py</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>ThrottleInterval</key>
+	<integer>10</integer>
+	<key>StandardOutPath</key>
+	<string>/tmp/vllm_keepalive.log</string>
+	<key>StandardErrorPath</key>
+	<string>/tmp/vllm_keepalive.log</string>
+</dict>
+</plist>

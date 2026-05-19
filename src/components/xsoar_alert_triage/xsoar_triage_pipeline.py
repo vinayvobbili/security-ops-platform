@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional
 
 from src.components.xsoar_alert_triage.models import (
+    ImpactModelPrediction,
     SimilarTicketPrediction,
     XsoarTriageCritique,
     XsoarTriageLLMResponse,
@@ -90,7 +91,7 @@ the call as a guardrail):
 - (any intent)     + outcome=false_alarm          → false_positive
 
 EXAMPLES:
-- "External IP sent spoofed email impersonating analyst@the-company.com to a Yahoo recipient. \
+- "External IP sent spoofed email impersonating <redacted-email> to a Yahoo recipient. \
 Yahoo rejected it via DMARC, generated an NDR." → intent=malicious, outcome=blocked → \
 true_positive_malicious_contained. (NOT true_positive_benign — DMARC working as designed \
 reduces impact, not intent.)
@@ -156,13 +157,54 @@ suspicious activity" in recommended_action for LOLBin alerts, even when the verd
 When IOC cross-correlation data shows the same IOCs appearing across multiple recent tickets, \
 this may indicate a campaign or widespread incident — factor this into your risk assessment.
 
-When Vectra NDR context is provided, weight it heavily:
-- A host/user entity with high threat (>50) and high certainty (>50) scores is a strong risk \
-escalator — Vectra uses behavioural AI on network traffic and false positives at high certainty \
-are rare. Multiple active Vectra detections alongside this XSOAR alert suggests a real incident.
-- An entity with zero active Vectra detections and low threat/certainty scores is a meaningful \
-mitigating factor, especially for network-based alerts.
-- A Vectra-prioritized entity should always be noted in risk factors regardless of verdict.
+When Vectra NDR context is provided, reason from the platform's own verdict signals \
+and the rendered fields — NOT from generic priors about "behavioural AI" or "rare \
+false positives." Cite specific field values from the Vectra context block in any \
+claim you make; if a fact you want to assert isn't in the rendered fields, do not \
+assert it.
+
+Field-level rules:
+- "Platform Verdict: custom_detection=benign" or "filtered_by_rule=true" / \
+"filtered_by_user=true" / "filtered_by_ai=true" means the platform (or a prior \
+analyst) already adjudicated this detection as non-actionable. Treat that as a \
+strong mitigating factor on intent. To override it, you need *new* evidence not \
+available at the time the triage rule fired — not just "the detection name sounds \
+bad." Quote the field when you cite it.
+- "triage_rule_id=<n>" indicates a tuning rule matched. Combined with scores of \
+0/100, that's the platform stating "this pattern is expected for this entity / \
+group." Do not interpret 0/0 scores as "absence of signal" on a triaged detection \
+— it's the platform's own benign verdict.
+- "Groups: …" carries tenant context. Sources in groups like "MDR - ZPA Connector \
+IPs", "Web Proxies", or scanner groups are infrastructure, not user endpoints — \
+do not infer "compromised user credentials" from an entity name that looks like \
+an email when the source is a connector. Destinations in groups like "M365 \
+worldwide IPs", "the company Domains", or vendor IP groups are expected destinations; \
+proxy fanout to those is not by itself a compromise indicator. Always name the \
+specific group when citing it as evidence.
+- "Session Shape" carries the discriminator numbers within a detection class. For \
+Outbound DoS / Slowloris-like detections, real attacks hold long-lived sessions \
+with sustained request load; proxy/connector fanout to SaaS shows many short \
+sessions with small bytes/session over a brief window. Quote sessions, duration, \
+and bytes/session when reasoning. For brute-force / lateral-movement detections, \
+quote dst_port, num_sessions, and duration.
+- "Recent Notes" carry ground truth from prior MDR escalations and analyst \
+closures. A recent note stating "Closing as duplicate of XSOAR#…" or carrying a \
+documented benign closure is direct evidence and should be inherited unless the \
+*current* alert presents materially different evidence (new IOCs, new \
+destinations, new timeframe). Quote the date and the relevant phrase when you \
+rely on a note.
+- A Vectra-prioritized entity (Prioritized: YES) should be noted as a risk factor \
+regardless of the above — Vectra explicitly elevated it for a reason worth \
+mentioning.
+- High threat AND high certainty (>50/>50) without any "Platform Verdict" line, \
+without "is_triaged" detections, and without offsetting Group memberships is a \
+risk escalator. State which of those conditions hold when you cite this.
+
+If the rendered Vectra context is empty or only contains the entity header with \
+no detections, groups, or notes, that is INSUFFICIENT data to draw a Vectra-based \
+conclusion. Set intent=unknown for the Vectra dimension and say "Vectra context \
+is thin — recommend analyst-driven entity lookup" rather than inferring from \
+absence.
 
 When ServiceNow context is provided:
 - An active change ticket (state: Implement, Scheduled, or similar) for the affected host is a \
@@ -910,7 +952,13 @@ def _build_source_details_section(source: Dict[str, Any]) -> list:
 
 
 def _build_vectra_context_section(vectra_context: Dict[str, Any]) -> list:
-    """Build LLM prompt section from Vectra NDR entity context."""
+    """Build LLM prompt section from Vectra NDR entity context.
+
+    Renders the platform's own verdict signals (triage rule fires,
+    custom_detection, filter flags), group memberships, session-shape
+    telemetry, and recent notes as facts the LLM can cite directly,
+    rather than asking it to re-derive a verdict from raw metrics.
+    """
     lines = ["\n## Vectra NDR Context"]
 
     for entity_key, label in (("host_entity", "Host Entity"), ("account_entity", "Account Entity")):
@@ -934,8 +982,18 @@ def _build_vectra_context_section(vectra_context: Dict[str, Any]) -> list:
             lines.append(f"  State: {entity['state']}")
         if entity.get("tags"):
             lines.append(f"  Tags: {', '.join(str(t) for t in entity['tags'][:5])}")
+        if entity.get("groups"):
+            lines.append(f"  Groups: {', '.join(entity['groups'][:8])}")
         if entity.get("last_detection_type"):
             lines.append(f"  Last Detection Type: {entity['last_detection_type']}")
+
+        notes = entity.get("notes") or []
+        if notes:
+            lines.append(f"  Recent Notes ({len(notes)}, newest first):")
+            for n in notes[:3]:
+                date = (n.get("date") or "")[:10]
+                text = (n.get("text") or "").replace("\n", " ").strip()
+                lines.append(f"    [{date}] {text}")
 
         active_dets = entity.get("active_detections", [])
         if active_dets:
@@ -946,9 +1004,57 @@ def _build_vectra_context_section(vectra_context: Dict[str, Any]) -> list:
                     f"    - {d.get('type', 'N/A')} "
                     f"(category: {d.get('category', 'N/A')}, "
                     f"threat: {d.get('threat', 0)}, "
-                    f"certainty: {d.get('certainty', 0)}){triaged}"
+                    f"certainty: {d.get('certainty', 0)}, "
+                    f"state: {d.get('state', 'N/A')}){triaged}"
                 )
-                if d.get("summary"):
+
+                # Platform's own verdict signals — strongest priors available.
+                verdict_bits = []
+                if d.get("custom_detection"):
+                    verdict_bits.append(f"custom_detection={d['custom_detection']}")
+                if d.get("triage_rule_id"):
+                    verdict_bits.append(f"triage_rule_id={d['triage_rule_id']}")
+                if d.get("filtered_by_rule"):
+                    verdict_bits.append("filtered_by_rule=true")
+                if d.get("filtered_by_user"):
+                    verdict_bits.append("filtered_by_user=true")
+                if d.get("filtered_by_ai"):
+                    verdict_bits.append("filtered_by_ai=true")
+                if verdict_bits:
+                    lines.append(f"      Platform Verdict: {' | '.join(verdict_bits)}")
+
+                if d.get("groups"):
+                    lines.append(f"      Groups: {', '.join(d['groups'][:8])}")
+
+                shape = d.get("session_shape") or {}
+                if shape:
+                    bits = []
+                    if shape.get("num_sessions") is not None:
+                        bits.append(f"sessions={shape['num_sessions']}")
+                    if shape.get("bytes_sent") is not None:
+                        bits.append(f"bytes_sent={shape['bytes_sent']}")
+                    if shape.get("bytes_received") is not None:
+                        bits.append(f"bytes_received={shape['bytes_received']}")
+                    if shape.get("duration_s") is not None:
+                        bits.append(f"duration={shape['duration_s']}s")
+                    if shape.get("bytes_per_session") is not None:
+                        bits.append(f"bytes/session={shape['bytes_per_session']}")
+                    if shape.get("protocol"):
+                        bits.append(f"proto={shape['protocol']}")
+                    if shape.get("dos_types"):
+                        bits.append(f"dos_type={','.join(str(t) for t in shape['dos_types'])}")
+                    if shape.get("dst_ips"):
+                        bits.append(f"dst_ip={','.join(str(i) for i in shape['dst_ips'][:3])}")
+                    if shape.get("dst_ports"):
+                        bits.append(f"dst_port={','.join(str(p) for p in shape['dst_ports'][:3])}")
+                    if shape.get("dst_domains"):
+                        bits.append(f"dst_domain={','.join(str(x) for x in shape['dst_domains'][:3])}")
+                    if bits:
+                        lines.append(f"      Session Shape: {' | '.join(bits)}")
+
+                if d.get("tags"):
+                    lines.append(f"      Tags: {', '.join(str(t) for t in d['tags'][:5])}")
+                if d.get("summary") and d["summary"] != d.get("type"):
                     lines.append(f"      Summary: {d['summary'][:150]}")
 
     if not vectra_context.get("host_entity") and not vectra_context.get("account_entity"):
@@ -1545,7 +1651,8 @@ def _run_triage_critic(
         HumanMessage(content=user_msg),
     ]
     try:
-        critic_structured = router.with_structured_output(XsoarTriageCritique)
+        from my_bot.utils.llm_factory import structured_output
+        critic_structured = structured_output(router, XsoarTriageCritique)
         critique = critic_structured.invoke(messages)
         logger.info(
             f"[critic] ticket={ticket_id} flagged={critique.flagged} "
@@ -1670,7 +1777,8 @@ def _run_xsoar_llm_triage(
     verdict_messages = messages + [verdict_prompt]
 
     try:
-        structured_llm = llm.with_structured_output(XsoarTriageLLMResponse)
+        from my_bot.utils.llm_factory import structured_output
+        structured_llm = structured_output(llm, XsoarTriageLLMResponse)
         return structured_llm.invoke(verdict_messages), tool_trace, critique
     except Exception as parse_err:
         logger.warning(
@@ -1738,16 +1846,18 @@ class XsoarTriagePipeline:
         enrichment = {}
         source_details = None
         similar_prediction = None
+        impact_model_prediction = None
         asset_context = {}
         vectra_context = {}
         qradar_entity_activity = {}
         snow_context = {}
         varonis_context = {}
         ad_context = {}
-        with ThreadPoolExecutor(max_workers=9, thread_name_prefix="xsoar-enrich") as pool:
+        with ThreadPoolExecutor(max_workers=10, thread_name_prefix="xsoar-enrich") as pool:
             ioc_future = pool.submit(enrich_xsoar_ticket, ticket)
             source_future = pool.submit(enrich_from_source, ticket)
             similar_future = pool.submit(self._get_similar_ticket_prediction, ticket)
+            impact_model_future = pool.submit(self._get_impact_model_prediction, ticket)
             asset_future = pool.submit(self._enrich_asset_context, hostname)
             vectra_future = pool.submit(enrich_vectra_context, hostname, username, source_ip)
             qradar_activity_future = pool.submit(
@@ -1766,6 +1876,10 @@ class XsoarTriagePipeline:
                 similar_prediction = similar_future.result()
             except Exception as e:
                 logger.warning(f"Similar ticket prediction failed for {ticket_id}: {e}")
+            try:
+                impact_model_prediction = impact_model_future.result()
+            except Exception as e:
+                logger.warning(f"Impact model prediction failed for {ticket_id}: {e}")
             try:
                 asset_context = asset_future.result() or {}
             except Exception as e:
@@ -1861,6 +1975,7 @@ class XsoarTriagePipeline:
             ticket_owner=ticket.get("owner", ""),
             enrichment=enrichment,
             similar_ticket_prediction=similar_prediction,
+            impact_model_prediction=impact_model_prediction,
             asset_context=asset_context,
             vectra_context=vectra_context,
             qradar_entity_activity=qradar_entity_activity,
@@ -2094,6 +2209,30 @@ class XsoarTriagePipeline:
 
         except Exception as e:
             logger.warning(f"Similar ticket prediction failed (graceful degradation): {e}")
+            return None
+
+    @staticmethod
+    def _get_impact_model_prediction(ticket: dict) -> Optional[ImpactModelPrediction]:
+        """Predict 3-class ticket impact via the trained sklearn model.
+
+        Returns None if the model artifact is missing on disk or inference
+        fails — the pipeline treats this as an absent signal rather than an
+        error, so an unbuilt model never blocks triage.
+        """
+        try:
+            from services.ticket_impact_model import predict_for_xsoar_ticket
+
+            result = predict_for_xsoar_ticket(ticket)
+            if result is None:
+                return None
+            return ImpactModelPrediction(
+                label=result["label"],
+                confidence=float(result["confidence"]),
+                probabilities={k: float(v) for k, v in result["probabilities"].items()},
+                model_version=result.get("model_version", ""),
+            )
+        except Exception as e:
+            logger.warning(f"Impact model prediction failed (graceful degradation): {e}")
             return None
 
     @staticmethod

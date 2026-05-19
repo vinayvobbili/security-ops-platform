@@ -19,6 +19,7 @@
             <span class="aid-project">{{ s.project_name }}</span>
             <div class="aid-header-right">
                 <span class="aid-priority aid-priority-{{ s.priority|lower }}">{{ s.priority }}</span>
+                <a class="aid-edit-btn" href="/ai-intake-submissions/{{ s.id }}/edit" title="Edit submission">✏️</a>
                 <button class="aid-delete-btn" title="Delete submission" onclick="document.getElementById('deleteModal').classList.add('show')">🗑️</button>
             </div>
         </div>
@@ -87,6 +88,45 @@
         </div>
         {% endif %}
     </div>
+
+    <div class="aid-card aid-comments" id="comments">
+        <div class="aid-comments-header">
+            <h3>💬 Discussion <span class="aid-comments-count" id="commentsCount">{{ comments|length }}</span></h3>
+            <div class="aid-comments-hint">Add answers, follow-ups, or scoping decisions here.</div>
+        </div>
+
+        <div class="aid-comments-thread" id="commentsThread">
+            {% if comments %}
+                {% for c in comments %}
+                <div class="aid-comment">
+                    <div class="aid-comment-head">
+                        <span class="aid-comment-author">{{ c.author_name }}</span>
+                        <span class="aid-comment-email">{{ c.author_email }}</span>
+                        <span class="aid-comment-time">{{ c.created_at_display }}</span>
+                    </div>
+                    <div class="aid-comment-body">{{ c.body_html|safe }}</div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="aid-comments-empty" id="commentsEmpty">No comments yet — be the first to reply.</div>
+            {% endif %}
+        </div>
+
+        <form class="aid-comment-form" id="commentForm" onsubmit="return submitComment(event)">
+            <div class="aid-comment-form-row">
+                <input type="text" id="commentAuthorName" placeholder="Your name" required autocomplete="name">
+                <div class="aid-comment-email-wrap">
+                    <input type="text" id="commentAuthorEmail" placeholder="username (optional)" autocomplete="username">
+                    <span class="aid-comment-email-suffix">@the-company.com</span>
+                </div>
+            </div>
+            <textarea id="commentBody" placeholder="Type your comment, answer, or follow-up question…" rows="4" required></textarea>
+            <div class="aid-comment-form-actions">
+                <span class="aid-comment-form-err" id="commentFormErr"></span>
+                <button type="submit" class="aid-comment-submit" id="commentSubmitBtn">Post comment</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <!-- Delete confirmation modal -->
@@ -110,6 +150,75 @@
 document.addEventListener('DOMContentLoaded', function() {
     if (typeof initTheme === 'function') initTheme();
 });
+
+function submitComment(event) {
+    event.preventDefault();
+    var nameEl = document.getElementById('commentAuthorName');
+    var emailEl = document.getElementById('commentAuthorEmail');
+    var bodyEl = document.getElementById('commentBody');
+    var errEl = document.getElementById('commentFormErr');
+    var btn = document.getElementById('commentSubmitBtn');
+
+    var name = (nameEl.value || '').trim();
+    var email = (emailEl.value || '').trim();
+    var body = (bodyEl.value || '').trim();
+    if (!name || !body) {
+        errEl.textContent = 'Name and comment are required.';
+        return false;
+    }
+
+    errEl.textContent = '';
+    btn.disabled = true;
+    btn.textContent = 'Posting…';
+
+    fetch('/ai-intake-submissions/{{ s.id }}/comments', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({author_name: name, author_email: email, body: body})
+    })
+    .then(function(r) { return r.json().then(function(data) { return {status: r.status, data: data}; }); })
+    .then(function(out) {
+        btn.disabled = false;
+        btn.textContent = 'Post comment';
+        if (out.status !== 200 || out.data.status !== 'success') {
+            errEl.textContent = (out.data && out.data.message) || 'Failed to post comment.';
+            return;
+        }
+        var c = out.data.comment;
+        var thread = document.getElementById('commentsThread');
+        var empty = document.getElementById('commentsEmpty');
+        if (empty) empty.remove();
+
+        var div = document.createElement('div');
+        div.className = 'aid-comment aid-comment-new';
+        var head = document.createElement('div');
+        head.className = 'aid-comment-head';
+        head.innerHTML = '<span class="aid-comment-author"></span><span class="aid-comment-email"></span><span class="aid-comment-time"></span>';
+        head.querySelector('.aid-comment-author').textContent = c.author_name;
+        head.querySelector('.aid-comment-email').textContent = c.author_email;
+        head.querySelector('.aid-comment-time').textContent = c.created_at_display || '';
+        div.appendChild(head);
+        var bodyDiv = document.createElement('div');
+        bodyDiv.className = 'aid-comment-body';
+        // body_html is server-rendered (HTML-escaped + URLs linkified) so it's safe to inject.
+        bodyDiv.innerHTML = c.body_html || '';
+        div.appendChild(bodyDiv);
+        thread.appendChild(div);
+
+        var countEl = document.getElementById('commentsCount');
+        countEl.textContent = (parseInt(countEl.textContent, 10) || 0) + 1;
+
+        bodyEl.value = '';
+        // Keep the name/email so the user doesn't have to retype for a follow-up.
+    })
+    .catch(function() {
+        btn.disabled = false;
+        btn.textContent = 'Post comment';
+        errEl.textContent = 'Network error.';
+    });
+
+    return false;
+}
 
 function confirmDelete() {
     const pw = document.getElementById('deletePassword').value;

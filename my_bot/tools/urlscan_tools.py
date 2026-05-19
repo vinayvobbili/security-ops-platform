@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Optional
 
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 from services.urlscan import URLScanClient
 from src.utils.tool_decorator import log_tool_call
@@ -229,7 +230,7 @@ def _format_scan_result(data: dict, url: str) -> str:
     return "\n".join(output)
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def search_urlscan(domain: str) -> str:
     """Search URLScan.io for existing scans of a domain.
@@ -268,7 +269,7 @@ def search_urlscan(domain: str) -> str:
         return f"Error searching URLScan: {str(e)}"
 
 
-@tool
+@mutating_tool
 @log_tool_call
 def scan_url_urlscan(url: str) -> str:
     """Submit a URL to URLScan.io for fresh scanning and analysis.

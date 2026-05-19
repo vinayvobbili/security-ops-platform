@@ -7,7 +7,7 @@ from mcp_server.server import mcp
 logger = logging.getLogger(__name__)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def wiki_search(query: str) -> str:
     """Search the team's Knowledge Base wiki for articles on SOC topics.
 

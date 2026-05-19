@@ -1,6 +1,6 @@
 """URL blocking tools via XSOAR.
 
-For MCP/the alert triage service, confirmation is handled conversationally by Claude —
+For MCP/Barnacles, confirmation is handled conversationally by Claude —
 no Webex card needed. The tool creates the ticket directly.
 """
 
@@ -20,7 +20,7 @@ def _clean_url(url: str) -> str:
     return url
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def block_url(
     url: str,
     reason: str,
@@ -46,7 +46,7 @@ def block_url(
     from src.utils.xsoar_enums import XsoarEnvironment
 
     clean = _clean_url(url)
-    handler = TicketHandler(environment=XsoarEnvironment.DEV)
+    handler = TicketHandler(environment=XsoarEnvironment.PROD)
 
     try:
         if xsoar_ticket_id:

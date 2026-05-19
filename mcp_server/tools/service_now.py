@@ -17,7 +17,7 @@ def _get_client():
     return _client
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def servicenow_get_host(hostname: str) -> dict:
     """Look up a host in the ServiceNow CMDB.
 
@@ -28,7 +28,7 @@ def servicenow_get_host(hostname: str) -> dict:
     return client.get_host_details(hostname)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def servicenow_get_incidents(
     assignment_group_name: str, minutes: int = 15
 ) -> dict:

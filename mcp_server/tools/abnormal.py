@@ -18,7 +18,7 @@ def _get_client():
     return _client
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def abnormal_get_threats(
     filter_param: Optional[str] = None,
     page_size: int = 100,
@@ -42,7 +42,7 @@ def abnormal_get_threats(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def abnormal_get_threat_details(
     threat_id: str, page_size: int = 100, page_number: int = 1
 ) -> dict:
@@ -59,7 +59,7 @@ def abnormal_get_threat_details(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def abnormal_get_cases(
     filter_param: Optional[str] = None,
     page_size: int = 100,
@@ -78,7 +78,7 @@ def abnormal_get_cases(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def abnormal_get_employee_info(email_address: str) -> dict:
     """Get employee information from Abnormal Security.
 
@@ -89,7 +89,7 @@ def abnormal_get_employee_info(email_address: str) -> dict:
     return client.get_employee_information(email_address)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def abnormal_get_threat_intel() -> dict:
     """Get the Abnormal Security threat intelligence feed."""
     client = _get_client()

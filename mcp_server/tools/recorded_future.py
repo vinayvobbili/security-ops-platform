@@ -18,7 +18,7 @@ def _get_client():
     return _client
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def recorded_future_search_actor(
     name: str, limit: int = 100, category: Optional[str] = None
 ) -> dict:
@@ -33,7 +33,7 @@ def recorded_future_search_actor(
     return client.search_actor(name, limit=limit, category=category)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def recorded_future_get_actor(actor_id: str) -> dict:
     """Get detailed information about a Recorded Future threat actor.
 
@@ -44,7 +44,7 @@ def recorded_future_get_actor(actor_id: str) -> dict:
     return client.get_actor_details(actor_id)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def recorded_future_enrich(
     ips: Optional[list] = None,
     domains: Optional[list] = None,
@@ -74,7 +74,7 @@ def recorded_future_enrich(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def recorded_future_triage_phishing(
     domains: Optional[list] = None,
     urls: Optional[list] = None,
@@ -95,7 +95,7 @@ def recorded_future_triage_phishing(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def recorded_future_search_brand(
     brand: str,
     legitimate_domains: Optional[list] = None,

@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 from services.qradar import QRadarClient
 from src.utils.tool_decorator import log_tool_call
@@ -19,7 +20,7 @@ from src.utils.llm_decorators import validate_args, IP_ADDRESS_PATTERN, DOMAIN_P
 # Lazy-initialized QRadar client
 _qradar_client: Optional[QRadarClient] = None
 
-# Lazy-initialized LLM for NL→AQL translation (separate from the security assistant bot's main LLM
+# Lazy-initialized LLM for NL→AQL translation (separate from Pokedex's main LLM
 # so the system prompt + few-shots stay scoped to AQL generation only)
 _nl_to_aql_llm = None
 
@@ -39,10 +40,47 @@ def _get_qradar_client() -> Optional[QRadarClient]:
     return _qradar_client
 
 
+_DETAIL_EVENT_FIELDS = frozenset({
+    "sourceip", "destinationip", "prenatsourceip", "prenatdestinationip",
+    "URL", "URL Path", "Referer URL", "File Name", "Destination Domain Name",
+    "Threat Name", "Threat Type", "eventname", "logsource", "magnitude", "starttime",
+})
+
+
+def _format_aggregation_rows(events: list, max_rows: int = 50) -> str:
+    """Render aggregation/group-by rows (e.g. SELECT TSLD, COUNT(*) ...) as a
+    markdown table the analysis LLM can read directly. Used when none of the
+    rows carry detail-event fields like sourceip/URL/Threat Name."""
+    headers = list(events[0].keys())
+    lines = [
+        f"**Total Rows:** {len(events)}",
+        "",
+        "| " + " | ".join(headers) + " |",
+        "| " + " | ".join("---" for _ in headers) + " |",
+    ]
+    for row in events[:max_rows]:
+        cells = []
+        for h in headers:
+            v = row.get(h)
+            if isinstance(v, float) and v.is_integer():
+                v = int(v)
+            cells.append(str(v) if v is not None else "")
+        lines.append("| " + " | ".join(cells) + " |")
+    if len(events) > max_rows:
+        lines.append(f"\n*... and {len(events) - max_rows} more rows*")
+    return "\n".join(lines)
+
+
 def _format_events_for_display(events: list, max_events: int = 10) -> str:
     """Format a list of events for display."""
     if not events:
         return "No events found"
+
+    # Aggregation result (e.g. GROUP BY TSLD with COUNT/SUM) — render as a table.
+    # Detect by absence of any detail-event field across all rows.
+    sample_keys = set().union(*(e.keys() for e in events[:5]))
+    if not (sample_keys & _DETAIL_EVENT_FIELDS):
+        return _format_aggregation_rows(events)
 
     lines = [f"**Total Events:** {len(events)}", ""]
 
@@ -105,7 +143,7 @@ def _format_events_for_display(events: list, max_events: int = 10) -> str:
     return "\n\n".join(lines)
 
 
-@tool
+@readonly_tool
 @validate_args(ip_address=IP_ADDRESS_PATTERN)
 @log_tool_call
 def search_qradar_by_ip(ip_address: str, hours: int = 24) -> str:
@@ -158,7 +196,7 @@ def search_qradar_by_ip(ip_address: str, hours: int = 24) -> str:
     return "\n".join(output)
 
 
-@tool
+@readonly_tool
 @validate_args(domain=DOMAIN_PATTERN)
 @log_tool_call
 def search_qradar_by_domain(domain: str, hours: int = 24) -> str:
@@ -213,7 +251,7 @@ def search_qradar_by_domain(domain: str, hours: int = 24) -> str:
     return "\n".join(output)
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_qradar_offense(offense_id: int) -> str:
     """Get detailed information about a SINGLE QRadar offense when you have the specific offense ID number.
@@ -260,7 +298,7 @@ def _format_epoch_ms(epoch_ms) -> str:
         return "Unknown"
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def list_qradar_offenses(status: str = "OPEN", hours_back: int = 0, limit: int = 10) -> str:
     """List QRadar offenses, optionally filtered to a recent time window.
@@ -361,42 +399,73 @@ def list_qradar_offenses(status: str = "OPEN", hours_back: int = 0, limit: int =
     return "\n\n".join(output)
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def run_qradar_aql_query(aql_query: str) -> str:
-    """Run an AQL (Ariel Query Language) query in QRadar. Also use this tool to WRITE
-    AQL from scratch when the user asks a natural-language question about SIEM event data
-    (e.g., "show top blocked domains", "who accessed evil.com", "high severity events today").
+    """Execute a raw AQL (Ariel Query Language) statement in QRadar — for verbatim
+    AQL the user provides, or for very simple SELECTs you assemble yourself when no
+    English translation is needed.
 
-    WHEN TO USE:
-    - User provides raw AQL (SELECT...FROM events)
-    - User asks a natural-language question about event/log data that requires querying QRadar
-    - User asks about traffic, connections, authentications, threats, or endpoint activity
+    PREFER `nl_to_aql_query` for English questions. That tool wraps a category-aware
+    schema and few-shot examples that prevent the most common LLM mistake on QRadar:
+    grouping by a field that doesn't exist on the chosen log source (e.g., "TSLD"
+    on the corporate proxy — the field is empty, so the query returns silently with zero rows).
+
+    WHEN TO USE THIS TOOL:
+    - User pasted literal AQL ("run this query: SELECT ...")
+    - You're following up on a previous AQL result with a tiny mechanical change
+      (different LIMIT, swap a sort column) that doesn't need a schema lookup
+
+    WHEN NOT TO USE THIS TOOL:
+    - User asks an English question ("show top blocked domains", "who accessed evil.com",
+      "high severity events today") — use `nl_to_aql_query` instead
 
     AQL SYNTAX (clause order is strict):
       SELECT cols FROM events WHERE conditions [GROUP BY col] [ORDER BY col DESC] [LIMIT N] LAST N HOURS|DAYS
     - When combining OR with AND, always parenthesize the OR: WHERE (A OR B) AND C
-    - Time window REQUIRED: always end with LAST N HOURS or LAST N DAYS
+    - Time window REQUIRED: always end with LAST N HOURS (plural — even N=1 is "LAST 1 HOURS")
     - String matching: ILIKE '%value%' (case-insensitive), LIKE (case-sensitive)
     - Double-quote custom properties: "Threat Name", "Computer Hostname", "User Agent"
     - Functions: qidname(qid) AS eventName, logsourcename(logsourceid) AS logSource,
       CATEGORYNAME(category), DATEFORMAT(starttime,'yyyy-MM-dd HH:mm:ss') AS time
     - Offense events: WHERE INOFFENSE(offense_id)
-    - Top-N pattern: SELECT col, COUNT(*) AS cnt FROM events WHERE ... GROUP BY col ORDER BY cnt DESC LIMIT 10 LAST 24 HOURS
-    - Time series: SELECT DATEFORMAT(starttime,'yyyy-MM-dd HH:00') AS hour, COUNT(*) AS cnt FROM events WHERE ... GROUP BY hour ORDER BY hour ASC LAST 24 HOURS
+    - Top-N pattern: SELECT col, COUNT(*) AS cnt FROM events WHERE ... GROUP BY col ORDER BY cnt DESC LIMIT 10 LAST 4 HOURS
+    - Time series: SELECT DATEFORMAT(starttime,'yyyy-MM-dd HH:00') AS hour, COUNT(*) AS cnt FROM events WHERE ... GROUP BY hour ORDER BY hour ASC LAST 4 HOURS
 
-    LOG SOURCES & FIELDS (filter with logsourcetypename(devicetype) = '...'):
-    - Web Proxy (Blue Coat Web Security Service): sourceip, destinationip, "Computer Hostname", username, URL, "Referer", "User Agent", filename, "Action" (Allowed/Blocked)
-    - Email (Area1 Security / Abnormal Security): sourceip, username, sender, recipient, "Subject"
-    - Office 365 (deviceType='397', Operation IN ('TIUrlClickData','TIMailData')): username, URL, "Subject", "Filename"
-    - Palo Alto (Palo Alto PA Series): sourceip, destinationip, "Threat Name", "Action", URL, "TSLD", "PAN Log SubType"
-    - Endpoint (CrowdStrike Falcon / Tanium): "Computer Hostname", username, "Process Name", "Command", "MD5 Hash", "SHA256 Hash"
-    - Entra ID (Microsoft Azure Active Directory): username, sourceip, Operation, "Conditional Access Status", "Region"
-    - Common fields (all sources): sourceip, destinationip, destinationport, username, starttime, magnitude (0-10)
+    FIELD AVAILABILITY MATRIX — every custom-property field belongs to a specific log
+    source. Querying a field outside its source returns NULL silently (and grouping
+    by NULL returns no rows). Match the WHERE log-source to the fields you select:
 
-    PERFORMANCE: NEVER GROUP BY URL (millions of unique values, will time out). Use GROUP BY "TSLD" for domain aggregations.
-    When grouping, exclude nulls: add "TSLD" IS NOT NULL (or relevant field) to WHERE.
-    HARD CAP — max time window is LAST 4 HOURS. Never use LAST N DAYS. Never use LAST N HOURS where N > 4. Even "today" / "this morning" should be LAST 4 HOURS. The tool will rewrite anything larger to 4 HOURS automatically.
+       Web Proxy (web proxy logs / Blue Coat Web Security Service):
+           sourceip, destinationip, "Computer Hostname", username, URL, "Referer",
+           "User Agent", filename, "Action" (Allowed/Blocked/nss-fw)
+       Email (Area1 Security / Abnormal Security):
+           sourceip, username, sender, recipient, "Subject"
+       Office 365 (deviceType='397', Operation IN ('TIUrlClickData','TIMailData')):
+           username, URL, "Subject", "Filename"
+       Palo Alto (Palo Alto PA Series):
+           sourceip, destinationip, "Threat Name", "Action", URL, "TSLD",
+           "PAN Log SubType"   ← TSLD lives ONLY here, NOT on the corporate proxy/Blue Coat
+       Endpoint (CrowdStrike Falcon / Tanium):
+           "Computer Hostname", username, "Process Name", "Command",
+           "MD5 Hash", "SHA256 Hash"
+       Entra ID (Microsoft Entra ID):
+           username, sourceip, Operation, "Conditional Access Status", "Region"
+       ZPA (VPN logs):
+           username, sourceip, "session-status"
+       Common (all sources): sourceip, destinationip, destinationport, username,
+           starttime, magnitude (0-10)
+
+    DOMAIN AGGREGATIONS: never GROUP BY URL (millions of unique values, will time out).
+    For top-domain questions use Palo Alto firewall data and GROUP BY "TSLD" — that
+    field is the registrable domain (e.g. google.com). On the corporate proxy/Blue Coat there is
+    no TSLD field; if the user wants top web-proxy destinations, GROUP BY destinationip
+    or use a regex on URL to extract the host. When grouping, exclude nulls — add
+    `"TSLD" IS NOT NULL` (or the relevant field) to the WHERE clause.
+
+    HARD CAP — max time window is LAST 4 HOURS. Never use LAST N DAYS. Never use
+    LAST N HOURS where N > 4. Even "today" / "this morning" should be LAST 4 HOURS.
+    The tool will rewrite anything larger to 4 HOURS automatically.
 
     Args:
         aql_query: The AQL query to execute, or a well-formed SELECT statement you construct from the user's question.
@@ -449,7 +518,16 @@ def run_qradar_aql_query(aql_query: str) -> str:
     events = result.get("events", result.get("flows", []))
 
     if not events:
-        return "Query completed but returned no results."
+        return (
+            "Query completed but returned **no results**.\n\n"
+            "Common cause: the GROUP BY field doesn't exist on the chosen log source. "
+            "QRadar reads the missing field as NULL and grouping by NULL returns nothing. "
+            "Notably: \"TSLD\" only exists on `Palo Alto PA Series` — the corporate proxy/Blue Coat events "
+            "have no TSLD, so a top-domain query against the web proxy returns empty.\n\n"
+            "Before retrying: confirm every custom-property field in your SELECT/GROUP BY "
+            "is listed for the log source in your WHERE clause. If it isn't, switch to the "
+            "right log source, or report no data — do NOT loop on the same query."
+        )
 
     output = [
         "## QRadar AQL Query Results",
@@ -480,12 +558,12 @@ def _get_nl_to_aql_llm():
 
 
 # Keyword → category mapping for auto-detection.
-# the security assistant bot has no sidebar — when the caller doesn't specify a category, we score
+# Pokedex has no sidebar — when the caller doesn't specify a category, we score
 # the question against these keywords and pick the highest-scoring match.
 # Order matters only as a tiebreaker (first match wins on equal scores).
 _CATEGORY_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
     ("web_proxy", (
-        "web proxy", "blue coat", "bluecoat", "browse", "browsed",
+        "web proxy", "proxy nss", "blue coat", "bluecoat", "browse", "browsed",
         "blocked domain", "blocked url", "blocked site", "user agent", "referer",
         "downloaded file", "url category", "web filter",
     )),
@@ -501,6 +579,9 @@ _CATEGORY_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
     ("paloalto", (
         "palo alto", "paloalto", "pan-os", "panos", "pa series", "wildfire",
         "firewall threat", "pan log", "tsld", "url filtering",
+        # Domain-volume questions answer best from the firewall (TSLD field)
+        "top domain", "top domains", "top tld", "registrable domain",
+        "traffic volume", "by volume", "by traffic", "noisiest domain",
     )),
     ("endpoint", (
         "endpoint", "crowdstrike", "falcon", "tanium", "process name", "command line",
@@ -509,6 +590,9 @@ _CATEGORY_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
     ("entra_id", (
         "entra", "azure ad", "azure active directory", "aad", "sign-in", "signin",
         "sign in", "conditional access", "ca policy", "interactive login", "mfa",
+    )),
+    ("zpa", (
+        "zpa", "proxy private access", "zpn-sess", "private access session",
     )),
 ]
 
@@ -533,7 +617,7 @@ def _infer_category(question: str) -> str:
     return best_id
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def nl_to_aql_query(question: str, category: str = "auto") -> str:
     """Translate a natural-language question into AQL, execute it in QRadar, and return results.
@@ -541,35 +625,33 @@ def nl_to_aql_query(question: str, category: str = "auto") -> str:
     This is the smartest QRadar tool — use it whenever the user asks an English question about
     SIEM data and you want a focused, log-source-aware query without writing AQL yourself.
     A specialist LLM handles AQL generation with category-specific schemas and few-shot examples,
-    so the security assistant bot doesn't need to know AQL syntax.
+    so Pokedex doesn't need to know AQL syntax.
 
-    DATASET SELECTION: The tool auto-detects the right log source category from keywords in the
-    question (e.g. "Entra sign-in" → entra_id, "blocked domain" → web_proxy). You normally don't
-    need to pass `category` — leave it as "auto" and it'll pick the best match. Only set it
-    explicitly if the user names a specific dataset and the keywords are ambiguous.
+    CRITICAL — DO NOT PASS THE `category` PARAMETER. Pass only `question`. The tool's
+    auto-detector picks the right log source from the question's keywords and knows
+    facts about field availability that you do not (e.g. that "TSLD" — the registrable-
+    domain field needed for top-domain aggregations — exists ONLY on Palo Alto, not on
+    the corporate proxy/Blue Coat web proxy). If you guess `category` yourself you will route to a
+    log source that doesn't carry the field the question needs and get zero rows back.
+
+    Only override `category` if the USER names a specific dataset by name (e.g. "search
+    the corporate proxy", "in Entra", "from Palo Alto") AND the auto-detector's keyword list might
+    miss it. When in doubt, omit `category`.
 
     Use this tool when:
     - User asks a natural-language question about SIEM/QRadar event data
-      (e.g., "show top blocked domains", "any failed sign-ins in Entra?",
-       "what threats did Palo Alto detect today?", "noisiest endpoints in the last hour")
+      (e.g., "show top blocked domains", "top domains by traffic volume",
+       "any failed sign-ins in Entra?", "what threats did Palo Alto detect today?",
+       "noisiest endpoints in the last hour")
     - User asks an exploratory SIEM question without providing AQL
-    - You want pre-built schemas, log-source filters, and AQL guidance applied automatically
-
-    Available categories (auto-detected from question; pass explicitly only if you must override):
-    - web_proxy   — Blue Coat web proxy logs
-    - email       — Area1 & Abnormal email security
-    - o365        — Office 365 threat intel (URL clicks, mail data, AIR investigations)
-    - paloalto    — Palo Alto firewall threats and traffic
-    - endpoint    — CrowdStrike Falcon & Tanium endpoint detections
-    - entra_id    — Microsoft Entra ID / Azure AD sign-ins
-    - all_events  — Any log source (cross-source searches or when no dataset matches)
 
     NOTE: For raw AQL the user provides verbatim, use run_qradar_aql_query.
     For simple IP/domain searches with no aggregation, use search_qradar_by_ip / search_qradar_by_domain.
 
     Args:
         question: The user's natural-language question (e.g., "Top 10 source IPs in the last hour")
-        category: Log source category id, or "auto" (default) to auto-detect from the question
+        category: LEAVE UNSET. Defaults to "auto" — the tool will pick the right log source.
+                  Override only when the user explicitly names a dataset.
     """
     from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
     from src.components.web.qradar_chat_handler import (
@@ -707,8 +789,28 @@ def nl_to_aql_query(question: str, category: str = "auto") -> str:
     ]
     if not events:
         output.append("Query executed successfully but returned **no results**.")
+        output.append("")
+        output.append("---")
+        output.append(
+            "**STOP. This is the final answer.** Tell the user the query "
+            "returned no results in the time window and offer to broaden the "
+            "search. **Do NOT call run_qradar_aql_query or any other QRadar "
+            "tool to retry, refine, or 'try a different angle' on this question.** "
+            "Looping wastes 60+ seconds per attempt and produces no new data."
+        )
     else:
         output.append(_format_events_for_display(events))
+        output.append("")
+        output.append("---")
+        output.append(
+            "**STOP. This is the final answer.** The query above was generated "
+            "by a QRadar specialist with full schema knowledge of the chosen "
+            "log source. Format the rows above and present them to the user. "
+            "**Do NOT call run_qradar_aql_query or any other QRadar tool to "
+            "refine, retry, double-check, or augment this result** — the data "
+            "above IS the answer. If the user wants a follow-up, wait for them "
+            "to ask."
+        )
 
     return "\n".join(output)
 

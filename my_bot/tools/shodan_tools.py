@@ -17,6 +17,7 @@ import logging
 from typing import Optional
 
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 from services.shodan_monitor import ShodanClient
 from src.utils.tool_decorator import log_tool_call
@@ -229,7 +230,7 @@ def _format_domain_result(data: dict) -> str:
     return "\n".join(result)
 
 
-@tool
+@readonly_tool
 @validate_args(ip_address=IP_ADDRESS_PATTERN)
 @log_tool_call
 def lookup_ip_shodan(ip_address: str) -> str:
@@ -262,7 +263,7 @@ def lookup_ip_shodan(ip_address: str) -> str:
         return f"Error looking up IP in Shodan: {str(e)}"
 
 
-@tool
+@readonly_tool
 @validate_args(domain=DOMAIN_PATTERN)
 @log_tool_call
 def lookup_domain_shodan(domain: str) -> str:

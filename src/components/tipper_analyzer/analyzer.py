@@ -1077,12 +1077,13 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
 
         logger.info("Generating novelty analysis with LLM...")
         if not self.llm:
-            raise RuntimeError("LLM not initialized. Ensure the security assistant bot state manager is running.")
+            raise RuntimeError("LLM not initialized. Ensure Pokedex state manager is running.")
 
         start_time = time.time()
 
-        # Use structured output to guarantee valid JSON response
-        structured_llm = self.llm.with_structured_output(NoveltyLLMResponse)
+        # Use json_mode (no FSM-constrained decoding — see llm_factory.structured_output)
+        from my_bot.utils.llm_factory import structured_output
+        structured_llm = structured_output(self.llm, NoveltyLLMResponse)
         logger.info(f"Sending request to LLM (timeout={LLM_TIMEOUT_SECONDS}s)...")
 
         # Python-level timeout: ChatOllama's client_kwargs timeout may not be

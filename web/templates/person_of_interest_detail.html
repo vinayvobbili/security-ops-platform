@@ -1,0 +1,963 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'POI Investigation #' ~ inv.id %}
+{% set page_title_left_icon = '🕵️' %}
+{% set page_title_right_icon = '🔎' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/chat_widget.css') }}">
+<style>
+  /* Soft brand-tinted page bg — matches Regulatory Acceleration Matrix */
+  body { background: linear-gradient(160deg, #f3f7fc 0%, #e8f0fe 35%, #e7f6ee 70%, #f0fbf4 100%) fixed; }
+  body.dark-mode { background: linear-gradient(160deg, #0a0e1a 0%, #0f172a 50%, #0b1a14 100%) fixed; }
+
+  /* Brand-gradient scrollbar (matches QRadar AQL Explorer) */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: rgba(0,70,173,0.08); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #00a651, #0046ad, #f6be00); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #0046ad, #f6be00, #00a651); }
+
+  .poi-d-wrap { max-width: 1480px; margin: 16px auto; padding: 0 28px 60px; }
+
+  .poi-d-back { display: inline-block; margin-bottom: 14px; color: #0046AD; text-decoration: none; font-weight: 600; font-size: 0.9rem; }
+  body.dark-mode .poi-d-back { color: #7dd3fc; }
+
+  /* Hero ribbon — gradient left border, target identity */
+  .poi-hero {
+    background: linear-gradient(135deg, rgba(0,70,173,0.10) 0%, rgba(0,166,81,0.08) 100%);
+    border-left: 5px solid;
+    border-image: linear-gradient(180deg, #0046AD, #00A651) 1;
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-bottom: 18px;
+    box-shadow: 0 2px 8px rgba(0,70,173,0.06);
+  }
+  body.dark-mode .poi-hero {
+    background: linear-gradient(135deg, rgba(0,70,173,0.18) 0%, rgba(0,166,81,0.14) 100%);
+    box-shadow: 0 2px 8px rgba(125,211,252,0.10);
+  }
+  .poi-hero-eyebrow {
+    display: flex; gap: 10px; align-items: center;
+    font-size: 0.74rem; font-weight: 700; color: #64748b;
+    text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px;
+  }
+  body.dark-mode .poi-hero-eyebrow { color: #94a3b8; }
+  .poi-hero-title {
+    font-size: 1.95rem; font-weight: 800; margin: 0 0 10px;
+    color: #1e293b; line-height: 1.15;
+  }
+  body.dark-mode .poi-hero-title { color: #e2e8f0; }
+  .poi-hero-ids { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .poi-hero-ids code {
+    background: rgba(0,70,173,0.08);
+    padding: 3px 10px; border-radius: 6px; font-size: 0.88rem;
+    color: #0046AD; font-weight: 600;
+  }
+  body.dark-mode .poi-hero-ids code { background: rgba(125,211,252,0.18); color: #e2e8f0; }
+  .poi-hero-reason {
+    font-style: italic; color: #475569; margin-bottom: 12px; font-size: 0.92rem;
+    padding: 8px 12px; background: rgba(255,255,255,0.5); border-radius: 8px;
+    border-left: 3px solid rgba(0,166,81,0.45);
+  }
+  body.dark-mode .poi-hero-reason { color: #cbd5e1; background: rgba(15,23,42,0.40); }
+  .poi-hero-commentary {
+    margin: 12px 0 4px; padding: 10px 14px;
+    background: rgba(255,255,255,0.65);
+    border-left: 3px solid #0046AD;
+    border-radius: 8px;
+    font-size: 0.92rem; color: #1e293b; line-height: 1.5;
+  }
+  body.dark-mode .poi-hero-commentary { color: #e2e8f0; background: rgba(15,23,42,0.50); border-left-color: #7dd3fc; }
+  .poi-hero-commentary code {
+    background: rgba(0,70,173,0.10); color: #0046AD;
+    padding: 1px 6px; border-radius: 4px; font-size: 0.85rem; font-weight: 600;
+  }
+  body.dark-mode .poi-hero-commentary code { background: rgba(125,211,252,0.18); color: #e2e8f0; }
+  .poi-hero-meta {
+    display: flex; gap: 22px; flex-wrap: wrap;
+    font-size: 0.8rem; color: #475569; margin-top: 4px;
+  }
+  body.dark-mode .poi-hero-meta { color: #cbd5e1; }
+  .poi-hero-meta-item { display: flex; flex-direction: column; }
+  .poi-hero-meta-item strong {
+    color: #64748b; font-weight: 700; text-transform: uppercase;
+    font-size: 0.66rem; letter-spacing: .06em; margin-bottom: 2px;
+  }
+  body.dark-mode .poi-hero-meta-item strong { color: #94a3b8; }
+  .poi-hero-meta-item span { color: #1e293b; font-weight: 600; }
+  body.dark-mode .poi-hero-meta-item span { color: #e2e8f0; }
+
+  /* KPI strip — colored gradient cards */
+  .poi-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 14px; margin-bottom: 22px;
+  }
+  .poi-kpi {
+    border-radius: 12px; padding: 18px 20px; text-align: center;
+    color: #fff; box-shadow: 0 4px 16px rgba(0,0,0,0.10);
+    position: relative; overflow: hidden;
+  }
+  .poi-kpi::before {
+    content: ''; position: absolute; inset: 0;
+    background: rgba(255,255,255,0.08); pointer-events: none;
+  }
+  .poi-kpi-val { font-size: 32px; font-weight: 800; line-height: 1.1; position: relative; }
+  .poi-kpi-lbl {
+    font-size: 11px; opacity: 0.92; margin-top: 6px;
+    text-transform: uppercase; letter-spacing: .08em; font-weight: 600; position: relative;
+  }
+  .poi-kpi-breaches { background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); }
+  .poi-kpi-accounts { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+  .poi-kpi-sites    { background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%); }
+  .poi-kpi-duration { background: linear-gradient(135deg, #0046AD 0%, #003a90 100%); }
+  .poi-kpi-pending  { background: linear-gradient(135deg, #64748b 0%, #475569 100%); }
+
+  /* Tabs — pill style on a brand-tinted track */
+  .poi-tabs {
+    display: inline-flex; gap: 2px;
+    background: linear-gradient(135deg, rgba(0,70,173,0.06) 0%, rgba(0,166,81,0.04) 100%);
+    border-radius: 12px; padding: 4px;
+    border: 1px solid rgba(0,70,173,0.12);
+    margin-bottom: 18px;
+  }
+  body.dark-mode .poi-tabs {
+    background: linear-gradient(135deg, rgba(0,70,173,0.18) 0%, rgba(0,166,81,0.12) 100%);
+    border-color: rgba(125,211,252,0.20);
+  }
+  .poi-tab-btn {
+    background: transparent; border: 0; padding: 8px 18px;
+    font-weight: 600; font-size: 0.92rem; color: #64748b;
+    cursor: pointer; border-radius: 8px;
+    transition: all 0.15s ease;
+  }
+  .poi-tab-btn:hover { color: #1e293b; background: rgba(255,255,255,0.5); }
+  body.dark-mode .poi-tab-btn { color: #94a3b8; }
+  body.dark-mode .poi-tab-btn:hover { color: #e2e8f0; background: rgba(15,23,42,0.40); }
+  .poi-tab-btn.active {
+    background: linear-gradient(135deg, #0046AD 0%, #1e5fc6 100%);
+    color: #fff; box-shadow: 0 2px 8px rgba(0,70,173,0.25);
+  }
+  body.dark-mode .poi-tab-btn.active { background: linear-gradient(135deg, #1e5fc6 0%, #0046AD 100%); }
+  .poi-tab-panel { display: none; }
+  .poi-tab-panel.active { display: block; }
+
+  /* Graph tab */
+  .poi-graph-wrap {
+    background: linear-gradient(160deg, rgba(255,255,255,0.85) 0%, rgba(232,240,254,0.75) 100%);
+    border: 1px solid rgba(0,70,173,0.12);
+    border-radius: 14px;
+    overflow: hidden;
+    height: 640px;
+    position: relative;
+    box-shadow: 0 6px 24px rgba(0,70,173,0.08), 0 2px 8px rgba(0,0,0,0.04);
+  }
+  body.dark-mode .poi-graph-wrap {
+    background: linear-gradient(160deg, rgba(15,23,42,0.85) 0%, rgba(11,18,32,0.85) 100%);
+    border-color: rgba(125,211,252,0.18);
+  }
+  #poi-graph { width: 100%; height: 100%; }
+  .poi-graph-legend {
+    display: flex; gap: 14px; flex-wrap: wrap;
+    padding: 10px 16px; font-size: 0.82rem;
+    background: rgba(0,70,173,0.06);
+    border-top: 1px solid rgba(0,70,173,0.10);
+  }
+  body.dark-mode .poi-graph-legend { background: rgba(125,211,252,0.10); border-top-color: rgba(125,211,252,0.20); }
+  .poi-graph-legend span { display: inline-flex; align-items: center; gap: 6px; color: #475569; }
+  body.dark-mode .poi-graph-legend span { color: #cbd5e1; }
+  .poi-graph-legend i {
+    width: 12px; height: 12px; border-radius: 50%; display: inline-block;
+    border: 1px solid rgba(15,23,42,0.20);
+  }
+  .poi-graph-meta {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 10px; font-size: 0.82rem; color: #64748b;
+  }
+  body.dark-mode .poi-graph-meta { color: #94a3b8; }
+
+  /* Graph controls overlay — wiki-page pattern */
+  .poi-gc-toolbar {
+    position: absolute; top: 12px; right: 12px; z-index: 5;
+    display: flex; flex-direction: column; gap: 4px; padding: 6px;
+    background: rgba(30,41,59,0.85);
+    border: 1px solid #334155;
+    border-radius: 10px;
+    backdrop-filter: blur(8px);
+  }
+  .poi-gc-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px;
+    border: 0; border-radius: 6px;
+    background: transparent; color: #94a3b8;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .poi-gc-btn:hover { background: rgba(255,255,255,0.10); color: #e2e8f0; }
+  .poi-gc-btn:active { background: rgba(59,130,246,0.25); color: #93c5fd; }
+  .poi-gc-divider { display: block; height: 1px; margin: 2px 4px; background: #334155; }
+  .poi-graph-hint {
+    position: absolute; bottom: 56px; left: 50%; transform: translateX(-50%);
+    padding: 6px 18px;
+    background: rgba(30,41,59,0.80);
+    border: 1px solid #334155;
+    border-radius: 20px;
+    font-size: 0.72rem; color: #cbd5e1;
+    pointer-events: none; white-space: nowrap;
+    backdrop-filter: blur(4px);
+    z-index: 2;
+  }
+
+  .poi-d-badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 0.74rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+  .poi-d-badge.completed { background: linear-gradient(135deg, #00A651, #058a47); color: #fff; }
+  .poi-d-badge.running   { background: linear-gradient(135deg, #0d9488, #0f766e); color: #fff; }
+  .poi-d-badge.pending   { background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; }
+  .poi-d-badge.failed    { background: linear-gradient(135deg, #dc2626, #b91c1c); color: #fff; }
+
+  /* Section cards — translucent over page gradient */
+  .poi-section {
+    background: linear-gradient(160deg, rgba(255,255,255,0.85) 0%, rgba(232,240,254,0.65) 100%);
+    border: 1px solid rgba(0,70,173,0.12);
+    border-radius: 14px;
+    padding: 18px 22px;
+    margin-bottom: 18px;
+    box-shadow: 0 6px 24px rgba(0,70,173,0.06), 0 2px 8px rgba(0,0,0,0.03);
+  }
+  body.dark-mode .poi-section {
+    background: linear-gradient(160deg, rgba(15,23,42,0.85) 0%, rgba(11,18,32,0.80) 100%);
+    border-color: rgba(125,211,252,0.18);
+  }
+  .poi-section h2 {
+    margin: 0 0 14px;
+    font-size: 1.05rem;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: linear-gradient(135deg, #0046AD, #00A651);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  body.dark-mode .poi-section h2 {
+    background: linear-gradient(135deg, #7dd3fc, #6ee7b7);
+    -webkit-background-clip: text; background-clip: text;
+  }
+  .poi-section h2 .count {
+    margin-left: auto;
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #fff;
+    background: linear-gradient(135deg, #0046AD, #00A651);
+    -webkit-text-fill-color: #fff;
+    padding: 3px 10px;
+    border-radius: 999px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+
+  .poi-section ul { margin: 0; padding-left: 20px; }
+  .poi-section li { margin-bottom: 4px; font-size: 0.92rem; line-height: 1.5; }
+  .poi-section a { color: #0046ad; text-decoration: none; font-weight: 500; }
+  .poi-section a:hover { text-decoration: underline; }
+  body.dark-mode .poi-section a { color: #7dd3fc; }
+  .poi-section .empty { color: #64748b; font-style: italic; font-size: 0.92rem; }
+  body.dark-mode .poi-section .empty { color: #94a3b8; }
+
+  .poi-error { color: #b91c1c; font-weight: 600; }
+  body.dark-mode .poi-error { color: #fca5a5; }
+
+  .poi-grid-sites { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 12px; }
+  .poi-grid-sites li { list-style: "✔️  "; }
+  .poi-no-url { color: #94a3b8; font-size: 0.72rem; font-style: italic; }
+  body.dark-mode .poi-no-url { color: #64748b; }
+
+  .poi-breach-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+  .poi-breach-grid li {
+    background: rgba(220,38,38,0.06);
+    border: 1px solid rgba(220,38,38,0.20);
+    border-radius: 10px;
+    padding: 10px 12px;
+    list-style: none;
+    font-size: 0.86rem;
+    color: #1e293b;
+  }
+  body.dark-mode .poi-breach-grid li { background: rgba(220,38,38,0.10); border-color: rgba(220,38,38,0.30); color: #e2e8f0; }
+  .poi-breach-grid .b-name { font-weight: 700; color: #b91c1c; font-size: 0.95rem; }
+  body.dark-mode .poi-breach-grid .b-name { color: #fca5a5; }
+  .poi-breach-grid .b-meta { color: #64748b; font-size: 0.78rem; margin-top: 2px; }
+  body.dark-mode .poi-breach-grid .b-meta { color: #94a3b8; }
+  .poi-breach-grid .b-classes { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+  .poi-breach-grid .b-classes span {
+    background: rgba(15,23,42,0.06);
+    color: #475569;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+  }
+  body.dark-mode .poi-breach-grid .b-classes span { background: rgba(148,163,184,0.18); color: #cbd5e1; }
+
+  /* Progress strip (shown while status != completed/failed) */
+  .poi-progress {
+    background: linear-gradient(135deg, rgba(0,70,173,0.08), rgba(13,148,136,0.05));
+    border: 1px solid rgba(0,70,173,0.20);
+    border-radius: 14px;
+    padding: 16px 20px;
+    margin-bottom: 18px;
+  }
+  body.dark-mode .poi-progress { background: linear-gradient(135deg, rgba(0,70,173,0.18), rgba(13,148,136,0.10)); border-color: rgba(125,211,252,0.30); }
+  .poi-progress.hidden { display: none; }
+  .poi-progress-title {
+    display: flex; align-items: center; gap: 10px;
+    font-weight: 700; color: #1e293b; margin-bottom: 12px;
+  }
+  body.dark-mode .poi-progress-title { color: #e2e8f0; }
+  .poi-progress-spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(0,70,173,0.20);
+    border-top-color: #0046ad;
+    border-radius: 50%;
+    animation: poi-spin 0.8s linear infinite;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  body.dark-mode .poi-progress-spinner { border-color: rgba(125,211,252,0.25); border-top-color: #7dd3fc; }
+  @keyframes poi-spin { to { transform: rotate(360deg); } }
+  .poi-progress-elapsed { margin-left: auto; font-size: 0.82rem; color: #64748b; font-weight: 500; }
+  body.dark-mode .poi-progress-elapsed { color: #94a3b8; }
+  .poi-progress-steps { display: flex; gap: 8px; flex-wrap: wrap; }
+  .poi-progress-step {
+    display: inline-flex; gap: 7px; align-items: center;
+    padding: 6px 13px; border-radius: 999px;
+    background: rgba(15,23,42,0.05);
+    color: #64748b;
+    font-size: 0.84rem; font-weight: 600;
+    transition: background 0.2s, color 0.2s;
+  }
+  body.dark-mode .poi-progress-step { background: rgba(148,163,184,0.12); color: #94a3b8; }
+  .poi-progress-step.done    { background: rgba(0,166,81,0.16);  color: #047857; }
+  .poi-progress-step.current { background: rgba(0,70,173,0.18);  color: #0046ad; }
+  body.dark-mode .poi-progress-step.done    { background: rgba(0,166,81,0.22); color: #6ee7b7; }
+  body.dark-mode .poi-progress-step.current { background: rgba(125,211,252,0.22); color: #7dd3fc; }
+  .poi-progress-step .step-icon { font-size: 0.95rem; line-height: 1; }
+  .poi-progress-step.current .step-icon {
+    animation: poi-pulse 1.1s ease-in-out infinite;
+  }
+  @keyframes poi-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  /* Timeline tab */
+  .poi-timeline-wrap {
+    background: #fff;
+    border: 1px solid rgba(15,23,42,0.10);
+    border-radius: 14px;
+    padding: 18px 22px;
+    overflow-x: auto;
+  }
+  body.dark-mode .poi-timeline-wrap { background: #0b1220; border-color: rgba(148,163,184,0.18); }
+  .poi-timeline-empty { padding: 60px 20px; text-align: center; color: #64748b; font-style: italic; }
+  body.dark-mode .poi-timeline-empty { color: #94a3b8; }
+  .poi-undated {
+    margin-top: 18px; padding: 12px 14px;
+    background: rgba(202,138,4,0.10);
+    border: 1px solid rgba(202,138,4,0.22);
+    border-radius: 10px;
+    font-size: 0.86rem;
+    color: #b45309;
+  }
+  body.dark-mode .poi-undated { background: rgba(202,138,4,0.18); color: #fbbf24; border-color: rgba(202,138,4,0.30); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="poi-d-wrap">
+
+  <a class="poi-d-back" href="/person-of-interest">← All investigations</a>
+
+  {# Hero ribbon — target identity + audit meta #}
+  {% set hero_title = inv.target_name or inv.target_username or inv.target_email or ('POI-' ~ inv.id) %}
+  <div class="poi-hero">
+    <div class="poi-hero-eyebrow">
+      <span>🕵️ Investigation #{{ inv.id }}</span>
+      <span class="poi-d-badge {{ inv.status }}">{{ inv.status }}</span>
+    </div>
+    <h1 class="poi-hero-title">{{ hero_title }}</h1>
+    <div class="poi-hero-ids">
+      {% if inv.target_username %}<code>🆔 {{ inv.target_username }}</code>{% endif %}
+      {% if inv.target_email %}<code>📧 {{ inv.target_email }}</code>{% endif %}
+      {% if inv.target_name and inv.target_name != hero_title %}<code>👤 {{ inv.target_name }}</code>{% endif %}
+    </div>
+    {% if inv.reason %}
+    <div class="poi-hero-reason">📝 {{ inv.reason }}</div>
+    {% endif %}
+    {% if inv.commentary %}
+    <div class="poi-hero-commentary">💡 {{ inv.commentary }}</div>
+    {% endif %}
+    <div class="poi-hero-meta">
+      <div class="poi-hero-meta-item"><strong>Requested by</strong><span>{{ inv.requester }}</span></div>
+      <div class="poi-hero-meta-item"><strong>Started (UTC)</strong><span>{{ inv.created_at_fmt }}</span></div>
+      {% if inv.completed_at %}<div class="poi-hero-meta-item"><strong>Completed (UTC)</strong><span>{{ inv.completed_at_fmt }}</span></div>{% endif %}
+    </div>
+  </div>
+
+  {# KPI strip — summary counts as gradient cards #}
+  {% set s = inv.summary or {} %}
+  <div class="poi-summary">
+    {% set b = s.hibp_breach_count %}
+    <div class="poi-kpi {% if b is none %}poi-kpi-pending{% else %}poi-kpi-breaches{% endif %}">
+      <div class="poi-kpi-val">{% if b is none %}—{% else %}{{ b }}{% endif %}</div>
+      <div class="poi-kpi-lbl">🚨 HIBP breaches</div>
+    </div>
+    {% set h = s.holehe_hit_count %}
+    <div class="poi-kpi {% if h is none %}poi-kpi-pending{% else %}poi-kpi-accounts{% endif %}">
+      <div class="poi-kpi-val">{% if h is none %}—{% else %}{{ h }}{% endif %}</div>
+      <div class="poi-kpi-lbl">📧 Email accounts</div>
+    </div>
+    {% set m = s.maigret_claimed_count %}
+    <div class="poi-kpi {% if m is none %}poi-kpi-pending{% else %}poi-kpi-sites{% endif %}">
+      <div class="poi-kpi-val">{% if m is none %}—{% else %}{{ m }}{% endif %}</div>
+      <div class="poi-kpi-lbl">🌐 Claimed sites</div>
+    </div>
+    <div class="poi-kpi poi-kpi-duration">
+      <div class="poi-kpi-val">{% if inv.duration_s is not none %}{{ inv.duration_s }}s{% else %}…{% endif %}</div>
+      <div class="poi-kpi-lbl">⏱️ Duration</div>
+    </div>
+  </div>
+
+  {% set _active = inv.status not in ('completed', 'failed') %}
+  <div class="poi-progress {% if not _active %}hidden{% endif %}" id="poi-progress">
+    <div class="poi-progress-title">
+      <span class="poi-progress-spinner"></span>
+      <span id="poi-progress-headline">
+        {% if inv.phase %}Running <code>{{ inv.phase }}</code>…{% else %}Investigation queued…{% endif %}
+      </span>
+      <span class="poi-progress-elapsed" id="poi-progress-elapsed"></span>
+    </div>
+    <div class="poi-progress-steps">
+      {% for p in expected_phases %}
+      <span class="poi-progress-step pending" data-phase="{{ p.id }}">
+        <span class="step-icon">○</span> {{ p.label }}
+      </span>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="poi-tabs" role="tablist">
+    <button class="poi-tab-btn active" data-tab="text" type="button">📋 Text results</button>
+    <button class="poi-tab-btn" data-tab="graph" type="button">🧠 Graph view</button>
+    {% if has_timeline %}
+    <button class="poi-tab-btn" data-tab="timeline" type="button">📅 Breach timeline</button>
+    {% endif %}
+  </div>
+
+  <div class="poi-tab-panel active" id="poi-tab-text">
+
+  {% if inv.status == 'failed' and inv.error %}
+  <div class="poi-section">
+    <h2>❌ Error</h2>
+    <p class="poi-error">{{ inv.error }}</p>
+  </div>
+  {% endif %}
+
+  {% set r = inv.results or {} %}
+
+  {% if r.hibp %}
+  <div class="poi-section">
+    <h2>🚨 Breach Lookup (HIBP)
+      {% if r.hibp.ok %}<span class="count">{{ r.hibp.breach_count or 0 }} breach{{ '' if r.hibp.breach_count == 1 else 'es' }}</span>{% endif %}
+    </h2>
+    {% if not r.hibp.ok %}
+      <p class="poi-error">⚠️ {{ r.hibp.error }}</p>
+    {% elif not r.hibp.breached %}
+      <p class="empty">✅ <code>{{ r.hibp.email }}</code> not found in any known breach.</p>
+    {% else %}
+      <ul class="poi-breach-grid">
+        {% for b in r.hibp.breaches %}
+          {% if b is mapping %}
+          <li>
+            <div class="b-name">{{ b.title or b.name }}</div>
+            <div class="b-meta">
+              {% if b.date %}{{ b.date }}{% endif %}
+              {% if b.pwn_count %} · {{ '{:,}'.format(b.pwn_count) }} accounts{% endif %}
+              {% if b.domain %} · {{ b.domain }}{% endif %}
+            </div>
+            {% if b.data_classes %}
+              <div class="b-classes">
+                {% for dc in b.data_classes[:6] %}<span>{{ dc }}</span>{% endfor %}
+                {% if b.data_classes|length > 6 %}<span>+{{ b.data_classes|length - 6 }}</span>{% endif %}
+              </div>
+            {% endif %}
+          </li>
+          {% else %}
+          <li><div class="b-name">{{ b }}</div></li>
+          {% endif %}
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if r.holehe %}
+  <div class="poi-section">
+    <h2>📧 Email Account Check (holehe)
+      {% if r.holehe.ok %}<span class="count">{{ r.holehe.hits|length }} hit{{ '' if r.holehe.hits|length == 1 else 's' }} / {{ r.holehe.checked }} checked</span>{% endif %}
+    </h2>
+    {% if not r.holehe.ok %}
+      <p class="poi-error">⚠️ {{ r.holehe.error }}</p>
+    {% elif not r.holehe.hits %}
+      <p class="empty">✅ no accounts found for <code>{{ r.holehe.email }}</code></p>
+    {% else %}
+      <ul class="poi-grid-sites">
+        {% for site in r.holehe.hits %}<li>{{ site }}</li>{% endfor %}
+      </ul>
+    {% endif %}
+    {% if r.holehe.ok and r.holehe.rate_limited %}
+      <p style="margin-top: 10px; font-size: 0.82rem; color: #64748b;">
+        Rate-limited / no answer from {{ r.holehe.rate_limited|length }} provider{{ '' if r.holehe.rate_limited|length == 1 else 's' }}.
+      </p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if r.maigret %}
+  <div class="poi-section">
+    <h2>🌐 Username Sweep (maigret)
+      {% if r.maigret.ok %}<span class="count">{{ r.maigret.claimed|length }} claimed / {{ r.maigret.sites_checked }} sites</span>{% endif %}
+    </h2>
+    {% if not r.maigret.ok %}
+      <p class="poi-error">⚠️ {{ r.maigret.error }}</p>
+    {% elif not r.maigret.claimed %}
+      <p class="empty">✅ no claimed profiles for <code>{{ r.maigret.username }}</code></p>
+    {% else %}
+      <ul class="poi-grid-sites">
+        {% for hit in r.maigret.claimed %}
+          {# A maigret "claimed" hit is only clickable evidence when the URL
+             deep-links to ONE user. Two failure modes:
+              - Discord/etc: URL is the platform homepage (no username at all)
+              - StackOverflow/etc: URL is a name-search (e.g. /users/filter?search=aades)
+                that returns everyone whose handle contains the substring.
+             Mark both as text rather than misleading links. #}
+          {% set u = (r.maigret.username or '')|lower %}
+          {% set url_lower = (hit.url or '')|lower %}
+          {% set is_search = 'search=' in url_lower or 'query=' in url_lower or '?q=' in url_lower %}
+          {% set has_user_url = hit.url and u and u in url_lower and not is_search %}
+          <li>
+            {% if has_user_url %}<a href="{{ hit.url }}" target="_blank" rel="noopener noreferrer">{{ hit.site }}</a>
+            {% elif is_search %}{{ hit.site }} <small class="poi-no-url">(name-search hit, not a specific user)</small>
+            {% else %}{{ hit.site }} <small class="poi-no-url">(no profile URL)</small>{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if r.dorks %}
+  <div class="poi-section">
+    <h2>🔗 Name Dorks <span class="count">{{ r.dorks.name }}</span></h2>
+    <ul>
+      {% for link in r.dorks.links %}
+        <li><a href="{{ link.url }}" target="_blank" rel="noopener noreferrer">{{ link.label }}</a></li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  </div>{# /text panel #}
+
+  {# ---------------- Timeline tab ---------------- #}
+  {% if has_timeline %}
+  <div class="poi-tab-panel" id="poi-tab-timeline">
+    <div class="poi-timeline-wrap">
+      {% if timeline_years %}
+      <div class="mermaid" id="poi-timeline-mermaid">
+timeline
+    title Breach exposure {% if inv.target_email %}for {{ inv.target_email }}{% endif %}
+{% for year, bs in timeline_years %}    {{ year }}{% for b in bs %} : {{ b.title or b.name }}{% if b.pwn_count %} ({{ '{:,}'.format(b.pwn_count) }}){% endif %}{% endfor %}
+{% endfor %}
+      </div>
+      {% else %}
+      <div class="poi-timeline-empty">No dated breaches in this investigation.</div>
+      {% endif %}
+
+      {% if timeline_undated %}
+      <div class="poi-undated">
+        ⚠️ <strong>{{ timeline_undated|length }}</strong> breach{{ '' if timeline_undated|length == 1 else 'es' }} with no date in HIBP:
+        {% for b in timeline_undated %}{{ b.title or b.name }}{% if not loop.last %}, {% endif %}{% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {# ---------------- Graph view tab ---------------- #}
+  <div class="poi-tab-panel" id="poi-tab-graph">
+    <div class="poi-graph-wrap">
+      <div id="poi-graph"></div>
+      <div class="poi-gc-toolbar">
+        <button class="poi-gc-btn" data-gc="zoom-in" title="Zoom in" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        </button>
+        <button class="poi-gc-btn" data-gc="zoom-out" title="Zoom out" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        </button>
+        <span class="poi-gc-divider"></span>
+        <button class="poi-gc-btn" data-gc="pan-up" title="Pan up" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="18 15 12 9 6 15"/></svg>
+        </button>
+        <button class="poi-gc-btn" data-gc="pan-down" title="Pan down" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <button class="poi-gc-btn" data-gc="pan-left" title="Pan left" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <button class="poi-gc-btn" data-gc="pan-right" title="Pan right" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+        <span class="poi-gc-divider"></span>
+        <button class="poi-gc-btn" data-gc="reset" title="Reset view" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        </button>
+      </div>
+      <div class="poi-graph-hint">Scroll to zoom · Drag to pan · Click node to open</div>
+      <div class="poi-graph-legend">
+        <span><i style="background:#e1ad1d"></i>Person</span>
+        <span><i style="background:#50a5e6"></i>Username</span>
+        <span><i style="background:#ff8c10"></i>Email</span>
+        <span><i style="background:#d93e27"></i>Breach</span>
+        <span><i style="background:#4cb350"></i>Profile</span>
+        <span><i style="background:#ffd400"></i>Account</span>
+        <span><i style="background:#9e9e9e"></i>Dork</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% include '_chat_widget.html' %}
+
+{# Build the graph data server-side from the same results that drive the text panel #}
+{% set person_label = inv.target_name or inv.target_username or inv.target_email or ('POI-' ~ inv.id) %}
+{% set nodes = [] %}
+{% set edges = [] %}
+{% set _ = nodes.append({'id': 'person', 'label': person_label, 'type': 'person', 'url': ''}) %}
+
+{% if inv.target_username %}
+  {% set _ = nodes.append({'id': 'username', 'label': inv.target_username, 'type': 'username', 'url': ''}) %}
+  {% set _ = edges.append({'source': 'person', 'target': 'username'}) %}
+  {% if r.maigret and r.maigret.ok %}
+    {% for c in r.maigret.claimed %}
+      {% set nid = 'profile_' ~ loop.index %}
+      {% set _ = nodes.append({'id': nid, 'label': c.site, 'type': 'profile', 'url': c.url or ''}) %}
+      {% set _ = edges.append({'source': 'username', 'target': nid}) %}
+    {% endfor %}
+  {% endif %}
+{% endif %}
+
+{% if inv.target_email %}
+  {% set _ = nodes.append({'id': 'email', 'label': inv.target_email, 'type': 'email', 'url': ''}) %}
+  {% set _ = edges.append({'source': 'person', 'target': 'email'}) %}
+  {% if r.hibp and r.hibp.ok %}
+    {% for b in r.hibp.breaches %}
+      {% set bid = 'breach_' ~ loop.index %}
+      {% set bname = b.name if b is mapping else b %}
+      {% set _ = nodes.append({'id': bid, 'label': bname, 'type': 'breach', 'url': 'https://haveibeenpwned.com/PwnedWebsites#' ~ bname}) %}
+      {% set _ = edges.append({'source': 'email', 'target': bid}) %}
+    {% endfor %}
+  {% endif %}
+  {% if r.holehe and r.holehe.ok %}
+    {% for a in r.holehe.hits %}
+      {% set aid = 'account_' ~ loop.index %}
+      {% set _ = nodes.append({'id': aid, 'label': a, 'type': 'account', 'url': ''}) %}
+      {% set _ = edges.append({'source': 'email', 'target': aid}) %}
+    {% endfor %}
+  {% endif %}
+{% endif %}
+
+{% if r.dorks %}
+  {% for link in r.dorks.links %}
+    {% set did = 'dork_' ~ loop.index %}
+    {% set _ = nodes.append({'id': did, 'label': link.label, 'type': 'dork', 'url': link.url}) %}
+    {% set _ = edges.append({'source': 'person', 'target': did}) %}
+  {% endfor %}
+{% endif %}
+
+<script src="https://cdn.jsdelivr.net/npm/cytoscape@3.30.0/dist/cytoscape.min.js"></script>
+{% if has_timeline %}
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+{% endif %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="{{ url_for('static', filename='js/chat_widget.js') }}"></script>
+<script>
+  // Server-built markdown blob — full scan context (commentary + breach
+  // details + holehe + maigret high/low signal split + dorks).
+  const POI_CHAT_CONTEXT = {{ chat_context_md | tojson }};
+  document.addEventListener('DOMContentLoaded', () => {
+    if (typeof initChatWidget !== 'function') return;
+    initChatWidget({
+      title: 'Ask about this POI scan',
+      greeting: 'Ask me anything about this investigation — breaches, accounts, claimed handles, follow-up steps.',
+      chips: [
+        {label: 'Top risks',         q: 'What are the most important findings and risks for this target?'},
+        {label: 'Likely real hits',  q: 'Of the claimed usernames, which are most likely the same person, and why?'},
+        {label: 'Breach walkthrough',q: 'Walk me through the HIBP breach details — dates, what data was exposed, and severity.'},
+        {label: 'Next steps',        q: 'What follow-up actions should an analyst take based on this scan?'},
+      ],
+      getContext: () => POI_CHAT_CONTEXT,
+    });
+  });
+</script>
+<script>
+(function () {
+  const NODES = {{ nodes|tojson }};
+  const EDGES = {{ edges|tojson }};
+
+  const TYPE_COLOR = {
+    person:   '#e1ad1d',
+    username: '#50a5e6',
+    email:    '#ff8c10',
+    breach:   '#d93e27',
+    profile:  '#4cb350',
+    account:  '#ffd400',
+    dork:     '#9e9e9e',
+  };
+  const TYPE_SIZE = { person: 56, username: 40, email: 40, breach: 30, profile: 26, account: 26, dork: 22 };
+
+  let cy = null;
+
+  function renderGraph() {
+    if (cy) return;
+    const isDark = document.body.classList.contains('dark-mode');
+    cy = cytoscape({
+      container: document.getElementById('poi-graph'),
+      elements: [
+        ...NODES.map(n => ({ data: { id: n.id, label: n.label, type: n.type, url: n.url } })),
+        ...EDGES.map((e, i) => ({ data: { id: 'e' + i, source: e.source, target: e.target } })),
+      ],
+      style: [
+        {
+          selector: 'node',
+          style: {
+            'background-color': ele => TYPE_COLOR[ele.data('type')] || '#888',
+            'width':  ele => TYPE_SIZE[ele.data('type')] || 26,
+            'height': ele => TYPE_SIZE[ele.data('type')] || 26,
+            'label': 'data(label)',
+            'color': isDark ? '#e2e8f0' : '#1e293b',
+            'font-size': 11,
+            'font-weight': 600,
+            'text-valign': 'bottom',
+            'text-margin-y': 6,
+            'text-outline-width': 2,
+            'text-outline-color': isDark ? '#0f172a' : '#ffffff',
+            'border-width': 2,
+            'border-color': isDark ? 'rgba(255,255,255,0.18)' : 'rgba(15,23,42,0.18)',
+          },
+        },
+        {
+          selector: 'edge',
+          style: {
+            'width': 1.5,
+            'line-color': isDark ? 'rgba(148,163,184,0.45)' : 'rgba(15,23,42,0.30)',
+            'curve-style': 'bezier',
+            'opacity': 0.7,
+          },
+        },
+        {
+          selector: 'node:selected',
+          style: { 'border-width': 4, 'border-color': '#7c3aed' },
+        },
+      ],
+      wheelSensitivity: 0.25,
+    });
+
+    // Custom spoke-and-wheel layout: Username + Email are twin hubs centered
+    // horizontally; their child leaves fan outward to the left/right; Person
+    // sits above between them; dorks fan above Person.
+    const positions = buildHubLayout(cy.width(), cy.height());
+    cy.layout({
+      name: 'preset',
+      positions: node => positions[node.id()] || { x: cy.width() / 2, y: cy.height() / 2 },
+      fit: true,
+      padding: 40,
+    }).run();
+
+    cy.on('tap', 'node', evt => {
+      const url = evt.target.data('url');
+      if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    });
+  }
+
+  // Place `ids` around (cx, cy_) at `radius`. If startA/endA spans 2π,
+  // treats it as a closed circle (evenly spaced N points); otherwise a fan.
+  function fanArc(positions, ids, cx, cy_, radius, startA, endA) {
+    const n = ids.length;
+    if (n === 0) return;
+    const fullCircle = Math.abs(endA - startA) >= 2 * Math.PI - 0.001;
+    for (let i = 0; i < n; i++) {
+      let a;
+      if (fullCircle) {
+        a = startA + (2 * Math.PI * i) / n;
+      } else {
+        const t = n === 1 ? 0.5 : i / (n - 1);
+        a = startA + (endA - startA) * t;
+      }
+      positions[ids[i]] = { x: cx + radius * Math.cos(a), y: cy_ + radius * Math.sin(a) };
+    }
+  }
+
+  function buildHubLayout(W, H) {
+    const cx = W / 2;
+    const hubY = H * 0.55;
+    const personY = H * 0.12;     // Person high enough to clear hub wheels
+
+    const childrenOf = {};
+    EDGES.forEach(e => {
+      (childrenOf[e.source] = childrenOf[e.source] || []).push(e.target);
+    });
+
+    const hasUsername = NODES.some(n => n.id === 'username');
+    const hasEmail    = NODES.some(n => n.id === 'email');
+    const positions = {};
+    positions['person'] = { x: cx, y: personY };
+
+    const wheelRadius = Math.min(W * 0.22, H * 0.36, 280);
+
+    if (hasUsername && hasEmail) {
+      // Push hubs to ~30% from each edge so wheels have room to breathe
+      const usernameX = cx - W * 0.27;
+      const emailX    = cx + W * 0.27;
+      positions['username'] = { x: usernameX, y: hubY };
+      positions['email']    = { x: emailX,    y: hubY };
+      // Full 360° wheel around each hub (start at left so first node is opposite the partner hub)
+      fanArc(positions, (childrenOf['username'] || []).filter(id => id !== 'person'),
+             usernameX, hubY, wheelRadius, Math.PI, Math.PI + 2 * Math.PI);
+      fanArc(positions, (childrenOf['email'] || []).filter(id => id !== 'person'),
+             emailX, hubY, wheelRadius, 0, 2 * Math.PI);
+    } else if (hasUsername) {
+      positions['username'] = { x: cx, y: hubY };
+      fanArc(positions, (childrenOf['username'] || []).filter(id => id !== 'person'),
+             cx, hubY, wheelRadius, 0, 2 * Math.PI);
+    } else if (hasEmail) {
+      positions['email'] = { x: cx, y: hubY };
+      fanArc(positions, (childrenOf['email'] || []).filter(id => id !== 'person'),
+             cx, hubY, wheelRadius, 0, 2 * Math.PI);
+    }
+
+    const dorkLeaves = (childrenOf['person'] || []).filter(id => id !== 'username' && id !== 'email');
+    if (dorkLeaves.length) {
+      const dorkRadius = Math.min(W * 0.15, 160);
+      fanArc(positions, dorkLeaves, cx, personY, dorkRadius, -Math.PI * 0.85, -Math.PI * 0.15);
+    }
+    return positions;
+  }
+
+  // Wire the overlay toolbar to cytoscape (centered around the viewport).
+  document.querySelectorAll('.poi-gc-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!cy) return;
+      const ext = cy.extent();
+      const cx = (ext.x1 + ext.x2) / 2, cy_ = (ext.y1 + ext.y2) / 2;
+      const panStep = Math.min(cy.width(), cy.height()) * 0.15;
+      switch (btn.dataset.gc) {
+        case 'zoom-in':  cy.zoom({ level: cy.zoom() * 1.25, position: { x: cx, y: cy_ } }); break;
+        case 'zoom-out': cy.zoom({ level: cy.zoom() / 1.25, position: { x: cx, y: cy_ } }); break;
+        case 'pan-up':    cy.panBy({ x: 0, y:  panStep }); break;
+        case 'pan-down':  cy.panBy({ x: 0, y: -panStep }); break;
+        case 'pan-left':  cy.panBy({ x:  panStep, y: 0 }); break;
+        case 'pan-right': cy.panBy({ x: -panStep, y: 0 }); break;
+        case 'reset':    cy.fit(undefined, 40); break;
+      }
+    });
+  });
+
+  let mermaidRendered = false;
+  function renderTimeline() {
+    if (mermaidRendered || typeof mermaid === 'undefined') return;
+    const isDark = document.body.classList.contains('dark-mode');
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: isDark ? 'dark' : 'default',
+      securityLevel: 'loose',
+    });
+    mermaid.run({ querySelector: '#poi-timeline-mermaid' });
+    mermaidRendered = true;
+  }
+
+  // ---------- Progress polling ----------
+  const INV_ID = {{ inv.id }};
+  const ACTIVE = {{ 'true' if inv.status not in ('completed', 'failed') else 'false' }};
+  const PHASES = {{ expected_phases | map(attribute='id') | list | tojson }};
+  // Server clock — `inv.created_at` is naive UTC ISO from datetime.utcnow().isoformat().
+  // Append Z so JS parses it as UTC; clamp to 0 to tolerate client-clock skew.
+  const STARTED_MS = new Date('{{ inv.created_at }}Z').getTime();
+
+  function fmtElapsed(s) {
+    if (s < 60) return s + 's';
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return m + 'm' + (r < 10 ? '0' : '') + r + 's';
+  }
+
+  function paintProgress(phase) {
+    const idx = phase ? PHASES.indexOf(phase) : -1;
+    document.querySelectorAll('.poi-progress-step').forEach((el) => {
+      const pIdx = PHASES.indexOf(el.dataset.phase);
+      el.classList.remove('done', 'current', 'pending');
+      const icon = el.querySelector('.step-icon');
+      if (idx < 0 || pIdx > idx) {
+        el.classList.add('pending'); icon.textContent = '○';
+      } else if (pIdx === idx) {
+        el.classList.add('current'); icon.textContent = '◐';
+      } else {
+        el.classList.add('done'); icon.textContent = '✓';
+      }
+    });
+    const head = document.getElementById('poi-progress-headline');
+    if (phase) head.innerHTML = 'Running <code>' + phase + '</code>…';
+    else head.textContent = 'Investigation queued…';
+  }
+
+  function tickElapsed() {
+    const el = document.getElementById('poi-progress-elapsed');
+    if (!el) return;
+    const s = Math.max(0, Math.floor((Date.now() - STARTED_MS) / 1000));
+    el.textContent = fmtElapsed(s) + ' elapsed';
+  }
+
+  async function pollStatus() {
+    try {
+      const r = await fetch('/person-of-interest/' + INV_ID + '/status.json', { cache: 'no-store' });
+      if (!r.ok) return;
+      const data = await r.json();
+      if (data.status === 'completed' || data.status === 'failed') {
+        // Page reload renders the full results / error block server-side.
+        location.reload();
+        return;
+      }
+      paintProgress(data.phase);
+    } catch (_) { /* transient — try again next tick */ }
+  }
+
+  if (ACTIVE) {
+    paintProgress({{ inv.phase | tojson }});
+    tickElapsed();
+    setInterval(tickElapsed, 1000);
+    pollStatus();
+    setInterval(pollStatus, 2500);
+  }
+
+  document.querySelectorAll('.poi-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.poi-tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.poi-tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      const tab = btn.dataset.tab;
+      document.getElementById('poi-tab-' + tab).classList.add('active');
+      if (tab === 'graph') {
+        // Defer one frame so the container has its final size
+        requestAnimationFrame(() => { renderGraph(); cy && cy.resize() && cy.fit(undefined, 40); });
+      } else if (tab === 'timeline') {
+        requestAnimationFrame(renderTimeline);
+      }
+    });
+  });
+})();
+</script>
+{% endblock %}

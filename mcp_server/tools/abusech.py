@@ -21,7 +21,7 @@ def _get_client():
     return _client
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def abusech_check_domain(domain: str) -> dict:
     """Check a domain against Abuse.ch threat intelligence databases.
 
@@ -36,7 +36,7 @@ def abusech_check_domain(domain: str) -> dict:
     return client.check_domain_all(domain)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def abusech_check_ip(ip_address: str) -> dict:
     """Check an IP address against Abuse.ch threat intelligence databases.
 

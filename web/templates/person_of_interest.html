@@ -1,0 +1,153 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'Person of Interest — OSINT' %}
+{% set page_title_left_icon = '🕵️' %}
+{% set page_title_right_icon = '🔎' %}
+
+{% block extra_css %}
+<style>
+  /* Brand-gradient scrollbar (matches QRadar AQL Explorer) */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: rgba(0,70,173,0.08); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #00a651, #0046ad, #f6be00); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #0046ad, #f6be00, #00a651); }
+
+  .poi-wrap { max-width: 1200px; margin: 24px auto; padding: 0 20px; }
+  .poi-banner {
+    background: linear-gradient(135deg, rgba(217,119,6,0.08), rgba(0,70,173,0.06));
+    border: 1px solid rgba(217,119,6,0.18);
+    border-left: 4px solid #d97706;
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 22px;
+    font-size: 0.95rem;
+    color: #1e293b;
+  }
+  body.dark-mode .poi-banner { color: #e2e8f0; background: linear-gradient(135deg, rgba(217,119,6,0.10), rgba(0,70,173,0.10)); }
+  .poi-banner strong { color: #b45309; }
+  body.dark-mode .poi-banner strong { color: #fbbf24; }
+
+  .poi-table-wrap { background: #fff; border: 1px solid rgba(15,23,42,0.10); border-radius: 14px; overflow: hidden; }
+  body.dark-mode .poi-table-wrap { background: #0f172a; border-color: rgba(148,163,184,0.18); }
+
+  table.poi-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+  .poi-table th, .poi-table td { padding: 12px 14px; text-align: left; vertical-align: top; }
+  .poi-table thead th {
+    background: linear-gradient(180deg, #f8fafc, #f1f5f9);
+    color: #334155;
+    border-bottom: 1px solid rgba(15,23,42,0.10);
+    font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  body.dark-mode .poi-table thead th { background: linear-gradient(180deg, #1e293b, #0f172a); color: #cbd5e1; border-bottom-color: rgba(148,163,184,0.18); }
+  .poi-table tbody tr { border-bottom: 1px solid rgba(15,23,42,0.06); }
+  body.dark-mode .poi-table tbody tr { border-bottom-color: rgba(148,163,184,0.10); }
+  .poi-table tbody tr:hover { background: rgba(13,148,136,0.04); }
+  body.dark-mode .poi-table tbody tr:hover { background: rgba(13,148,136,0.08); }
+
+  .poi-targets { display: flex; flex-direction: column; gap: 2px; }
+  .poi-targets code { background: rgba(15,23,42,0.06); padding: 1px 6px; border-radius: 4px; font-size: 0.82rem; }
+  body.dark-mode .poi-targets code { background: rgba(148,163,184,0.18); color: #e2e8f0; }
+
+  .poi-badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 0.74rem; font-weight: 700; letter-spacing: 0.02em; }
+  .poi-badge.completed { background: rgba(0,166,81,0.12); color: #047857; }
+  .poi-badge.running   { background: rgba(13,148,136,0.14); color: #0d9488; }
+  .poi-badge.pending   { background: rgba(202,138,4,0.14); color: #b45309; }
+  .poi-badge.failed    { background: rgba(220,38,38,0.14); color: #b91c1c; }
+  body.dark-mode .poi-badge.completed { background: rgba(0,166,81,0.20); color: #6ee7b7; }
+  body.dark-mode .poi-badge.running   { background: rgba(13,148,136,0.24); color: #5eead4; }
+  body.dark-mode .poi-badge.pending   { background: rgba(202,138,4,0.24); color: #fbbf24; }
+  body.dark-mode .poi-badge.failed    { background: rgba(220,38,38,0.24); color: #fca5a5; }
+
+  .poi-num { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .poi-num.zero { color: #64748b; font-weight: 500; }
+  .poi-num.hit  { color: #b45309; }
+  .poi-num.alarm { color: #b91c1c; }
+  body.dark-mode .poi-num.zero { color: #94a3b8; }
+  body.dark-mode .poi-num.hit { color: #fbbf24; }
+  body.dark-mode .poi-num.alarm { color: #fca5a5; }
+
+  .poi-table a.poi-link { color: #0046ad; font-weight: 600; text-decoration: none; }
+  .poi-table a.poi-link:hover { text-decoration: underline; }
+  body.dark-mode .poi-table a.poi-link { color: #7dd3fc; }
+
+  .poi-empty { text-align: center; padding: 60px 20px; color: #64748b; font-size: 1rem; }
+  body.dark-mode .poi-empty { color: #94a3b8; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="poi-wrap">
+
+  <div class="poi-banner">
+    <strong>🔒 Handle with care.</strong>
+    Investigations here use breach data + public username/email footprint signals.
+    They are <em>auditable</em> — every kickoff is logged with the requester's identity.
+    To start a new investigation, open <code>Toodles → 🕵️ Person of Interest</code> on Webex.
+  </div>
+
+  {% if investigations %}
+  <div class="poi-table-wrap">
+    <table class="poi-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Started (UTC)</th>
+          <th>Requester</th>
+          <th>Target</th>
+          <th>Reason</th>
+          <th>Status</th>
+          <th>Breaches</th>
+          <th>Email hits</th>
+          <th>Sites</th>
+          <th>Duration</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for inv in investigations %}
+        {% set s = inv.summary or {} %}
+        <tr>
+          <td><a class="poi-link" href="/person-of-interest/{{ inv.id }}">#{{ inv.id }}</a></td>
+          <td>{{ inv.created_at_fmt }}</td>
+          <td>{{ inv.requester }}</td>
+          <td>
+            <div class="poi-targets">
+              {% if inv.target_name %}<span>👤 {{ inv.target_name }}</span>{% endif %}
+              {% if inv.target_username %}<code>🆔 {{ inv.target_username }}</code>{% endif %}
+              {% if inv.target_email %}<code>📧 {{ inv.target_email }}</code>{% endif %}
+            </div>
+          </td>
+          <td>{{ inv.reason or '' }}</td>
+          <td><span class="poi-badge {{ inv.status }}">{{ inv.status }}</span></td>
+          <td>
+            {% set b = s.hibp_breach_count %}
+            {% if b is none %}<span class="poi-num zero">—</span>
+            {% elif b == 0 %}<span class="poi-num zero">0</span>
+            {% else %}<span class="poi-num alarm">{{ b }}</span>{% endif %}
+          </td>
+          <td>
+            {% set h = s.holehe_hit_count %}
+            {% if h is none %}<span class="poi-num zero">—</span>
+            {% elif h == 0 %}<span class="poi-num zero">0</span>
+            {% else %}<span class="poi-num hit">{{ h }}</span>{% endif %}
+          </td>
+          <td>
+            {% set m = s.maigret_claimed_count %}
+            {% if m is none %}<span class="poi-num zero">—</span>
+            {% elif m == 0 %}<span class="poi-num zero">0</span>
+            {% else %}<span class="poi-num hit">{{ m }}</span>{% endif %}
+          </td>
+          <td>{% if inv.duration_s is not none %}{{ inv.duration_s }}s{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="poi-table-wrap">
+    <div class="poi-empty">
+      No investigations yet. Start one from Toodles → 🕵️ Person of Interest.
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

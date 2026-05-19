@@ -20,6 +20,7 @@ import logging
 from typing import Optional
 
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 from services.abusech import AbuseCHClient
 from src.utils.tool_decorator import log_tool_call
@@ -205,7 +206,7 @@ def _format_ip_result(data: dict) -> str:
     return "\n".join(result)
 
 
-@tool
+@readonly_tool
 @validate_args(domain=DOMAIN_PATTERN)
 @log_tool_call
 def check_domain_abusech(domain: str) -> str:
@@ -242,7 +243,7 @@ def check_domain_abusech(domain: str) -> str:
         return f"Error checking domain on abuse.ch: {str(e)}"
 
 
-@tool
+@readonly_tool
 @validate_args(ip_address=IP_ADDRESS_PATTERN)
 @log_tool_call
 def check_ip_abusech(ip_address: str) -> str:

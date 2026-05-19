@@ -49,7 +49,13 @@ body {
 
 .aid-meta { font-size: 0.85rem; color: #64748b; margin-bottom: 16px; }
 
-/* ---------- delete ---------- */
+/* ---------- edit / delete ---------- */
+.aid-edit-btn {
+    background: none; border: none; cursor: pointer; font-size: 1.2rem;
+    opacity: 0.55; transition: opacity 0.2s, transform 0.2s; padding: 4px 8px;
+    text-decoration: none; line-height: 1;
+}
+.aid-edit-btn:hover { opacity: 1; transform: scale(1.15); }
 .aid-delete-btn {
     background: none; border: none; cursor: pointer; font-size: 1.3rem;
     opacity: 0.5; transition: opacity 0.2s, transform 0.2s; padding: 4px 8px;
@@ -164,3 +170,149 @@ body.dark-mode .aid-delete-box h3 { color: #e2e8f0; }
 body.dark-mode .aid-delete-box p { color: #94a3b8; }
 body.dark-mode .aid-delete-box input { background: #0f172a; color: #e2e8f0; border-color: #334155; }
 body.dark-mode .aid-btn-cancel { background: #334155; color: #cbd5e1; }
+
+/* ---------- discussion / comments ---------- */
+.aid-comments { margin-top: 20px; }
+.aid-comments-header { margin-bottom: 14px; }
+.aid-comments-header h3 {
+    margin: 0 0 4px;
+    font-size: 1.1rem;
+    background: linear-gradient(135deg, #0046AD, #00A651);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.aid-comments-count {
+    background: #0046AD;
+    -webkit-text-fill-color: #fff;
+    color: #fff;
+    font-size: 12px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-weight: 700;
+}
+.aid-comments-hint { font-size: 13px; color: #475569; }
+
+.aid-comments-thread { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+.aid-comments-empty {
+    padding: 18px;
+    color: #64748b;
+    font-style: italic;
+    text-align: center;
+    background: rgba(255,255,255,0.55);
+    border: 1px dashed #cbd5e1;
+    border-radius: 10px;
+}
+
+.aid-comment {
+    background: rgba(255,255,255,0.7);
+    border: 1px solid #d1d9e6;
+    border-left: 3px solid #0046AD;
+    border-radius: 8px;
+    padding: 12px 14px;
+}
+.aid-comment-new { animation: aid-comment-pop .35s ease-out; }
+@keyframes aid-comment-pop {
+    from { transform: translateY(-4px); opacity: 0; }
+    to   { transform: translateY(0);     opacity: 1; }
+}
+.aid-comment-head {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    font-size: 12px;
+    color: #64748b;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+.aid-comment-author { font-weight: 700; color: #0046AD; font-size: 13px; }
+.aid-comment-email  { color: #64748b; }
+.aid-comment-time   { margin-left: auto; color: #94a3b8; font-family: 'SFMono-Regular', Menlo, monospace; font-size: 11px; }
+.aid-comment-body { font-size: 14px; line-height: 1.55; color: #1e293b; white-space: pre-wrap; overflow-wrap: anywhere; }
+.aid-comment-body a { color: #0046AD; text-decoration: underline; word-break: break-all; }
+.aid-comment-body a:hover { color: #00A651; }
+body.dark-mode .aid-comment-body a { color: #93c5fd; }
+body.dark-mode .aid-comment-body a:hover { color: #6ee7b7; }
+
+.aid-comment-form {
+    background: rgba(255,255,255,0.7);
+    border: 1px solid #d1d9e6;
+    border-radius: 10px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.aid-comment-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.aid-comment-form input,
+.aid-comment-form textarea {
+    width: 100%;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    background: #fff;
+}
+.aid-comment-form textarea { resize: vertical; min-height: 80px; }
+.aid-comment-form input:focus,
+.aid-comment-form textarea:focus { outline: none; border-color: #0046AD; box-shadow: 0 0 0 2px rgba(0,70,173,0.15); }
+.aid-comment-form-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.aid-comment-form-err { color: #b91c1c; font-size: 12px; }
+.aid-comment-submit {
+    background: linear-gradient(135deg, #0046AD, #00A651);
+    color: #fff;
+    border: 0;
+    padding: 9px 18px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    transition: transform .1s, box-shadow .15s;
+}
+.aid-comment-submit:hover { box-shadow: 0 4px 12px rgba(0,70,173,0.3); transform: translateY(-1px); }
+.aid-comment-submit:disabled { opacity: .6; cursor: wait; transform: none; box-shadow: none; }
+
+/* Dark-mode parity */
+body.dark-mode .aid-comments-hint { color: #94a3b8; }
+body.dark-mode .aid-comment { background: rgba(15,23,42,0.55); border-color: #334155; border-left-color: #60a5fa; }
+body.dark-mode .aid-comment-author { color: #93c5fd; }
+body.dark-mode .aid-comment-body { color: #e2e8f0; }
+body.dark-mode .aid-comments-empty { background: rgba(15,23,42,0.4); color: #94a3b8; border-color: #334155; }
+body.dark-mode .aid-comment-form { background: rgba(15,23,42,0.55); border-color: #334155; }
+body.dark-mode .aid-comment-form input,
+body.dark-mode .aid-comment-form textarea { background: #0f172a; color: #e2e8f0; border-color: #334155; }
+
+.aid-comment-email-wrap {
+    display: flex;
+    align-items: stretch;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #fff;
+    overflow: hidden;
+}
+.aid-comment-email-wrap input {
+    flex: 1;
+    border: 0 !important;
+    border-radius: 0 !important;
+    padding: 8px 10px;
+    background: transparent;
+}
+.aid-comment-email-wrap input:focus { box-shadow: none !important; }
+.aid-comment-email-wrap:focus-within { border-color: #0046AD; box-shadow: 0 0 0 2px rgba(0,70,173,0.15); }
+.aid-comment-email-suffix {
+    background: #eef2f7;
+    color: #475569;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-family: 'SFMono-Regular', Menlo, monospace;
+    border-left: 1px solid #cbd5e1;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+}
+body.dark-mode .aid-comment-email-wrap { background: #0f172a; border-color: #334155; }
+body.dark-mode .aid-comment-email-wrap input { color: #e2e8f0; }
+body.dark-mode .aid-comment-email-suffix { background: #1e293b; color: #94a3b8; border-left-color: #334155; }

@@ -1,0 +1,39 @@
+First run after fresh engine restart (counters at zero, cache empty):
+
+   label    ttft   total  prompt   out  response
+ A1 cold  144.27s  145.23s   70018    33  'My tone is concise, evidence-driven, and never speculative. '
+ A2 warm   0.85s   1.82s   70019    33  'The prefix for QRadar offenses is **AE_**.\n\nFor example: AE_'
+ B1 cold  133.33s  134.28s   67018    33  'My specialty is **distributed systems**.\n\nI focus on:\n\n- **T'
+ A3 warm   0.86s   1.83s   70018    33  '**Cite.**\n\nI never speculate. I only cite exact field values'
+ B2 warm   0.81s   1.76s   67017    33  'No, I never invent APIs. If something is unknown, I say so e'
+
+Post-run /v1/cache/stats:
+
+{
+    "engine_cache": {
+        "system_kv_cache": {
+            "capacity": 4,
+            "in_use": 2,
+            "counters": {
+                "hits": 3,
+                "misses": 2,
+                "stores": 2,
+                "evictions": 0,
+                "hit_ratio": 0.6
+            }
+        }
+    }
+}
+
+Second run (cache already populated -- demonstrates persistence across
+multiple consumers of the same engine; no STORE pressure):
+
+   label    ttft   total  prompt   out  response
+ A1 cold   1.31s   2.28s   70018    33  'My tone is concise, evidence-driven, and never speculative. '
+ A2 warm   0.83s    1.8s   70019    33  'The prefix for QRadar offenses is **AE_**.\n\nFor example: AE_'
+ B1 cold   0.83s   1.78s   67018    33  'My specialty is **distributed systems**.\n\nI focus on:\n\n- **T'
+ A3 warm   0.85s   1.82s   70018    33  '**Cite.**\n\nI never speculate. I only cite exact field values'
+ B2 warm   0.80s   1.75s   67017    33  'No, I never invent APIs. If something is unknown, I say so e'
+
+Headline: 144s -> 0.85s TTFT on warm prefix (~170x). Multi-slot proof is
+A3: it HITs because A's snapshot was not evicted by B1's STORE.

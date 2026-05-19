@@ -6,7 +6,8 @@ import threading
 from flask import Blueprint, jsonify, render_template, request
 
 from src.utils.logging_utils import log_web_activity
-from src.components.web.edit_auth import check_edit_password, notify_edit_async
+from src.components.web.edit_auth import notify_edit_async
+from web.auth import helpers
 
 logger = logging.getLogger(__name__)
 
@@ -86,8 +87,8 @@ def wiki_graph():
 @wiki_bp.route("/api/wiki/compile", methods=["POST"])
 @log_web_activity
 def wiki_compile():
-    if not check_edit_password(request, "wiki"):
-        return jsonify({"success": False, "error": "Invalid password"}), 403
+    if not helpers.current_user():
+        return jsonify({"success": False, "error": "login_required"}), 401
     if _compile_status["running"]:
         return jsonify({"success": False, "error": "A compile is already in progress"}), 409
     data = request.get_json() or {}

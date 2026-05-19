@@ -6,16 +6,32 @@
     {% if page_title %}
         <h1 class="{{ page_title_class if page_title_class else 'dashboard-title' }}" aria-label="{{ page_title_aria if page_title_aria else (page_title|striptags) }}">{{ page_title|safe }}</h1>
     {% endif %}
-    {# Theme toggle + audio controls inside nav for alignment #}
-    <div class="nav-theme-slider" id="themeSlider">
-        <input type="radio" name="themeMode" id="themeModeLight" value="light">
-        <input type="radio" name="themeMode" id="themeModeDark" value="dark">
-        <label for="themeModeLight" class="nav-theme-slider-opt" data-mode="light">☀️</label>
-        <label for="themeModeDark" class="nav-theme-slider-opt" data-mode="dark">🌙</label>
-        <div class="nav-theme-slider-thumb"></div>
-    </div>
+    {# Theme picker moved to /account (Appearance card). initTheme() still
+       applies the saved theme on every page via localStorage. #}
     {% set audio_controls_classes = 'audio-controls--enhanced audio-controls--in-nav' %}
     {% include 'audio_controls.html' %}
+    <div class="nav-person-dropdown" id="personDropdown">
+        <button type="button" class="person-dd-trigger" id="personDdTrigger"
+                aria-haspopup="menu" aria-expanded="false"
+                title="{% if current_user %}{{ current_user.email }}{% else %}Account{% endif %}"
+                aria-label="{% if current_user %}Account menu{% else %}Sign in menu{% endif %}">
+            <svg class="person-dd-icon" viewBox="0 0 448 512" aria-hidden="true" focusable="false"><path d="M224 256A128 128 0 1 0 224 0a128 128 0 1 0 0 256zm-45.7 48C79.8 304 0 383.8 0 482.3C0 498.7 13.3 512 29.7 512l388.6 0c16.4 0 29.7-13.3 29.7-29.7C448 383.8 368.2 304 269.7 304l-91.4 0z"/></svg>
+        </button>
+        <div class="person-dd-menu" id="personDdMenu" role="menu" hidden>
+            {% if current_user %}
+                <a class="person-dd-opt" href="/account" role="menuitem">Profile</a>
+                {% if current_user.role == 'admin' %}
+                <a class="person-dd-opt" href="/admin-users"  role="menuitem">Admin · Users</a>
+                <a class="person-dd-opt" href="/traffic-logs" role="menuitem">Admin · Traffic Logs</a>
+                {% endif %}
+                <form method="POST" action="/logout" role="none" style="margin:0;">
+                    <button type="submit" class="person-dd-opt" role="menuitem">Log out</button>
+                </form>
+            {% else %}
+                <a class="person-dd-opt" href="/login" role="menuitem">Log in</a>
+            {% endif %}
+        </div>
+    </div>
     <div id="burgerMenu" class="burger-menu-content" style="display:none;" aria-hidden="true">
         <a href="/" target="_blank">🏠 Home</a>
         <a href="/meaningful-metrics" target="_blank">📊 Meaningful Metrics</a>

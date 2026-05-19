@@ -7,7 +7,7 @@ from mcp_server.server import mcp
 logger = logging.getLogger(__name__)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def staffing_current_shift() -> str:
     """Get the current SOC shift name and time boundaries.
 
@@ -33,7 +33,7 @@ def staffing_current_shift() -> str:
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def staffing_get_staff(day_name: str = None, shift_name: str = None) -> str:
     """Get the staffing roster for a shift.
 
@@ -48,7 +48,7 @@ def staffing_get_staff(day_name: str = None, shift_name: str = None) -> str:
     return get_basic_shift_staffing(day_name=day_name, shift_name=shift_name)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def staffing_get_shift_lead(day_name: str = None, shift_name: str = None) -> str:
     """Get the shift lead for a specific shift.
 
@@ -63,7 +63,7 @@ def staffing_get_shift_lead(day_name: str = None, shift_name: str = None) -> str
     return get_shift_lead(day_name=day_name, shift_name=shift_name)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def staffing_get_metrics(days_back: int = 0, shift_name: str = None) -> str:
     """Get shift performance metrics including ticket counts and resolution times.
 

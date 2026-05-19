@@ -18,6 +18,7 @@ import logging
 from typing import Optional
 
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 from services.intelx import IntelligenceXClient, get_client
 from src.utils.tool_decorator import log_tool_call
@@ -151,7 +152,7 @@ def _format_search_result(data: dict) -> str:
     return "\n".join(result)
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def search_intelx(search_term: str) -> str:
     """Search IntelligenceX for dark web, leak, and paste site mentions.
@@ -184,7 +185,7 @@ def search_intelx(search_term: str) -> str:
         return f"Error searching IntelligenceX: {str(e)}"
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def search_darkweb_intelx(search_term: str) -> str:
     """Search IntelligenceX specifically for dark web (Tor/I2P) mentions only.

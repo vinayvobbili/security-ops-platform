@@ -11,6 +11,7 @@ import logging
 from typing import Optional
 
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 from services.abuseipdb import AbuseIPDBClient, ABUSE_CATEGORIES
 from src.utils.tool_decorator import log_tool_call
@@ -152,7 +153,7 @@ def _format_domain_result(data: dict) -> str:
     return "\n".join(result)
 
 
-@tool
+@readonly_tool
 @validate_args(ip_address=IP_ADDRESS_PATTERN)
 @log_tool_call
 def lookup_ip_abuseipdb(ip_address: str) -> str:
@@ -184,7 +185,7 @@ def lookup_ip_abuseipdb(ip_address: str) -> str:
         return f"Error looking up IP in AbuseIPDB: {str(e)}"
 
 
-@tool
+@readonly_tool
 @validate_args(domain=DOMAIN_PATTERN)
 @log_tool_call
 def lookup_domain_abuseipdb(domain: str) -> str:

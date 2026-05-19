@@ -11,6 +11,7 @@ Uses python-whois (free) for WHOIS lookups.
 
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -258,11 +259,18 @@ class WhoisMonitor:
 
         return result
 
-    def scan_domains(self, domains: list[str]) -> dict[str, Any]:
-        """Scan multiple domains for WHOIS changes.
+    def scan_domains(self, domains: list[str], max_workers: int = 8) -> dict[str, Any]:
+        """Scan multiple domains for WHOIS changes in parallel.
+
+        WHOIS is pure socket I/O against many independent servers, so the
+        bottleneck is per-lookup timeouts (~10s for dead/parked domains).
+        Serial scanning of N domains was O(10·N seconds) which routinely
+        burned the 1800s job budget. Parallelizing brings worst-case to
+        ceil(N / max_workers) · 10s.
 
         Args:
             domains: List of domains to scan
+            max_workers: Concurrent WHOIS lookups (default 8)
 
         Returns:
             Dict with results for all domains and summary
@@ -277,25 +285,37 @@ class WhoisMonitor:
             "details": {},
         }
 
-        for domain in domains:
-            result = self.check_for_changes(domain)
-            results["details"][domain] = result
+        if not domains:
+            return results
 
-            if result.get("has_changes"):
-                results["domains_with_changes"] += 1
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            future_to_domain = {
+                pool.submit(self.check_for_changes, d): d for d in domains
+            }
+            for future in as_completed(future_to_domain):
+                domain = future_to_domain[future]
+                try:
+                    result = future.result()
+                except Exception as e:
+                    logger.error(f"WHOIS scan failed for {domain}: {e}")
+                    result = {"success": False, "domain": domain, "error": str(e)}
+                results["details"][domain] = result
 
-                if result.get("change_severity") == "high":
-                    results["high_severity_changes"].append({
+                if result.get("has_changes"):
+                    results["domains_with_changes"] += 1
+
+                    if result.get("change_severity") == "high":
+                        results["high_severity_changes"].append({
+                            "domain": domain,
+                            "changes": result["changes"],
+                        })
+
+                if result.get("is_newly_registered"):
+                    results["newly_registered"].append({
                         "domain": domain,
-                        "changes": result["changes"],
+                        "creation_date": result.get("data", {}).get("creation_date"),
+                        "registrar": result.get("data", {}).get("registrar"),
                     })
-
-            if result.get("is_newly_registered"):
-                results["newly_registered"].append({
-                    "domain": domain,
-                    "creation_date": result.get("data", {}).get("creation_date"),
-                    "registrar": result.get("data", {}).get("registrar"),
-                })
 
         logger.info(
             f"WHOIS scan complete: {results['domains_with_changes']}/{len(domains)} "

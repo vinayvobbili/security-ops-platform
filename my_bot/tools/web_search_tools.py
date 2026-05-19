@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 
 import httpx
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 from src.utils.tool_decorator import log_tool_call
 
@@ -23,7 +24,7 @@ MAX_SNIPPET_CHARS = 200
 
 FETCH_TIMEOUT_SECONDS = 15
 FETCH_MAX_BYTES = 2_000_000
-FETCH_USER_AGENT = "Mozilla/5.0 (compatible; IR-the security assistant bot/1.0; +https://gdnr.the-company.com)"
+FETCH_USER_AGENT = "Mozilla/5.0 (compatible; IR-Pokedex/1.0; +https://gdnr.the-company.com)"
 RENDER_TIMEOUT_SECONDS = 25
 RENDER_MIN_SIGNAL = 3  # high-signal IOC count below which we retry with headless browser
 
@@ -42,7 +43,7 @@ def _format_result(i: int, r: dict) -> str:
     return f"[{i}] {title}\n    {content}\n    Source: {url}\n    Engines: {engines}"
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def search_web(query: str, max_results: int = 5) -> str:
     """Search the internet for current events, news, or any topic that requires up-to-date information.
@@ -183,7 +184,7 @@ def _clean_entities(entities, source_host: str) -> None:
     ]
 
 
-# IOC patterns the security assistant bot has no first-party hunt tool for. Each entry names the
+# IOC patterns Pokedex has no first-party hunt tool for. Each entry names the
 # integration that would close the gap so the analyst knows what to build/ask for.
 # "scan=domains" reclassifies items already pulled by the extractor (moves out of
 # entities.domains); "scan=text" finds patterns the extractor misses entirely.
@@ -240,7 +241,7 @@ _GAP_PATTERNS = [
 
 
 def _classify_gaps(entities, text: str) -> dict:
-    """Find IOC-like values the security assistant bot has no hunt tool for.
+    """Find IOC-like values Pokedex has no hunt tool for.
 
     Reclassifies matches out of entities.domains (in-place) when appropriate,
     and scans raw text for secret/token patterns the entity extractor misses.
@@ -353,7 +354,7 @@ def _format_list_section(label: str, values: list, limit: int = 30) -> str:
     return f"{label} ({len(values)}): " + ", ".join(shown) + more
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def fetch_url_and_extract_iocs(url: str) -> str:
     """Fetch a web page (threat advisory, blog, vendor bulletin) and extract IOCs from it.
@@ -370,7 +371,7 @@ def fetch_url_and_extract_iocs(url: str) -> str:
     For JS-rendered pages (Next.js, React SPAs, dashboards), automatically retries
     with headless Chromium when the initial fetch yields too few high-signal IOCs.
 
-    The output may also include a "Hunt gaps" section listing IOC types the security assistant bot
+    The output may also include a "Hunt gaps" section listing IOC types Pokedex
     has no tool to hunt (OAuth client IDs, AWS keys, GitHub tokens, JWTs, etc.).
     Do NOT attempt to pivot on hunt-gap items with VT/QRadar/Tanium — they will
     return noise. Instead, tell the analyst the gap exists and what integration
@@ -453,7 +454,7 @@ def fetch_url_and_extract_iocs(url: str) -> str:
 
         if gaps:
             lines.append("")
-            lines.append("Hunt gaps — IOC types the security assistant bot has no tool for:")
+            lines.append("Hunt gaps — IOC types Pokedex has no tool for:")
             for gap_name, info in gaps.items():
                 values = info["values"]
                 shown = ", ".join(values[:5])

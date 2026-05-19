@@ -17,6 +17,7 @@ import logging
 from typing import Optional
 
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 from services.tanium import TaniumClient, TaniumAPIError
 from src.utils.tool_decorator import log_tool_call
@@ -112,7 +113,7 @@ def _format_search_results(computers: list, search_term: str, instance_name: str
     return "\n".join(result)
 
 
-@tool
+@readonly_tool
 @validate_args(hostname=HOSTNAME_PATTERN)
 @log_tool_call
 def lookup_endpoint_tanium(hostname: str) -> str:
@@ -176,7 +177,7 @@ def lookup_endpoint_tanium(hostname: str) -> str:
         return f"Error looking up endpoint in Tanium: {str(e)}"
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def search_endpoints_tanium(search_term: str, instance: str = "cloud") -> str:
     """Search for endpoints in Tanium by partial hostname match.
@@ -234,7 +235,7 @@ def search_endpoints_tanium(search_term: str, instance: str = "cloud") -> str:
         return f"Error searching endpoints in Tanium: {str(e)}"
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def list_tanium_instances() -> str:
     """List available Tanium instances and their status.

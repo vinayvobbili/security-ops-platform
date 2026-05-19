@@ -103,6 +103,17 @@ def _probe_qradar():
     return True
 
 
+def _probe_proxy():
+    from services.proxy import the corporate proxyClient
+    client = the corporate proxyClient()
+    if not client.is_configured():
+        raise RuntimeError('Not configured')
+    result = client.get_status()
+    if isinstance(result, dict) and 'error' in result:
+        raise RuntimeError(result['error'])
+    return True
+
+
 def _probe_vectra():
     from services.vectra import VectraClient
     client = VectraClient()
@@ -374,6 +385,7 @@ _PROBES = {
     'tanium_onprem': _probe_tanium_onprem,
     'cisco_amp': _probe_cisco_amp,
     'qradar': _probe_qradar,
+    'proxy': _probe_proxy,
     'vectra': _probe_vectra,
     'palo_alto': _probe_palo_alto,
     'recorded_future': _probe_recorded_future,
@@ -454,7 +466,7 @@ CONNECTORS: list[dict] = [
         'name': 'Tanium (On-Prem)',
         'category': 'Endpoint Protection',
         'description': 'On-premises endpoint management and visibility',
-        'env_vars': ['TANIUM_ONPREM_API_URL', 'TANIUM_ONPREM_API_TOKEN'],
+        'env_vars': ['TANIUM_ONPREM_API_URL', 'TANIUM_ONPREM_API_TOKEN_CH'],
     },
     {
         'id': 'cisco_amp',
@@ -471,6 +483,13 @@ CONNECTORS: list[dict] = [
         'category': 'SIEM & Network Security',
         'description': 'IBM SIEM for log analysis and threat detection',
         'env_vars': ['QRADAR_API_URL', 'QRADAR_API_KEY'],
+    },
+    {
+        'id': 'proxy',
+        'name': 'the corporate proxy',
+        'category': 'SIEM & Network Security',
+        'description': 'Cloud security web gateway',
+        'env_vars': ['CORPORATE_PROXY_API_BASE_URL', 'CORPORATE_PROXY_API_USERNAME', 'CORPORATE_PROXY_API_PASSWORD', 'CORPORATE_PROXY_API_KEY'],
     },
     {
         'id': 'vectra',
@@ -600,7 +619,7 @@ CONNECTORS: list[dict] = [
         'id': 'teams',
         'name': 'Microsoft Teams',
         'category': 'Communication',
-        'description': 'Teams bot integration (the notification service)',
+        'description': 'Teams bot integration (Toodles)',
         'env_vars': ['TEAMS_TOODLES_APP_ID', 'TEAMS_TOODLES_APP_PASSWORD', 'TEAMS_TOODLES_TENANT_ID'],
     },
     {

@@ -1,5 +1,5 @@
 """
-control-efficacy analytics Analysis — Systemic security gap analysis, trends, and remediation
+Defense Pulse Analysis — Systemic security gap analysis, trends, and remediation
 strategies derived from XSOAR incident data.
 
 Produces 4 charts and 1 Markdown report for three stakeholder groups:
@@ -155,7 +155,7 @@ def _load_previous_kpis(output_dir: Path) -> dict:
     """Load KPIs from the most recent *previous* dated folder.
 
     Scans web/static/charts/ for dated folders (MM-DD-YYYY) that have a
-    control-efficacy analytics KPI JSON and returns the contents of the most recent one
+    Defense Pulse KPI JSON and returns the contents of the most recent one
     that is NOT the current output_dir.
     """
     charts_root = ROOT_DIRECTORY / "web" / "static" / "charts"
@@ -166,7 +166,7 @@ def _load_previous_kpis(output_dir: Path) -> dict:
     for folder in charts_root.iterdir():
         if not folder.is_dir() or folder == output_dir:
             continue
-        kpi_file = folder / "control-efficacy analytics - KPIs.json"
+        kpi_file = folder / "Defense Pulse - KPIs.json"
         if kpi_file.exists():
             candidates.append(kpi_file)
 
@@ -283,7 +283,7 @@ def chart_category_impact_heatmap(tickets: List[dict], output_dir: Path) -> Path
     _add_border(fig)
     _add_footer(fig)
     plt.tight_layout(rect=(0, 0.05, 1, 0.95))
-    return _save_chart(fig, output_dir, 'control-efficacy analytics - Category Impact Heatmap.png')
+    return _save_chart(fig, output_dir, 'Defense Pulse - Category Impact Heatmap.png')
 
 
 # ---------------------------------------------------------------------------
@@ -335,11 +335,11 @@ def chart_root_cause_detection_source(tickets: List[dict], output_dir: Path) -> 
     _add_border(fig)
     _add_footer(fig)
     plt.tight_layout(rect=(0, 0.05, 1, 0.95))
-    return _save_chart(fig, output_dir, 'control-efficacy analytics - Root Cause Detection Source.png')
+    return _save_chart(fig, output_dir, 'Defense Pulse - Root Cause Detection Source.png')
 
 
 # ---------------------------------------------------------------------------
-# Chart 3: control-efficacy analytics Dashboard (disposition ratio + donut)
+# Chart 3: Defense Pulse Dashboard (disposition ratio + donut)
 # ---------------------------------------------------------------------------
 
 def chart_defense_pulse_dashboard(tickets: List[dict], output_dir: Path) -> Path:
@@ -414,12 +414,12 @@ def chart_defense_pulse_dashboard(tickets: List[dict], output_dir: Path) -> Path
                   ha='center', va='center', fontsize=11, fontweight='bold', color=BORDER_COLOR)
 
     total = len(df)
-    fig.suptitle(f'control-efficacy analytics Dashboard  ({total:,} incidents)',
+    fig.suptitle(f'Defense Pulse Dashboard  ({total:,} incidents)',
                  fontsize=16, fontweight='bold', color=BORDER_COLOR, y=0.97)
 
     _add_border(fig)
     _add_footer(fig)
-    return _save_chart(fig, output_dir, 'control-efficacy analytics - Dashboard.png')
+    return _save_chart(fig, output_dir, 'Defense Pulse - Dashboard.png')
 
 
 # ---------------------------------------------------------------------------
@@ -486,7 +486,7 @@ def chart_awareness_trends(tickets: List[dict], output_dir: Path) -> Path:
     _add_border(fig)
     _add_footer(fig)
     plt.tight_layout(rect=(0, 0.05, 1, 0.95))
-    return _save_chart(fig, output_dir, 'control-efficacy analytics - Awareness Trends.png')
+    return _save_chart(fig, output_dir, 'Defense Pulse - Awareness Trends.png')
 
 
 # ---------------------------------------------------------------------------
@@ -738,7 +738,7 @@ def chart_repeat_offenders(tickets: List[dict], output_dir: Path) -> Path:
     _add_border(fig)
     _add_footer(fig)
     plt.tight_layout(rect=(0, 0.05, 1, 0.93))
-    return _save_chart(fig, output_dir, 'control-efficacy analytics - Repeat Offenders.png')
+    return _save_chart(fig, output_dir, 'Defense Pulse - Repeat Offenders.png')
 
 
 # ---------------------------------------------------------------------------
@@ -1302,7 +1302,8 @@ def _generate_ai_analysis(stats: dict, tickets: List[dict]) -> dict:
             return {}
 
         prompt = _build_analysis_prompt(stats, clusters, total_cirs=len(cirs))
-        structured_llm = llm.with_structured_output(DefensePulseStructuredAnalysis)
+        from my_bot.utils.llm_factory import structured_output
+        structured_llm = structured_output(llm, DefensePulseStructuredAnalysis)
         response = structured_llm.invoke(prompt)
         llm_output = response.model_dump()
 
@@ -1468,7 +1469,7 @@ def _compute_chart_data(tickets: List[dict]) -> dict:
 # ---------------------------------------------------------------------------
 
 def generate_report(tickets: List[dict], output_dir: Path) -> Path:
-    """Generate the control-efficacy analytics Strategic Report Markdown file."""
+    """Generate the Defense Pulse Strategic Report Markdown file."""
     df = pd.DataFrame(tickets)
     df['created_dt'] = pd.to_datetime(df['created'], format='ISO8601', utc=True)
     df['source_short'] = df['type'].map(_short_type)
@@ -1478,7 +1479,7 @@ def generate_report(tickets: List[dict], output_dir: Path) -> Path:
     lines: List[str] = []
     w = lines.append  # shorthand
 
-    w(f"# control-efficacy analytics - Strategic Report")
+    w(f"# Defense Pulse - Strategic Report")
     w(f"")
     w(f"*Generated: {now_str}*  ")
     w(f"*Data: {total:,} incidents over 90-day window*")
@@ -1760,18 +1761,18 @@ def generate_report(tickets: List[dict], output_dir: Path) -> Path:
     w("---")
     _wm_tag = os.environ.get("WATERMARK_TAG", "")
     if _wm_tag:
-        w(f"*Report generated by control-efficacy analytics Analysis | {_wm_tag}*")
+        w(f"*Report generated by Defense Pulse Analysis | {_wm_tag}*")
     else:
-        w("*Report generated by control-efficacy analytics Analysis*")
+        w("*Report generated by Defense Pulse Analysis*")
 
     # Write files
     output_dir.mkdir(parents=True, exist_ok=True)
-    report_path = output_dir / "control-efficacy analytics - Strategic Report.md"
+    report_path = output_dir / "Defense Pulse - Strategic Report.md"
     report_path.write_text("\n".join(lines), encoding="utf-8")
     logger.info(f"Saved report: {report_path}")
 
     # Save KPI summary JSON for the dashboard
-    kpi_path = output_dir / "control-efficacy analytics - KPIs.json"
+    kpi_path = output_dir / "Defense Pulse - KPIs.json"
     kpis = {
         "total_incidents": total,
         "top_category": top_cat,
@@ -1960,7 +1961,7 @@ def send_webex_notification(tickets: List[dict], room_id: str = None) -> None:
         top_src_count = src_counts.iloc[0] if len(src_counts) > 0 else 0
 
         md = (
-            f"## 🛡️ control-efficacy analytics — Biweekly Analysis\n"
+            f"## 🛡️ Defense Pulse — Biweekly Analysis\n"
             f"📅 **{now_str}** · 90-day rolling window\n\n"
             f"---\n\n"
             f"- 📊 **Total Incidents:** {total:,} across {det_sources} detection sources\n"
@@ -1974,14 +1975,14 @@ def send_webex_notification(tickets: List[dict], room_id: str = None) -> None:
         )
 
         webex.messages.create(roomId=room_id, markdown=md)
-        logger.info("Sent control-efficacy analytics Webex notification")
+        logger.info("Sent Defense Pulse Webex notification")
 
     except Exception as e:
         logger.error(f"Failed to send Webex notification: {e}")
 
 
 def generate_all(date_str: str = None, room_id: str = None) -> None:
-    """Generate all control-efficacy analytics charts and report.
+    """Generate all Defense Pulse charts and report.
 
     Args:
         date_str: Date folder for cached data. If None, uses the latest snapshot.
@@ -2004,7 +2005,7 @@ def generate_all(date_str: str = None, room_id: str = None) -> None:
     # Notify via Webex
     send_webex_notification(tickets, room_id=room_id)
 
-    print(f"\ncontrol-efficacy analytics Analysis complete — {len(generated)} files generated:")
+    print(f"\nDefense Pulse Analysis complete — {len(generated)} files generated:")
     for p in generated:
         print(f"  {p}")
 
@@ -2018,7 +2019,7 @@ def make_chart(room_id: str = None) -> None:
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='control-efficacy analytics Analysis')
+    parser = argparse.ArgumentParser(description='Defense Pulse Analysis')
     parser.add_argument('--date', default=None,
                         help='Date folder for cached data (e.g. 12-08-2025). Defaults to latest.')
     args = parser.parse_args()

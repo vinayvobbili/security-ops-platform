@@ -53,8 +53,7 @@ def _query_chroma(question: str, n_results: int = 20) -> str:
             return "The document store is empty — no documents have been indexed yet."
         # Use same embedding function as indexing (OpenAI-compatible vllm-mlx)
         from my_bot.utils.embedding_function import OpenAIEmbeddingFunction
-        embed_url = os.environ.get("WEB_APP_EMBEDDING_API_URL") or os.environ.get("EMBEDDING_API_URL")
-        embed_fn = OpenAIEmbeddingFunction(base_url=embed_url)
+        embed_fn = OpenAIEmbeddingFunction()
         query_embedding = embed_fn([question])[0]
         results = col.query(query_embeddings=[query_embedding], n_results=n_results)
         docs = results.get("documents", [[]])[0]

@@ -4,6 +4,7 @@ import logging
 from typing import List, Optional
 
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 from src.utils.tool_decorator import log_tool_call
 
@@ -20,7 +21,7 @@ def _get_client():
     return _client
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def attackiq_list_templates() -> str:
     """List available AttackIQ BAS assessment templates.
@@ -40,7 +41,7 @@ def attackiq_list_templates() -> str:
         return f"Error listing AttackIQ templates: {e}"
 
 
-@tool
+@mutating_tool
 @log_tool_call
 def attackiq_create_assessment(
     azdo_id: int,
@@ -78,7 +79,7 @@ def attackiq_create_assessment(
         return f"Error creating AttackIQ assessment: {e}"
 
 
-@tool
+@mutating_tool
 @log_tool_call
 def attackiq_run_assessment(assessment_id: str) -> str:
     """Execute an AttackIQ BAS assessment.
@@ -98,7 +99,7 @@ def attackiq_run_assessment(assessment_id: str) -> str:
         return f"Error running AttackIQ assessment {assessment_id}: {e}"
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def attackiq_get_results(assessment_id: str) -> str:
     """Get results for a completed AttackIQ BAS assessment.

@@ -18,7 +18,7 @@ def _get_client():
     return _client
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def vectra_get_detections(
     limit: int = 50,
     state: Optional[str] = None,
@@ -51,7 +51,7 @@ def vectra_get_detections(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def vectra_get_detection(detection_id: int) -> dict:
     """Get details for a specific Vectra detection.
 
@@ -62,7 +62,7 @@ def vectra_get_detection(detection_id: int) -> dict:
     return client.get_detection_by_id(detection_id)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def vectra_search_entity(name: str, entity_type: Optional[str] = None) -> dict:
     """Search Vectra entities by name.
 
@@ -74,7 +74,7 @@ def vectra_search_entity(name: str, entity_type: Optional[str] = None) -> dict:
     return client.search_entity_by_name(name, entity_type=entity_type)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def vectra_search_by_ip(ip_address: str) -> dict:
     """Search Vectra entities by IP address.
 
@@ -85,7 +85,7 @@ def vectra_search_by_ip(ip_address: str) -> dict:
     return client.search_entity_by_ip(ip_address)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def vectra_get_prioritized(limit: int = 20) -> dict:
     """Get Vectra entities prioritized by risk score.
 
@@ -96,7 +96,7 @@ def vectra_get_prioritized(limit: int = 20) -> dict:
     return client.get_prioritized_entities(limit=limit)
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def vectra_mark_fixed(detection_id: int) -> dict:
     """Mark a Vectra detection as fixed/resolved.
 
@@ -107,7 +107,7 @@ def vectra_mark_fixed(detection_id: int) -> dict:
     return client.mark_detection_as_fixed(detection_id)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def vectra_get_high_threat(min_threat: int = 50, limit: int = 20) -> dict:
     """Get Vectra detections with high threat scores.
 
@@ -122,7 +122,7 @@ def vectra_get_high_threat(min_threat: int = 50, limit: int = 20) -> dict:
     return client.get_high_threat_detections(min_threat=min_threat, limit=limit)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def vectra_get_entity(entity_id: int) -> dict:
     """Get full details for a specific Vectra entity (host or account).
 

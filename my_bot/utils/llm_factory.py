@@ -86,6 +86,51 @@ def create_embeddings(config: ModelConfig = None, **overrides) -> Embeddings:
     return OpenAIEmbeddings(**kwargs)
 
 
+# ---------------------------------------------------------------------------
+# Structured-output helper
+# ---------------------------------------------------------------------------
+
+def structured_output(llm: BaseChatModel, schema, max_retries: int = 1):
+    """Wrap ``llm.with_structured_output`` using ``method="json_mode"``.
+
+    Why: the default method on ChatOpenAI in LangChain 0.3+ is ``"json_schema"``,
+    which sends ``response_format={"type":"json_schema", "strict":true}``.
+    vllm-mlx responds by running grammar-constrained decoding, masking logits to
+    the schema's FSM at every step. Complex schemas (oneOf/$defs/enums + long
+    prefills) have been observed wedging the decoder, blocking every other
+    request behind it for minutes. ``json_mode`` sends only
+    ``{"type":"json_object"}`` — LangChain still injects the schema into the
+    prompt and validates the response with Pydantic post-hoc.
+
+    Retries once on any exception (Pydantic ValidationError, JSON parse errors,
+    transient transport hiccups) to absorb the rare invalid-JSON response that
+    json_mode is more susceptible to vs strict json_schema decoding.
+    """
+    inner = llm.with_structured_output(schema, method="json_mode")
+
+    class _RetryingStructured:
+        def invoke(self, input, **kwargs):
+            last_err: Optional[Exception] = None
+            for attempt in range(max_retries + 1):
+                try:
+                    return inner.invoke(input, **kwargs)
+                except Exception as e:
+                    last_err = e
+                    if attempt < max_retries:
+                        logger.warning(
+                            "structured_output(%s) attempt %d/%d failed: %s: %s — retrying",
+                            getattr(schema, "__name__", str(schema)),
+                            attempt + 1, max_retries + 1,
+                            type(e).__name__, str(e)[:200],
+                        )
+                        continue
+                    raise
+            assert last_err is not None
+            raise last_err
+
+    return _RetryingStructured()
+
+
 class FailoverChatModel(BaseChatModel):
     """Wraps two LLMs — tries primary, falls back to secondary on connection errors.
 

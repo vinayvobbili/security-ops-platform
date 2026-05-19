@@ -11,11 +11,16 @@ logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 DATA_DIR = PROJECT_ROOT / "data" / "favorite_urls"
 JSON_PATH = DATA_DIR / "favorite_urls.json"
+SEED_PATH = PROJECT_ROOT / "data" / "favorite_urls_seed.json"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-# Seed empty file if missing
+# The runtime store is gitignored and user-mutable (CRUD via /favorite-urls UI).
+# On first run, hydrate it from the tracked seed file; fall back to empty list.
 if not JSON_PATH.exists():
-    JSON_PATH.write_text("[]")
+    if SEED_PATH.exists():
+        JSON_PATH.write_text(SEED_PATH.read_text())
+    else:
+        JSON_PATH.write_text("[]")
 
 
 def load_urls() -> List[Dict[str, Any]]:

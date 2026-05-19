@@ -17,7 +17,7 @@ def _get_client():
     return _client
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def ad_get_user(username: str) -> dict:
     """Look up an Active Directory user by username or email.
 
@@ -32,7 +32,7 @@ def ad_get_user(username: str) -> dict:
     return client.get_user(username)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def ad_get_computer(hostname: str) -> dict:
     """Look up an Active Directory computer account by hostname.
 

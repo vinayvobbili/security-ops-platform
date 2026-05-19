@@ -34,7 +34,7 @@ def _computer_to_dict(computer) -> dict:
     }
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def tanium_get_computer(hostname: str, instance: Optional[str] = None) -> dict:
     """Get endpoint details from Tanium by hostname.
 
@@ -49,7 +49,7 @@ def tanium_get_computer(hostname: str, instance: Optional[str] = None) -> dict:
     return _computer_to_dict(computer)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def tanium_search_computers(
     search_term: str, instance: Optional[str] = None, limit: int = 10
 ) -> dict:
@@ -67,14 +67,14 @@ def tanium_search_computers(
     return {"results": [_computer_to_dict(c) for c in computers]}
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def tanium_list_signals() -> dict:
     """List all Tanium Threat Response signals across instances."""
     client = _get_client()
     return client.list_all_signals()
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def tanium_add_tag(hostname: str, tag: str, instance: Optional[str] = None) -> dict:
     """Add a tag to a Tanium endpoint.
 
@@ -93,7 +93,7 @@ def tanium_add_tag(hostname: str, tag: str, instance: Optional[str] = None) -> d
     return target.add_tag_by_name(hostname.strip(), tag)
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def tanium_remove_tag(hostname: str, tag: str, instance: Optional[str] = None) -> dict:
     """Remove a tag from a Tanium endpoint.
 
@@ -112,7 +112,7 @@ def tanium_remove_tag(hostname: str, tag: str, instance: Optional[str] = None) -
     return target.remove_tag_by_name(hostname.strip(), tag)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def tanium_validate() -> dict:
     """Check connectivity to all configured Tanium instances."""
     client = _get_client()

@@ -48,8 +48,10 @@
             <span class="dl-count">{{ docs|length }} document{{ 's' if docs|length != 1 else '' }} in store</span>
         </div>
         <div class="dl-toolbar-right">
+            {% if current_user %}
             <button class="dl-btn dl-btn-rebuild" onclick="triggerRebuild()">⟳ Full Rebuild</button>
             <button class="dl-btn dl-btn-upload" onclick="openUploadModal()">+ Upload Document</button>
+            {% endif %}
         </div>
     </div>
 
@@ -83,10 +85,12 @@
                            href="{{ url_for('docs_library.download_doc', filename=doc.filename) }}"
                            download="{{ doc.filename | e }}"
                            title="Download">&#11015;</a>
+                        {% if current_user %}
                         <button class="dl-btn-icon dl-btn-delete"
                                 data-filename="{{ doc.filename | e }}"
                                 onclick="deleteDoc(this.dataset.filename)"
                                 title="Delete">&#128465;</button>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}

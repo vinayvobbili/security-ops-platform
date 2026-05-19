@@ -1,0 +1,272 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'Local LLM Benchmarks' %}
+{% set page_title_left_icon = '📊' %}
+{% set page_title_right_icon = '🦙' %}
+
+{% block extra_css %}
+<style>
+.bl-container { flex: 1 1 auto; min-width: 0; max-width: 1280px; margin: 24px auto 80px; padding: 0 20px; color: #1e293b; }
+
+::-webkit-scrollbar { width: 16px; height: 16px; }
+::-webkit-scrollbar-track {
+    background: linear-gradient(180deg, rgba(0,70,173,0.08), rgba(29,78,216,0.10) 50%, rgba(0,166,81,0.08));
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #0046ad 0%, #1d4ed8 20%, #2563eb 40%, #06b6d4 60%, #14b8a6 80%, #00a651 100%);
+    border-radius: 10px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35);
+}
+::-webkit-scrollbar-corner { background: transparent; }
+html { scrollbar-gutter: stable; }
+
+/* Hero */
+.bl-hero {
+    background: linear-gradient(135deg, #0046ad 0%, #1d4ed8 45%, #00a651 100%);
+    color: #fff; border-radius: 18px; padding: 32px 36px;
+    box-shadow: 0 16px 40px rgba(0,70,173,0.22);
+    margin-bottom: 24px; position: relative; overflow: hidden;
+}
+.bl-hero::after {
+    content: ''; position: absolute; right: -60px; top: -60px;
+    width: 280px; height: 280px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 70%);
+    pointer-events: none;
+}
+.bl-hero h1 { margin: 0 0 8px; font-size: 1.85rem; font-weight: 800; letter-spacing: -0.02em; }
+.bl-hero p  { margin: 0 0 12px; font-size: 1.02rem; opacity: 0.95; line-height: 1.55; max-width: 760px; }
+.bl-hero a  { color: #fff; text-decoration: underline; text-decoration-color: rgba(255,255,255,0.5); }
+.bl-hero a:hover { text-decoration-color: #fff; }
+
+/* Run card */
+.bl-run {
+    background: #fff; border-radius: 14px;
+    box-shadow: 0 4px 18px rgba(15,23,42,0.06);
+    border: 1px solid rgba(15,23,42,0.06);
+    padding: 22px 26px; margin-bottom: 22px;
+}
+.bl-run-head {
+    display: flex; flex-wrap: wrap; align-items: flex-start; gap: 18px;
+    justify-content: space-between; margin-bottom: 18px;
+    padding-bottom: 14px; border-bottom: 1px dashed rgba(15,23,42,0.10);
+}
+.bl-run-title { flex: 1 1 380px; min-width: 0; }
+.bl-run-title h2 { margin: 0 0 6px; font-size: 1.25rem; font-weight: 800; color: #0f172a; }
+.bl-run-meta {
+    display: flex; flex-wrap: wrap; gap: 6px; font-size: 0.82rem; color: #475569;
+}
+.bl-pill {
+    background: #f1f5f9; padding: 3px 10px; border-radius: 999px;
+    font-weight: 600; letter-spacing: 0.01em;
+}
+.bl-pill.bench { background: #dbeafe; color: #1e3a8a; }
+.bl-pill.model { background: #ecfeff; color: #0e7490; }
+.bl-pill.host  { background: #f0fdf4; color: #166534; }
+.bl-pill.date  { background: #fef3c7; color: #854d0e; }
+
+/* Score block */
+.bl-score {
+    display: flex; flex-direction: column; align-items: flex-end;
+    text-align: right; flex: 0 0 auto;
+}
+.bl-score-num { font-size: 2.4rem; font-weight: 900; line-height: 1; color: #0f172a; }
+.bl-score-num .denom { font-size: 1.1rem; font-weight: 700; color: #94a3b8; }
+.bl-score-rating { font-size: 0.95rem; font-weight: 700; color: #b45309; margin-top: 4px; }
+.bl-score-breakdown { font-size: 0.78rem; color: #64748b; margin-top: 4px; }
+
+/* Category grid */
+.bl-cat-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px; margin-bottom: 18px;
+}
+.bl-cat {
+    background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;
+    padding: 10px 12px;
+}
+.bl-cat-label { font-size: 0.78rem; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.04em; }
+.bl-cat-val { font-size: 1.4rem; font-weight: 800; color: #0f172a; margin-top: 2px; }
+.bl-cat-val .ratio { font-size: 0.85rem; color: #94a3b8; font-weight: 600; }
+.bl-cat-bar {
+    height: 6px; background: #e2e8f0; border-radius: 3px; margin-top: 8px; overflow: hidden;
+}
+.bl-cat-bar-fill { height: 100%; background: linear-gradient(90deg, #0046ad, #00a651); border-radius: 3px; }
+
+/* Scenario table */
+.bl-scenario-table {
+    width: 100%; border-collapse: collapse; font-size: 0.88rem;
+    margin-bottom: 14px;
+}
+.bl-scenario-table th, .bl-scenario-table td {
+    text-align: left; padding: 7px 10px; border-bottom: 1px solid #f1f5f9;
+}
+.bl-scenario-table th {
+    background: #f8fafc; color: #475569; font-weight: 700;
+    text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.04em;
+}
+.bl-status { font-weight: 700; padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; }
+.bl-status.pass { background: #dcfce7; color: #166534; }
+.bl-status.partial { background: #fef3c7; color: #854d0e; }
+.bl-status.fail { background: #fee2e2; color: #991b1b; }
+
+/* Notes */
+.bl-notes {
+    background: #fffbeb; border-left: 4px solid #f59e0b;
+    border-radius: 8px; padding: 12px 16px; margin-top: 8px;
+}
+.bl-notes h4 { margin: 0 0 6px; font-size: 0.85rem; font-weight: 800; color: #92400e; text-transform: uppercase; letter-spacing: 0.04em; }
+.bl-notes ul { margin: 0; padding-left: 22px; color: #78350f; font-size: 0.88rem; line-height: 1.55; }
+
+/* Endpoint code */
+.bl-endpoint {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.78rem; color: #334155;
+    background: #f1f5f9; padding: 2px 8px; border-radius: 6px;
+}
+
+/* Empty */
+.bl-empty {
+    text-align: center; padding: 48px 20px; color: #64748b;
+    background: #f8fafc; border-radius: 14px; border: 2px dashed #cbd5e1;
+}
+
+/* Recipe / how-to-add */
+.bl-recipe {
+    background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;
+    padding: 20px 24px; margin-top: 28px;
+}
+.bl-recipe h3 { margin: 0 0 8px; font-size: 1.05rem; font-weight: 800; color: #0f172a; }
+.bl-recipe p  { margin: 0 0 10px; color: #334155; font-size: 0.92rem; line-height: 1.55; }
+.bl-recipe pre {
+    background: #0f172a; color: #e2e8f0; padding: 14px 16px; border-radius: 10px;
+    overflow-x: auto; font-size: 0.8rem; line-height: 1.5;
+}
+
+@media (max-width: 720px) {
+    .bl-run-head { flex-direction: column; }
+    .bl-score { align-items: flex-start; text-align: left; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="bl-container">
+
+    <div class="bl-hero">
+        <h1>📊 Local LLM Benchmarks</h1>
+        <p>Reproducible scores for the models we serve on the local LLM fleet — captured via <a href="https://github.com/stevibe/BenchLocal" target="_blank">BenchLocal</a> Bench Packs against our vllm-mlx and Ollama endpoints. Add a new entry every time we swap a model or move serving between Macs so we can argue about model choices with numbers.</p>
+    </div>
+
+    {% if not runs %}
+        <div class="bl-empty">
+            <strong>No benchmark runs yet.</strong><br>
+            Drop a result into <code>data/benchmarks/results/</code> and add an entry to <code>data/benchmarks/index.json</code>.
+        </div>
+    {% else %}
+        {% for run in runs %}
+        <div class="bl-run">
+            <div class="bl-run-head">
+                <div class="bl-run-title">
+                    <h2>{{ run.bench }} → {{ run.model_label or run.model }}</h2>
+                    <div class="bl-run-meta">
+                        <span class="bl-pill date">📅 {{ run.date }}</span>
+                        <span class="bl-pill bench">🧪 <a href="{{ run.bench_url }}" target="_blank" style="color: inherit; text-decoration: none;">{{ run.bench }} v{{ run.bench_version }}</a></span>
+                        <span class="bl-pill model">🤖 {{ run.model }}</span>
+                        <span class="bl-pill host">🖥️ {{ run.host_label or run.host }}</span>
+                        {% if run.serving %}<span class="bl-pill">⚙️ {{ run.serving }}</span>{% endif %}
+                        {% if run.wall_clock_s %}<span class="bl-pill">⏱️ {{ '%.1f'|format(run.wall_clock_s) }} s</span>{% endif %}
+                        {% if run.sampling and run.sampling.temperature is defined %}<span class="bl-pill">🌡️ temp={{ run.sampling.temperature }}</span>{% endif %}
+                    </div>
+                    {% if run.endpoint %}<div style="margin-top: 8px;"><span class="bl-endpoint">{{ run.endpoint }}</span></div>{% endif %}
+                </div>
+                {% if run.headline %}
+                <div class="bl-score">
+                    <div class="bl-score-num">{{ run.headline.score }}<span class="denom"> / {{ run.headline.max }}</span></div>
+                    {% if run.headline.rating %}<div class="bl-score-rating">{{ run.headline.rating }}</div>{% endif %}
+                    <div class="bl-score-breakdown">{{ run.headline.points }} / {{ run.headline.max_points }} pts · {{ run.headline.pass }} pass / {{ run.headline.partial }} partial / {{ run.headline.fail }} fail</div>
+                </div>
+                {% endif %}
+            </div>
+
+            {% set detail = run._detail %}
+            {% if detail %}
+                {% set model_id = run.model_id or ('mlx:' ~ run.model) %}
+                {% set scores = detail.scores[model_id] if detail.scores and detail.scores[model_id] is defined else (detail.scores.values()|list|first if detail.scores else None) %}
+                {% if scores and scores.categoryScores %}
+                <div class="bl-cat-grid">
+                    {% for cat in scores.categoryScores %}
+                    <div class="bl-cat">
+                        <div class="bl-cat-label">{{ cat.category }} · {{ cat.label }}</div>
+                        <div class="bl-cat-val">{{ cat.percent }}<span style="font-size: 0.95rem;">%</span> <span class="ratio">({{ cat.earned }}/{{ cat.max }})</span></div>
+                        <div class="bl-cat-bar"><div class="bl-cat-bar-fill" style="width: {{ cat.percent }}%;"></div></div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                {% if scores and scores.scenarioResults %}
+                <table class="bl-scenario-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 70px;">ID</th>
+                            <th>Title</th>
+                            <th style="width: 90px;">Status</th>
+                            <th style="width: 60px;">Pts</th>
+                            <th>Summary</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% set scenarios_lookup = {} %}
+                        {% if detail.scenarios %}
+                            {% for s in detail.scenarios %}
+                                {% set _ = scenarios_lookup.update({s.scenarioId: s.title}) %}
+                            {% endfor %}
+                        {% endif %}
+                        {% for sr in scores.scenarioResults %}
+                        <tr>
+                            <td><strong>{{ sr.scenarioId }}</strong></td>
+                            <td>{{ scenarios_lookup.get(sr.scenarioId, '—') }}</td>
+                            <td><span class="bl-status {{ sr.status }}">{{ sr.status|upper }}</span></td>
+                            <td>{{ sr.points }}</td>
+                            <td style="color: #475569;">{{ sr.summary }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% endif %}
+            {% endif %}
+
+            {% if run.notes %}
+            <div class="bl-notes">
+                <h4>Notes</h4>
+                <ul>
+                    {% for note in run.notes %}<li>{{ note }}</li>{% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="bl-recipe">
+        <h3>🧰 Add a new run</h3>
+        <p>One JSON file per run, plus one entry in the index. Both live in <code>docs/benchmarks/</code> so they ship in git alongside the markdown summary.</p>
+<pre><code># 1. Run the bench (example: ToolCall-15 against a vllm-mlx endpoint)
+cd /tmp/ToolCall-15
+export MLX_HOST=http://&lt;mac&gt;.the-company.com:8003
+export MLX_API_KEY=&lt;bearer&gt;
+export LLM_MODELS="mlx:&lt;model-id&gt;"
+node dist-cli/cli/run.js --temperature 0 --timeout 180 --json &gt; /tmp/raw.json
+
+# 2. Strip the progress prefix and save under docs/benchmarks/results/
+tail -n +$(grep -n '^{' /tmp/raw.json | head -1 | cut -d: -f1) /tmp/raw.json \
+    &gt; docs/benchmarks/results/$(date +%F)-&lt;bench&gt;-&lt;model&gt;-&lt;host&gt;.json
+
+# 3. Append a record to docs/benchmarks/index.json with the matching
+#    result_file path, headline scores, host/model labels, and notes.
+
+# 4. Commit + restart ir-web-app (or wait for next deploy).</code></pre>
+    </div>
+</div>
+{% endblock %}

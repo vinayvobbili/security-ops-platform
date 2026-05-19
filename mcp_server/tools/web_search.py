@@ -19,7 +19,7 @@ def _truncate(text: str) -> str:
     return text[:MAX_SNIPPET_CHARS].rsplit(" ", 1)[0] + "..."
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def web_search(query: str, num_results: int = 10) -> dict:
     """Search the internet using the local SearXNG search instance.
 

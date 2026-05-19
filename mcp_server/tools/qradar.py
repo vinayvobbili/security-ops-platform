@@ -18,7 +18,7 @@ def _get_client():
     return _client
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def qradar_run_aql(
     aql_query: str, timeout: int = 300, max_results: int = 100
 ) -> dict:
@@ -33,7 +33,7 @@ def qradar_run_aql(
     return client.run_aql_search(aql_query, timeout=timeout, max_results=max_results)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def qradar_get_offenses(
     filter_query: Optional[str] = None,
     fields: Optional[str] = None,
@@ -56,7 +56,7 @@ def qradar_get_offenses(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def qradar_get_offense(offense_id: int, fields: Optional[str] = None) -> dict:
     """Get details for a single QRadar offense.
 
@@ -68,7 +68,7 @@ def qradar_get_offense(offense_id: int, fields: Optional[str] = None) -> dict:
     return client.get_offense(offense_id, fields=fields)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def qradar_search_by_ip(
     ip_address: str, hours: int = 24, max_results: int = 100
 ) -> dict:
@@ -83,7 +83,7 @@ def qradar_search_by_ip(
     return client.search_events_by_ip(ip_address, hours=hours, max_results=max_results)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def qradar_search_by_domain(
     domain: str, hours: int = 24, max_results: int = 100
 ) -> dict:
@@ -98,7 +98,7 @@ def qradar_search_by_domain(
     return client.search_events_by_domain(domain, hours=hours, max_results=max_results)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def qradar_search_email_by_sender(
     sender_domain: str, hours: int = 168, max_results: int = 100
 ) -> dict:
@@ -115,7 +115,7 @@ def qradar_search_email_by_sender(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def qradar_search_email_by_subject(
     subject_pattern: str, hours: int = 168, max_results: int = 100
 ) -> dict:
@@ -132,7 +132,7 @@ def qradar_search_email_by_subject(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def qradar_search_by_hash(
     file_hash: str, hours: int = 168, max_results: int = 100
 ) -> dict:
@@ -149,7 +149,7 @@ def qradar_search_by_hash(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def qradar_search_entra_by_user(
     username: str, hours: int = 168, max_results: int = 100
 ) -> dict:
@@ -166,7 +166,24 @@ def qradar_search_entra_by_user(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
+def qradar_search_zpa_by_user(
+    username: str, hours: int = 168, max_results: int = 100
+) -> dict:
+    """Search QRadar VPN logs logon events by username.
+
+    Args:
+        username: Username to search for
+        hours: Hours of history
+        max_results: Max events
+    """
+    client = _get_client()
+    return client.search_zpa_logons_by_user(
+        username, hours=hours, max_results=max_results
+    )
+
+
+@mcp.tool(tags={"readonly"})
 def qradar_get_reference_set(name: str) -> dict:
     """Get the values in a QRadar reference set.
 
@@ -177,7 +194,7 @@ def qradar_get_reference_set(name: str) -> dict:
     return client.get_reference_set(name)
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def qradar_add_to_reference_set(
     name: str, value: str, source: Optional[str] = None
 ) -> dict:

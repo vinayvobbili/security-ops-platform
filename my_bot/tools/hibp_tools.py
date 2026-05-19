@@ -18,6 +18,7 @@ import logging
 from typing import Optional
 
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 from services.hibp import HIBPClient
 from src.utils.tool_decorator import log_tool_call
@@ -239,7 +240,7 @@ def _format_breach_info(data: dict) -> str:
     return "\n".join(result)
 
 
-@tool
+@readonly_tool
 @validate_args(email=EMAIL_PATTERN)
 @log_tool_call
 def check_email_hibp(email: str) -> str:
@@ -274,7 +275,7 @@ def check_email_hibp(email: str) -> str:
         return f"Error checking email in HIBP: {str(e)}"
 
 
-@tool
+@readonly_tool
 @validate_args(domain=DOMAIN_PATTERN)
 @log_tool_call
 def check_domain_hibp(domain: str) -> str:
@@ -315,7 +316,7 @@ def check_domain_hibp(domain: str) -> str:
         return f"Error checking domain in HIBP: {str(e)}"
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_breach_info_hibp(breach_name: str) -> str:
     """Get detailed information about a specific data breach.

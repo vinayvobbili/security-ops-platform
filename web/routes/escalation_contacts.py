@@ -6,7 +6,8 @@ import threading
 from flask import Blueprint, jsonify, render_template, request
 
 from src.utils.logging_utils import log_web_activity
-from src.components.web.edit_auth import check_edit_password, notify_edit_async
+from src.components.web.edit_auth import notify_edit_async
+from web.auth import helpers
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +64,8 @@ def escalation_contacts_page():
 @escalation_contacts_bp.route("/api/escalation-contacts", methods=["POST"])
 @log_web_activity
 def create_contact():
-    if not check_edit_password(request, "contacts"):
-        return jsonify({"success": False, "error": "Invalid password"}), 403
+    if not helpers.current_user():
+        return jsonify({"success": False, "error": "login_required"}), 401
     try:
         from src.components.web import escalation_contacts_handler as h
 
@@ -100,8 +101,8 @@ def create_contact():
 @escalation_contacts_bp.route("/api/escalation-contacts/<int:contact_id>", methods=["PUT"])
 @log_web_activity
 def update_contact(contact_id):
-    if not check_edit_password(request, "contacts"):
-        return jsonify({"success": False, "error": "Invalid password"}), 403
+    if not helpers.current_user():
+        return jsonify({"success": False, "error": "login_required"}), 401
     try:
         from src.components.web import escalation_contacts_handler as h
 
@@ -125,8 +126,8 @@ def update_contact(contact_id):
 @escalation_contacts_bp.route("/api/escalation-contacts/<int:contact_id>", methods=["DELETE"])
 @log_web_activity
 def delete_contact(contact_id):
-    if not check_edit_password(request, "contacts"):
-        return jsonify({"success": False, "error": "Invalid password"}), 403
+    if not helpers.current_user():
+        return jsonify({"success": False, "error": "login_required"}), 401
     try:
         from src.components.web import escalation_contacts_handler as h
 

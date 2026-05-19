@@ -12,6 +12,7 @@ import re
 import time
 
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 from src.utils.tool_decorator import log_tool_call
 from my_config import get_config
@@ -43,7 +44,7 @@ def _get_current_room_id() -> str | None:
     return None
 
 
-@tool
+@mutating_tool
 @log_tool_call
 def request_url_block(url: str) -> str:
     """Request blocking a URL/domain via XSOAR.
@@ -91,7 +92,8 @@ def request_url_block(url: str) -> str:
 
 
 def execute_url_block(room_id: str, url: str, xsoar_ticket_id: str, reason: str,
-                      user_email: str, parent_msg_id: str):
+                      user_email: str, parent_msg_id: str,
+                      bot_access_token: str | None = None):
     """Execute the URL block after user confirms via Adaptive Card.
 
     Called from the bot's card action handler. Handles XSOAR ticket creation,
@@ -103,23 +105,26 @@ def execute_url_block(room_id: str, url: str, xsoar_ticket_id: str, reason: str,
         xsoar_ticket_id: Existing ticket ID (empty string to create new)
         reason: Reason for blocking the URL
         user_email: Email of the requester
-        parent_msg_id: Message ID to thread the reply under
+        parent_msg_id: Message ID to delete (the triggering card); empty to skip
+        bot_access_token: Webex bot access token (defaults to Pokedex's token)
     """
     from webexpythonsdk import WebexAPI
     from services.xsoar.ticket_handler import TicketHandler
     from src.utils.xsoar_enums import XsoarEnvironment
 
-    webex_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_pokedex)
+    token = bot_access_token or CONFIG.webex_bot_access_token_pokedex
+    webex_api = WebexAPI(access_token=token)
 
     # Delete the confirmation card to prevent accidental re-clicks
-    try:
-        webex_api.messages.delete(parent_msg_id)
-        logger.info(f"Deleted block URL confirmation card {parent_msg_id}")
-    except Exception as e:
-        logger.warning(f"Failed to delete confirmation card: {e}")
+    if parent_msg_id:
+        try:
+            webex_api.messages.delete(parent_msg_id)
+            logger.info(f"Deleted block URL confirmation card {parent_msg_id}")
+        except Exception as e:
+            logger.warning(f"Failed to delete confirmation card: {e}")
 
     try:
-        handler = TicketHandler(environment=XsoarEnvironment.DEV)
+        handler = TicketHandler(environment=XsoarEnvironment.PROD)
 
         # Create or use existing XSOAR ticket
         if xsoar_ticket_id:
@@ -156,7 +161,7 @@ def execute_url_block(room_id: str, url: str, xsoar_ticket_id: str, reason: str,
         handler.create_new_entry_in_existing_ticket(ticket_id, audit_note)
 
         # Send confirmation to Webex
-        ticket_link = f"[{ticket_id}]({CONFIG.xsoar_dev_ui_base_url}/Custom/caseinfoid/{ticket_id})"
+        ticket_link = f"[{ticket_id}]({CONFIG.xsoar_prod_ui_base_url}/Custom/caseinfoid/{ticket_id})"
         confirm_msg = (
             f"✅ **URL Block Initiated**\n\n"
             f"- **URL:** `{url}`\n"

@@ -43,6 +43,7 @@ from my_config import get_config
 from services.crowdstrike import CrowdStrikeClient, CSCredentialProfile
 from services.service_now import ServiceNowClient
 from services.epp_tagging_db import insert_tagging_run, bulk_insert_results
+from src.epp.cs_common import is_pmli_hostname
 
 
 def classify_untagged_reasons(hosts: List['Host']) -> Dict[str, int]:
@@ -270,10 +271,17 @@ class Host:
             self.life_cycle_status = snow_host_details.get('lifecycleStatus', '')
 
             name_lower = self.name.lower()
-            if not self.country and (name_lower.startswith(('metlap', 'pmdesk', 'inblr', 'inmum')) or 'pmli' in name_lower):
+            # PMLI override: SNOW returns 'India' for both PMLI and MGCC hosts, so the
+            # hostname is the only signal that distinguishes them. Force 'India PMLI'
+            # (→ APAC) for PMLI patterns; plain 'India' stays as-is and resolves to US.
+            if is_pmli_hostname(self.name) and self.country != 'India PMLI':
+                previous = self.country
                 self.country = 'India PMLI'
                 self.was_country_guessed = True
-                self.status_message += f" Country guessed from METLAP/PMDESK/PMLI/INBLR/INMUM pattern in hostname: {self.country}."
+                self.status_message += (
+                    f" Country overridden to India PMLI from hostname pattern"
+                    f"{f' (SNOW had {previous!r})' if previous else ''}."
+                )
 
             if not self.country and name_lower.startswith('iaz'):
                 self.country = 'US'
@@ -464,13 +472,17 @@ class TagManager:
         return successfully_tagged
 
     @staticmethod
-    def remove_tags(hosts_with_tags_to_remove: List[dict], batch_size: int = 100) -> None:
+    def remove_tags(hosts_with_tags_to_remove: List[dict], batch_size: int = 100) -> set:
         """
         Remove specified tags from hosts in batches.
         Each dict in hosts_with_tags_to_remove should have:
             - 'device_id': str
             - 'tags': List[str] (tags to remove)
+
+        Returns the set of device_ids that Falcon confirmed as updated.
+        Hosts not in the returned set should be considered un-dropped and retried.
         """
+        successfully_removed: set = set()
         total = len(hosts_with_tags_to_remove)
         total_batches = math.ceil(total / batch_size)
         logger.info(f"Removing tags from {total} hosts in batches of {batch_size}...")
@@ -490,8 +502,20 @@ class TagManager:
                 ids=device_ids,
                 tags=tags_to_remove
             )
-            if response.get("status_code") not in (200, 202):
-                logger.error(f"Failed to remove tags for batch {i // batch_size + 1}: {response.get('errors', ['Unknown error'])}")
+            status_code = response.get("status_code")
+            if status_code not in (200, 202):
+                logger.error(
+                    f"Failed to remove tags for batch {batch_num} "
+                    f"(status={status_code}): {response.get('body', {}).get('errors', ['Unknown error'])}"
+                )
+                continue
+            # Per-device outcomes: Falcon returns resources=[{id, updated}, ...]
+            for resource in response.get("body", {}).get("resources", []) or []:
+                if resource.get("updated"):
+                    rid = resource.get("id") or resource.get("device_id")
+                    if rid:
+                        successfully_removed.add(rid)
+        return successfully_removed
 
 
 class FileHandler:

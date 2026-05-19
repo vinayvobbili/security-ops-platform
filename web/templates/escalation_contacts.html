@@ -22,7 +22,9 @@
             <span class="ec-count" id="contactCount"></span>
         </div>
         <div class="ec-toolbar-right">
+            {% if current_user %}
             <button class="ec-btn ec-btn-add" onclick="openAddModal()">+ Add Contact</button>
+            {% endif %}
         </div>
     </div>
 
@@ -81,8 +83,10 @@
                                 <td data-field="phone">{{ c.phone }}</td>
                                 <td data-field="comments" class="ec-comments-cell">{{ c.comments }}</td>
                                 <td class="ec-actions">
+                                    {% if current_user %}
                                     <button class="ec-btn-icon ec-btn-edit" onclick="startEdit({{ c.id }})" title="Edit">&#9998;</button>
                                     <button class="ec-btn-icon ec-btn-delete" onclick="deleteContact({{ c.id }})" title="Delete">&times;</button>
+                                    {% endif %}
                                 </td>
                             </tr>
                             {% endfor %}

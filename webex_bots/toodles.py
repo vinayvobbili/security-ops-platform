@@ -1,17 +1,17 @@
 #!/usr/bin/python3
 
 """
-the notification service Bot - Configuration Guide
+Toodles Bot - Configuration Guide
 ==================================
 
 This bot supports three operating modes:
 
-1. FULL RESILIENCE MODE (for corporate proxy / TLS-inspection environments)
+1. FULL RESILIENCE MODE (for the corporate proxy/corporate proxy environments)
    SHOULD_USE_RESILIENCY = True
    USE_AUTO_RECONNECT = ignored
    Features: SSL patching, WebSocket patching, device cleanup, auto-reconnect
 
-2. LITE RESILIENCE MODE (recommended for production without TLS-inspection)
+2. LITE RESILIENCE MODE (recommended for production without the corporate proxy)
    SHOULD_USE_RESILIENCY = False
    USE_AUTO_RECONNECT = True
    Features: Device cleanup, auto-reconnect (handles WebSocket timeouts)
@@ -56,7 +56,7 @@ from my_config import get_config
 
 CONFIG = get_config()
 
-# ALWAYS configure SSL for proxy environments (auto-detects corp proxies)
+# ALWAYS configure SSL for proxy environments (auto-detects the corporate proxy/proxies)
 from src.utils.ssl_config import configure_ssl_if_needed
 
 configure_ssl_if_needed(verbose=True)
@@ -111,20 +111,23 @@ from services.xsoar import ListHandler, TicketHandler, XsoarEnvironment
 from webex_bots.cards import (
     NEW_TICKET_CARD, IOC_HUNT, THREAT_HUNT, AZDO_CARD,
     APPROVED_TESTING_CARD, TICKET_CANNON_CARD, NOISE_SUPPRESSOR_CARD, TICKET_IMPORT_CARD, TUNING_REQUEST_CARD,
-    DOMAIN_LOOKALIKE_CARD, BIRTHDAY_ANNIVERSARY_CARD,
-    BROWSER_HISTORY_CARD, FILE_PULL_CARD, all_options_card,
-    CONTACTS_MENU_CARD, build_contacts_add_card
+    URL_BLOCK_VERDICT_CARD, DOMAIN_LOOKALIKE_CARD, BIRTHDAY_ANNIVERSARY_CARD,
+    BROWSER_HISTORY_CARD, FILE_PULL_CARD, BLOCK_URL_FORM_CARD, all_options_card,
+    CONTACTS_MENU_CARD, build_contacts_add_card,
+    POI_INVESTIGATE_CARD,
 )
 from my_bot.tools.crowdstrike_tools import collect_browser_history, get_and_clear_generated_file_path
 from services.crowdstrike_rtr import download_rtr_file
+from src.components.url_lookup_traffic import URLChecker
 from src.utils.http_utils import get_session
 from src.utils.toodles_decorators import toodles_log_activity
 from src.utils.webex_validation import validate_required_inputs, get_input_value
 from src.utils.xsoar_helpers import build_incident_url, create_incident_with_response
 from src.utils.webex_responses import format_user_response, get_user_email, get_user_display_name
 from src.utils.webex_device_manager import cleanup_devices_on_startup
-from webex_bots.base import the notification serviceCommand, CardOnlyCommand
+from webex_bots.base import ToodlesCommand, CardOnlyCommand
 from src.components.domain_lookalike_scanner import DomainLookalikeScanner
+from services.poi_scanner import POIScanner
 
 # Get robust HTTP session instance
 http_session = get_session()
@@ -146,6 +149,7 @@ webex_api = configure_webex_api_session(
 
 # Component instances
 domain_scanner = DomainLookalikeScanner(webex_api)
+poi_scanner = POIScanner(webex_api)
 
 # Global variables
 bot_instance = None
@@ -177,7 +181,7 @@ ACHIEVEMENT_MESSAGES = {
 }
 
 TOODLES_GREETINGS = [
-    "👋 the notification service is here to help!",
+    "👋 Toodles is here to help!",
     "🎉 Ready to tackle some tickets!",
     "🔥 Let's get this workflow blazing!",
     "⚡ Powered up and ready to go!",
@@ -344,7 +348,7 @@ class GetNewXTicketForm(CardOnlyCommand):
     card = NEW_TICKET_CARD
 
 
-class CreateXSOARTicket(the notification serviceCommand):
+class CreateXSOARTicket(ToodlesCommand):
     """Create a new XSOAR ticket from form submission."""
     command_keyword = "create_x_ticket"
     card = None
@@ -386,7 +390,7 @@ class IOC(CardOnlyCommand):
     card = IOC_HUNT
 
 
-class IOCHunt(the notification serviceCommand):
+class IOCHunt(ToodlesCommand):
     """Create a new IOC Hunt in XSOAR."""
     command_keyword = "ioc_hunt"
     card = None
@@ -425,7 +429,7 @@ class ThreatHunt(CardOnlyCommand):
     card = THREAT_HUNT
 
 
-class CreateThreatHunt(the notification serviceCommand):
+class CreateThreatHunt(ToodlesCommand):
     """Create a new Threat Hunt in XSOAR and announce it."""
     command_keyword = "submit_threat_hunt"
     card = None
@@ -462,7 +466,7 @@ class GetAZDOCard(CardOnlyCommand):
     card = AZDO_CARD
 
 
-class CreateAZDOWorkItem(the notification serviceCommand):
+class CreateAZDOWorkItem(ToodlesCommand):
     """Create an Azure DevOps work item."""
     command_keyword = "azdo_wit"
     help_message = ""
@@ -518,7 +522,7 @@ class CreateAZDOWorkItem(the notification serviceCommand):
             return str(e)
 
 
-class Review(the notification serviceCommand):
+class Review(ToodlesCommand):
     """Submit a ticket for review."""
     command_keyword = "review"
     card = None
@@ -594,7 +598,7 @@ def get_approved_testing_entries_table():
     return table
 
 
-class GetCurrentApprovedTestingEntries(the notification serviceCommand):
+class GetCurrentApprovedTestingEntries(ToodlesCommand):
     """Display current approved testing entries."""
     command_keyword = "current_approved_testing"
     card = None
@@ -632,7 +636,7 @@ def is_valid_ip(address: str) -> bool:
         return False
 
 
-class AddApprovedTestingEntry(the notification serviceCommand):
+class AddApprovedTestingEntry(ToodlesCommand):
     """Add a new approved testing entry."""
     command_keyword = "add_approved_testing"
     card = None
@@ -700,7 +704,7 @@ class GetNoiseSuppressorCard(CardOnlyCommand):
     card = NOISE_SUPPRESSOR_CARD
 
 
-class CreateSilencerEntry(the notification serviceCommand):
+class CreateSilencerEntry(ToodlesCommand):
     """Create a new silencer or suppressor entry."""
     command_keyword = "create_silencer"
     card = None
@@ -765,7 +769,7 @@ class CreateSilencerEntry(the notification serviceCommand):
         )
 
 
-class GetCurrentSilencers(the notification serviceCommand):
+class GetCurrentSilencers(ToodlesCommand):
     """Show current active silencers and suppressors."""
     command_keyword = "current_silencers"
     card = None
@@ -828,7 +832,7 @@ def announce_new_threat_hunt(ticket_no, ticket_title, incident_url, person_id):
     requests.post(webex_data.get('api_url'), headers=request_headers, json=payload_json)
 
 
-class Who(the notification serviceCommand):
+class Who(ToodlesCommand):
     """Return who the on-call person is."""
     command_keyword = "who"
     help_message = "On-Call ☎️"
@@ -845,7 +849,7 @@ class Who(the notification serviceCommand):
         )
 
 
-class Rotation(the notification serviceCommand):
+class Rotation(ToodlesCommand):
     """Display the on-call rotation schedule."""
     command_keyword = "rotation"
     card = None
@@ -860,7 +864,7 @@ class Rotation(the notification serviceCommand):
         return data_frame.to_string(index=False)
 
 
-class ContainmentStatusCS(the notification serviceCommand):
+class ContainmentStatusCS(ToodlesCommand):
     """Return the containment status of a host in CrowdStrike."""
     command_keyword = "status"
     card = None
@@ -875,7 +879,7 @@ class ContainmentStatusCS(the notification serviceCommand):
         else:
             host_name_cs = ""
 
-        host_name_cs = host_name_cs.replace(f"{CONFIG.team_name}_the notification service status", "").strip()
+        host_name_cs = host_name_cs.replace(f"{CONFIG.team_name}_Toodles status", "").strip()
         if not host_name_cs:
             return "Please enter a host name and try again"
 
@@ -903,7 +907,7 @@ class ImportTicket(CardOnlyCommand):
     card = TICKET_IMPORT_CARD.to_dict()
 
 
-class DoImportTicket(the notification serviceCommand):
+class DoImportTicket(ToodlesCommand):
     """Import a ticket from production to dev."""
     command_keyword = "do_import"
     card = None
@@ -926,7 +930,7 @@ class GetTuningRequestCard(CardOnlyCommand):
     card = TUNING_REQUEST_CARD.to_dict()
 
 
-class CreateTuningRequest(the notification serviceCommand):
+class CreateTuningRequest(ToodlesCommand):
     """Create a tuning request in Azure DevOps."""
     command_keyword = "tuning_request"
     card = TUNING_REQUEST_CARD.to_dict()
@@ -992,7 +996,7 @@ class GetSearchXSOARCard(CardOnlyCommand):
     card = SEARCH_X_CARD.to_dict()
 
 
-class FetchXSOARTickets(the notification serviceCommand):
+class FetchXSOARTickets(ToodlesCommand):
     """Fetch XSOAR tickets based on search criteria."""
     command_keyword = "fetch_xsoar_tickets"
     card = None
@@ -1028,7 +1032,7 @@ class FetchXSOARTickets(the notification serviceCommand):
             return format_user_response(activity, f"no tickets found in X for {criteria_text}")
 
 
-class GetCompanyHolidays(the notification serviceCommand):
+class GetCompanyHolidays(ToodlesCommand):
     """Display company holidays for the year."""
     command_keyword = "holidays"
     card = None
@@ -1128,7 +1132,7 @@ class GetCompanyHolidays(the notification serviceCommand):
         return title + "\n".join(output_lines) + note
 
 
-class GetBotHealth(the notification serviceCommand):
+class GetBotHealth(ToodlesCommand):
     """Check bot health and status."""
     command_keyword = "health"
     card = None
@@ -1142,7 +1146,7 @@ class GetBotHealth(the notification serviceCommand):
         # Determine current mode
         if CONFIG.should_use_proxy_resilience:
             mode = "Full Resilience"
-            health_detail = "Proxy/TLS features + Auto-reconnect"
+            health_detail = "the corporate proxy features + Auto-reconnect"
             features = "SSL config, WebSocket patching, device cleanup, auto-restart"
         elif CONFIG.should_auto_reconnect:
             mode = "Lite Resilience"
@@ -1162,7 +1166,7 @@ class GetBotHealth(the notification serviceCommand):
         status_card = AdaptiveCard(
             body=[
                 TextBlock(
-                    text="🤖 the notification service Bot Status",
+                    text="🤖 Toodles Bot Status",
                     color=options.Colors.GOOD,
                     size=options.FontSize.LARGE,
                     weight=options.FontWeight.BOLDER,
@@ -1193,7 +1197,7 @@ class GetBotHealth(the notification serviceCommand):
         )
 
 
-class Hi(the notification serviceCommand):
+class Hi(ToodlesCommand):
     """Simple Hi command to check if bot is alive."""
     command_keyword = "hi"
     card = None
@@ -1204,7 +1208,7 @@ class Hi(the notification serviceCommand):
         return "Hi 👋🏾"
 
 
-class RemoveWatchlistDomain(the notification serviceCommand):
+class RemoveWatchlistDomain(ToodlesCommand):
     """Remove a domain from the realtime watchlist via heartbeat card action."""
     command_keyword = "watchlist_remove"
     card = None
@@ -1227,7 +1231,7 @@ class GetDomainLookalikeCard(CardOnlyCommand):
     card = DOMAIN_LOOKALIKE_CARD
 
 
-class ProcessDomainLookalike(the notification serviceCommand):
+class ProcessDomainLookalike(ToodlesCommand):
     """Process domain lookalike scan requests."""
     command_keyword = "domain_lookalike_scan"
     card = None
@@ -1259,6 +1263,41 @@ class ProcessDomainLookalike(the notification serviceCommand):
             return domain_scanner.start_quick_scan(domain, room_id)
 
 
+class GetPOICard(CardOnlyCommand):
+    """Show the Person-of-Interest OSINT form."""
+    command_keyword = "poi"
+    card = POI_INVESTIGATE_CARD
+
+
+class InvestigatePOI(ToodlesCommand):
+    """Run OSINT sweep on a person (name/username/email)."""
+    command_keyword = "poi_investigate"
+    card = None
+
+    @toodles_log_activity
+    def execute(self, message, attachment_actions, activity):
+        name = (get_input_value(attachment_actions, 'poi_name') or '').strip()
+        username = (get_input_value(attachment_actions, 'poi_username') or '').strip()
+        email = (get_input_value(attachment_actions, 'poi_email') or '').strip()
+        reason = (get_input_value(attachment_actions, 'poi_reason') or '').strip()
+
+        if not (name or username or email):
+            return "❌ Provide at least one of: name, username, or email."
+
+        room_id = attachment_actions.roomId if attachment_actions else None
+        if not room_id:
+            return "❌ Unable to determine chat room. Please try again."
+
+        requester = get_user_email(activity) or 'unknown'
+        ack = poi_scanner.start_investigation(
+            name=name, username=username, email=email,
+            reason=reason, room_id=room_id, requester=requester,
+        )
+        if ack is None:
+            # Target on exception list — return a neutral, plausible response and
+            # do no further work. Activity log records only the requester + command.
+            return "✅ Investigation complete. No notable findings."
+        return ack
 
 
 def _check_host_online(hostname: str) -> bool:
@@ -1313,7 +1352,7 @@ def _offline_host_card(ticket_number, hostname, rtr_action, file_path=None):
     return response_from_adaptive_card(adaptive_card=card)
 
 
-class MonitorOfflineHost(the notification serviceCommand):
+class MonitorOfflineHost(ToodlesCommand):
     """Queue an offline host for deferred RTR execution via the scheduler."""
     command_keyword = "monitor_offline_host"
     card = None
@@ -1377,7 +1416,7 @@ def _closed_ticket_card(ticket_number, retry_action, file_path=None):
     return response_from_adaptive_card(adaptive_card=card)
 
 
-class ReopenAndRetry(the notification serviceCommand):
+class ReopenAndRetry(ToodlesCommand):
     """Reopen a closed XSOAR ticket and re-run the original action."""
     command_keyword = "reopen_and_retry"
     card = None
@@ -1412,7 +1451,7 @@ class GetBrowserHistoryCard(CardOnlyCommand):
     card = BROWSER_HISTORY_CARD
 
 
-class FetchBrowserHistory(the notification serviceCommand):
+class FetchBrowserHistory(ToodlesCommand):
     """Collect browser history from a device via CrowdStrike RTR."""
     command_keyword = "fetch_browser_history"
     card = None
@@ -1523,7 +1562,7 @@ class GetFilePullCard(CardOnlyCommand):
     card = FILE_PULL_CARD
 
 
-class FetchFilePull(the notification serviceCommand):
+class FetchFilePull(ToodlesCommand):
     """Pull a file from an endpoint via CrowdStrike RTR."""
     command_keyword = "fetch_file_pull"
     card = None
@@ -1615,7 +1654,151 @@ class FetchFilePull(the notification serviceCommand):
         )
 
 
-class GetBirthdayAnniversaryForm(the notification serviceCommand):
+class GetUrlBlockVerdictForm(CardOnlyCommand):
+    """Display the URL block verdict form."""
+    command_keyword = "get_url_block_verdict_form"
+    card = URL_BLOCK_VERDICT_CARD
+    delete_previous_message = False
+
+
+class ProcessUrlBlockVerdict(ToodlesCommand):
+    """Process URL filtering submission from the card."""
+    command_keyword = "url_verdict"
+    card = None
+
+    @toodles_log_activity
+    def execute(self, message, attachment_actions, activity):
+        import time
+        start_time = time.time()
+
+        # Handle both card submission and direct text command
+        if hasattr(attachment_actions, 'inputs') and 'urls_to_check' in attachment_actions.inputs:
+            # This is a card submission
+            urls_text = attachment_actions.inputs['urls_to_check'].strip()
+        else:
+            # This is a direct text command - extract URLs from message
+            urls_text = message.replace("url_verdict", "").strip()
+
+        if not urls_text:
+            return f"{activity['actor']['displayName']}, please provide URLs to test. Example: @toodles url_verdict facebook.com, google.com"
+
+        try:
+            # Create tester and parse/normalize URLs using backend logic
+            url_checker = URLChecker()
+            urls = url_checker.parse_and_normalize_urls(urls_text)
+
+            if not urls:
+                return f"{activity['actor']['displayName']}, please provide valid URLs to test."
+
+            # Test URLs and collect results
+            result = url_checker.get_block_verdict(urls, normalize=False)  # Already normalized
+            results = result['details']
+
+            # Build table data for tabulate
+            table_rows = []
+            for result in results:
+                url = result['url']
+                zs = result['proxy']
+                bo = result['bloxone']
+
+                # Status indicators
+                zs_status = '✅' if zs.get('allowed') else '❌'
+
+                if 'skipped' in bo:
+                    bo_status = 'SKIPPED'
+                else:
+                    bo_status = '✅' if bo.get('allowed') else '❌'
+
+                # Truncate URL if too long for cleaner display
+                display_url = url if len(url) <= 50 else url[:47] + '...'
+
+                table_rows.append([display_url, zs_status, bo_status])
+
+            # Create table using tabulate
+            table_headers = ['URL', 'the corporate proxy', 'Bloxone']
+            table_str = tabulate(table_rows, headers=table_headers, tablefmt='simple', colalign=['left', 'center', 'center'])
+
+            # Calculate response time
+            response_time = round(time.time() - start_time)
+
+            # Build final response with Markdown formatting
+            response = (f"**{activity['actor']['displayName']}, URL block verdict results:**\n"
+                        f"```\n{table_str}\n\nLegend: ✅=ALLOWED ❌=BLOCKED\n"
+                        f"Response Time: {response_time}s\n```")
+
+            # Check length and fallback to summary if needed
+            if len(response) > 7000:  # Conservative limit for Webex
+                total = len(results)
+                zs_blocked = sum(1 for r in results if not r['proxy'].get('allowed'))
+                bo_blocked = sum(1 for r in results if not r['bloxone'].get('allowed', True) and 'skipped' not in r['bloxone'])
+
+                response = (f"{activity['actor']['displayName']}, tested {total} URLs.\n"
+                            f"the corporate proxy blocked: {zs_blocked}/{total}\n"
+                            f"Bloxone blocked: {bo_blocked}/{total}\n"
+                            f"Results too long for chat - reduce the number of URLs in the input.\n"
+                            f"Responded in {response_time}s")
+
+            return response
+
+        except Exception as e:
+            logger.error(f"URL testing error: {str(e)}")
+            return f"{activity['actor']['displayName']}, error testing URLs: {str(e)}"
+
+
+class GetBlockUrlForm(CardOnlyCommand):
+    """Display the Block URL form."""
+    command_keyword = "get_block_url_form"
+    help_message = "Block URL 🚫"
+    card = BLOCK_URL_FORM_CARD
+
+
+class DoBlockUrl(ToodlesCommand):
+    """Submit a URL block request to XSOAR."""
+    command_keyword = "do_block_url"
+    card = None
+
+    @toodles_log_activity
+    def execute(self, message, attachment_actions, activity):
+        from my_bot.tools.block_url_tools import execute_url_block, _get_allowed_rooms
+
+        room_id = attachment_actions.roomId if attachment_actions else None
+        allowed = _get_allowed_rooms()
+        if allowed and (not room_id or room_id not in allowed):
+            return "🚫 URL blocking is only available in authorized rooms (Threat Con, GOSC T2, or Test Dev Space)."
+
+        url = (get_input_value(attachment_actions, 'url') or '').strip()
+        xsoar_ticket_id = (get_input_value(attachment_actions, 'xsoar_ticket_id') or '').strip()
+        reason = (get_input_value(attachment_actions, 'reason') or '').strip()
+
+        if not url:
+            return "❌ URL is required."
+        if not reason:
+            return "❌ Reason is required."
+
+        import re
+        clean_url = re.sub(r'^https?://', '', url).split('/')[0]
+
+        user_email = get_user_email(activity) or 'unknown'
+
+        import threading
+        threading.Thread(
+            target=execute_url_block,
+            kwargs={
+                'room_id': room_id,
+                'url': clean_url,
+                'xsoar_ticket_id': xsoar_ticket_id,
+                'reason': reason,
+                'user_email': user_email,
+                'parent_msg_id': '',
+                'bot_access_token': CONFIG.webex_bot_access_token_toodles,
+            },
+            daemon=True,
+        ).start()
+
+        return f"🚫 Submitting block request for `{clean_url}`..."
+
+
+class GetBirthdayAnniversaryForm(ToodlesCommand):
     """Display the birthday and anniversary input form."""
     command_keyword = "get_birthday_anniversary_form"
     help_message = "Birthday & Anniversary 🎉"
@@ -1666,7 +1849,7 @@ class GetBirthdayAnniversaryForm(the notification serviceCommand):
         return None
 
 
-class SaveBirthdayAnniversary(the notification serviceCommand):
+class SaveBirthdayAnniversary(ToodlesCommand):
     """Save birthday and anniversary information from the form."""
     command_keyword = "save_birthday_anniversary"
     card = None
@@ -1759,11 +1942,11 @@ class SaveBirthdayAnniversary(the notification serviceCommand):
             return f"{activity['actor']['displayName']}, sorry, there was an error saving your information. Please try again."
 
 
-class the notification serviceHelpCommand(HelpCommand):
+class ToodlesHelpCommand(HelpCommand):
     """Custom help command with centered title and two-column button grid."""
 
     def build_card(self, message, attachment_actions, activity):
-        heading = TextBlock("🛠️ the notification service ✨", weight=FontWeight.BOLDER, wrap=True,
+        heading = TextBlock("🛠️ Toodles ✨", weight=FontWeight.BOLDER, wrap=True,
                             size=FontSize.LARGE, horizontalAlignment=HorizontalAlignment.CENTER,
                             color=Colors.ACCENT)
         subtitle = TextBlock(self.bot_help_subtitle, wrap=True, size=FontSize.SMALL,
@@ -1823,12 +2006,12 @@ class the notification serviceHelpCommand(HelpCommand):
 
 
 def toodles_bot_factory():
-    """Create the notification service bot instance"""
+    """Create Toodles bot instance"""
     # Clean up stale device registrations before starting
     # (to prevent device buildup from automatic restarts)
     cleanup_devices_on_startup(
         CONFIG.webex_bot_access_token_toodles,
-        bot_name="the notification service"
+        bot_name="Toodles"
     )
 
     # Build approved users list: employees + all bots for peer ping communication
@@ -1844,15 +2027,15 @@ def toodles_bot_factory():
     # Fetch bot avatar for the custom help card
     bot_avatar = webex_api.people.me().avatar
 
-    help_cmd = the notification serviceHelpCommand(
-        bot_name="the notification service",
+    help_cmd = ToodlesHelpCommand(
+        bot_name="Toodles",
         bot_help_subtitle="✨ Your friendly toolbox bot!",
         bot_help_image=bot_avatar
     )
 
     return WebexBot(
         CONFIG.webex_bot_access_token_toodles,
-        bot_name="the notification service",
+        bot_name="Toodles",
         approved_domains=[d.strip() for d in (CONFIG.company_domains or CONFIG.my_web_domain).split(",") if d.strip()],
         approved_users=approved_bot_emails,  # Allow other bots for peer ping
         # approved_rooms disabled - bot lacks spark:memberships_read scope for validation
@@ -1875,7 +2058,7 @@ class GetContactsCard(CardOnlyCommand):
     card = CONTACTS_MENU_CARD
 
 
-class GetContactsAddForm(the notification serviceCommand):
+class GetContactsAddForm(ToodlesCommand):
     """Display the Add New Contact form with dynamic region choices."""
     command_keyword = "get_contacts_add_form"
     card = None
@@ -1899,7 +2082,7 @@ class GetContactsAddForm(the notification serviceCommand):
         return None
 
 
-class AddNewContact(the notification serviceCommand):
+class AddNewContact(ToodlesCommand):
     """Process the Add New Contact form submission."""
     command_keyword = "add_new_contact"
     card = None
@@ -1948,7 +2131,7 @@ class AddNewContact(the notification serviceCommand):
 
 
 def toodles_initialization(bot=None):
-    """Initialize the notification service commands"""
+    """Initialize Toodles commands"""
     if bot:
         # Add all commands
         bot.add_command(GetApprovedTestingCard())
@@ -1983,12 +2166,17 @@ def toodles_initialization(bot=None):
         bot.add_command(GetCompanyHolidays())
         bot.add_command(GetBotHealth())
         bot.add_command(Hi())
+        bot.add_command(GetUrlBlockVerdictForm())
+        bot.add_command(ProcessUrlBlockVerdict())
         bot.add_command(GetBirthdayAnniversaryForm())
         bot.add_command(SaveBirthdayAnniversary())
         # Domain monitoring
         bot.add_command(RemoveWatchlistDomain())
         bot.add_command(GetDomainLookalikeCard())
         bot.add_command(ProcessDomainLookalike())
+        # Person of Interest OSINT
+        bot.add_command(GetPOICard())
+        bot.add_command(InvestigatePOI())
         # Browser History
         bot.add_command(ReopenAndRetry())
         bot.add_command(GetBrowserHistoryCard())
@@ -1996,6 +2184,9 @@ def toodles_initialization(bot=None):
         # File Pull
         bot.add_command(GetFilePullCard())
         bot.add_command(FetchFilePull())
+        # Block URL
+        bot.add_command(GetBlockUrlForm())
+        bot.add_command(DoBlockUrl())
         # Offline host monitoring (callback from RTR offline prompt)
         bot.add_command(MonitorOfflineHost())
         # Escalation Contacts
@@ -2014,8 +2205,8 @@ def _shutdown_handler(signum=None, frame=None):
 
 
 def main():
-    """the notification service main - simplified to use basic WebexBot (keepalive handled by peer_ping_keepalive.py)"""
-    logger.info("Starting the notification service with basic WebexBot")
+    """Toodles main - simplified to use basic WebexBot (keepalive handled by peer_ping_keepalive.py)"""
+    logger.info("Starting Toodles with basic WebexBot")
 
     # Register shutdown handlers for graceful logging
     atexit.register(_shutdown_handler)
@@ -2029,8 +2220,8 @@ def main():
     toodles_initialization(bot)
 
     # Run bot (simple and direct)
-    logger.info("🚀 the notification service is up and running...")
-    print("🚀 the notification service is up and running...", flush=True)
+    logger.info("🚀 Toodles is up and running...")
+    print("🚀 Toodles is up and running...", flush=True)
     bot.run()
 
 

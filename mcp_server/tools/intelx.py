@@ -17,7 +17,7 @@ def _get_client():
     return _client
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def intelx_search(term: str, max_results: int = 50) -> dict:
     """Search IntelX for a term across dark web, leaks, and paste sites.
 
@@ -34,7 +34,7 @@ def intelx_search(term: str, max_results: int = 50) -> dict:
     return client.search(term, max_results=max_results)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def intelx_search_domain(domain: str) -> dict:
     """Search IntelX for mentions of a domain across dark web and data leaks.
 

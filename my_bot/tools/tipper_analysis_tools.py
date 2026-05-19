@@ -7,6 +7,7 @@ Tools for analyzing threat tippers for novelty against historical data.
 import logging
 import re
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 FINAL_RESPONSE_PREFIX = "[FINAL_RESPONSE]"  # duplicated from state_manager to avoid circular import
 from my_config import get_config
@@ -49,7 +50,7 @@ def _markdown_to_html(text: str) -> str:
     return text
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def analyze_tipper_novelty(tipper_id: str) -> str:
     """
@@ -119,7 +120,7 @@ def analyze_tipper_novelty(tipper_id: str) -> str:
         return FINAL_RESPONSE_PREFIX + f"Error analyzing tipper: {str(e)}"
 
 
-@tool
+@mutating_tool
 @log_tool_call
 def add_note_to_tipper(tipper_id: str, note: str) -> str:
     """
@@ -166,7 +167,7 @@ def add_note_to_tipper(tipper_id: str, note: str) -> str:
 
         # Format note with header
         formatted_note = f"""<div>
-<p><strong>🤖 Note from the security assistant bot:</strong></p>
+<p><strong>🤖 Note from Pokedex:</strong></p>
 <div>{html_note}</div>
 </div>"""
 
@@ -183,7 +184,7 @@ def add_note_to_tipper(tipper_id: str, note: str) -> str:
         return f"Error adding note: {str(e)}"
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def analyze_threat_text(threat_description: str) -> str:
     """

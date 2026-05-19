@@ -10,6 +10,7 @@ import logging
 from typing import Optional
 
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 from services.service_now import ServiceNowClient
 from src.utils.tool_decorator import log_tool_call
@@ -96,7 +97,7 @@ def _format_host_details(details: dict, hostname: str) -> str:
     return "\n".join(info_parts)
 
 
-@tool
+@readonly_tool
 @validate_args(hostname=HOSTNAME_PATTERN)
 @llm_cache(ttl_seconds=86400)
 @log_tool_call
@@ -124,7 +125,7 @@ def get_host_details_snow(hostname: str) -> str:
     return _format_host_details(details, hostname_short)
 
 
-@tool
+@readonly_tool
 @validate_args(hostname=HOSTNAME_PATTERN)
 @log_tool_call
 def get_servicenow_changes(hostname: str) -> str:
@@ -164,7 +165,7 @@ def get_servicenow_changes(hostname: str) -> str:
     return "\n".join(lines)
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_servicenow_incidents(search_term: str, hours: int = 72) -> str:
     """Get recent ServiceNow incidents where the affected CI matches a hostname or username.

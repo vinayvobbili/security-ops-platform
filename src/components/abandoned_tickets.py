@@ -44,7 +44,7 @@ def get_last_entry_details(incident_id):
 def generate_daily_summary(tickets) -> str | None:
     try:
         if not tickets:  # Check for empty list
-            return pd.DataFrame(columns=['id', 'created', 'last note', 'owner', 'note']).to_markdown(index=False)
+            return pd.DataFrame(columns=['id', 'created', 'last note', 'owner', 'type', 'phase', 'note']).to_markdown(index=False)
 
         df = pd.DataFrame(tickets)
 
@@ -52,6 +52,20 @@ def generate_daily_summary(tickets) -> str | None:
             df['owner'] = df['owner'].fillna('Unassigned').astype(str).str.replace(f'@{config.my_web_domain}', '', regex=False)
         else:
             df['owner'] = 'Unassigned'
+
+        if 'type' in df.columns:
+            df['type'] = df['type'].fillna('').astype(str).str.replace(config.team_name, '', regex=False, case=False).str.strip(' -')
+        else:
+            df['type'] = ''
+
+        if 'phase' in df.columns:
+            df['phase'] = (
+                df['phase'].fillna('Unknown').astype(str)
+                .str.replace(r'^\s*\d+\.\s*', '', regex=True)
+                .replace('', 'Unknown')
+            )
+        else:
+            df['phase'] = 'Unknown'
 
         df['created'] = pd.to_datetime(df['created'], format='mixed')
         df['last_entry_date'] = pd.to_datetime(df['last_entry_date'], format='mixed')
@@ -62,7 +76,7 @@ def generate_daily_summary(tickets) -> str | None:
         df['note'] = df['note'].fillna('').astype(str).str.replace('\n', ' ').str.replace('\r', ' ').apply(lambda x: x[:NOTE_MAX_LENGTH] + '...' if len(x) > NOTE_MAX_LENGTH else x)
 
         # Rename column for display to save space
-        df = df[['id', 'created', 'last_entry_date', 'owner', 'note']]
+        df = df[['id', 'created', 'last_entry_date', 'owner', 'type', 'phase', 'note']]
         df = df.rename(columns={'last_entry_date': 'last note'})
         df = df.sort_values(by='last note', ascending=True)
 
@@ -79,7 +93,7 @@ def send_report(room_id=config.webex_room_id_dev_test_space):
     today_minus_5 = datetime.now(tz=eastern) - timedelta(days=5)
 
     # Query for all open tickets (no time filter needed for abandoned tickets check)
-    query = f'-status:closed type:{config.team_name} -type:"{config.team_name} Third Party Compromise" created:<{today_minus_5.strftime("%Y-%m-%d")}'
+    query = f'-status:closed type:{config.team_name} -type:"{config.team_name} Third Party Compromise" -type:"{config.team_name} Lost or Stolen Computer" created:<{today_minus_5.strftime("%Y-%m-%d")}'
     logger.debug(f'Query for tickets: {query}')
 
     tickets = TicketHandler(XsoarEnvironment.PROD).get_tickets(query=query)

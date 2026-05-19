@@ -1,19 +1,11 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Upcoming Travel Records</title>
-    {% block extra_css %}
-        <link rel="stylesheet" href="{{ url_for('static', filename='css/upcoming_travel.css') }}">
-    {% endblock %}
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
-</head>
-<body>
 {% extends 'base_layout.html' %}
-{% import 'title_macros.html' as titles %}
-{% set page_title = titles.build_title('Upcoming Travel Records','✈️','🗓️') %}
-{% include 'top_bar.html' %}
+{% set page_title_text = 'Upcoming Travel Records' %}
+{% set page_title_left_icon = '✈️' %}
+{% set page_title_right_icon = '🗓️' %}
+{% block extra_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/upcoming_travel.css') }}">
+{% endblock %}
+{% block content %}
 <div class="container">
 
     <section>
@@ -39,7 +31,7 @@
                     <td>{{ record.vacation_location }}</td>
                     <td>{{ record.vacation_start_date }}</td>
                     <td>{{ record.vacation_end_date }}</td>
-                    <td>{{ "Yes" if record.will_work_during_vacation else "No" }}</td>
+                    <td>{{ record.is_working_during_vacation }}</td>
                     <td title="{{ record.comments }}"><span class="truncate-text">{{ record.comments }}</span></td>
                     <td>{{ record.submitted_at }}</td>
                     <td>{{ record.submitted_by_ip_address }}</td>
@@ -50,12 +42,7 @@
     </section>
 
 </div>
-<script src="/static/js/common.js"></script>
+{% endblock %}
+{% block extra_js %}
 <script src="{{ url_for('static', filename='js/upcoming_travel.js') }}"></script>
-<script>
-    initRandomMusic();
-
-    initBurgerMenu();
-</script>
-</body>
-</html>
+{% endblock %}

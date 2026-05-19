@@ -35,7 +35,7 @@ def _slim_ticket(ticket: dict) -> dict:
     return slim
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def xsoar_get_tickets(query: str, size: int = 100) -> dict:
     """Search XSOAR incidents by query string. Returns summary fields only.
 
@@ -46,6 +46,66 @@ def xsoar_get_tickets(query: str, size: int = 100) -> dict:
     client = _get_client()
     tickets = client.get_tickets(query, size=size)
     return {"count": len(tickets), "tickets": [_slim_ticket(t) for t in tickets]}
+
+
+@mcp.tool(tags={"readonly"})
+def xsoar_search_tickets(
+    text: str,
+    days_back: int = 30,
+    status: Optional[str] = None,
+    severity: Optional[str] = None,
+    incident_type: str = "METCIRT",
+    size: int = 50,
+) -> dict:
+    """Free-text live search across XSOAR tickets via the XSOAR API.
+
+    Hits XSOAR's search API directly — no local index, no RAG. Combines a
+    free-text term with optional metadata filters and returns slim ticket
+    summaries. For deep details on any single hit, follow up with
+    xsoar_get_case(incident_id).
+
+    Args:
+        text: Free-text search term — XSOAR matches it across name,
+              details, notes and most string custom fields. Wrap exact
+              phrases in double quotes: '"AWS root login"'.
+        days_back: Limit to tickets created in the last N days
+                   (default 30). Pass 0 to search all-time.
+        status: Optional 'Active' or 'closed'.
+        severity: Optional 'Low', 'Medium', 'High', or 'Critical'.
+        incident_type: XSOAR incident type, exact match
+                       (default 'METCIRT'). Empty string to search all
+                       types. Note: 'METCIRT' does NOT include
+                       'METCIRT IOC Hunt' — those are a separate type.
+        size: Max results to return (default 50).
+
+    Returns:
+        {"count": N, "query": "<XSOAR query string>", "tickets": [slim ticket dicts]}
+    """
+    from datetime import datetime, timedelta, timezone
+
+    parts: list[str] = []
+    text = (text or "").strip()
+    if text:
+        parts.append(text)
+    if incident_type:
+        parts.append(f"type:{incident_type}")
+    if status:
+        parts.append(f"status:{status}")
+    if severity:
+        parts.append(f"severity:{severity}")
+    if days_back and days_back > 0:
+        since = (datetime.now(timezone.utc) - timedelta(days=days_back)) \
+            .strftime("%Y-%m-%dT%H:%M:%SZ")
+        parts.append(f'created:>="{since}"')
+
+    query = " ".join(parts).strip()
+    client = _get_client()
+    tickets = client.get_tickets(query, size=size, paginate=False)
+    return {
+        "count": len(tickets),
+        "query": query,
+        "tickets": [_slim_ticket(t) for t in tickets],
+    }
 
 
 def _slim_closed_ticket(ticket: dict) -> dict:
@@ -60,7 +120,7 @@ def _slim_closed_ticket(ticket: dict) -> dict:
     return base
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def xsoar_get_closed_tickets_by_period(
     start: str,
     end: str,
@@ -149,7 +209,7 @@ def xsoar_get_closed_tickets_by_period(
     }
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def xsoar_get_case(incident_id: str) -> dict:
     """Get full XSOAR case details including analyst notes.
 
@@ -160,7 +220,7 @@ def xsoar_get_case(incident_id: str) -> dict:
     return client.get_case_data_with_notes(incident_id)
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def xsoar_create_incident(payload: dict) -> dict:
     """Create a new XSOAR incident.
 
@@ -171,7 +231,7 @@ def xsoar_create_incident(payload: dict) -> dict:
     return client.create(payload)
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def xsoar_update_incident(ticket_id: str, update_data: dict) -> dict:
     """Update fields on an existing XSOAR incident.
 
@@ -183,7 +243,7 @@ def xsoar_update_incident(ticket_id: str, update_data: dict) -> dict:
     return client.update_incident(ticket_id, update_data)
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def xsoar_add_note(incident_id: str, note: str, markdown: bool = True) -> dict:
     """Add a note/entry to an existing XSOAR ticket.
 
@@ -198,7 +258,7 @@ def xsoar_add_note(incident_id: str, note: str, markdown: bool = True) -> dict:
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def xsoar_complete_task(ticket_id: str, task_name: str, task_input: str = "") -> dict:
     """Complete a playbook task in an XSOAR incident.
 
@@ -212,7 +272,7 @@ def xsoar_complete_task(ticket_id: str, task_name: str, task_input: str = "") ->
     return {"success": True, "result": result}
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def xsoar_link_tickets(parent_ticket_id: str, link_ticket_id: str) -> dict:
     """Link two XSOAR tickets together.
 

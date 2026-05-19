@@ -8,9 +8,10 @@ This module provides bot testing capabilities for operational validation.
 import logging
 import time
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 
-@tool
+@mutating_tool
 def run_tests() -> str:
     """Run basic bot functionality tests."""
     try:
@@ -123,7 +124,7 @@ def run_tests() -> str:
         return f"❌ **Test execution failed:** {str(e)}"
 
 
-@tool
+@mutating_tool
 def simple_live_message_test() -> str:
     """Send a simple test message to verify bot communication."""
     try:

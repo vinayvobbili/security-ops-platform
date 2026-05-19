@@ -6,7 +6,8 @@ import threading
 from flask import Blueprint, jsonify, render_template, request, send_from_directory
 
 from src.utils.logging_utils import log_web_activity
-from src.components.web.edit_auth import check_edit_password, notify_edit_async
+from src.components.web.edit_auth import notify_edit_async
+from web.auth import helpers
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +53,8 @@ def docs_library_page():
 @docs_library_bp.route("/api/docs-library/upload", methods=["POST"])
 @log_web_activity
 def upload_doc():
-    if not check_edit_password(request, "docs"):
-        return jsonify({"success": False, "error": "Invalid password"}), 403
+    if not helpers.current_user():
+        return jsonify({"success": False, "error": "login_required"}), 401
     try:
         from src.components.web import docs_library_handler as h
         if "file" not in request.files:
@@ -76,8 +77,8 @@ def upload_doc():
 @docs_library_bp.route("/api/docs-library/delete", methods=["POST"])
 @log_web_activity
 def delete_doc():
-    if not check_edit_password(request, "docs"):
-        return jsonify({"success": False, "error": "Invalid password"}), 403
+    if not helpers.current_user():
+        return jsonify({"success": False, "error": "login_required"}), 401
     try:
         from src.components.web import docs_library_handler as h
         data = request.get_json()
@@ -96,8 +97,8 @@ def delete_doc():
 @docs_library_bp.route("/api/docs-library/rebuild", methods=["POST"])
 @log_web_activity
 def rebuild_store():
-    if not check_edit_password(request, "docs"):
-        return jsonify({"success": False, "error": "Invalid password"}), 403
+    if not helpers.current_user():
+        return jsonify({"success": False, "error": "login_required"}), 401
     if _sync_status["running"]:
         return jsonify({"success": False, "error": "A rebuild is already in progress"}), 409
     threading.Thread(target=_run_rebuild, daemon=True).start()

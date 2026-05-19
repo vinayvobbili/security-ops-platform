@@ -1,11 +1,18 @@
 """AI Project Intake Form Handler for Web Dashboard."""
 
+import html
 import logging
+import re
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:  # pragma: no cover — Python <3.9
+    ZoneInfo = None  # type: ignore
 
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
@@ -72,6 +79,20 @@ def init_db():
         cols = [row[1] for row in conn.execute("PRAGMA table_info(submissions)").fetchall()]
         if 'documents' not in cols:
             conn.execute("ALTER TABLE submissions ADD COLUMN documents TEXT")
+
+        # Comments / discussion thread per submission.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS comments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                submission_id INTEGER NOT NULL,
+                author_name TEXT NOT NULL,
+                author_email TEXT NOT NULL,
+                body TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (submission_id) REFERENCES submissions(id) ON DELETE CASCADE
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_comments_submission ON comments(submission_id)")
     logger.info(f"AI intake database initialized at {DB_PATH}")
 
 
@@ -133,8 +154,139 @@ def get_submission(submission_id: int) -> Optional[Dict[str, Any]]:
 def delete_submission(submission_id: int) -> bool:
     """Delete a submission by ID. Returns True if a row was deleted."""
     with _get_connection() as conn:
+        # Cascade requires foreign_keys pragma; do the cleanup explicitly to be safe.
+        conn.execute("DELETE FROM comments WHERE submission_id = ?", (submission_id,))
         cursor = conn.execute("DELETE FROM submissions WHERE id = ?", (submission_id,))
         return cursor.rowcount > 0
+
+
+_URL_RE = re.compile(r'(https?://[^\s<>"\'`]+)')
+_TRAILING_PUNCT = ".,;:!?)]}"
+
+
+def _linkify(text: str) -> str:
+    """HTML-escape ``text`` and turn bare http(s) URLs into anchor tags."""
+    if not text:
+        return ""
+    out: List[str] = []
+    last = 0
+    for match in _URL_RE.finditer(text):
+        out.append(html.escape(text[last:match.start()]))
+        url = match.group(1)
+        trail = ""
+        while url and url[-1] in _TRAILING_PUNCT:
+            trail = url[-1] + trail
+            url = url[:-1]
+        if url:
+            href = html.escape(url, quote=True)
+            label = html.escape(url)
+            out.append(f'<a href="{href}" target="_blank" rel="noopener noreferrer">{label}</a>')
+        out.append(html.escape(trail))
+        last = match.end()
+    out.append(html.escape(text[last:]))
+    return "".join(out)
+
+
+def _format_comment_timestamp(ts: Optional[str]) -> str:
+    """Render a SQLite UTC timestamp as ``MM/DD/YYYY HH:MM AM/PM EDT|EST``."""
+    if not ts:
+        return ""
+    raw = ts.split(".")[0] if "." in ts else ts
+    try:
+        dt = datetime.strptime(raw, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        try:
+            dt = datetime.fromisoformat(raw)
+        except ValueError:
+            return ts
+    dt = dt.replace(tzinfo=timezone.utc)
+    if ZoneInfo is not None:
+        dt_local = dt.astimezone(ZoneInfo("America/New_York"))
+        tz_label = dt_local.strftime("%Z") or "ET"
+    else:
+        dt_local = dt
+        tz_label = "UTC"
+    return f"{dt_local.strftime('%m/%d/%Y')} {dt_local.strftime('%I:%M %p')} {tz_label}"
+
+
+def _enrich_comment(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Attach display-friendly fields (linkified body, formatted timestamp)."""
+    row["body_html"] = _linkify(row.get("body") or "")
+    row["created_at_display"] = _format_comment_timestamp(row.get("created_at"))
+    return row
+
+
+def get_comments(submission_id: int) -> List[Dict[str, Any]]:
+    """Return all comments for a submission, oldest first."""
+    with _get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM comments WHERE submission_id = ? ORDER BY created_at ASC, id ASC",
+            (submission_id,),
+        ).fetchall()
+        return [_enrich_comment(dict(row)) for row in rows]
+
+
+def add_comment(
+    submission_id: int,
+    author_name: str,
+    author_email: str,
+    body: str,
+) -> Dict[str, Any]:
+    """Append a comment to a submission and notify the AI intake Webex room.
+
+    Returns a status dict with the saved comment (or an error message).
+    """
+    author_name = (author_name or "").strip()
+    author_email = (author_email or "").strip()
+    body = (body or "").strip()
+    if not author_name or not body:
+        return {"status": "error", "message": "Name and comment body are required."}
+    # Email is optional. If a bare local-part was provided (no @), assume corp domain.
+    if author_email and "@" not in author_email:
+        author_email = f"{author_email}@the-company.com"
+
+    submission = get_submission(submission_id)
+    if not submission:
+        return {"status": "error", "message": "Submission not found."}
+
+    with _get_connection() as conn:
+        cursor = conn.execute(
+            "INSERT INTO comments (submission_id, author_name, author_email, body) VALUES (?, ?, ?, ?)",
+            (submission_id, author_name, author_email, body),
+        )
+        comment_id = cursor.lastrowid
+        row = conn.execute("SELECT * FROM comments WHERE id = ?", (comment_id,)).fetchone()
+
+    saved = _enrich_comment(dict(row)) if row else None
+    logger.info(
+        f"AI intake submission {submission_id} new comment #{comment_id} by {author_name} ({author_email})"
+    )
+
+    # Webex audit notification — same channel as the intake submission lifecycle.
+    base_url = CONFIG.web_server_url
+    view_url = f"{base_url}/ai-intake-submissions/{submission_id}#comments"
+    access_token = CONFIG.webex_bot_access_token_toodles
+    room_id = CONFIG.webex_room_id_gs_ai
+    if access_token and room_id:
+        try:
+            webex_api = WebexAPI(access_token=access_token, disable_ssl_verify=True)
+            preview = body if len(body) <= 400 else body[:400].rstrip() + "…"
+            md = (
+                f"💬 **New comment on AI Intake #{submission_id}** — *{submission.get('project_name')}*  \n"
+                f"👤 {author_name} ({author_email})  \n\n"
+                f"> {preview}  \n\n"
+                f"🔗 [Open discussion]({view_url})"
+            )
+            safe_send_message(
+                webex_api,
+                room_id,
+                markdown=md,
+                fallback_text=f"New comment on AI Intake #{submission_id} by {author_name}: {view_url}",
+            )
+        except Exception as exc:
+            logger.warning(f"Could not send AI intake comment Webex notification: {exc}")
+
+    return {"status": "success", "comment": saved}
 
 
 def get_document_path(submission_id: int, filename: str) -> Optional[Path]:
@@ -151,6 +303,97 @@ def get_document_path(submission_id: int, filename: str) -> Optional[Path]:
     folder = secure_filename(submission.get('project_name') or '') or "unnamed_project"
     fpath = UPLOADS_DIR / folder / safe_name
     return fpath if fpath.is_file() else None
+
+
+def update_submission(
+    submission_id: int,
+    form_data: Dict[str, Any],
+    files: Optional[List[FileStorage]] = None,
+) -> Dict[str, Any]:
+    """Update an existing submission. All text fields replaceable; documents append-only."""
+    existing = get_submission(submission_id)
+    if not existing:
+        return {'status': 'error', 'message': 'Submission not found'}
+
+    requester_name = form_data.get('requesterName', '').strip()
+    email = form_data.get('email', '').strip()
+    team = form_data.get('team', '').strip()
+    project_name = form_data.get('projectName', '').strip()
+    use_case = form_data.get('useCase', '')
+    problem_statement = form_data.get('problemStatement', '').strip()
+    expected_outcome = form_data.get('expectedOutcome', '').strip()
+    priority = form_data.get('priority', '')
+    data_sources = form_data.get('dataSources', '').strip()
+    timeline = form_data.get('timeline', '')
+    additional_notes = form_data.get('additionalNotes', '').strip()
+
+    required = {
+        'Requester Name': requester_name,
+        'Email': email,
+        'Team / Department': team,
+        'Project Name': project_name,
+        'Use Case Category': use_case,
+        'Problem Statement': problem_statement,
+        'Expected Outcome': expected_outcome,
+        'Priority': priority,
+        'Target Timeline': timeline,
+    }
+    missing = [k for k, v in required.items() if not v]
+    if missing:
+        return {'status': 'error', 'message': f"Missing required fields: {', '.join(missing)}"}
+
+    # Append new uploads to the existing project folder; existing docs are never removed
+    saved_files = _save_uploads(files or [], project_name)
+    existing_docs = [d.strip() for d in (existing.get('documents') or '').split(',') if d.strip()]
+    combined = existing_docs[:]
+    for name in saved_files:
+        if name not in combined:
+            combined.append(name)
+    documents_str = ", ".join(combined) if combined else None
+
+    with _get_connection() as conn:
+        conn.execute(
+            """UPDATE submissions SET
+                 requester_name=?, email=?, team=?, project_name=?, use_case=?,
+                 problem_statement=?, expected_outcome=?, priority=?, data_sources=?,
+                 timeline=?, additional_notes=?, documents=?
+               WHERE id=?""",
+            (requester_name, email, team, project_name, use_case,
+             problem_statement, expected_outcome, priority, data_sources or None,
+             timeline, additional_notes or None, documents_str, submission_id),
+        )
+
+    # Webex audit notification
+    base_url = CONFIG.web_server_url
+    view_url = f"{base_url}/ai-intake-submissions/{submission_id}"
+    new_docs_str = ", ".join(saved_files) if saved_files else "(no new files)"
+    access_token = CONFIG.webex_bot_access_token_toodles
+    room_id = CONFIG.webex_room_id_gs_ai
+    if access_token and room_id:
+        try:
+            webex_api = WebexAPI(access_token=access_token, disable_ssl_verify=True)
+            md = (
+                f"✏️ **AI Intake submission #{submission_id} edited** by {requester_name} ({team})  \n"
+                f"📋 **{project_name}**  \n"
+                f"📎 New attachments: {new_docs_str}  \n"
+                f"🔗 [View submission]({view_url})"
+            )
+            safe_send_message(
+                webex_api,
+                room_id,
+                markdown=md,
+                fallback_text=f"AI Intake submission #{submission_id} edited by {requester_name}: {view_url}",
+            )
+        except Exception as exc:
+            logger.warning(f"Could not send AI intake edit Webex notification: {exc}")
+
+    logger.info(f"AI intake submission {submission_id} edited by {requester_name} (added {len(saved_files)} files)")
+
+    return {
+        'status': 'success',
+        'message': 'Your submission has been updated.',
+        'added_files': saved_files,
+    }
 
 
 def handle_ai_intake_submission(
@@ -401,7 +644,7 @@ def handle_ai_intake_submission(
         "content": adaptive_card,
     }]
 
-    # Send to GS AI Enablement Webex space via the notification service
+    # Send to GS AI Enablement Webex space via Toodles
     access_token = CONFIG.webex_bot_access_token_toodles
     room_id = CONFIG.webex_room_id_gs_ai
 
@@ -426,6 +669,8 @@ def handle_ai_intake_submission(
     result = {
         'status': 'success',
         'message': 'Your AI project request has been submitted. The team has been notified and will follow up.',
+        'submission_url': view_url,
+        'submission_id': submission_id,
     }
     if azdo_url:
         result['azdo_url'] = azdo_url

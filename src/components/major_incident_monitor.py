@@ -347,7 +347,10 @@ def check_for_new_incidents(room_id=None):
                 logger.info(f"Found {len(new_incidents)} new INC(s) for {group_name}: {sorted(new_ids)}")
                 incidents_by_group[group_name] = new_incidents
 
-            seen_ids[group_name] = current_ids
+            # Union, don't overwrite — a ticket that transitions to Resolved drops
+            # out of current_ids (terminal-state filter), and if we replaced the
+            # seen set with current_ids only, a later reopen would re-alert.
+            seen_ids[group_name] = previously_seen | current_ids
 
         _save_seen_ids(seen_ids)
 

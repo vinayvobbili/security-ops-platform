@@ -15,6 +15,7 @@ import tempfile
 
 import requests
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 from my_config import get_config
 from src.utils.tool_decorator import log_tool_call
@@ -230,7 +231,7 @@ def _get_current_room_id() -> str | None:
     return None
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def generate_diagram(mermaid_source: str, title: str = "") -> str:
     """
@@ -292,7 +293,7 @@ def generate_diagram(mermaid_source: str, title: str = "") -> str:
             Y --> D{🔍 DMARC Check}:::decision
             D -->|❌ FAIL| R[🚫 Rejected 554]:::blocked
             R --> N[📨 NDR Bounce]:::asset
-            N --> M[📥 analyst@the-company.com]:::system
+            N --> M[📥 <redacted-email>]:::system
             subgraph SC[🛡️ Security Controls]
                 direction TB
                 SC1[🛡️ DMARC Policy]:::defender
@@ -332,7 +333,7 @@ def generate_diagram(mermaid_source: str, title: str = "") -> str:
             Y --> D{DMARC Check}:::decision
             D -->|FAIL| R[Rejected 554 5.7.9]:::blocked
             R --> N[NDR Bounce]:::asset
-            N --> M[analyst@the-company.com]:::system
+            N --> M[<redacted-email>]:::system
 
     - For SEQUENCE diagrams, group actors by trust zone with `box` syntax:
         sequenceDiagram

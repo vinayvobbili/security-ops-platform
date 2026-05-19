@@ -71,7 +71,8 @@ def handle_speak_up_form_submission():
         request.form,
         prod_ticket_handler,
         CONFIG.xsoar_dev_ui_base_url,
-        CONFIG.team_name
+        CONFIG.team_name,
+        file_data=request.files.get('file'),
     )
     return jsonify(result)
 
@@ -236,7 +237,49 @@ def view_ai_intake_submission(submission_id):
     submission = ai_intake_handler.get_submission(submission_id)
     if not submission:
         return "Submission not found", 404
-    return render_template("ai_intake_submission_detail.html", s=submission)
+    comments = ai_intake_handler.get_comments(submission_id)
+    return render_template("ai_intake_submission_detail.html", s=submission, comments=comments)
+
+
+@forms_bp.route("/ai-intake-submissions/<int:submission_id>/comments", methods=["POST"])
+@log_web_activity
+def add_ai_intake_comment(submission_id):
+    """Append a comment to an AI Intake submission and fire a Webex notification."""
+    payload = request.get_json(silent=True) or request.form
+    result = ai_intake_handler.add_comment(
+        submission_id,
+        payload.get("author_name", ""),
+        payload.get("author_email", ""),
+        payload.get("body", ""),
+    )
+    status_code = 200 if result.get("status") == "success" else 400
+    return jsonify(result), status_code
+
+
+@forms_bp.route("/ai-intake-submissions/<int:submission_id>/edit", methods=["GET"])
+@log_web_activity
+def edit_ai_intake_submission_form(submission_id):
+    """Displays the edit form prefilled with the current submission values."""
+    submission = ai_intake_handler.get_submission(submission_id)
+    if not submission:
+        return "Submission not found", 404
+    return render_template(
+        "ai_intake_submission_edit.html",
+        s=submission,
+        email_domain=COMPANY_EMAIL_DOMAIN,
+    )
+
+
+@forms_bp.route("/ai-intake-submissions/<int:submission_id>/edit", methods=["POST"])
+@log_web_activity
+def update_ai_intake_submission(submission_id):
+    """Updates an existing AI Intake submission and appends any new uploaded documents."""
+    result = ai_intake_handler.update_submission(
+        submission_id,
+        request.form,
+        request.files.getlist('documents'),
+    )
+    return jsonify(result)
 
 
 @forms_bp.route("/ai-intake-submissions/<int:submission_id>/download/<path:filename>")

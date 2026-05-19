@@ -1,4 +1,4 @@
-"""Navigation and options cards for the notification service bot.
+"""Navigation and options cards for Toodles bot.
 
 Uses Action.Submit buttons instead of Action.ShowCard to keep the card
 under Webex's size limit. Each button triggers the corresponding command
@@ -86,7 +86,7 @@ def get_all_options_card():
                 "spacing": "Small",
                 "actions": [
                     {"type": "Action.Submit", "title": "🌐 Browser History", "data": {"callback_keyword": "get_browser_history_card"}, "style": "positive"},
-                    {"type": "Action.Submit", "title": "📁 File Pull", "data": {"callback_keyword": "get_file_pull_card"}, "style": "positive"},
+                    {"type": "Action.Submit", "title": "🚫 Block URL", "data": {"callback_keyword": "get_block_url_form"}, "style": "destructive"},
                 ]
             },
             # --- XSOAR ---
@@ -125,6 +125,7 @@ def get_all_options_card():
                     {"type": "Action.Submit", "title": "🎂 Birthday & Anniversary", "data": {"callback_keyword": "get_birthday_anniversary_form"}, "style": "positive"},
                     {"type": "Action.Submit", "title": "💼 AZDO Work Item", "data": {"callback_keyword": "azdo"}, "style": "positive"},
                     {"type": "Action.Submit", "title": "🌐 Domain Lookalike", "data": {"callback_keyword": "domain_lookalike"}, "style": "destructive"},
+                    {"type": "Action.Submit", "title": "🕵️ Person of Interest", "data": {"callback_keyword": "poi"}, "style": "destructive"},
                     {"type": "Action.Submit", "title": "🚫 URL Block Verdict", "data": {"callback_keyword": "get_url_block_verdict_form"}, "style": "destructive"},
                     {"type": "Action.Submit", "title": "🔧 Tuning Request", "data": {"callback_keyword": "tuning"}, "style": "positive"},
                     {"type": "Action.Submit", "title": "📇 Contacts", "data": {"callback_keyword": "contacts"}, "style": "positive"},

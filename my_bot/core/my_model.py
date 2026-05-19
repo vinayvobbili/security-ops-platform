@@ -20,6 +20,7 @@ Features:
 Created for Security Operations
 """
 import logging
+import re
 import time
 
 from my_bot.core.session_manager import get_session_manager
@@ -29,11 +30,27 @@ logging.basicConfig(level=logging.ERROR)
 
 logger = logging.getLogger(__name__)
 
+# Qwen3-Coder occasionally appends a stray `<tool_call>` tag (sometimes a full
+# malformed block) after its final answer when the chat template hasn't been
+# fully compiled — vllm-mlx's `qwen3_coder` parser only strips well-formed
+# `<tool_call>...</tool_call>` pairs, so the leak reaches the user. See the
+# matching note in `win_ai_state_manager.py:241`.
+_LEAKED_TOOL_CALL_TAIL_RE = re.compile(r"\s*<tool_call>.*\Z", re.DOTALL)
+_LEAKED_TOOL_CALL_CLOSE_RE = re.compile(r"</tool_call>")
+
+
+def _strip_leaked_tool_call_tags(text: str) -> str:
+    if not text or "<tool_call>" not in text and "</tool_call>" not in text:
+        return text
+    cleaned = _LEAKED_TOOL_CALL_TAIL_RE.sub("", text)
+    cleaned = _LEAKED_TOOL_CALL_CLOSE_RE.sub("", cleaned)
+    return cleaned.rstrip()
+
 
 def _metrics(content="", **overrides):
     """Build a standard metrics response dict. Use overrides for non-zero values."""
     result = {
-        'content': content,
+        'content': _strip_leaked_tool_call_tags(content) if isinstance(content, str) else content,
         'input_tokens': 0,
         'output_tokens': 0,
         'total_tokens': 0,
@@ -76,7 +93,7 @@ def get_help_response() -> str:
     Returns:
         str: Formatted help message for Webex
     """
-    return """## 📟 the security assistant bot
+    return """## 📟 Pokedex
 
 ### ⚡ Commands
 
@@ -377,52 +394,11 @@ Call exactly one tool to fulfill the request."""
 
 
 def _is_clear_session_command(query_text: str) -> bool:
+    """Detect the exact 'clear my session' command (case insensitive).
+
+    Clears the bot's conversation memory, NOT the Webex chat history.
     """
-    Detect if user wants to clear the bot's session context (memory) using flexible keyword matching.
-
-    This clears the bot's memory of the conversation, NOT the Webex chat history.
-
-    Handles variations like:
-    - "clear session context"
-    - "start fresh" / "start afresh"
-    - "new session"
-    - "reset conversation"
-    - "forget our conversation"
-    - etc.
-
-    Args:
-        query_text: The user's query string
-
-    Returns:
-        bool: True if the query is a session context clear command, False otherwise
-    """
-    query_lower = query_text.lower().strip()
-
-    # Action keywords that indicate clearing/resetting/starting fresh
-    # Note: 'start' and 'new' handled via fresh_phrases to avoid false positives
-    action_keywords = ['clear', 'reset', 'delete', 'forget', 'erase', 'remove']
-
-    # Target keywords that indicate what to clear (session context, not Webex chat)
-    target_keywords = ['conversation', 'chat', 'history', 'session', 'context', 'messages', 'memory', 'talked']
-
-    # Special phrases that indicate starting fresh (check with substring matching)
-    fresh_phrases = [
-        'start fresh', 'start afresh',
-        'start a new session', 'start a new conversation',
-        'new conversation', 'new session',
-        'start over', 'begin again',
-        'forget what we talked'
-    ]
-
-    # Check fresh phrases with substring matching (handles "let's start afresh")
-    if any(phrase in query_lower for phrase in fresh_phrases):
-        return True
-
-    # Check if query contains both an action and a target keyword
-    has_action = any(action in query_lower for action in action_keywords)
-    has_target = any(target in query_lower for target in target_keywords)
-
-    return has_action and has_target
+    return query_text.strip().lower() == 'clear my session'
 
 
 def run_health_tests_command() -> str:
@@ -545,8 +521,9 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default", p
         original_query = query
 
         # Remove bot name mentions from anywhere in the message (common in group chats)
-        bot_names = ['DnR_the security assistant bot', 'the security assistant bot', 'pokedex', 'dnr_pokedex',
-                     'the notification service', 'toodles', 'the alert triage service', 'barnacles']
+        bot_names = ['DnR_Pokedex', 'Pokedex', 'pokedex', 'dnr_pokedex',
+                     'HAL9000', 'hal9000', 'Jarvis', 'jarvis',
+                     'Toodles', 'toodles', 'Barnacles', 'barnacles']
 
         # Remove all bot name mentions from anywhere in the message
         removed_names = []
@@ -571,7 +548,7 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default", p
         # Get session manager for context
         state_manager = get_state_manager()
         if state_manager and not state_manager.is_initialized:
-            logging.info("Lazy-initializing the security assistant bot components on first request...")
+            logging.info("Lazy-initializing Pokedex components on first request...")
             if not state_manager.initialize_all_components():
                 logging.error("Lazy initialization failed.")
                 return _metrics("❌ Bot not ready. Initialization failed — check Ollama connectivity.")
@@ -699,6 +676,9 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default", p
             logging.error(f"Failed to invoke agent: {e}")
             result = _metrics("❌ An error occurred. Please try again or contact support.")
 
+        if isinstance(result.get('content'), str):
+            result['content'] = _strip_leaked_tool_call_tags(result['content'])
+
         # Store user message and bot response in session
         session_manager.add_message(session_key, "user", query)
         session_manager.add_message(session_key, "assistant", result['content'])
@@ -740,8 +720,9 @@ def ask_stream(user_message: str, user_id: str = "default", room_id: str = "defa
         query = user_message.strip()
 
         # Remove bot name mentions
-        bot_names = ['DnR_the security assistant bot', 'the security assistant bot', 'pokedex', 'dnr_pokedex',
-                     'the notification service', 'toodles', 'the alert triage service', 'barnacles']
+        bot_names = ['DnR_Pokedex', 'Pokedex', 'pokedex', 'dnr_pokedex',
+                     'HAL9000', 'hal9000', 'Jarvis', 'jarvis',
+                     'Toodles', 'toodles', 'Barnacles', 'barnacles']
 
         for bot_name in bot_names:
             if bot_name.lower() in query.lower():
@@ -759,7 +740,7 @@ def ask_stream(user_message: str, user_id: str = "default", room_id: str = "defa
         # Get state manager
         state_manager = get_state_manager()
         if state_manager and not state_manager.is_initialized:
-            logging.info("Lazy-initializing the security assistant bot components on first request (stream)...")
+            logging.info("Lazy-initializing Pokedex components on first request (stream)...")
             if not state_manager.initialize_all_components():
                 logging.error("Lazy initialization failed.")
                 yield "❌ Bot not ready. Initialization failed — check Ollama connectivity."

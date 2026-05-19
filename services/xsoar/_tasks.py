@@ -42,12 +42,16 @@ def get_playbook_task_id(
         return None
 
     data = _parse_generic_response(response)
-    tasks = data.get('invPlaybook', {}).get('tasks', {})
+    # Use `or {}` because XSOAR can return keys with explicit None values
+    # while the workplan is still being populated post-ticket-creation.
+    tasks = (data.get('invPlaybook') or {}).get('tasks') or {}
 
     # Recursive function to search through tasks and sub-playbooks
     def search_tasks(tasks_dict: Dict[str, Any], depth: int = 0) -> Optional[str]:
         for k, v in tasks_dict.items():
-            task_info = v.get('task', {})
+            if not v:
+                continue
+            task_info = v.get('task') or {}
             playbook_task_id = v.get('id')
             found_task_name = task_info.get('name')
 
@@ -57,12 +61,12 @@ def get_playbook_task_id(
                 return playbook_task_id
 
             # Check if this task has a sub-playbook
-            if 'subPlaybook' in v:
-                sub_tasks = v.get('subPlaybook', {}).get('tasks', {})
-                if sub_tasks:
-                    result = search_tasks(sub_tasks, depth + 1)
-                    if result:
-                        return result
+            sub_playbook = v.get('subPlaybook') or {}
+            sub_tasks = sub_playbook.get('tasks') or {}
+            if sub_tasks:
+                result = search_tasks(sub_tasks, depth + 1)
+                if result:
+                    return result
 
         return None
 
@@ -104,7 +108,16 @@ def complete_task(
     """
     log.debug(f"Completing task {task_name} in the ticket {ticket_id} with response: {task_input}")
 
-    task_id = get_playbook_task_id(client, ticket_id, task_name)
+    # Workplan can lag ticket creation; poll a few times before giving up.
+    task_id = None
+    for attempt in range(6):
+        task_id = get_playbook_task_id(client, ticket_id, task_name)
+        if task_id:
+            break
+        log.info(f"Task '{task_name}' not yet in workplan for ticket {ticket_id}; "
+                 f"retrying ({attempt + 1}/6) after 5s")
+        time.sleep(5)
+
     if not task_id:
         log.error(f"Task '{task_name}' not found in ticket {ticket_id}")
         raise ValueError(f"Task '{task_name}' not found in ticket {ticket_id}")

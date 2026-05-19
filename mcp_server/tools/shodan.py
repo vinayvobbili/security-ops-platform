@@ -17,7 +17,7 @@ def _get_client():
     return _client
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def shodan_lookup_ip(ip_address: str) -> dict:
     """Look up an IP address on Shodan for open ports, services, and vulnerabilities.
 
@@ -31,7 +31,7 @@ def shodan_lookup_ip(ip_address: str) -> dict:
     return client.lookup_ip(ip_address)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def shodan_lookup_domain(domain: str) -> dict:
     """Look up a domain on Shodan for infrastructure and exposure details.
 

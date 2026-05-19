@@ -8,6 +8,7 @@ import logging
 from typing import Optional
 
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 from src.utils.tool_decorator import log_tool_call
 
@@ -53,7 +54,7 @@ def _resolve_hostname(employee_id: str) -> Optional[str]:
     return employee_id
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def oe_get_network_connections(employee_id: str, days: int = 30) -> str:
     """Get network connection events for an employee's device from CrowdStrike LogScale.
@@ -85,7 +86,7 @@ def oe_get_network_connections(employee_id: str, days: int = 30) -> str:
         return f"Error fetching network connections for {employee_id}: {e}"
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def oe_get_process_timeline(employee_id: str, days: int = 30) -> str:
     """Get process execution timeline for an employee's device from CrowdStrike LogScale.
@@ -117,7 +118,7 @@ def oe_get_process_timeline(employee_id: str, days: int = 30) -> str:
         return f"Error fetching process timeline for {employee_id}: {e}"
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def oe_get_installed_software(employee_id: str) -> str:
     """Get installed software inventory for an employee's device from Tanium.

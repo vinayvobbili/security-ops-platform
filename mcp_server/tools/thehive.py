@@ -18,7 +18,7 @@ def _get_client():
     return _client
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def thehive_search_cases(
     query: Optional[str] = None,
     status: Optional[str] = None,
@@ -42,7 +42,7 @@ def thehive_search_cases(
     return {"count": len(cases), "cases": cases}
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def thehive_get_case(case_id: str) -> dict:
     """Get full details for a TheHive case.
 
@@ -53,7 +53,7 @@ def thehive_get_case(case_id: str) -> dict:
     return client.get_case(case_id)
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def thehive_create_case(
     title: str,
     description: str,
@@ -83,7 +83,7 @@ def thehive_create_case(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def thehive_add_observable(
     case_id: str,
     data_type: str,
@@ -119,7 +119,7 @@ def thehive_add_observable(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def thehive_add_task(
     case_id: str,
     title: str,
@@ -146,7 +146,7 @@ def thehive_add_task(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def thehive_create_alert(
     title: str,
     description: str,
@@ -188,7 +188,7 @@ def thehive_create_alert(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def thehive_promote_alert(alert_id: str) -> dict:
     """Promote a TheHive alert to a full case.
 
@@ -199,7 +199,7 @@ def thehive_promote_alert(alert_id: str) -> dict:
     return client.promote_alert_to_case(alert_id)
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def thehive_add_comment(case_id: str, comment: str) -> dict:
     """Add a comment/note to an existing TheHive case.
 
@@ -211,7 +211,7 @@ def thehive_add_comment(case_id: str, comment: str) -> dict:
     return client.add_comment(case_id, comment)
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def thehive_update_case(
     case_id: str,
     title: Optional[str] = None,
@@ -253,7 +253,7 @@ def thehive_update_case(
     return client.update_case(case_id, **updates)
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def thehive_close_case(
     case_id: str,
     status: str = "TruePositive",

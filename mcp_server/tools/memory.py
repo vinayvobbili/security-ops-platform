@@ -66,12 +66,12 @@ def _init_db():
 _init_db()
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def memory_save(topic: str, content: str) -> str:
     """Save a fact or piece of information to the team's shared memory.
 
     Creates or updates the memory for the given topic. Both platforms
-    (the security assistant bot and the alert triage service) share the same memory store.
+    (Pokedex and Barnacles) share the same memory store.
 
     Args:
         topic: Short label for the memory (e.g. 'VPN gateway IP', 'helpdesk number')
@@ -104,12 +104,12 @@ def memory_save(topic: str, content: str) -> str:
         return f"Error saving memory: {e}"
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def memory_recall(query: str) -> str:
     """Search the team's saved memories for information matching the query.
 
     Uses full-text search to find relevant memories. Both platforms
-    (the security assistant bot and the alert triage service) share the same memory store.
+    (Pokedex and Barnacles) share the same memory store.
 
     Args:
         query: Search terms to find relevant memories
@@ -153,7 +153,7 @@ def memory_recall(query: str) -> str:
         return f"Error searching memories: {e}"
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def memory_forget(query: str) -> str:
     """Delete a saved memory by topic or search terms.
 

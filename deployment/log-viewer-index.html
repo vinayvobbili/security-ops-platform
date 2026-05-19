@@ -1110,6 +1110,54 @@
                 </div>
             </div>
         </div>
+        <div class="log-card mac-card" id="card-studio2">
+            <div class="card-header">
+                <h3>🖥️ Studio 2</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-studio2"></span>
+                    <span id="status-studio2">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-studio2">
+                <div class="card-overlay-content">
+                    <div class="metric-row">
+                        <span class="metric-label">Chip:</span>
+                        <span class="metric-value" id="studio2-chip">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Cores:</span>
+                        <span class="metric-value" id="studio2-cores">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">macOS:</span>
+                        <span class="metric-value" id="studio2-macos">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Uptime:</span>
+                        <span class="metric-value" id="studio2-uptime">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">CPU:</span>
+                        <span class="metric-value" id="studio2-cpu">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="studio2-cpu-bar" style="width: 0%"></div></div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Mem:</span>
+                        <span class="metric-value" id="studio2-mem">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="studio2-mem-bar" style="width: 0%"></div></div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Load:</span>
+                        <span class="metric-value" id="studio2-load">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Disk:</span>
+                        <span class="metric-value" id="studio2-disk">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="studio2-disk-bar" style="width: 0%"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
         <div style="grid-column: 1 / -1; padding: 12px 4px 0; color: var(--text-muted); font-size: 0.8em; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Bots</div>
         <!-- Bot cards will be populated by JavaScript -->
         <div data-section="services" style="grid-column: 1 / -1; padding: 12px 4px 0; color: var(--text-muted); font-size: 0.8em; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Services</div>
@@ -1277,22 +1325,42 @@
                 </div>
             </div>
         </div>
-        <div class="log-card llm-card" id="card-llm-s1-qwen">
+        <div class="log-card llm-card" id="card-llm-s1-coder">
             <div class="card-header">
-                <h3>🧠 S1 Qwen3-32B</h3>
+                <h3>🧠 S1 Coder</h3>
                 <div class="card-status">
-                    <span class="status-dot stopped" id="dot-llm-s1-qwen"></span>
-                    <span id="status-llm-s1-qwen">Checking...</span>
+                    <span class="status-dot stopped" id="dot-llm-s1-coder"></span>
+                    <span id="status-llm-s1-coder">Checking...</span>
                 </div>
             </div>
-            <div class="card-overlay" id="overlay-llm-s1-qwen">
+            <div class="card-overlay" id="overlay-llm-s1-coder">
                 <div class="card-overlay-content">
-                    <div class="metric-row"><span class="metric-label">Port:</span><span class="metric-value">8023 → 8000</span></div>
-                    <div class="metric-row"><span class="metric-label">Latency:</span><span class="metric-value" id="latency-llm-s1-qwen">--</span></div>
-                    <div class="metric-row"><span class="metric-label">Model:</span><span class="metric-value" id="model-llm-s1-qwen">--</span></div>
-                    <div class="metric-row"><span class="metric-label">Size:</span><span class="metric-value" id="size-llm-s1-qwen">--</span></div>
-                    <div class="metric-row"><span class="metric-label">Uptime:</span><span class="metric-value" id="uptime-llm-s1-qwen">--</span></div>
-                    <div class="metric-row"><span class="metric-label">SSH:</span><span class="metric-value" id="tunnel-llm-s1-qwen">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Port:</span><span class="metric-value">Studio1:8003 (direct)</span></div>
+                    <div class="metric-row"><span class="metric-label">Latency:</span><span class="metric-value" id="latency-llm-s1-coder">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Model:</span><span class="metric-value" id="model-llm-s1-coder">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Size:</span><span class="metric-value" id="size-llm-s1-coder">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Uptime:</span><span class="metric-value" id="uptime-llm-s1-coder">--</span></div>
+                    <div class="metric-row"><span class="metric-label">SSH:</span><span class="metric-value" id="tunnel-llm-s1-coder">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">Claude Code (ccr)</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="log-card llm-card" id="card-llm-s2-gemma">
+            <div class="card-header">
+                <h3>🧠 S2 Gemma 4</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-llm-s2-gemma"></span>
+                    <span id="status-llm-s2-gemma">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-llm-s2-gemma">
+                <div class="card-overlay-content">
+                    <div class="metric-row"><span class="metric-label">Port:</span><span class="metric-value">Studio2:8000 (direct)</span></div>
+                    <div class="metric-row"><span class="metric-label">Latency:</span><span class="metric-value" id="latency-llm-s2-gemma">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Model:</span><span class="metric-value" id="model-llm-s2-gemma">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Size:</span><span class="metric-value" id="size-llm-s2-gemma">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Uptime:</span><span class="metric-value" id="uptime-llm-s2-gemma">--</span></div>
+                    <div class="metric-row"><span class="metric-label">SSH:</span><span class="metric-value" id="tunnel-llm-s2-gemma">--</span></div>
                     <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">(none yet)</span></div>
                 </div>
             </div>
@@ -1407,6 +1475,7 @@
         { key: 'ai',        name: 'AI Scheduler',    emoji: '🧠', port: 8045, group: 'services' },
         { key: 'de',        name: 'DE Scheduler',    emoji: '🔍', port: 8046, group: 'services' },
         { key: 'webserver', name: 'Web App',         emoji: '🌐', port: 8039, group: 'services' },
+        { key: 'mcp-public', name: 'MCP Public',      emoji: '🔌', port: 8047, group: 'services' },
     ];
 
     // Initialize

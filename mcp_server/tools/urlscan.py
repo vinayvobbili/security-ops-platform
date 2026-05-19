@@ -17,7 +17,7 @@ def _get_client():
     return _client
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def urlscan_search(domain: str, size: int = 10) -> dict:
     """Search URLScan.io for historical scans of a domain.
 
@@ -32,7 +32,7 @@ def urlscan_search(domain: str, size: int = 10) -> dict:
     return client.search_domain(domain, size=size)
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def urlscan_submit(url: str, visibility: str = "public") -> dict:
     """Submit a URL to URLScan.io for live scanning.
 

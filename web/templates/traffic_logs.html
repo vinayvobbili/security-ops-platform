@@ -8,22 +8,8 @@
 {% endblock %}
 
 {% block content %}
-<!-- Auth overlay -->
-<div class="tl-auth-overlay" id="tlAuthOverlay">
-    <div class="tl-auth-box">
-        <h2>Traffic Logs</h2>
-        <p>Enter admin credentials to view logs</p>
-        <input type="text" id="tlUsername" placeholder="Username" autofocus
-               onkeydown="if(event.key==='Enter')document.getElementById('tlPassword').focus()" style="margin-bottom:10px;">
-        <input type="password" id="tlPassword" placeholder="Password" autocomplete="current-password"
-               onkeydown="if(event.key==='Enter')tlAuth()">
-        <div class="tl-auth-err" id="tlAuthErr"></div>
-        <button onclick="tlAuth()">Unlock</button>
-    </div>
-</div>
-
-<!-- Main content (hidden until auth) -->
-<div class="tl-container" id="tlMain" style="display:none;">
+<!-- Route is gated by @admin_required — reaching this page means you're an admin. -->
+<div class="tl-container" id="tlMain">
 
     <!-- Stats -->
     <div class="tl-stats" id="tlStats">
@@ -45,6 +31,8 @@
         <button class="tl-tab active" data-tab="web" onclick="switchTab('web')">Web Traffic</button>
         <button class="tl-tab" data-tab="bot" onclick="switchTab('bot')">Bot Activity</button>
         <button class="tl-tab" data-tab="conv" onclick="switchTab('conv')">Conversations</button>
+        <button class="tl-tab" data-tab="ccr" onclick="switchTab('ccr')">CCR Prompts</button>
+        <button class="tl-tab" data-tab="pats" onclick="switchTab('pats')">PATs</button>
     </div>
 
     <!-- Web traffic tab -->
@@ -79,36 +67,61 @@
         <div class="tl-pagination" id="convPagination"></div>
     </div>
 
+    <!-- CCR Prompts tab -->
+    <div class="tl-tab-content" id="tab-ccr" style="display:none;">
+        <div class="tl-toolbar">
+            <input type="text" id="ccrUserFilter" placeholder="Filter by user email" onkeydown="if(event.key==='Enter')loadCCRCaptures(0)" style="max-width:220px;">
+            <input type="text" id="ccrIpFilter" placeholder="Filter by client IP" onkeydown="if(event.key==='Enter')loadCCRCaptures(0)" style="max-width:200px;">
+            <input type="text" id="ccrAliasFilter" placeholder="Filter by model alias" onkeydown="if(event.key==='Enter')loadCCRCaptures(0)" style="max-width:220px;">
+            <button onclick="loadCCRCaptures(0)">Search</button>
+            <button class="tl-btn-outline" onclick="document.getElementById('ccrUserFilter').value='';document.getElementById('ccrIpFilter').value='';document.getElementById('ccrAliasFilter').value='';loadCCRCaptures(0)">Clear</button>
+        </div>
+        <div class="tl-table-wrap"><table class="tl-table" id="ccrTable">
+            <thead><tr><th>Time</th><th>User</th><th>Client IP</th><th>Model</th><th>Msgs</th><th>Tools</th><th>Last User Prompt</th><th>Size</th><th></th></tr></thead>
+            <tbody id="ccrBody"><tr><td colspan="9" class="tl-loading">Loading...</td></tr></tbody>
+        </table></div>
+        <div class="tl-pagination" id="ccrPagination"></div>
+    </div>
+
+    <!-- PATs tab -->
+    <div class="tl-tab-content" id="tab-pats" style="display:none;">
+        <div style="margin-bottom:12px; font-size:13px; opacity:0.85;">
+            One row per CCR PAT. <b>Shared</b> = same PAT observed from more than one client IP. Click a row to expand the per-IP fingerprint.
+        </div>
+        <div class="tl-table-wrap"><table class="tl-table" id="patsTable">
+            <thead><tr><th>User</th><th>PAT name</th><th>Status</th><th>Distinct IPs</th><th>Last used</th><th>Created</th><th>Expires</th></tr></thead>
+            <tbody id="patsBody"><tr><td colspan="7" class="tl-loading">Loading...</td></tr></tbody>
+        </table></div>
+    </div>
+
+    <!-- CCR detail modal -->
+    <div id="ccrDetailOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:flex-start; justify-content:center; padding-top:90px; padding-bottom:20px; overflow-y:auto;" onclick="if(event.target===this)closeCCRDetail()">
+        <div style="background:var(--bg-secondary, #1e1e1e); color:var(--text-primary, #eee); border:1px solid var(--border, #444); border-radius:8px; padding:18px; max-width:90vw; max-height:calc(100vh - 110px); overflow:auto; min-width:600px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <h3 id="ccrDetailTitle" style="margin:0;">Capture detail</h3>
+                <button onclick="closeCCRDetail()" style="background:none; border:1px solid var(--border, #555); color:inherit; padding:4px 10px; border-radius:4px; cursor:pointer;">Close</button>
+            </div>
+            <pre id="ccrDetailBody" style="white-space:pre-wrap; word-break:break-word; font-size:12px; max-height:75vh; overflow:auto; background:rgba(0,0,0,0.25); padding:10px; border-radius:4px;"></pre>
+        </div>
+    </div>
+
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 (function() {
-    let _user = '', _pw = '';
     const PER_PAGE = 200;
-    let _offsets = { web: 0, bot: 0, conv: 0 };
+    let _offsets = { web: 0, bot: 0, conv: 0, ccr: 0 };
+    const _patExpanded = new Set();
     let _activeTab = 'web';
 
     function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
-    window.tlAuth = function() {
-        _user = document.getElementById('tlUsername').value;
-        _pw = document.getElementById('tlPassword').value;
-        fetch('/api/traffic-logs/auth', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: _user, password: _pw })
-        }).then(r => {
-            if (!r.ok) { document.getElementById('tlAuthErr').textContent = 'Invalid credentials'; return; }
-            document.getElementById('tlAuthOverlay').style.display = 'none';
-            document.getElementById('tlMain').style.display = 'block';
-            loadStats();
-            loadWebActivity(0);
-        }).catch(() => { document.getElementById('tlAuthErr').textContent = 'Connection error'; });
-    };
-
-    function authParam() { return 'username=' + encodeURIComponent(_user) + '&password=' + encodeURIComponent(_pw); }
+    // Admin gating now happens server-side via the session cookie — no
+    // legacy username/password is sent. authParam() is kept as a no-op so
+    // the existing `?${authParam()}&limit=...` URL templates compile.
+    function authParam() { return ''; }
 
     function loadStats() {
         fetch('/api/traffic-logs/stats?' + authParam())
@@ -196,13 +209,112 @@
 
     function renderPagination(elId, tab, rowCount) {
         const offset = _offsets[tab];
-        const loadFn = tab === 'web' ? 'loadWebActivity' : tab === 'bot' ? 'loadBotActivity' : 'loadConversations';
+        const loadFn = tab === 'web' ? 'loadWebActivity'
+            : tab === 'bot' ? 'loadBotActivity'
+            : tab === 'conv' ? 'loadConversations'
+            : 'loadCCRCaptures';
         let html = '';
         if (offset > 0) html += `<button onclick="${loadFn}(${Math.max(0, offset - PER_PAGE)})">Previous</button>`;
         html += `<span>Showing ${offset + 1} - ${offset + rowCount}</span>`;
         if (rowCount === PER_PAGE) html += `<button onclick="${loadFn}(${offset + PER_PAGE})">Next</button>`;
         document.getElementById(elId).innerHTML = html;
     }
+
+    window.loadCCRCaptures = function(offset) {
+        _offsets.ccr = offset;
+        const userFilter = document.getElementById('ccrUserFilter').value.trim();
+        const ipFilter = document.getElementById('ccrIpFilter').value.trim();
+        const aliasFilter = document.getElementById('ccrAliasFilter').value.trim();
+        let url = `/api/traffic-logs/ccr-captures?${authParam()}&limit=${PER_PAGE}&offset=${offset}`;
+        if (userFilter) url += '&user=' + encodeURIComponent(userFilter);
+        if (ipFilter) url += '&ip=' + encodeURIComponent(ipFilter);
+        if (aliasFilter) url += '&alias=' + encodeURIComponent(aliasFilter);
+        fetch(url).then(r => r.json()).then(d => {
+            if (!d.success) return;
+            const tbody = document.getElementById('ccrBody');
+            if (!d.rows.length) { tbody.innerHTML = '<tr><td colspan="9" class="tl-loading">No captures yet</td></tr>'; return; }
+            tbody.innerHTML = d.rows.map(r => `<tr>
+                <td>${esc(r.timestamp_eastern)}</td>
+                <td>${esc(r.client_user || '—')}</td>
+                <td>${esc(r.client_ip)}</td>
+                <td>${esc(r.alias)}</td>
+                <td>${r.num_messages}</td>
+                <td>${r.num_tools}</td>
+                <td title="${esc(r.prompt_preview)}">${esc((r.prompt_preview||'').substring(0,140))}</td>
+                <td>${(r.size_bytes / 1024).toFixed(1)} KB</td>
+                <td><button class="tl-btn-outline" onclick="openCCRDetail('${esc(r.id)}')">View</button></td>
+            </tr>`).join('');
+            renderPagination('ccrPagination', 'ccr', d.rows.length);
+        });
+    };
+
+    window.loadPATUsage = function() {
+        fetch(`/api/traffic-logs/pat-usage?${authParam()}`)
+            .then(r => r.json()).then(d => {
+                if (!d.success) return;
+                const tbody = document.getElementById('patsBody');
+                if (!d.rows.length) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="tl-loading">No PATs issued yet</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = d.rows.map(r => renderPATRows(r)).join('');
+            });
+    };
+
+    function renderPATRows(r) {
+        const shared = r.distinct_ip_count > 1;
+        const sharedBadge = shared
+            ? '<span style="background:#ef4444; color:#fff; padding:2px 8px; border-radius:10px; font-size:11px; margin-left:6px;">SHARED</span>'
+            : '';
+        const status = r.revoked
+            ? '<span style="color:#ef4444;">revoked</span>'
+            : (r.expires_at && r.expires_at * 1000 < Date.now()
+                ? '<span style="color:#94a3b8;">expired</span>'
+                : '<span style="color:#10b981;">active</span>');
+        const ipCount = r.distinct_ip_count
+            ? `<a href="javascript:void(0)" onclick="togglePATRow(${r.pat_id})" style="color:${shared ? '#ef4444' : 'inherit'}; text-decoration:underline; cursor:pointer;">${r.distinct_ip_count}</a>`
+            : '0';
+        const main = `<tr data-pat-id="${r.pat_id}">
+            <td>${esc(r.email)}</td>
+            <td>${esc(r.name)}${sharedBadge}</td>
+            <td>${status}</td>
+            <td>${ipCount}</td>
+            <td>${esc(r.last_used_at_eastern || '—')}</td>
+            <td>${esc(r.created_at_eastern)}</td>
+            <td>${esc(r.expires_at_eastern)}</td>
+        </tr>`;
+        if (!_patExpanded.has(r.pat_id) || !r.ips.length) return main;
+        const ipRows = r.ips.map(ip => `<tr><td colspan="7" style="padding-left:32px; font-size:12px; opacity:0.85;">
+            <code>${esc(ip.ip)}</code> · ${ip.request_count.toLocaleString()} request${ip.request_count === 1 ? '' : 's'} · first ${esc(ip.first_seen_at_eastern)} · last ${esc(ip.last_seen_at_eastern)}
+        </td></tr>`).join('');
+        return main + ipRows;
+    }
+
+    window.togglePATRow = function(patId) {
+        if (_patExpanded.has(patId)) _patExpanded.delete(patId);
+        else _patExpanded.add(patId);
+        loadPATUsage();
+    };
+
+    window.openCCRDetail = function(id) {
+        document.getElementById('ccrDetailTitle').textContent = id;
+        document.getElementById('ccrDetailBody').textContent = 'Loading...';
+        document.getElementById('ccrDetailOverlay').style.display = 'flex';
+        fetch(`/api/traffic-logs/ccr-capture/${encodeURIComponent(id)}?${authParam()}`)
+            .then(r => r.json()).then(d => {
+                if (!d.success) {
+                    document.getElementById('ccrDetailBody').textContent = 'Error: ' + (d.error || 'unknown');
+                    return;
+                }
+                document.getElementById('ccrDetailBody').textContent = JSON.stringify(d.capture, null, 2);
+            }).catch(e => {
+                document.getElementById('ccrDetailBody').textContent = 'Fetch error: ' + e;
+            });
+    };
+
+    window.closeCCRDetail = function() {
+        document.getElementById('ccrDetailOverlay').style.display = 'none';
+    };
 
     window.switchTab = function(tab) {
         _activeTab = tab;
@@ -213,6 +325,8 @@
         // Load data on first visit
         if (tab === 'bot' && document.getElementById('botBody').querySelector('.tl-loading')) loadBotActivity(0);
         if (tab === 'conv' && document.getElementById('convBody').querySelector('.tl-loading')) loadConversations(0);
+        if (tab === 'ccr' && document.getElementById('ccrBody').querySelector('.tl-loading')) loadCCRCaptures(0);
+        if (tab === 'pats' && document.getElementById('patsBody').querySelector('.tl-loading')) loadPATUsage();
     };
 
     function updateExcludeBtn() {
@@ -238,8 +352,7 @@
         } else {
             fetch('/api/traffic-logs/exclude-me', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: _user, password: _pw })
+                headers: { 'Content-Type': 'application/json' }
             }).then(r => r.json()).then(d => {
                 if (d.success) updateExcludeBtn();
             });
@@ -249,7 +362,8 @@
     document.addEventListener('DOMContentLoaded', function() {
         if (typeof initTheme === 'function') initTheme();
         updateExcludeBtn();
-        document.getElementById('tlUsername').focus();
+        loadStats();
+        loadWebActivity(0);
     });
 })();
 </script>

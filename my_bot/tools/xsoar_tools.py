@@ -7,6 +7,7 @@ Tools for generating executive summaries and reports from XSOAR tickets.
 import logging
 from typing import Dict, Any, Union
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 # Import tool logging decorator
 from src.utils.tool_decorator import log_tool_call
@@ -42,7 +43,7 @@ def _flatten(value: Any) -> str:
     return str(value)
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_xsoar_ticket(ticket_id: Union[str, int], environment: str = "prod") -> str:
     """Get details from an XSOAR ticket including verdicts, incident description, and recent analyst notes.
@@ -459,7 +460,7 @@ def generate_executive_summary_with_metrics(ticket_id: str, environment: str = "
         return default_metrics
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def generate_executive_summary(ticket_id: Union[str, int], environment: str = "prod") -> str:
     """
@@ -509,7 +510,7 @@ def generate_executive_summary(ticket_id: Union[str, int], environment: str = "p
     return FINAL_RESPONSE_PREFIX + result['content']
 
 
-@tool
+@mutating_tool
 @log_tool_call
 def add_note_to_xsoar_ticket(ticket_id: Union[str, int], note_text: str, environment: str = "prod") -> str:
     """
@@ -583,7 +584,7 @@ def add_note_to_xsoar_ticket(ticket_id: Union[str, int], note_text: str, environ
         return f"Error adding note to ticket: {str(e)}"
 
 
-@tool
+@mutating_tool
 @log_tool_call
 def attach_file_to_xsoar_ticket(ticket_id: Union[str, int], file_path: str, comment: str = "", environment: str = "prod") -> str:
     """
@@ -640,7 +641,7 @@ def attach_file_to_xsoar_ticket(ticket_id: Union[str, int], file_path: str, comm
         result = ticket_handler.upload_file_to_attachment(
             incident_id=ticket_id,
             file_path=file_path,
-            comment=comment or f"File attached via the security assistant bot: {os.path.basename(file_path)}"
+            comment=comment or f"File attached via Pokedex: {os.path.basename(file_path)}"
         )
 
         file_name = os.path.basename(file_path)
@@ -658,7 +659,7 @@ def attach_file_to_xsoar_ticket(ticket_id: Union[str, int], file_path: str, comm
         return f"Error attaching file to ticket: {str(e)}"
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def triage_xsoar_ticket(ticket_id: Union[str, int]) -> str:
     """Run Sentinel Triage on an XSOAR ticket: enrich from source platform, AI verdict, similar tickets.
@@ -727,7 +728,7 @@ def triage_xsoar_ticket(ticket_id: Union[str, int]) -> str:
         return FINAL_RESPONSE_PREFIX + f"Error triaging ticket {ticket_id}: {str(e)}"
 
 
-@tool
+@mutating_tool
 @log_tool_call
 def qa_review_xsoar_ticket(ticket_id: Union[str, int]) -> str:
     """QA review an XSOAR ticket: evaluate investigation quality, impact classification,
@@ -789,3 +790,238 @@ def qa_review_xsoar_ticket(ticket_id: Union[str, int]) -> str:
     except Exception as e:
         logger.error(f"QA review failed for ticket {ticket_id}: {e}", exc_info=True)
         return FINAL_RESPONSE_PREFIX + f"Error reviewing ticket {ticket_id}: {str(e)}"
+
+
+@readonly_tool
+@log_tool_call
+def search_xsoar_tickets_by_hostname(hostname: str, limit: int = 30) -> str:
+    """Search XSOAR for tickets/incidents that reference a host by name.
+
+    USE THIS TOOL when the user asks about a specific host/machine/endpoint and wants to
+    know about historical or open XSOAR tickets, e.g. "any incidents for host RTL032",
+    "did we approve testing on host X", "tell me about this host". Searches across name,
+    details, labels, and custom fields — works for hostnames, asset tags, etc.
+
+    Args:
+        hostname: Hostname to search for (e.g., 'RTL032'). Free-text query also accepted.
+        limit: Max tickets to return (default 30, max 100).
+
+    Returns:
+        Summary listing ticket IDs, names, types, severity/status, owner, created/closed
+        timestamps, close reason, and a snippet of close notes (which often contains
+        approved-testing / red-team-testing context).
+    """
+    from services.xsoar._client import get_prod_client, get_config as _get_xsoar_config
+    from services.xsoar._search import get_tickets
+
+    try:
+        hostname = (hostname or "").strip()
+        if not hostname:
+            return FINAL_RESPONSE_PREFIX + "Error: hostname is required."
+        limit = max(1, min(int(limit), 100))
+
+        cfg = _get_xsoar_config()
+        app = get_config()
+        client = get_prod_client()
+        team = app.team_name or "METCIRT"
+
+        rows = get_tickets(
+            client, cfg.xsoar_prod_api_base_url, hostname, team,
+            paginate=False, size=max(limit * 5, 200), test_connection=False,
+        )
+
+        if not rows:
+            return f"No XSOAR tickets found for `{hostname}`."
+
+        rows.sort(key=lambda r: str(r.get("created") or ""), reverse=True)
+        open_rows = [r for r in rows if r.get("status") != 2]
+        closed_rows = [r for r in rows if r.get("status") == 2]
+
+        from collections import Counter
+        type_hist = Counter((r.get("type") or "?") for r in rows)
+        reason_hist = Counter((r.get("close_reason") or "(none)") for r in closed_rows)
+
+        ui_base = app.xsoar_prod_ui_base_url
+
+        def _fmt(r):
+            tid = r.get("id")
+            name = (r.get("name") or "").strip().replace("\n", " ")[:60]
+            sev = _XSOAR_SEVERITY.get(r.get("severity"), r.get("severity"))
+            status = _XSOAR_STATUS.get(r.get("status"), r.get("status"))
+            ttype = r.get("type") or ""
+            owner = r.get("owner") or "(unassigned)"
+            created = str(r.get("created") or "")[:19]
+            closed = str(r.get("closed") or "")[:19]
+            cr = r.get("close_reason") or ""
+            cn = (r.get("close_notes") or "").strip().replace("\n", " ")
+            line = (
+                f"- [X#{tid}]({ui_base}/Custom/caseinfoid/{tid}) — {name}\n"
+                f"    {ttype} · sev={sev} · status={status} · owner={owner}\n"
+                f"    created={created} · closed={closed if status == 'Closed' else '-'}"
+            )
+            if status == "Closed":
+                line += f" · close_reason={cr}"
+                if cn:
+                    line += f"\n    notes: {cn[:240]}"
+            return line
+
+        parts = [
+            f"**XSOAR tickets matching `{hostname}`** — {len(rows)} total "
+            f"({len(open_rows)} open, {len(closed_rows)} closed)",
+            "",
+            "**By type:** " + ", ".join(f"{t}={n}" for t, n in type_hist.most_common()),
+            "**Close reasons:** " + ", ".join(f"{k}={v}" for k, v in reason_hist.most_common(5)),
+        ]
+        if open_rows:
+            parts += ["", f"**Open ({len(open_rows)}):**"] + [_fmt(r) for r in open_rows[:limit]]
+        if closed_rows:
+            shown = closed_rows[: max(0, limit - len(open_rows))]
+            if shown:
+                parts += ["", f"**Recently closed (showing {len(shown)} of {len(closed_rows)}):**"] + [_fmt(r) for r in shown]
+
+        return "\n".join(parts)
+
+    except Exception as e:
+        logger.error(f"search_xsoar_tickets_by_hostname failed for '{hostname}': {e}", exc_info=True)
+        return FINAL_RESPONSE_PREFIX + f"Error searching XSOAR for `{hostname}`: {str(e)}"
+
+
+@readonly_tool
+@log_tool_call
+def check_approved_testing_entries(identifier: str) -> str:
+    """Check whether a host, user, or IP is documented in the team's Approved Security
+    Testing entries — i.e. part of sanctioned activity (Red Team, pentest, training
+    exercise, lab, etc.) — based on the close notes of historical XSOAR tickets.
+
+    Approved Security Testing entries typically reference an asset by hostname,
+    username, OR IP address, so this tool accepts any of those.
+
+    USE THIS TOOL when the user asks any of:
+    - "is host X / user Y / IP 1.2.3.4 approved for testing"
+    - "is RTL032 a red team box / lab host / pentest host"
+    - "did we approve testing on host X / user Y / IP Z"
+    - "tell me about host X / user Y" combined with anything about incidents/testing
+
+    The tool returns a verdict (APPROVED_TESTING / NOT_DOCUMENTED / UNCERTAIN) with
+    direct quotes from analyst close notes as evidence, plus the ticket IDs that
+    support the verdict.
+
+    Args:
+        identifier: Hostname, username, or IP address to check (e.g., 'RTL032',
+                    'gabriel.lucero', '<internal-host>').
+
+    Returns:
+        A verdict block with supporting quotes and ticket citations. The bot should
+        relay the verdict + 1-2 quotes verbatim — do NOT paraphrase the analyst quotes.
+    """
+    import re
+    from my_bot.core.state_manager import FINAL_RESPONSE_PREFIX
+    from services.xsoar._client import get_prod_client, get_config as _get_xsoar_config
+    from services.xsoar._search import get_tickets
+
+    try:
+        identifier = (identifier or "").strip()
+        if not identifier:
+            return FINAL_RESPONSE_PREFIX + "Error: identifier (hostname, username, or IP) is required."
+
+        cfg = _get_xsoar_config()
+        app = get_config()
+        client = get_prod_client()
+        team = app.team_name or "METCIRT"
+
+        rows = get_tickets(
+            client, cfg.xsoar_prod_api_base_url, identifier, team,
+            paginate=False, size=500, test_connection=False,
+        )
+
+        if not rows:
+            return FINAL_RESPONSE_PREFIX + (
+                f"**`{identifier}` — NOT_DOCUMENTED**\n\n"
+                f"No XSOAR tickets reference this identifier, so there is no historical "
+                f"record of approved testing. Treat any current alert as a normal incident."
+            )
+
+        # Strong = analyst affirmatively states it's a sanctioned/test host.
+        # Weak = generic "if not sanctioned" boilerplate that XSOAR templates emit.
+        STRONG_PATTERNS = [
+            (r"\bred[\s-]?team(ing)?\b", "Red Team"),
+            (r"\bpen[\s-]?test(ing|er)?\b", "Pentest"),
+            (r"\bapproved\s+(for\s+)?(test|red|exercis)", "Approved testing"),
+            (r"\bsanction(ed|ing)?\b(?!\s+(activity|process))", "Sanctioned"),
+            (r"\bauthoriz(ed|ation)\s+(test|red|pen|exercis|simulat)", "Authorized exercise"),
+            (r"\b(part of|used for|dedicated to)\s+(red\s*team|test|lab|training|exercise)", "Designated test host"),
+            (r"\b(lab|test)\s+(host|machine|box|server|environment)\b", "Lab/test host"),
+            (r"\b(simulation|exercise|tabletop|breach\s+and\s+attack)\b", "Simulation"),
+        ]
+        WEAK_BOILERPLATE = re.compile(
+            r"if\s+(the\s+activity\s+)?(is\s+)?not\s+sanctioned", re.I
+        )
+
+        evidence = []  # (ticket_id, label, quote)
+        for r in rows:
+            cn = (r.get("close_notes") or "").strip()
+            if not cn:
+                continue
+            # Strip XSOAR template boilerplate so it doesn't overpower analyst commentary
+            scan = WEAK_BOILERPLATE.sub("", cn)
+            for pat, label in STRONG_PATTERNS:
+                m = re.search(pat, scan, re.I)
+                if m:
+                    i = m.start()
+                    quote = scan[max(0, i - 80):i + 160].strip()
+                    quote = re.sub(r"\s+", " ", quote)
+                    evidence.append((r.get("id"), label, quote))
+                    break
+
+        ui = app.xsoar_prod_ui_base_url
+        total = len(rows)
+        ev_count = len(evidence)
+        # Dedup quotes by (label, first 60 chars) to avoid repetition from duplicate close notes
+        seen = set()
+        unique_ev = []
+        for tid, label, quote in evidence:
+            key = (label, quote[:60].lower())
+            if key in seen:
+                continue
+            seen.add(key)
+            unique_ev.append((tid, label, quote))
+
+        if unique_ev:
+            verdict = "APPROVED_TESTING"
+            header = (
+                f"**`{identifier}` — VERDICT: APPROVED_TESTING ✅**\n\n"
+                f"This identifier is documented in Approved Security Testing entries. "
+                f"{ev_count} of {total} tickets contain analyst close-notes confirming this. "
+                f"Treat recurring detections involving it as expected unless the activity "
+                f"materially differs from prior approved scope.\n\n"
+                f"**Evidence:**"
+            )
+            lines = [header]
+            for tid, label, quote in unique_ev[:5]:
+                lines.append(
+                    f"- [X#{tid}]({ui}/Custom/caseinfoid/{tid}) — *{label}*: \"...{quote}...\""
+                )
+            return FINAL_RESPONSE_PREFIX + "\n".join(lines)
+
+        # No strong evidence found — distinguish "many tickets, no testing context"
+        # from "couldn't tell either way"
+        if total >= 5:
+            verdict_msg = (
+                f"**`{identifier}` — VERDICT: NOT_DOCUMENTED**\n\n"
+                f"Found {total} XSOAR tickets referencing this identifier, but none of the "
+                f"close notes affirmatively document it as a Red Team / pentest / lab / "
+                f"approved-testing entry. Treat any current alert as a normal incident "
+                f"and confirm with the asset/user owner before assuming sanctioned activity."
+            )
+        else:
+            verdict_msg = (
+                f"**`{identifier}` — VERDICT: UNCERTAIN**\n\n"
+                f"Only {total} ticket(s) reference this identifier and none contain explicit "
+                f"approved-testing language. Insufficient evidence to call it sanctioned — "
+                f"verify with the asset/user owner / CMDB before classifying."
+            )
+        return FINAL_RESPONSE_PREFIX + verdict_msg
+
+    except Exception as e:
+        logger.error(f"check_approved_testing_entries failed for '{identifier}': {e}", exc_info=True)
+        return FINAL_RESPONSE_PREFIX + f"Error checking `{identifier}`: {str(e)}"

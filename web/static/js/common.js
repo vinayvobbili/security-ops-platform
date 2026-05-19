@@ -41,9 +41,25 @@ async function setRandomAudio() {
     music.pause();
     icon.src = '/static/icons/volume-xmark-solid.svg';
 
-    // Add error event listener to debug loading issues
+    // If the saved src points at a track that no longer exists, refetch once.
+    let audioRetried = false;
     music.addEventListener('error', (e) => {
         console.error('Audio loading error:', e, 'Source:', music.src);
+        if (audioRetried) return;
+        audioRetried = true;
+        localStorage.removeItem('music-src');
+        sessionStorage.removeItem('music-session-id');
+        fetch('/api/random-audio')
+            .then(r => r.json())
+            .then(data => {
+                if (!data.filename) return;
+                const newSrc = '/static/audio/' + data.filename;
+                music.src = newSrc;
+                localStorage.setItem('music-src', newSrc);
+                sessionStorage.setItem('music-session-id', Date.now().toString());
+                console.log('Recovered from stale audio src, new:', newSrc);
+            })
+            .catch(err => console.error('Audio retry failed:', err));
     });
 
     music.addEventListener('loadeddata', () => {
@@ -223,47 +239,118 @@ function initBurgerMenu() {
     });
 }
 
-// THEME TOGGLING (Dark / Light Mode)
-function applyTheme(mode) {
-    const body = document.body;
-    const isDark = mode === 'dark';
-    body.classList.toggle('dark-mode', isDark);
-    // Sync slider radio buttons
-    const lightRadio = document.getElementById('themeModeLight');
-    const darkRadio = document.getElementById('themeModeDark');
-    if (lightRadio) lightRadio.checked = !isDark;
-    if (darkRadio) darkRadio.checked = isDark;
-    // Notify any page-specific scripts (e.g., charts) of theme change
-    window.dispatchEvent(new CustomEvent('themechange', {detail: {mode}}));
-}
+// THEME TOGGLING — three modes: 'light' | 'dark' | 'system'
+// 'system' tracks OS preference live via matchMedia.
+const THEME_ICONS = { light: '☀️', dark: '🌙', system: '🖥️' };
 
 function detectOSTheme() {
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
+function applyTheme(mode) {
+    if (mode !== 'light' && mode !== 'dark' && mode !== 'system') mode = 'system';
+    const effective = mode === 'system' ? detectOSTheme() : mode;
+    document.body.classList.toggle('dark-mode', effective === 'dark');
+
+    // Reflect saved choice in the trigger icon and the menu's selected state
+    const triggerIcon = document.getElementById('themeDdIcon');
+    if (triggerIcon) triggerIcon.textContent = THEME_ICONS[mode];
+    document.querySelectorAll('.theme-dd-opt').forEach(opt => {
+        opt.classList.toggle('selected', opt.dataset.theme === mode);
+        opt.setAttribute('aria-selected', opt.dataset.theme === mode ? 'true' : 'false');
+    });
+
+    // Notify page-specific scripts (e.g., charts) of the *effective* theme
+    window.dispatchEvent(new CustomEvent('themechange', {detail: {mode, effective}}));
+}
+
 function initTheme() {
-    const slider = document.getElementById('themeSlider');
-    if (slider && !slider.dataset.themeInitialized) {
-        slider.addEventListener('change', (e) => {
-            if (e.target.name === 'themeMode') {
-                localStorage.setItem('theme', e.target.value);
-                applyTheme(e.target.value);
+    const trigger = document.getElementById('themeDdTrigger');
+    const menu    = document.getElementById('themeDdMenu');
+
+    if (trigger && menu && !trigger.dataset.themeInitialized) {
+        const closeMenu = () => {
+            menu.hidden = true;
+            trigger.setAttribute('aria-expanded', 'false');
+        };
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const willOpen = menu.hidden;
+            menu.hidden = !willOpen;
+            trigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+        });
+        document.addEventListener('click', (e) => {
+            if (menu.hidden) return;
+            if (!menu.contains(e.target) && e.target !== trigger && !trigger.contains(e.target)) {
+                closeMenu();
             }
         });
-        slider.dataset.themeInitialized = 'true';
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !menu.hidden) closeMenu();
+        });
+        menu.querySelectorAll('.theme-dd-opt').forEach(opt => {
+            opt.addEventListener('click', () => {
+                const mode = opt.dataset.theme;
+                localStorage.setItem('theme', mode);
+                applyTheme(mode);
+                closeMenu();
+            });
+        });
+        trigger.dataset.themeInitialized = 'true';
     }
-    // Use saved preference, fall back to OS preference
-    const saved = localStorage.getItem('theme');
-    applyTheme(saved || detectOSTheme());
+
+    // Saved preference wins; default to 'system' if nothing saved.
+    const saved = localStorage.getItem('theme') || 'system';
+    applyTheme(saved);
+
+    // Track OS theme changes live so 'system' reflects them without a reload.
+    const mql = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+    if (mql && !mql.__irThemeBound) {
+        const handler = () => {
+            const cur = localStorage.getItem('theme') || 'system';
+            if (cur === 'system') applyTheme('system');
+        };
+        if (mql.addEventListener) mql.addEventListener('change', handler);
+        else if (mql.addListener) mql.addListener(handler);
+        mql.__irThemeBound = true;
+    }
+}
+
+function initPersonDropdown() {
+    const trigger = document.getElementById('personDdTrigger');
+    const menu    = document.getElementById('personDdMenu');
+    if (!trigger || !menu || trigger.dataset.personInitialized) return;
+    const closeMenu = () => {
+        menu.hidden = true;
+        trigger.setAttribute('aria-expanded', 'false');
+    };
+    trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const willOpen = menu.hidden;
+        menu.hidden = !willOpen;
+        trigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    });
+    document.addEventListener('click', (e) => {
+        if (menu.hidden) return;
+        if (!menu.contains(e.target) && e.target !== trigger && !trigger.contains(e.target)) {
+            closeMenu();
+        }
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !menu.hidden) closeMenu();
+    });
+    trigger.dataset.personInitialized = 'true';
 }
 
 // Initialize theme after DOM ready if not already invoked explicitly
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         if (typeof initTheme === 'function') initTheme();
+        if (typeof initPersonDropdown === 'function') initPersonDropdown();
     });
 } else {
     if (typeof initTheme === 'function') initTheme();
+    if (typeof initPersonDropdown === 'function') initPersonDropdown();
 }
 
 // Toast notification logic
@@ -288,16 +375,44 @@ function showToast(message, timeout = 3500) {
 //     };
 // }
 
-// Bind audio toggle button (CSP friendly) once DOM is ready
-(function bindAudioToggle() {
+// Pick a new random track. Keeps playing if it was already unmuted.
+async function skipAudio() {
+    const music = document.getElementById('music');
+    if (!music) return;
+    const wasPlaying = !music.muted && !music.paused;
+    try {
+        const response = await fetch('/api/random-audio');
+        const data = await response.json();
+        if (!data.filename) return;
+        const newSrc = '/static/audio/' + data.filename;
+        music.src = newSrc;
+        localStorage.setItem('music-src', newSrc);
+        sessionStorage.setItem('music-session-id', Date.now().toString());
+        localStorage.setItem('music-current-time', '0');
+        if (wasPlaying) {
+            music.play().catch(e => console.error('Skip play failed:', e));
+        }
+        console.log('Skipped to new audio:', newSrc);
+    } catch (e) {
+        console.error('Failed to skip audio:', e);
+    }
+}
+
+// Bind audio toggle + skip buttons (CSP friendly) once DOM is ready
+(function bindAudioButtons() {
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', bindAudioToggle);
+        document.addEventListener('DOMContentLoaded', bindAudioButtons);
         return;
     }
-    const btn = document.getElementById('audioToggleBtn');
-    if (btn && !btn.dataset.bound) {
-        btn.addEventListener('click', toggleAudio);
-        btn.dataset.bound = 'true';
+    const toggleBtn = document.getElementById('audioToggleBtn');
+    if (toggleBtn && !toggleBtn.dataset.bound) {
+        toggleBtn.addEventListener('click', toggleAudio);
+        toggleBtn.dataset.bound = 'true';
+    }
+    const skipBtn = document.getElementById('audioSkipBtn');
+    if (skipBtn && !skipBtn.dataset.bound) {
+        skipBtn.addEventListener('click', skipAudio);
+        skipBtn.dataset.bound = 'true';
     }
 })();
 
@@ -311,83 +426,9 @@ if (typeof initBurgerMenu === 'function') {
 }
 
 // ── Edit Auth ──
-// Matches the ticket cannon silencer pattern:
-// - Masked password modal prompt per action (no session caching)
-// - Password injected into the request body (JSON field or FormData field)
-// - Server returns 403 on failure
-
-/** Show a masked password modal. Returns a Promise<string|null> (null = cancelled). */
-function askEditPassword(title) {
-    return new Promise(resolve => {
-        const existing = document.getElementById('_editPwdOverlay');
-        if (existing) existing.remove();
-
-        const isDark = document.body.classList.contains('dark-mode');
-        const overlay = document.createElement('div');
-        overlay.id = '_editPwdOverlay';
-        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99999;display:flex;align-items:center;justify-content:center;';
-
-        overlay.innerHTML = `
-<div style="background:${isDark ? '#1e293b' : '#fff'};border-radius:14px;width:90%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden;font-family:inherit;">
-  <div style="padding:16px 20px;background:linear-gradient(135deg,#0046AD,#00A651);color:#fff;display:flex;justify-content:space-between;align-items:center;">
-    <span style="font-weight:700;font-size:1rem;">🔒 ${title || 'Enter Password'}</span>
-    <button id="_editPwdX" style="background:none;border:none;color:#fff;font-size:1.3rem;cursor:pointer;opacity:0.8;line-height:1;">&times;</button>
-  </div>
-  <div style="padding:20px 20px 4px;">
-    <input id="_editPwdInput" type="password" autocomplete="current-password"
-      style="width:100%;padding:9px 12px;border:1px solid ${isDark ? '#334155' : '#cbd5e1'};border-radius:8px;font-size:0.9rem;font-family:inherit;background:${isDark ? '#0f172a' : '#fff'};color:${isDark ? '#e2e8f0' : '#1e293b'};box-sizing:border-box;"
-      placeholder="Password">
-  </div>
-  <div style="display:flex;justify-content:flex-end;gap:10px;padding:16px 20px;">
-    <button id="_editPwdCancel" style="padding:8px 18px;border:none;border-radius:8px;background:${isDark ? '#334155' : '#e2e8f0'};color:${isDark ? '#e2e8f0' : '#475569'};font-weight:600;font-size:0.88rem;cursor:pointer;">Cancel</button>
-    <button id="_editPwdOk" style="padding:8px 18px;border:none;border-radius:8px;background:#0046AD;color:#fff;font-weight:600;font-size:0.88rem;cursor:pointer;">OK</button>
-  </div>
-</div>`;
-
-        document.body.appendChild(overlay);
-        setTimeout(() => document.getElementById('_editPwdInput').focus(), 50);
-
-        function confirm() {
-            const val = document.getElementById('_editPwdInput').value;
-            overlay.remove();
-            resolve(val || null);
-        }
-        function dismiss() { overlay.remove(); resolve(null); }
-
-        document.getElementById('_editPwdOk').addEventListener('click', confirm);
-        document.getElementById('_editPwdX').addEventListener('click', dismiss);
-        document.getElementById('_editPwdCancel').addEventListener('click', dismiss);
-        document.getElementById('_editPwdInput').addEventListener('keydown', e => {
-            if (e.key === 'Enter') confirm();
-            if (e.key === 'Escape') dismiss();
-        });
-        overlay.addEventListener('click', e => { if (e.target === overlay) dismiss(); });
-    });
-}
-
-/**
- * Wrapper around fetch() that prompts for a password and injects it into
- * the request body (JSON field or FormData field). Returns null if cancelled.
- */
+// Edit endpoints (contacts, docs, wiki, favorites…) now gate on the
+// session cookie — any signed-in user is allowed. editFetch is a thin
+// wrapper over fetch() kept so per-page JS doesn't have to be rewritten.
 async function editFetch(url, options) {
-    const pwd = await askEditPassword('Enter Password');
-    if (pwd === null) return null;
-
-    options = options || {};
-
-    if (options.body instanceof FormData) {
-        options.body.append('password', pwd);
-    } else if (typeof options.body === 'string') {
-        try {
-            const obj = JSON.parse(options.body);
-            obj.password = pwd;
-            options.body = JSON.stringify(obj);
-        } catch (_) {}
-    } else {
-        // No body yet (e.g. rebuild endpoint) — create one
-        options.body = JSON.stringify({ password: pwd });
-        options.headers = Object.assign({}, options.headers || {}, { 'Content-Type': 'application/json' });
-    }
-
-    return fetch(url, options);
+    return fetch(url, options || {});
 }

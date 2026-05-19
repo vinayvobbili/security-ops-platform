@@ -25,6 +25,7 @@ from .meeting_qa import meeting_qa_bp
 from .powerbi import powerbi_bp
 from .recap import recap_bp
 from .traffic_logs import traffic_logs_bp
+from .auth_routes import auth_bp
 from .pir import pir_bp
 from .qradar import qradar_bp
 from .qradar_chat import qradar_chat_bp
@@ -32,12 +33,19 @@ from .db_security import db_security_bp
 from .wiki import wiki_bp
 from .llm_usage import llm_usage_bp
 from .customer_assurance import customer_assurance_bp
-from .ai_spm import ai_spm_bp
+from .ai_drt import ai_drt_bp
 from .exposed_api_scanner import exposed_api_scanner_bp
 from .cyber_simulator import cyber_simulator_bp
 from .dspm import dspm_bp
 from .db_config import db_config_bp
 from .cyber_tool_inventory import cyber_tool_inventory_bp
+from .claude_code_setup import claude_code_setup_bp
+from .gitlab_onboarding import gitlab_onboarding_bp
+from .vibe_coding import vibe_coding_bp
+from .regulatory_matrix import regulatory_matrix_bp
+from .tipper_automation import tipper_automation_bp
+from .person_of_interest import person_of_interest_bp
+from .bench_local import bench_local_bp
 
 __all__ = [
     'utilities_bp',
@@ -69,12 +77,19 @@ __all__ = [
     'wiki_bp',
     'llm_usage_bp',
     'customer_assurance_bp',
-    'ai_spm_bp',
+    'ai_drt_bp',
     'exposed_api_scanner_bp',
     'cyber_simulator_bp',
     'dspm_bp',
     'db_config_bp',
     'cyber_tool_inventory_bp',
+    'claude_code_setup_bp',
+    'gitlab_onboarding_bp',
+    'vibe_coding_bp',
+    'regulatory_matrix_bp',
+    'tipper_automation_bp',
+    'person_of_interest_bp',
+    'bench_local_bp',
 ]
 
 
@@ -106,6 +121,7 @@ def register_all_blueprints(app):
     app.register_blueprint(powerbi_bp)
     app.register_blueprint(recap_bp)
     app.register_blueprint(traffic_logs_bp)
+    app.register_blueprint(auth_bp)
     app.register_blueprint(pir_bp)
     app.register_blueprint(qradar_bp)
     app.register_blueprint(qradar_chat_bp)
@@ -113,9 +129,16 @@ def register_all_blueprints(app):
     app.register_blueprint(wiki_bp)
     app.register_blueprint(llm_usage_bp)
     app.register_blueprint(customer_assurance_bp)
-    app.register_blueprint(ai_spm_bp)
+    app.register_blueprint(ai_drt_bp)
     app.register_blueprint(exposed_api_scanner_bp)
     app.register_blueprint(cyber_simulator_bp)
     app.register_blueprint(dspm_bp)
     app.register_blueprint(db_config_bp)
     app.register_blueprint(cyber_tool_inventory_bp)
+    app.register_blueprint(claude_code_setup_bp)
+    app.register_blueprint(gitlab_onboarding_bp)
+    app.register_blueprint(vibe_coding_bp)
+    app.register_blueprint(regulatory_matrix_bp)
+    app.register_blueprint(tipper_automation_bp)
+    app.register_blueprint(person_of_interest_bp)
+    app.register_blueprint(bench_local_bp)

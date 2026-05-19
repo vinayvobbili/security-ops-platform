@@ -1,64 +1,58 @@
 #!/usr/bin/env bash
-# Apply local vllm-mlx patches to a vllm-mlx install.
+# Reapply local vllm-mlx patches after a fresh pip install on studio1.
 #
-# Idempotent: skips a patch if its marker is already present.
-# Run on each Mac that hosts a vllm-mlx instance after installing or upgrading
-# the vllm-mlx package. Re-run after every `pip install --upgrade vllm-mlx`.
+# Run from any directory on the Mac that hosts the vllm-mlx venv. Resolves
+# the engine path via the venv's Python so it doesn't bake in a Python
+# minor-version.
+#
+# Patches applied (in order):
+#   1. multi_slot_lru_for_system_kv.patch
+#        Replaces SimpleEngine's single-slot system-KV snapshot with an
+#        OrderedDict LRU keyed by system-prefix hash. Capacity is
+#        ``VLLM_MLX_SYSTEM_KV_SLOTS`` (default 4). Lets the main agent +
+#        sub-agents coexist without thrashing the snapshot when Claude
+#        Code (or any tool-calling client) alternates between system
+#        prompts of different sizes.
 #
 # Usage:
-#   ./apply.sh              # auto-detect site-packages from `python -c ...`
-#   ./apply.sh /path/to/venv # use a specific venv
+#   bash deployment/vllm_mlx_patches/apply.sh /path/to/vllm-venv
 #
-# Each patch lives next to this script as <name>.patch; see README in this
-# directory for what each one does.
+# Reverts the touched file from a `.pre-multi-slot-lru` backup if the patch
+# already applied cleanly once and you want to re-apply.
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV="${1:-${VLLM_MLX_VENV:-$HOME/vllm-venv}}"
+PATCH_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Resolve site-packages of the target vllm-mlx
-if [[ $# -ge 1 ]]; then
-  VENV_PYTHON="$1/bin/python"
-else
-  VENV_PYTHON="${VENV_PYTHON:-$(command -v python3)}"
-fi
-
-VLLM_MLX_DIR="$("$VENV_PYTHON" -c \
-  'import os, vllm_mlx; print(os.path.dirname(vllm_mlx.__file__))')"
-
-if [[ ! -d "$VLLM_MLX_DIR" ]]; then
-  echo "vllm_mlx not found via $VENV_PYTHON" >&2
+if [[ ! -x "$VENV/bin/python" ]]; then
+  echo "ERROR: $VENV/bin/python not found. Pass the venv path as arg 1." >&2
   exit 1
 fi
 
-echo "Patching vllm_mlx at: $VLLM_MLX_DIR"
+ENGINE_DIR=$("$VENV/bin/python" -c "import vllm_mlx.engine, os; print(os.path.dirname(vllm_mlx.engine.__file__))")
+TARGET="$ENGINE_DIR/simple.py"
 
-apply_patch() {
-  local patch_file="$1"
-  local marker="$2"   # any unique substring the patch introduces
-  local target="$3"   # path relative to $VLLM_MLX_DIR
+if [[ ! -f "$TARGET" ]]; then
+  echo "ERROR: $TARGET not found." >&2
+  exit 1
+fi
 
-  local target_full="$VLLM_MLX_DIR/$target"
+BACKUP="$TARGET.pre-multi-slot-lru"
+if [[ ! -f "$BACKUP" ]]; then
+  cp "$TARGET" "$BACKUP"
+  echo "Backed up original to $BACKUP"
+fi
 
-  if grep -q -F "$marker" "$target_full"; then
-    echo "  [skip] $(basename "$patch_file") — marker already present in $target"
-    return
-  fi
+cd "$ENGINE_DIR"
+if patch --dry-run -p1 < "$PATCH_DIR/multi_slot_lru_for_system_kv.patch" >/dev/null 2>&1; then
+  patch -p1 < "$PATCH_DIR/multi_slot_lru_for_system_kv.patch"
+  echo "Applied multi_slot_lru_for_system_kv.patch"
+elif grep -q '_system_kv_cache: "OrderedDict' "$TARGET"; then
+  echo "Patch already applied; skipping."
+else
+  echo "ERROR: patch does not apply cleanly. Inspect manually." >&2
+  exit 2
+fi
 
-  cp "$target_full" "$target_full.pre-$(basename "$patch_file" .patch)"
-  # Patch labels are `vllm_mlx/engine/simple.py`; cwd is the package root,
-  # so -p1 strips the leading `vllm_mlx/` to match `engine/simple.py`.
-  ( cd "$VLLM_MLX_DIR" && patch -p1 < "$patch_file" )
-  # Drop stale bytecode so the new source is loaded
-  find "$VLLM_MLX_DIR" -name "__pycache__" -type d -prune -exec rm -rf {} +
-  echo "  [done] $(basename "$patch_file")"
-}
-
-apply_patch \
-  "$SCRIPT_DIR/system_kv_cache_for_simple_engine.patch" \
-  "System KV cache HIT (pure-LLM)" \
-  "engine/simple.py"
-
-echo "All patches applied. Restart the vllm-mlx launchctl agent to pick them up:"
-echo "  launchctl bootout gui/\$(id -u)/com.ir.vllm-mlx-coder"
-echo "  launchctl bootstrap gui/\$(id -u) ~/Library/LaunchAgents/com.ir.vllm-mlx-coder.plist"
+"$VENV/bin/python" -c "import ast; ast.parse(open('$TARGET').read()); print('post-patch syntax OK')"

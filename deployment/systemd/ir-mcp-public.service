@@ -1,0 +1,20 @@
+[Unit]
+Description=IR MCP Server (public, readonly + bearer auth) — fronts gdnr.the-company.com/mcp
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/vinay/security-ops-platform
+EnvironmentFile=/home/vinay/security-ops-platform/data/transient/.env
+ExecStart=/home/vinay/security-ops-platform/.venv/bin/python -m mcp_server --public
+Restart=on-failure
+KillMode=mixed
+TimeoutStopSec=10
+RestartSec=10
+Environment=PYTHONPATH=/home/vinay/security-ops-platform
+Environment=PYTHONUNBUFFERED=1
+StandardOutput=append:/home/vinay/security-ops-platform/data/transient/logs/mcp_public.log
+StandardError=append:/home/vinay/security-ops-platform/data/transient/logs/mcp_public.log
+
+[Install]
+WantedBy=default.target

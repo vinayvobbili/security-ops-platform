@@ -14,7 +14,7 @@ import os
 import signal
 import sys
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import lru_cache
 
 # Load .env file before any other imports that use environment variables
@@ -28,7 +28,7 @@ if _PROJECT_ROOT not in sys.path:
 load_dotenv(os.path.join(_PROJECT_ROOT, 'data', 'transient', '.env'))
 
 # Third-party imports
-from flask import Flask, abort, jsonify, request
+from flask import Flask, abort, jsonify, request, url_for
 
 # Local imports
 from src.utils.logging_utils import is_scanner_request, setup_logging, get_client_ip
@@ -65,10 +65,23 @@ logger.warning("=" * 100)
 
 # Initialize Flask app
 app = Flask(__name__, static_folder='static', static_url_path='/static', template_folder='templates')
-app.secret_key = CONFIG.flask_secret_key if hasattr(CONFIG, 'flask_secret_key') else 'your-secret-key-change-this'
+_secret = getattr(CONFIG, 'flask_secret_key', None)
+if not _secret:
+    raise RuntimeError("FLASK_SECRET_KEY is not set — sessions (login, verify-email, reset) will crash. Add it to .secrets.age.")
+app.secret_key = _secret
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500 MB max request body (meeting recap uploads — Teams MP4s for ~2hr meetings)
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
+# Keep users logged in for 7 days after their last visit. SESSION_REFRESH_EACH_REQUEST
+# defaults to True, so each request slides the expiry forward — a regularly-active
+# user stays logged in indefinitely; an idle user is signed out after 7 days.
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
+
+# Trust one proxy hop (nginx on 127.0.0.1) so request.remote_addr / scheme / host
+# reflect the real client. Without this, flask-limiter rate-limits all proxied
+# traffic as a single bucket (since remote_addr would be 127.0.0.1).
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 # Bind rate limiter to app
 limiter.init_app(app)
@@ -85,6 +98,34 @@ blocked_ip_ranges = []
 def inject_public_config():
     """Inject public config values into all templates for branding/customization."""
     return {'config': PUBLIC_CONFIG}
+
+
+@app.context_processor
+def inject_current_user():
+    """Expose the logged-in browser user to every template so shared chrome
+    (e.g. the Person pill in burger_menu.html) can render conditionally
+    without each route handler forwarding `user=...` explicitly."""
+    try:
+        from web.auth.helpers import current_user as _current_user
+        return {'current_user': _current_user()}
+    except Exception:
+        return {'current_user': None}
+
+
+def _versioned_url_for(endpoint, **values):
+    # Append ?v=<mtime> to static URLs so browser caches invalidate when files change.
+    if endpoint == 'static' and 'filename' in values:
+        try:
+            file_path = os.path.join(app.root_path, 'static', values['filename'])
+            values['v'] = int(os.path.getmtime(file_path))
+        except OSError:
+            pass
+    return url_for(endpoint, **values)
+
+
+@app.context_processor
+def override_url_for():
+    return {'url_for': _versioned_url_for}
 
 
 # --- Server detection utilities ---
@@ -178,12 +219,13 @@ def set_security_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
     # Pages that embed vendor sidecars in same-origin iframes need SAMEORIGIN
     # instead of DENY.
-    if (request.path == '/ai-spm' or request.path.startswith('/ai-spm-app/')
+    if (request.path == '/ai-drt' or request.path.startswith('/ai-drt-app/')
             or request.path == '/db-security' or request.path.startswith('/db-sec-app/')
             or request.path == '/exposed-api-scanner' or request.path.startswith('/exposed-api-scanner-app/')
             or request.path == '/cyber-simulator' or request.path.startswith('/cyber-simulator-app/')
             or request.path == '/dspm' or request.path.startswith('/dspm-app/')
-            or request.path == '/db-config' or request.path.startswith('/db-config-app/')):
+            or request.path == '/db-config' or request.path.startswith('/db-config-app/')
+            or request.path == '/tipper-automation' or request.path.startswith('/tipper-automation-app/')):
         response.headers['X-Frame-Options'] = 'SAMEORIGIN'
     else:
         response.headers['X-Frame-Options'] = 'DENY'
@@ -222,13 +264,13 @@ def main():
     # Initialize Pokédex bot components
     try:
         if os.environ.get('SKIP_POKEDEX_WARMUP', '').lower() == 'true':
-            print("⏭️ Skipping the security assistant bot initialization (SKIP_POKEDEX_WARMUP=true)")
+            print("⏭️ Skipping Pokedex initialization (SKIP_POKEDEX_WARMUP=true)")
         else:
-            print("🤖 Initializing the security assistant bot chat components...")
+            print("🤖 Initializing Pokedex chat components...")
             from my_bot.core.my_model import initialize_model_and_agent
             from my_bot.core.state_manager import get_state_manager
             if initialize_model_and_agent():
-                print("✅ the security assistant bot chat components initialized!")
+                print("✅ Pokedex chat components initialized!")
 
                 print("🔥 Warming up LLM (this will load the model into memory)...")
                 state_manager = get_state_manager()
@@ -237,9 +279,9 @@ def main():
                 else:
                     print("⚠️ LLM warmup skipped or failed - model will load on first request")
             else:
-                print("⚠️ the security assistant bot chat initialization failed - chat endpoint will return errors")
+                print("⚠️ Pokedex chat initialization failed - chat endpoint will return errors")
     except Exception as exc:
-        print(f"⚠️ Failed to initialize the security assistant bot chat: {exc}")
+        print(f"⚠️ Failed to initialize Pokedex chat: {exc}")
         print("   Chat endpoint will be available but may return errors")
 
     charts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'static/charts'))
@@ -262,8 +304,8 @@ def main():
         print("Using Flask dev server with auto-reload (debug mode)")
         try:
             # exclude external/ so Werkzeug's reloader doesn't restart Flask
-            # mid-request when the AISPM deploy portal extracts/swaps vendor code
-            # under external/aispm{,_staging,_backups}/ (see web/routes/ai_spm.py).
+            # mid-request when the AIDRT deploy portal extracts/swaps vendor code
+            # under external/aidrt{,_staging,_backups}/ (see web/routes/ai_drt.py).
             app.run(
                 debug=True,
                 host=host,
@@ -279,7 +321,21 @@ def main():
             from waitress import serve
             print("Using Waitress WSGI server for production deployment")
             try:
-                serve(app, host=host, port=port, threads=20, channel_timeout=600)
+                # trusted_proxy='127.0.0.1' lets waitress pass X-Forwarded-*
+                # through to the WSGI environ; without it waitress strips XFF
+                # before ProxyFix can see it, and flask-limiter then puts every
+                # nginx-proxied request in a single 127.0.0.1 bucket.
+                serve(
+                    app, host=host, port=port,
+                    threads=20, channel_timeout=600,
+                    trusted_proxy='127.0.0.1',
+                    trusted_proxy_count=1,
+                    trusted_proxy_headers={
+                        'x-forwarded-for',
+                        'x-forwarded-proto',
+                        'x-forwarded-host',
+                    },
+                )
             except OSError as excep:
                 _handle_port_error(excep, port, debug=False)
         except ImportError:
@@ -310,7 +366,17 @@ def _handle_port_error(exc, port, debug=False):
             app.run(debug=True, host='0.0.0.0', port=fallback_port, threaded=True, use_reloader=True)
         else:
             from waitress import serve
-            serve(app, host='0.0.0.0', port=fallback_port, threads=20, channel_timeout=600)
+            serve(
+                app, host='0.0.0.0', port=fallback_port,
+                threads=20, channel_timeout=600,
+                trusted_proxy='127.0.0.1',
+                trusted_proxy_count=1,
+                trusted_proxy_headers={
+                    'x-forwarded-for',
+                    'x-forwarded-proto',
+                    'x-forwarded-host',
+                },
+            )
 
     elif exc.errno == 48 or exc.errno == 98:
         print(f"\n{'=' * 70}")

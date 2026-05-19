@@ -1,15 +1,16 @@
-"""Wiki Knowledge Base search tool for the Windows triage agent."""
+"""Wiki Knowledge Base search tool for Win.AI."""
 
 import logging
 
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 from src.utils.tool_decorator import log_tool_call
 
 logger = logging.getLogger(__name__)
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def search_wiki(query: str) -> str:
     """Search the team's Knowledge Base wiki for compiled articles on SOC topics, \

@@ -17,7 +17,7 @@ def _get_client():
     return _client
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def hibp_check_email(email: str) -> dict:
     """Check if an email address appears in known data breaches.
 
@@ -32,7 +32,7 @@ def hibp_check_email(email: str) -> dict:
     return client.check_email(email)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def hibp_check_domain(domain: str) -> dict:
     """Check if a domain's email addresses appear in known data breaches.
 

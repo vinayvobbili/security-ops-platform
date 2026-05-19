@@ -1,45 +1,14 @@
-"""Shared edit-action auth and Webex notification for web edit operations."""
+"""Shared edit-action Webex notification for web edit operations.
+
+Edit authorization moved off per-page passwords onto the auth system —
+callers now gate with ``helpers.current_user()`` (any signed-in user)
+or ``helpers.is_admin()`` for admin-only paths.
+"""
 
 import logging
-import secrets
 import threading
 
 logger = logging.getLogger(__name__)
-
-
-def _get_provided_password(request) -> str:
-    """Extract password from JSON body or multipart form field."""
-    provided = (request.get_json(silent=True) or {}).get("password", "")
-    if not provided:
-        provided = request.form.get("password", "")
-    return provided
-
-
-_PAGE_PASSWORD_FIELDS = {
-    "contacts": "contacts_edit_password",
-    "docs": "docs_edit_password",
-    "wiki": "wiki_edit_password",
-    "favorites": "favorites_edit_password",
-}
-
-
-def check_edit_password(request, page: str) -> bool:
-    """Return True if the request carries a valid edit password for the given page (or none is configured)."""
-    from my_config import get_config
-    field = _PAGE_PASSWORD_FIELDS[page]
-    expected = (getattr(get_config(), field) or "").strip()
-    if not expected:
-        return True
-    return secrets.compare_digest(_get_provided_password(request), expected)
-
-
-def check_s3_password(request) -> bool:
-    """Return True if the request carries a valid S3 scan password (or none is configured)."""
-    from my_config import get_config
-    expected = (get_config().scan_s3_password or "").strip()
-    if not expected:
-        return True
-    return secrets.compare_digest(_get_provided_password(request), expected)
 
 
 def notify_edit_async(page: str, action: str, detail: str = "") -> None:

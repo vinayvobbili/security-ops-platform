@@ -1,0 +1,920 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'GitLab Onboarding' %}
+{% set page_title_left_icon = '🦊' %}
+{% set page_title_right_icon = '🚀' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/chat_widget.css') }}">
+<style>
+/* Page-scoped warm cream background — gives the white section cards contrast against the page. */
+body:not(.dark-mode) { background: linear-gradient(180deg, #fdf6ec 0%, #faeee2 60%, #f5e7e9 100%); }
+
+/* GitLab-palette scrollbar — light mode, thick & multi-colored */
+::-webkit-scrollbar { width: 16px; height: 16px; }
+::-webkit-scrollbar-track {
+    background: linear-gradient(180deg, rgba(252,109,38,0.10), rgba(226,67,41,0.10) 55%, rgba(107,79,187,0.10));
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #facc15 0%, #fb923c 22%, #fc6d26 40%, #e24329 60%, #c026d3 78%, #6b4fbb 100%);
+    border-radius: 10px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35);
+}
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #6b4fbb 0%, #c026d3 22%, #e24329 40%, #fc6d26 60%, #fb923c 78%, #facc15 100%);
+    background-clip: padding-box;
+}
+::-webkit-scrollbar-corner { background: transparent; }
+/* Force classic always-on scrollbars on Chromium so the webkit rules render. */
+html { scrollbar-gutter: stable; }
+
+.gl-container { flex: 1 1 auto; min-width: 0; max-width: 1100px; margin: 24px auto 80px; padding: 0 20px; color: #1e293b; }
+/* Inside the flex wrapper, kill the auto-centering — sidebar + container are centered as a unit. */
+.gl-page-wrap > .gl-container { margin: 24px 0 80px; }
+
+/* HERO */
+.gl-hero {
+    background: linear-gradient(135deg, #fc6d26 0%, #e24329 50%, #6b4fbb 100%);
+    color: #fff; border-radius: 18px; padding: 32px 36px;
+    box-shadow: 0 16px 40px rgba(226,67,41,0.22);
+    margin-bottom: 24px; position: relative; overflow: hidden;
+}
+.gl-hero::after {
+    content: ''; position: absolute; right: -60px; top: -60px;
+    width: 280px; height: 280px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 70%);
+    pointer-events: none;
+}
+.gl-hero h1 { margin: 0 0 8px; font-size: 1.85rem; font-weight: 800; letter-spacing: -0.02em; }
+.gl-hero p  { margin: 0 0 18px; font-size: 1.02rem; opacity: 0.95; line-height: 1.55; max-width: 760px; }
+.gl-hero-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.gl-hero-pill {
+    background: rgba(255,255,255,0.18); backdrop-filter: blur(4px);
+    color: #fff; padding: 6px 14px; border-radius: 999px;
+    font-size: 0.82rem; font-weight: 600; letter-spacing: 0.02em;
+    border: 1px solid rgba(255,255,255,0.28);
+}
+
+/* KPI CARDS */
+.gl-kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 28px; }
+.gl-kpi-card {
+    background: linear-gradient(135deg, rgba(252,109,38,0.07) 0%, rgba(107,79,187,0.06) 100%);
+    border: 1px solid rgba(226,67,41,0.18); border-left: 4px solid #e24329;
+    border-radius: 12px; padding: 18px 20px;
+    box-shadow: 0 2px 6px rgba(15,23,42,0.05);
+}
+.gl-kpi-icon { font-size: 1.65rem; }
+.gl-kpi-title { font-weight: 800; font-size: 1.05rem; margin: 6px 0 4px; }
+.gl-kpi-body { font-size: 0.88rem; color: #475569; line-height: 1.5; }
+
+/* PAGE WRAP — flex container so sidebar sits flush left of content */
+.gl-page-wrap {
+    display: flex;
+    align-items: flex-start;
+    max-width: 1340px;
+    margin: 0 auto;
+    gap: 0;
+}
+
+/* SIDEBAR TOC — sticky, colorful, accordion-style, scroll-spy */
+.gl-side-toc {
+    position: sticky;
+    top: 96px;
+    flex: 0 0 220px;
+    align-self: flex-start;
+    margin-top: 24px;
+    max-height: calc(100vh - 116px);
+    overflow: hidden;
+    background: linear-gradient(165deg, #fff7ed 0%, #ffe8d4 45%, #f5dcef 100%);
+    border: 1px solid rgba(226,67,41,0.28);
+    border-right: 4px solid #e24329;
+    border-radius: 14px 0 0 14px;
+    box-shadow: 0 6px 18px rgba(226,67,41,0.14);
+    z-index: 9;
+    transition: max-height 0.25s ease;
+}
+.gl-side-toc-inner {
+    max-height: calc(100vh - 116px);
+    overflow-y: auto;
+    display: flex; flex-direction: column;
+}
+.gl-side-toc-header {
+    background: linear-gradient(135deg, #fc6d26 0%, #e24329 55%, #6b4fbb 100%);
+    color: #fff;
+    padding: 12px 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer; user-select: none;
+    font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em;
+    font-weight: 800;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.18);
+    flex-shrink: 0;
+}
+.gl-side-toc-header:hover { filter: brightness(1.06); }
+.gl-side-toc-header-icon {
+    font-size: 1.05rem; color: #fff; font-weight: 800;
+    transition: transform 0.25s ease; line-height: 1;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+}
+.gl-side-toc.gl-collapsed .gl-side-toc-header-icon { transform: rotate(-90deg); }
+.gl-side-toc.gl-collapsed { max-height: 50px; }
+.gl-side-toc.gl-collapsed .gl-side-toc-list { display: none; }
+.gl-side-toc-list {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 10px 10px 12px;
+    overflow-y: auto;
+}
+.gl-side-toc-list a {
+    color: #4a2e10; text-decoration: none;
+    font-size: 0.86rem; line-height: 1.35; font-weight: 600;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border-left: 3px solid transparent;
+    transition: all 0.15s ease;
+    display: block;
+    background: rgba(255,255,255,0.45);
+}
+.gl-side-toc-list a:hover {
+    background: rgba(252,109,38,0.18);
+    color: #b8390a;
+    transform: translateX(2px);
+}
+.gl-side-toc-list a.gl-active {
+    background: linear-gradient(90deg, #fc6d26 0%, #e24329 70%, #6b4fbb 100%);
+    color: #fff;
+    border-left-color: #6b4fbb;
+    font-weight: 800;
+    box-shadow: 0 2px 6px rgba(226,67,41,0.32);
+    text-shadow: 0 1px 1px rgba(0,0,0,0.18);
+}
+.gl-side-toc-list a.gl-active:hover { transform: translateX(2px); filter: brightness(1.05); }
+
+/* Hide sidebar when there's no room for it; show inline TOC instead */
+@media (max-width: 1280px) {
+    .gl-side-toc { display: none; }
+    .gl-page-wrap { display: block; }
+}
+@media (min-width: 1281px) {
+    .gl-toc { display: none; }
+}
+
+/* TOC */
+.gl-toc {
+    background: #fff; border: 1px solid rgba(148,163,184,0.3); border-radius: 12px;
+    padding: 16px 20px; margin-bottom: 28px;
+    box-shadow: 0 2px 6px rgba(15,23,42,0.04);
+}
+.gl-toc-title {
+    font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: #475569; font-weight: 800; margin-bottom: 10px;
+}
+.gl-toc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 18px; }
+.gl-toc-grid a { color: #6b4fbb; text-decoration: none; font-size: 0.88rem; padding: 4px 0; border-radius: 4px; }
+.gl-toc-grid a:hover { color: #e24329; text-decoration: underline; }
+
+/* SECTION */
+.gl-section {
+    background: #fff; border: 1px solid rgba(148,163,184,0.25); border-radius: 14px;
+    padding: 26px 30px; margin-bottom: 22px;
+    box-shadow: 0 2px 8px rgba(15,23,42,0.04);
+    scroll-margin-top: 16px;
+}
+.gl-section h2 {
+    margin: 0 0 14px; font-size: 1.3rem; font-weight: 800;
+    color: #0f172a; letter-spacing: -0.01em;
+    display: flex; align-items: center; gap: 10px;
+}
+.gl-section h3 {
+    margin: 22px 0 10px; font-size: 1.02rem; font-weight: 700;
+    color: #e24329;
+    display: flex; align-items: center; gap: 8px;
+}
+.gl-section p { margin: 0 0 12px; line-height: 1.62; color: #334155; }
+.gl-section ul, .gl-section ol { margin: 0 0 12px 20px; line-height: 1.62; color: #334155; }
+.gl-section li { margin-bottom: 4px; }
+.gl-section code {
+    background: rgba(252,109,38,0.10); color: #b8390a;
+    padding: 1px 6px; border-radius: 4px; font-size: 0.88em;
+    font-family: 'JetBrains Mono','Menlo','Consolas',monospace;
+}
+.gl-section a { color: #6b4fbb; }
+.gl-section a:hover { color: #e24329; }
+
+/* STEP BADGE */
+.gl-step {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border-radius: 8px;
+    background: linear-gradient(135deg, #e24329, #fc6d26); color: #fff;
+    font-weight: 800; font-size: 0.95rem;
+    box-shadow: 0 2px 6px rgba(226,67,41,0.3);
+}
+
+/* CODE BLOCK */
+.gl-code-wrap {
+    position: relative; margin: 12px 0 16px;
+    background: #f1f5f9; border: 1px solid rgba(15,23,42,0.10);
+    border-radius: 10px; overflow: hidden;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.06);
+}
+.gl-code-wrap pre {
+    margin: 0; padding: 16px 64px 16px 20px;
+    color: #0f172a; font-size: 0.88rem; font-weight: 500; line-height: 1.6;
+    font-family: 'JetBrains Mono','Menlo','Consolas',monospace;
+    overflow-x: auto; white-space: pre;
+}
+.gl-copy-btn {
+    position: absolute; top: 8px; right: 8px;
+    background: #fff; color: #475569;
+    border: 1px solid rgba(15,23,42,0.15); border-radius: 6px;
+    font-size: 0.75rem; font-weight: 600; padding: 4px 10px;
+    cursor: pointer; transition: all 0.15s ease; font-family: inherit;
+}
+.gl-copy-btn:hover { background: #fc6d26; color: #fff; border-color: #fc6d26; }
+.gl-copy-btn.gl-copied { background: #16a34a; color: #fff; border-color: #16a34a; }
+
+/* CALLOUTS */
+.gl-callout {
+    border-radius: 10px; padding: 14px 18px; margin: 14px 0;
+    display: flex; gap: 12px; align-items: flex-start;
+    border-left: 4px solid;
+}
+.gl-callout-icon { font-size: 1.2rem; flex: 0 0 auto; line-height: 1.4; }
+.gl-callout-body { flex: 1; line-height: 1.55; font-size: 0.92rem; }
+.gl-callout-body strong { display: block; margin-bottom: 4px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.gl-callout.tip      { background: rgba(0,166,81,0.07);  border-color: #00a651; color: #064e3b; }
+.gl-callout.note     { background: rgba(107,79,187,0.08); border-color: #6b4fbb; color: #312e81; }
+.gl-callout.warning  { background: rgba(245,158,11,0.10); border-color: #f59e0b; color: #78350f; }
+.gl-callout.important{ background: rgba(220,38,38,0.07);  border-color: #dc2626; color: #7f1d1d; }
+
+/* FAQ accordion */
+.gl-faq { border: 1px solid rgba(148,163,184,0.28); border-radius: 10px; overflow: hidden; margin-top: 8px; }
+.gl-faq-item { border-bottom: 1px solid rgba(148,163,184,0.2); }
+.gl-faq-item:last-child { border-bottom: none; }
+.gl-faq-q {
+    width: 100%; text-align: left;
+    background: transparent; border: none; cursor: pointer;
+    padding: 14px 50px 14px 18px; position: relative;
+    font-size: 0.95rem; font-weight: 600; color: #1e293b;
+    transition: background 0.15s ease;
+    font-family: inherit;
+}
+.gl-faq-q:hover { background: rgba(252,109,38,0.06); }
+.gl-faq-q::after {
+    content: '+'; position: absolute; right: 18px; top: 50%;
+    transform: translateY(-50%); font-size: 1.3rem; color: #e24329; font-weight: 700;
+    transition: transform 0.2s ease;
+}
+.gl-faq-item.gl-open .gl-faq-q::after { content: '−'; }
+.gl-faq-a {
+    display: none; padding: 0 18px 16px; color: #334155; line-height: 1.6; font-size: 0.92rem;
+}
+.gl-faq-a code {
+    background: rgba(252,109,38,0.10); color: #b8390a;
+    padding: 1px 6px; border-radius: 4px; font-size: 0.88em;
+    font-family: 'JetBrains Mono','Menlo','Consolas',monospace;
+}
+.gl-faq-a a { color: #6b4fbb; }
+.gl-faq-item.gl-open .gl-faq-a { display: block; }
+
+/* TOAST */
+.gl-toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: #0f172a; color: #fff; padding: 10px 18px; border-radius: 999px;
+    font-size: 0.88rem; font-weight: 600;
+    box-shadow: 0 8px 24px rgba(15,23,42,0.25);
+    opacity: 0; pointer-events: none; transition: all 0.25s ease; z-index: 200;
+}
+.gl-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+@media (max-width: 720px) {
+    .gl-kpi-grid { grid-template-columns: 1fr; }
+    .gl-hero { padding: 24px 22px; }
+    .gl-section { padding: 20px; }
+    .gl-toc-grid { grid-template-columns: 1fr; }
+}
+
+/* DARK MODE */
+body.dark-mode .gl-container { color: #e2e8f0; }
+body.dark-mode .gl-hero { box-shadow: 0 16px 40px rgba(0,0,0,0.55); }
+body.dark-mode .gl-kpi-card {
+    background: linear-gradient(135deg, rgba(30,41,59,0.7) 0%, rgba(15,23,42,0.7) 100%);
+    border-color: rgba(148,163,184,0.25);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+body.dark-mode .gl-kpi-title { color: #f1f5f9; }
+body.dark-mode .gl-kpi-body  { color: #94a3b8; }
+body.dark-mode .gl-toc {
+    background: #1e293b; border-color: rgba(148,163,184,0.25);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+body.dark-mode .gl-toc-title { color: #94a3b8; }
+body.dark-mode .gl-toc-grid a { color: #c4b5fd; }
+body.dark-mode .gl-toc-grid a:hover { color: #fdba74; }
+body.dark-mode .gl-section {
+    background: #1e293b; border-color: rgba(148,163,184,0.18);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+body.dark-mode .gl-section h2 { color: #f1f5f9; }
+body.dark-mode .gl-section h3 { color: #fdba74; }
+body.dark-mode .gl-section p,
+body.dark-mode .gl-section ul,
+body.dark-mode .gl-section ol { color: #cbd5e1; }
+body.dark-mode .gl-section a { color: #c4b5fd; }
+body.dark-mode .gl-section a:hover { color: #fdba74; }
+body.dark-mode .gl-section code { background: rgba(252,109,38,0.18); color: #fed7aa; }
+body.dark-mode .gl-callout.tip      { background: rgba(0,166,81,0.13);   color: #bbf7d0; }
+body.dark-mode .gl-callout.note     { background: rgba(107,79,187,0.18); color: #ddd6fe; }
+body.dark-mode .gl-callout.warning  { background: rgba(245,158,11,0.15); color: #fed7aa; }
+body.dark-mode .gl-callout.important{ background: rgba(220,38,38,0.18);  color: #fecaca; }
+body.dark-mode .gl-callout code { background: rgba(255,255,255,0.10); color: inherit; }
+body.dark-mode .gl-code-wrap {
+    background: #0f172a; border-color: rgba(148,163,184,0.18);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+body.dark-mode .gl-code-wrap pre { color: #f1f5f9; }
+body.dark-mode .gl-copy-btn {
+    background: rgba(255,255,255,0.08); color: #cbd5e1;
+    border-color: rgba(255,255,255,0.15); box-shadow: none;
+}
+body.dark-mode .gl-copy-btn:hover { background: #fc6d26; color: #fff; border-color: #fc6d26; }
+
+body.dark-mode .gl-faq { border-color: rgba(148,163,184,0.18); }
+body.dark-mode .gl-faq-item { border-bottom-color: rgba(148,163,184,0.15); }
+body.dark-mode .gl-faq-q    { color: #e2e8f0; }
+body.dark-mode .gl-faq-q:hover { background: rgba(252,109,38,0.10); }
+body.dark-mode .gl-faq-q::after { color: #fdba74; }
+body.dark-mode .gl-faq-a    { color: #cbd5e1; }
+body.dark-mode .gl-faq-a code { background: rgba(252,109,38,0.18); color: #fed7aa; }
+body.dark-mode .gl-faq-a a { color: #c4b5fd; }
+
+body.dark-mode .gl-side-toc {
+    background: linear-gradient(165deg, #2a1a0e 0%, #321b18 50%, #261c33 100%);
+    border-color: rgba(252,109,38,0.35);
+    border-right-color: #fc6d26;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+}
+body.dark-mode .gl-side-toc-header {
+    background: linear-gradient(135deg, #fc6d26 0%, #e24329 55%, #6b4fbb 100%);
+    color: #fff;
+}
+body.dark-mode .gl-side-toc-header-icon { color: #fff; }
+body.dark-mode .gl-side-toc-list a {
+    color: #fed7aa;
+    background: rgba(255,255,255,0.04);
+}
+body.dark-mode .gl-side-toc-list a:hover { background: rgba(252,109,38,0.22); color: #fff; }
+body.dark-mode .gl-side-toc-list a.gl-active {
+    background: linear-gradient(90deg, #fc6d26 0%, #e24329 70%, #6b4fbb 100%);
+    color: #fff; border-left-color: #c4b5fd;
+}
+
+/* GitLab-palette scrollbar — dark mode, thick & multi-colored */
+body.dark-mode ::-webkit-scrollbar-track {
+    background: linear-gradient(180deg, rgba(253,186,116,0.08), rgba(252,109,38,0.10) 55%, rgba(196,181,253,0.10));
+}
+body.dark-mode ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #fde68a 0%, #fdba74 22%, #fb923c 40%, #f87171 60%, #f0abfc 78%, #c4b5fd 100%);
+    background-clip: padding-box;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18);
+}
+body.dark-mode ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #c4b5fd 0%, #f0abfc 22%, #f87171 40%, #fb923c 60%, #fdba74 78%, #fde68a 100%);
+    background-clip: padding-box;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="gl-page-wrap">
+
+    <!-- SIDEBAR TOC (sticky, visible on wide screens; inline TOC card shown on narrow) -->
+    <aside class="gl-side-toc" id="glSideToc">
+        <div class="gl-side-toc-header" id="glSideTocHeader" role="button" tabindex="0" aria-expanded="true">
+            <span>📑 On this page</span>
+            <span class="gl-side-toc-header-icon">▾</span>
+        </div>
+        <nav class="gl-side-toc-list" id="glSideTocList">
+            <a href="#what-is">🧠 What is this?</a>
+            <a href="#sign-up">1️⃣ Sign up</a>
+            <a href="#sign-in">2️⃣ Sign in</a>
+            <a href="#fork">3️⃣ Fork the starter</a>
+            <a href="#first-push">4️⃣ Make your first push</a>
+            <a href="#gotchas">⚠️ Gotchas</a>
+            <a href="#faq">❓ FAQ</a>
+            <a href="#whats-next">🎧 Try Vibe Coding</a>
+            <a href="#help">🆘 Where to get help</a>
+        </nav>
+    </aside>
+
+<div class="gl-container">
+
+    <!-- HERO -->
+    <div class="gl-hero">
+        <h1>🦊 GitLab — Our Internal Vibe-Coding Lab</h1>
+        <p>A self-hosted GitLab instance for citizen developers. Spin up repos, fork starter templates, ship working code without filing a ticket. No admin approval, no email confirmation — sign up and you're in.</p>
+        <div class="gl-hero-pills">
+            <span class="gl-hero-pill">● status: live</span>
+            <span class="gl-hero-pill">● self-serve sign-up</span>
+            <span class="gl-hero-pill">● corp network only</span>
+            <span class="gl-hero-pill">● for vibe coders</span>
+        </div>
+    </div>
+
+    <!-- KPI CARDS -->
+    <div class="gl-kpi-grid">
+        <div class="gl-kpi-card">
+            <div class="gl-kpi-icon">⚡</div>
+            <div class="gl-kpi-title">Instant Access</div>
+            <div class="gl-kpi-body">Sign up with your @the-company.com email and you're signed in immediately. No admin approval queue, no email confirmation link to chase.</div>
+        </div>
+        <div class="gl-kpi-card" style="border-left-color:#6b4fbb;">
+            <div class="gl-kpi-icon">🧪</div>
+            <div class="gl-kpi-title">Built for Vibe Coding</div>
+            <div class="gl-kpi-body">Citizen-developer playground. Fork the Python starter, push small ideas, iterate fast. Lightweight by design.</div>
+        </div>
+        <div class="gl-kpi-card" style="border-left-color:#fc6d26;">
+            <div class="gl-kpi-icon">🏢</div>
+            <div class="gl-kpi-title">Internal Hosting</div>
+            <div class="gl-kpi-body">Lives on the corp network. Your code stays on our infra — no GitHub, no SaaS round-trip.</div>
+        </div>
+    </div>
+
+    <!-- TOC -->
+    <div class="gl-toc">
+        <div class="gl-toc-title">📑 On this page</div>
+        <div class="gl-toc-grid">
+            <a href="#what-is">🧠 What is this?</a>
+            <a href="#sign-up">1️⃣ Sign up</a>
+            <a href="#sign-in">2️⃣ Sign in</a>
+            <a href="#fork">3️⃣ Fork the starter</a>
+            <a href="#first-push">4️⃣ Make your first push</a>
+            <a href="#gotchas">⚠️ Gotchas</a>
+            <a href="#faq">❓ FAQ</a>
+            <a href="#whats-next">🎧 Try Vibe Coding</a>
+            <a href="#help">🆘 Where to get help</a>
+        </div>
+    </div>
+
+    <!-- WHAT IS THIS -->
+    <div class="gl-section" id="what-is">
+        <h2>🧠 What is this?</h2>
+        <p>It's a GitLab instance, hosted internally, opened up so anyone on the team can self-serve a repo without filing a ticket. The intent is "vibe coding" — quick experiments, scripts, glue code, half-baked ideas that don't need to live in a heavyweight platform.</p>
+        <p>Think of it as the citizen-developer sandbox: a place to try something, fork a starter, push a branch, and see if the idea has legs.</p>
+        <div class="gl-callout note">
+            <div class="gl-callout-icon">🌐</div>
+            <div class="gl-callout-body">
+                <strong>URL</strong>
+                <a href="http://gitlab.internal.local" target="_blank" rel="noopener">http://gitlab.internal.local</a> — note this is plain HTTP, not HTTPS yet. Your browser will warn; that's expected for now.
+            </div>
+        </div>
+    </div>
+
+    <!-- STEP 1 - SIGN UP -->
+    <div class="gl-section" id="sign-up">
+        <h2><span class="gl-step">1</span> Sign up</h2>
+        <p>Go to the sign-up page:</p>
+        <div class="gl-code-wrap"><pre><code>http://gitlab.internal.local/users/sign_up</code></pre><button class="gl-copy-btn">Copy</button></div>
+        <p>Fill in:</p>
+        <ul>
+            <li>Your <strong>@the-company.com</strong> email address</li>
+            <li>A username</li>
+            <li>A password <em>you pick yourself</em> — you're not getting a temp password emailed to you</li>
+        </ul>
+        <div class="gl-callout tip">
+            <div class="gl-callout-icon">✅</div>
+            <div class="gl-callout-body">
+                <strong>That's it</strong>
+                No admin approval. No email confirmation link. Submit the form and your account is active.
+            </div>
+        </div>
+    </div>
+
+    <!-- STEP 2 - SIGN IN -->
+    <div class="gl-section" id="sign-in">
+        <h2><span class="gl-step">2</span> Sign in</h2>
+        <p>Hit sign-in with the credentials you just set:</p>
+        <div class="gl-code-wrap"><pre><code>http://gitlab.internal.local/users/sign_in</code></pre><button class="gl-copy-btn">Copy</button></div>
+        <p>You should land on your GitLab dashboard. If you don't see anything in the project list, that's normal — you haven't created or forked anything yet. On to step 3.</p>
+    </div>
+
+    <!-- STEP 3 - FORK STARTER -->
+    <div class="gl-section" id="fork">
+        <h2><span class="gl-step">3</span> Fork the starter template</h2>
+        <p>The vibe-lab group has a Python starter you can fork as a base for your own project:</p>
+        <div class="gl-code-wrap"><pre><code>http://gitlab.internal.local/vibe-lab/python-script</code></pre><button class="gl-copy-btn">Copy</button></div>
+        <p>Open the link, click <strong>Fork</strong> (top-right of the project page), pick your namespace, and you'll have your own copy to push to.</p>
+        <div class="gl-callout tip">
+            <div class="gl-callout-icon">🚀</div>
+            <div class="gl-callout-body">
+                <strong>Then what?</strong>
+                Clone it locally, edit, commit, push. Standard git. If you've never used GitLab before, the project's own README in your fork has the next steps.
+            </div>
+        </div>
+        <h3>Cloning your fork</h3>
+        <div class="gl-code-wrap"><pre><code>git clone http://gitlab.internal.local/&lt;your-username&gt;/python-script.git
+cd python-script</code></pre><button class="gl-copy-btn">Copy</button></div>
+    </div>
+
+    <!-- STEP 4 - FIRST PUSH -->
+    <div class="gl-section" id="first-push">
+        <h2><span class="gl-step">4</span> Make your first push</h2>
+        <p>Once your fork is cloned locally, change something small and push it back to confirm everything's wired up:</p>
+        <div class="gl-code-wrap"><pre><code>echo "# my notes" &gt;&gt; README.md
+git add README.md
+git commit -m "first commit"
+git push origin main</code></pre><button class="gl-copy-btn">Copy</button></div>
+        <p>The first <code>git push</code> will prompt for username + password. Username is your GitLab username; for the password, use a <strong>personal access token</strong> (not your account password) — see the gotcha below.</p>
+        <h3>🔑 Generate a personal access token</h3>
+        <ol>
+            <li>Sign into GitLab → click your avatar (top-right) → <strong>Edit profile</strong>.</li>
+            <li>Left sidebar → <strong>Access Tokens</strong>.</li>
+            <li>Name the token (e.g. <code>laptop-cli</code>), pick an expiry, and check at minimum the <code>read_repository</code> + <code>write_repository</code> scopes.</li>
+            <li>Click <strong>Create</strong> and copy the token <em>immediately</em> — you can't view it again after closing the page.</li>
+            <li>Paste that token when git prompts you for a password.</li>
+        </ol>
+        <div class="gl-callout tip">
+            <div class="gl-callout-icon">💾</div>
+            <div class="gl-callout-body">
+                <strong>Don't want to retype it every push?</strong>
+                Run <code>git config --global credential.helper store</code> once. Git will remember the token after your next successful push. (Stored in plain text under <code>~/.git-credentials</code> — fine for a personal laptop, not for shared machines.)
+            </div>
+        </div>
+    </div>
+
+    <!-- GOTCHAS -->
+    <div class="gl-section" id="gotchas">
+        <h2>⚠️ Gotchas</h2>
+
+        <h3>🌐 Network & access</h3>
+        <ul>
+            <li><strong>HTTP only for now.</strong> The site is <code>http://</code>, not <code>https://</code>. Your browser will flag the connection as insecure (no padlock, possibly a "Not Secure" warning) — that's expected. HTTPS rollout is on the roadmap.</li>
+            <li><strong>Corp network required.</strong> Reachable from any corp-network path: office WiFi/LAN, corp VPN from home, or the corporate proxy. Off-network (coffee shop, hotel, no VPN) → connection just hangs.</li>
+            <li><strong>No GitHub mirroring.</strong> Code pushed here lives here. There's no auto-sync to GitHub or any external service.</li>
+        </ul>
+
+        <h3>🔐 Auth & identity</h3>
+        <ul>
+            <li><strong>Use a token, not your password, for git.</strong> GitLab disables password auth for git operations by default. If <code>git push</code> says <code>HTTP Basic: Access denied</code>, you used your password instead of a personal access token. See Step 4 above.</li>
+            <li><strong>Forgot your password?</strong> Use the "Forgot your password?" link on the sign-in page — it emails a reset link to your @the-company.com address.</li>
+            <li><strong>Cached the wrong credential?</strong> On Windows: <em>Credential Manager → Windows Credentials → remove the gitlab.internal.local entry</em>. On macOS/Linux with credential helper: <code>git credential reject &lt;&lt;&lt; "url=http://gitlab.internal.local"</code> (or just clear <code>~/.git-credentials</code>).</li>
+            <li><strong>SSO / corp directory.</strong> This is local-account sign-up — your @the-company.com email is the identifier, but the <em>password is separate</em> from your corp AD password. Forgetting that is the #1 source of confusion.</li>
+        </ul>
+
+        <h3>🧱 Push & repo limits</h3>
+        <ul>
+            <li><strong>Default branch is <code>main</code>.</strong> If you cloned a fork that still uses <code>master</code>, push to <code>master</code> or rename it locally.</li>
+            <li><strong>No force-push to <code>main</code>.</strong> The default branch is protected on most projects. Push to a feature branch and open a merge request instead.</li>
+            <li><strong>Big files.</strong> Large binaries (>10 MB) will work but get ugly fast. Use Git LFS if you really need to commit them.</li>
+        </ul>
+
+        <div class="gl-callout important">
+            <div class="gl-callout-icon">🔒</div>
+            <div class="gl-callout-body">
+                <strong>Same data classification rules apply</strong>
+                This is an internal tool, not a vault. Don't push secrets, credentials, customer PII, or anything you wouldn't put in a Confluence page. Treat it like any other corp code repo. If you push a secret by accident, rotate it <em>and</em> ask an admin to scrub the history — a force-push won't be enough.
+            </div>
+        </div>
+    </div>
+
+    <!-- FAQ -->
+    <div class="gl-section" id="faq">
+        <h2>❓ FAQ</h2>
+        <div class="gl-faq">
+            <div class="gl-faq-item">
+                <button class="gl-faq-q">Why is the URL <code>http://</code> and not <code>https://</code>?</button>
+                <div class="gl-faq-a">HTTPS hasn't been turned on yet — it's on the roadmap. Until then, your browser will warn the connection is insecure. Because the instance is corp-network-only, traffic isn't traversing the public internet, but the warning is still real and you should expect it.</div>
+            </div>
+            <div class="gl-faq-item">
+                <button class="gl-faq-q">I signed up but never got a confirmation email — is my account active?</button>
+                <div class="gl-faq-a">Yes. There is no email confirmation step. As soon as you submit the sign-up form, your account is active. Try signing in directly at <a href="http://gitlab.internal.local/users/sign_in" target="_blank" rel="noopener">/users/sign_in</a>.</div>
+            </div>
+            <div class="gl-faq-item">
+                <button class="gl-faq-q">Do I need admin approval to create a project?</button>
+                <div class="gl-faq-a">No. Once signed in, you can create projects and fork existing ones immediately. Click the <strong>+</strong> button (top-right of the GitLab UI) → <strong>New project</strong>.</div>
+            </div>
+            <div class="gl-faq-item">
+                <button class="gl-faq-q">My <code>git push</code> says "HTTP Basic: Access denied". What's wrong?</button>
+                <div class="gl-faq-a">You probably typed your account password where git asked for one. Git operations require a <strong>personal access token</strong>, not your password — generate one (see Step 4) and use the token as the password. If your machine cached the wrong credential, clear it from your OS credential store and try again.</div>
+            </div>
+            <div class="gl-faq-item">
+                <button class="gl-faq-q">I get connection refused / timeout when I try to reach the site.</button>
+                <div class="gl-faq-a">You're not on the corp network. Connect to office WiFi/LAN, the corp VPN, or the corporate proxy, then retry. There is no public-internet route to this instance.</div>
+            </div>
+            <div class="gl-faq-item">
+                <button class="gl-faq-q">Can I use SSH for git instead of HTTP?</button>
+                <div class="gl-faq-a">Yes — add an SSH key under <em>Edit profile → SSH Keys</em> and use the SSH clone URL from your project page (looks like <code><redacted-email>:&lt;namespace&gt;/&lt;repo&gt;.git</code>). For most casual users, HTTP + a personal access token is simpler.</div>
+            </div>
+            <div class="gl-faq-item">
+                <button class="gl-faq-q">Where do my forks of <code>vibe-lab/python-script</code> end up?</button>
+                <div class="gl-faq-a">Under your personal namespace by default — i.e. <code>http://gitlab.internal.local/&lt;your-username&gt;/python-script</code>. You can also fork into a group you belong to.</div>
+            </div>
+            <div class="gl-faq-item">
+                <button class="gl-faq-q">Can I push code I shouldn't (secrets, customer data) here?</button>
+                <div class="gl-faq-a">No. Treat this like any other corp code repo: no secrets, credentials, tokens, customer PII, or anything sensitive in commits. If something slips in, rotate the secret and ask an admin to scrub the git history (a force-push alone doesn't fully remove it from GitLab's reflog).</div>
+            </div>
+            <div class="gl-faq-item">
+                <button class="gl-faq-q">Is there CI / pipelines / runners?</button>
+                <div class="gl-faq-a">GitLab CI is part of the platform. Whether shared runners are available depends on what's been provisioned — check <em>Project → Settings → CI/CD → Runners</em>. If none are listed, ping the team lead.</div>
+            </div>
+            <div class="gl-faq-item">
+                <button class="gl-faq-q">What's "vibe coding"?</button>
+                <div class="gl-faq-a">Loose term for low-ceremony, idea-first coding — usually with an AI assistant doing the heavy typing. The point of this instance is to give non-traditional developers a place to push experiments without having to negotiate with a heavyweight repo platform.</div>
+            </div>
+            <div class="gl-faq-item">
+                <button class="gl-faq-q">Can I delete my account or a project?</button>
+                <div class="gl-faq-a">Project: <em>Settings → General → Advanced → Delete project</em>. Account: <em>Edit profile → Account → Delete account</em>. Both are permanent.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- WHAT'S NEXT — cross-link to sibling pages -->
+    <div class="gl-section" id="whats-next">
+        <h2>🎧 Now build something with it</h2>
+        <p>You've got a repo. Need an idea? Try the 15-minute Vibe Coding workshop — a blank folder becomes a Flask weather app and then a Webex bot, driven by the Claude Code CLI. Push the final result to your shiny new GitLab project.</p>
+        <a href="/vibe-coding" style="display:flex; align-items:center; gap:14px; background:linear-gradient(135deg, rgba(236,72,153,0.10), rgba(6,182,212,0.10)); border:1px solid rgba(139,92,246,0.30); border-left:4px solid #ec4899; border-radius:12px; padding:16px 20px; text-decoration:none; color:inherit; transition:all 0.18s ease;">
+            <span style="font-size:1.9rem;">🎧</span>
+            <span style="flex:1;">
+                <span style="display:block; font-size:0.72rem; color:#64748b; font-weight:700; text-transform:uppercase; letter-spacing:0.06em;">Workshop</span>
+                <span style="display:block; font-weight:800; font-size:1.05rem; color:#0f172a;">Vibe Coding — Zero to Enterprise App in 15 minutes</span>
+                <span style="display:block; font-size:0.88rem; color:#475569; margin-top:2px;">15 ready-to-paste prompts. Claude Code CLI + the local LLM. Ends with a working web app and a weather bot.</span>
+            </span>
+            <span style="color:#8b5cf6; font-weight:800; font-size:1.4rem;">→</span>
+        </a>
+        <p style="margin-top:14px;">Don't have Claude Code wired up yet? See <a href="/claude-code-with-local-models">🤖 Claude Code on the Local LLM</a>.</p>
+    </div>
+
+    <!-- HELP -->
+    <div class="gl-section" id="help">
+        <h2>🆘 Where to get help</h2>
+        <ul>
+            <li><strong>Stuck on this page?</strong> Use the 💬 chat in the bottom-right — it knows the entire onboarding guide and can troubleshoot the common errors.</li>
+            <li><strong>GitLab account / instance issues</strong> (can't sign up, project gone, runners missing) → ping the team lead in Webex.</li>
+            <li><strong>Generic GitLab questions</strong> (how do I open a merge request, what's a CI pipeline, etc.) → <a href="https://docs.gitlab.com/" target="_blank" rel="noopener">docs.gitlab.com</a>.</li>
+        </ul>
+    </div>
+
+</div>
+</div>
+
+<div class="gl-toast" id="glToast">Copied!</div>
+
+{% include '_chat_widget.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    var toast = document.getElementById('glToast');
+    function flashToast(msg) {
+        toast.textContent = msg;
+        toast.classList.add('show');
+        setTimeout(function() { toast.classList.remove('show'); }, 1400);
+    }
+    document.querySelectorAll('.gl-copy-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var pre = btn.parentElement.querySelector('pre');
+            if (!pre) return;
+            var text = pre.innerText;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(function() {
+                    btn.classList.add('gl-copied');
+                    btn.textContent = 'Copied!';
+                    flashToast('Copied to clipboard');
+                    setTimeout(function() {
+                        btn.classList.remove('gl-copied');
+                        btn.textContent = 'Copy';
+                    }, 1400);
+                }).catch(function() { flashToast('Copy failed — select and Ctrl+C'); });
+            } else {
+                var range = document.createRange();
+                range.selectNodeContents(pre);
+                var sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+                flashToast('Selected — press Ctrl+C / Cmd+C');
+            }
+        });
+    });
+    document.querySelectorAll('.gl-toc-grid a').forEach(function(a) {
+        a.addEventListener('click', function(e) {
+            var id = a.getAttribute('href');
+            if (!id || !id.startsWith('#')) return;
+            var target = document.querySelector(id);
+            if (!target) return;
+            e.preventDefault();
+            target.scrollIntoView({behavior: 'smooth', block: 'start'});
+            history.replaceState(null, '', id);
+        });
+    });
+
+    // FAQ accordion
+    document.querySelectorAll('.gl-faq-q').forEach(function(q) {
+        q.addEventListener('click', function() {
+            q.parentElement.classList.toggle('gl-open');
+        });
+    });
+
+    // Sidebar TOC: accordion toggle
+    var sideToc       = document.getElementById('glSideToc');
+    var sideTocHeader = document.getElementById('glSideTocHeader');
+    if (sideToc && sideTocHeader) {
+        var STORAGE_KEY = 'gl_side_toc_collapsed';
+        try {
+            if (localStorage.getItem(STORAGE_KEY) === '1') {
+                sideToc.classList.add('gl-collapsed');
+                sideTocHeader.setAttribute('aria-expanded', 'false');
+            }
+        } catch (e) {}
+
+        function toggleSideToc() {
+            sideToc.classList.toggle('gl-collapsed');
+            var collapsed = sideToc.classList.contains('gl-collapsed');
+            sideTocHeader.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            try { localStorage.setItem(STORAGE_KEY, collapsed ? '1' : '0'); } catch (e) {}
+        }
+        sideTocHeader.addEventListener('click', toggleSideToc);
+        sideTocHeader.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSideToc(); }
+        });
+    }
+
+    // Sidebar TOC: smooth-scroll on click
+    document.querySelectorAll('.gl-side-toc-list a').forEach(function(a) {
+        a.addEventListener('click', function(e) {
+            var id = a.getAttribute('href');
+            if (!id || !id.startsWith('#')) return;
+            var target = document.querySelector(id);
+            if (!target) return;
+            e.preventDefault();
+            target.scrollIntoView({behavior: 'smooth', block: 'start'});
+            history.replaceState(null, '', id);
+        });
+    });
+
+    // Sidebar TOC: scroll-spy — highlight the section currently in view
+    var sideLinks = Array.from(document.querySelectorAll('.gl-side-toc-list a'));
+    if (sideLinks.length && 'IntersectionObserver' in window) {
+        var linkByHash = {};
+        sideLinks.forEach(function(a) { linkByHash[a.getAttribute('href')] = a; });
+
+        var visible = new Set();
+        var observer = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry) {
+                if (entry.isIntersecting) visible.add('#' + entry.target.id);
+                else                      visible.delete('#' + entry.target.id);
+            });
+            // Pick the first section (in DOM order) currently visible
+            var activeHash = null;
+            for (var i = 0; i < sideLinks.length; i++) {
+                var h = sideLinks[i].getAttribute('href');
+                if (visible.has(h)) { activeHash = h; break; }
+            }
+            sideLinks.forEach(function(a) {
+                a.classList.toggle('gl-active', a.getAttribute('href') === activeHash);
+            });
+        }, { rootMargin: '-20% 0px -60% 0px', threshold: 0 });
+
+        sideLinks.forEach(function(a) {
+            var t = document.querySelector(a.getAttribute('href'));
+            if (t) observer.observe(t);
+        });
+    }
+})();
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="{{ url_for('static', filename='js/chat_widget.js') }}"></script>
+<script>
+// Page-context for the chat widget. Posted as `report_md` on /api/page-chat/stream
+// so the LLM can answer questions about the GitLab onboarding guide using exactly
+// what users see on this page.
+const GITLAB_ONBOARDING_CONTEXT = `# GitLab Onboarding — Internal Vibe-Coding Lab
+
+Self-hosted GitLab instance for citizen developers. Self-serve sign-up, no admin approval, no email confirmation. Corp-network only.
+
+## Where it lives
+- URL: http://gitlab.internal.local  (HTTP only — HTTPS not yet enabled. Browsers will flag the connection as insecure; that's expected.)
+- Reachable from: corp WiFi/LAN, corp VPN from home, or the corporate proxy.
+- NOT reachable from the public internet without VPN/the corporate proxy.
+
+## Who is this for
+- "Vibe coders" / citizen developers — a place to push experiments, scripts, glue code, half-baked ideas.
+- Anyone with a @the-company.com email; no IT ticket required.
+
+## Step 1 — Sign up
+- URL: http://gitlab.internal.local/users/sign_up
+- Required: @the-company.com email, a username, a password you pick yourself.
+- No admin approval queue. No email confirmation link. Account is active immediately on form submit.
+- The password is LOCAL to this GitLab instance — it is NOT your corp AD / SSO password.
+
+## Step 2 — Sign in
+- URL: http://gitlab.internal.local/users/sign_in
+- Use the username (or email) + password you just set.
+- Lands on your dashboard. Empty project list is normal until you create or fork something.
+
+## Step 3 — Fork the starter
+- URL: http://gitlab.internal.local/vibe-lab/python-script
+- Click Fork (top-right). Pick your namespace. Done.
+- Forks land at http://gitlab.internal.local/<your-username>/python-script by default.
+
+## Step 4 — Make your first push
+1. Clone:  git clone http://gitlab.internal.local/<your-username>/python-script.git
+2. Edit any file, then:
+   git add <file>
+   git commit -m "first commit"
+   git push origin main
+3. Git will prompt for username + password. Use a PERSONAL ACCESS TOKEN as the password (not your account password).
+
+### Generating a personal access token
+- Avatar (top-right) → Edit profile → Access Tokens (left sidebar).
+- Name it (e.g. laptop-cli), pick an expiry, scopes: at minimum read_repository + write_repository.
+- Click Create. COPY THE TOKEN IMMEDIATELY — it's not viewable again.
+- Paste the token when git prompts you for password.
+
+### Don't want to retype the token?
+- Run once: git config --global credential.helper store
+- Subsequent pushes auto-use the saved token (stored in plain text at ~/.git-credentials).
+
+## Common error signatures and fixes
+
+- "HTTP Basic: Access denied" on git push
+  → You used your account password instead of a personal access token. Generate a token (Step 4 / Generating a personal access token) and retry.
+
+- Connection refused / timeout when reaching gitlab.internal.local
+  → Not on corp network. Connect to office WiFi, corp VPN, or the corporate proxy, then retry. No public-internet route exists.
+
+- Browser says "Not Secure" / no padlock
+  → Expected. The site is HTTP-only for now. Traffic stays on corp network; HTTPS rollout is pending.
+
+- I never got a confirmation email after signing up
+  → There is no confirmation email. The account is active. Try signing in directly.
+
+- Cached the wrong credentials and git keeps failing
+  → Windows: Credential Manager → Windows Credentials → remove the gitlab.internal.local entry.
+  → macOS/Linux with credential.helper=store: edit/clear ~/.git-credentials.
+  → Or run: git credential reject <<< "url=http://gitlab.internal.local"
+
+- Forgot password
+  → Use the "Forgot your password?" link on /users/sign_in. Reset link goes to your @the-company.com email.
+
+- Can't push to main / "remote rejected" / protected branch error
+  → main is protected on most projects. Push to a feature branch and open a merge request instead.
+
+## Gotchas
+
+- HTTP only (no HTTPS yet). Browser warnings are expected.
+- Corp network only — VPN/the corporate proxy/office network required.
+- Password for this site is LOCAL, not your corp SSO password — common source of confusion.
+- Git operations need a personal access token, not your password.
+- No external mirroring — code pushed here lives only here, not on GitHub or any SaaS.
+- Default branch is main (some forks may still be master).
+- main is protected on most projects; force-push to it is blocked. Use feature branches + MRs.
+- Big binaries: works up to a point, but use Git LFS for large files.
+
+## Data classification
+- Same rules as any other corp code repo. NO secrets, credentials, API tokens, customer PII.
+- If a secret is pushed by accident: ROTATE the secret AND ask an admin to scrub git history. A force-push alone does NOT remove it from GitLab's reflog.
+
+## CI / runners
+- GitLab CI is part of the platform.
+- Whether shared runners are provisioned depends on the instance — check Project → Settings → CI/CD → Runners.
+- If none listed, ping the team lead.
+
+## SSH (optional, instead of HTTP + token)
+- Edit profile → SSH Keys → add your public key.
+- Clone URL looks like: <redacted-email>:<namespace>/<repo>.git
+
+## Account / project deletion
+- Project: Settings → General → Advanced → Delete project (permanent).
+- Account: Edit profile → Account → Delete account (permanent).
+
+## Where to get help
+- Stuck on this guide → ask in this chat widget.
+- Account / instance issues (can't sign up, runners missing, project gone) → team lead in Webex.
+- Generic GitLab usage questions → https://docs.gitlab.com/
+`;
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof initChatWidget !== 'function') return;
+    initChatWidget({
+        title: 'New to GitLab? Ask me.',
+        greeting: "Hi! I know this entire GitLab onboarding guide. Stuck on sign-up, getting an auth error on git push, browser warning weirding you out? Tell me the symptom and I'll walk you through it.",
+        loadingMessages: [
+            'Reading the onboarding guide…',
+            'Looking up the symptom…',
+            'Cross-referencing the FAQ…',
+            'Drafting a fix…'
+        ],
+        chips: [
+            {label: 'Sign-up not working',     q: 'I tried to sign up but it\'s not letting me in. What should I check?'},
+            {label: '"Access denied" on push', q: 'My git push fails with "HTTP Basic: Access denied". How do I fix it?'},
+            {label: 'Personal access token',   q: 'How do I generate a personal access token to use with git?'},
+            {label: 'Connection refused',      q: 'I get connection refused when I try to open gitlab.internal.local. What network do I need?'},
+            {label: 'Fork the starter',        q: 'Walk me through forking the vibe-lab Python starter.'}
+        ],
+        getContext: function() { return GITLAB_ONBOARDING_CONTEXT; }
+    });
+});
+</script>
+{% endblock %}

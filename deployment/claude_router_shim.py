@@ -35,7 +35,7 @@ CAPTURE_DIR = os.environ.get("CCR_SHIM_CAPTURE_DIR", "")
 MODEL_MAP: dict[str, str] = {
     "glm-4.7-flash": "glm,glm-4.7-flash",
     "glm-4.7-flash-think": "glm,glm-4.7-flash",
-    "qwen2.5-coder-32b": "coder,qwen2.5-coder-32b",
+    "qwen3-coder-30b-a3b-128k": "coder,qwen3-coder-30b-a3b",
     "laguna": "laguna,laguna-xs.2:q8_0",
 }
 DEFAULT_ALIAS = "glm-4.7-flash"
@@ -43,7 +43,7 @@ DEFAULT_ALIAS = "glm-4.7-flash"
 DISPLAY_NAMES = {
     "glm-4.7-flash": "GLM 4.7 Flash",
     "glm-4.7-flash-think": "GLM 4.7 Flash (think-tagged)",
-    "qwen2.5-coder-32b": "Qwen2.5 Coder 32B",
+    "qwen3-coder-30b-a3b-128k": "Qwen3 Coder 30B-A3B (MoE, 128K ctx)",
     "laguna": "Laguna xs.2",
 }
 
@@ -67,7 +67,7 @@ THINK_TAG_INSTRUCTION = (
 # SSE events from the buffered response. Trades typewriter effect for
 # correct tool_use block rendering — fine for a coding helper since tool
 # calls aren't visible until the user confirms anyway.
-BUFFER_TO_STREAM_ALIASES = {"qwen2.5-coder-32b"}
+BUFFER_TO_STREAM_ALIASES = {"qwen3-coder-30b-a3b-128k"}
 
 # Map upstream HTTP status to Anthropic error type. Anything outside this
 # table falls back to api_error. Used by the error sanitizer below.
@@ -231,12 +231,87 @@ app = FastAPI(title="ir-claude-router shim")
 client = httpx.AsyncClient(base_url=CCR_UPSTREAM, timeout=httpx.Timeout(None))
 
 
-def _check_auth(request: Request) -> None:
+def _lookup_pat(token: str):
+    """Look up a per-user PAT in the web app's auth DB.
+
+    Imported lazily so the shim still starts even if the web app's auth
+    module isn't yet importable (e.g. fresh checkout). Returns the joined
+    PAT row (with user email) or None.
+    """
+    try:
+        # Make web/ importable as a top-level package.
+        import sys
+        repo_root = "/home/vinay/security-ops-platform"
+        if repo_root not in sys.path:
+            sys.path.insert(0, repo_root)
+        from web.auth import db as auth_db
+        from web.auth import security as auth_security
+        return auth_db.lookup_pat(auth_security.hash_token(token))
+    except Exception:
+        return None
+
+
+def _client_ip(request: Request) -> str:
+    """Pick the real client IP. nginx/ProxyFix put it in x-forwarded-for;
+    fall back to request.client.host for direct connections."""
+    xff = request.headers.get("x-forwarded-for", "")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else ""
+
+
+def _check_auth(request: Request) -> dict:
+    """Authenticate the request — per-user PAT only.
+
+    The shared SHIM_APIKEY is no longer accepted as an inbound auth (it
+    used to be the 'team-wide' token). Every client must present a PAT
+    minted at /account. SHIM_APIKEY is still used outbound to authenticate
+    the shim itself against ccr upstream.
+
+    Records (pat_id, client_ip) usage. The first time a PAT is seen from
+    a new IP we fire a Webex sharing-alert (operator only — the PAT owner
+    is not emailed). Both are best-effort and never block the proxy path
+    on failure.
+    """
     auth = request.headers.get("authorization", "")
     if not auth.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing bearer token")
-    if auth.removeprefix("Bearer ") != SHIM_APIKEY:
+    token = auth.removeprefix("Bearer ").strip()
+    row = _lookup_pat(token)
+    if row is None:
         raise HTTPException(status_code=401, detail="Invalid bearer token")
+    client_ip = _client_ip(request)
+    _record_pat_usage(row["id"], row["email"], row["name"], client_ip)
+    return {
+        "pat_id": row["id"],
+        "user_id": row["user_id"],
+        "email": row["email"],
+        "pat_name": row["name"],
+    }
+
+
+def _record_pat_usage(pat_id: int, email: str, pat_name: str, client_ip: str) -> None:
+    """Stamp (pat_id, client_ip) and ping Webex if it's the first sighting
+    from that IP. Best-effort: any failure here must not break auth."""
+    try:
+        import sys
+        repo_root = "/home/vinay/security-ops-platform"
+        if repo_root not in sys.path:
+            sys.path.insert(0, repo_root)
+        from web.auth import db as auth_db
+        from web.auth import notifications as auth_notifications
+    except Exception:
+        return
+    try:
+        is_new_ip = auth_db.record_pat_usage(pat_id, client_ip)
+    except Exception as exc:
+        print(f"[shim] record_pat_usage failed: {exc!r}", flush=True)
+        return
+    if is_new_ip:
+        try:
+            auth_notifications.notify_pat_new_ip(email, pat_name, client_ip, source="CCR")
+        except Exception as exc:
+            print(f"[shim] notify_pat_new_ip failed: {exc!r}", flush=True)
 
 
 @app.get("/v1/models")
@@ -266,7 +341,7 @@ async def list_models(request: Request) -> JSONResponse:
     methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"],
 )
 async def proxy(full_path: str, request: Request) -> Response:
-    _check_auth(request)
+    pat_user = _check_auth(request)
     body = await request.body()
 
     client_wants_stream = False
@@ -291,9 +366,22 @@ async def proxy(full_path: str, request: Request) -> Response:
                 try:
                     os.makedirs(CAPTURE_DIR, exist_ok=True)
                     import time
-                    fname = f"{int(time.time()*1000)}-{alias}.json"
+                    ts_ms = int(time.time() * 1000)
+                    client_ip = (
+                        request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+                        or (request.client.host if request.client else "")
+                    )
+                    envelope = {
+                        "ts_ms": ts_ms,
+                        "alias": alias,
+                        "client_ip": client_ip,
+                        "client_user": (pat_user or {}).get("email", ""),
+                        "client_pat_name": (pat_user or {}).get("pat_name", ""),
+                        "request": payload,
+                    }
+                    fname = f"{ts_ms}-{alias}.json"
                     with open(os.path.join(CAPTURE_DIR, fname), "wb") as f:
-                        f.write(json.dumps(payload, indent=2).encode())
+                        f.write(json.dumps(envelope, indent=2).encode())
                 except Exception:
                     pass
             body = json.dumps(payload).encode()
@@ -301,8 +389,11 @@ async def proxy(full_path: str, request: Request) -> Response:
     headers = {
         k: v
         for k, v in request.headers.items()
-        if k.lower() not in {"host", "content-length", "accept"}
+        if k.lower() not in {"host", "content-length", "accept", "authorization"}
     }
+    # Always forward ccr's own shared key upstream — ccr doesn't know about
+    # per-user PATs. The PAT was already validated by _check_auth.
+    headers["authorization"] = f"Bearer {SHIM_APIKEY}"
     if buffered_alias:
         headers["accept"] = "application/json"
 

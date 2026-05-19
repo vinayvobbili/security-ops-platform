@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 WEATHER_API_URL = "http://api.openweathermap.org/data/2.5/weather"
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def weather_get(city: str) -> dict:
     """Get current weather information for a city.
 

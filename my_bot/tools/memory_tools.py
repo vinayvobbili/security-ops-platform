@@ -16,6 +16,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 from src.utils.tool_decorator import log_tool_call
 
 # When a tool returns this prefix, the agentic loop short-circuits and returns
@@ -141,7 +142,7 @@ def _is_room_allowed() -> bool:
 # Tools
 # ---------------------------------------------------------------------------
 
-@tool
+@mutating_tool
 @log_tool_call
 def save_memory(topic: str, content: str) -> str:
     """Save a fact or piece of information for the team to recall later.
@@ -188,7 +189,7 @@ def save_memory(topic: str, content: str) -> str:
         return f"❌ Failed to save memory: {e}"
 
 
-@tool
+@mutating_tool
 @log_tool_call
 def update_memory(query: str, new_content: str) -> str:
     """Update an existing saved memory with new content.
@@ -238,7 +239,7 @@ def update_memory(query: str, new_content: str) -> str:
         return f"❌ Failed to update memory: {e}"
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def recall_memory(query: str) -> str:
     """Search the team's saved memories/knowledge base.
@@ -292,7 +293,7 @@ def recall_memory(query: str) -> str:
         return f"❌ Failed to search memories: {e}"
 
 
-@tool
+@mutating_tool
 @log_tool_call
 def forget_memory(query: str) -> str:
     """Delete a saved memory by topic or search terms.

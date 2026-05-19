@@ -9,6 +9,7 @@ import logging
 from typing import Optional
 
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 from services.active_directory import ActiveDirectoryClient
 from src.utils.tool_decorator import log_tool_call
@@ -28,7 +29,7 @@ def _get_ad_client() -> Optional[ActiveDirectoryClient]:
     return _ad_client
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_ad_user(username: str, ticket_id: str) -> str:
     """Fetch Active Directory user object details for a username.
@@ -74,7 +75,7 @@ def get_ad_user(username: str, ticket_id: str) -> str:
     return "\n".join(lines)
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_ad_computer(hostname: str, ticket_id: str) -> str:
     """Fetch Active Directory computer object details for a hostname.

@@ -1,6 +1,7 @@
 """Cortex XSIAM / XDR tools."""
 
 import logging
+from datetime import datetime, timezone
 from typing import Optional
 
 from mcp_server.server import mcp
@@ -19,13 +20,13 @@ def _get_client():
     return _client
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def xsiam_validate() -> dict:
     """Validate XSIAM API key and signing flow."""
     return _get_client().validate_auth()
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def xsiam_get_incidents(
     hours_back: int = 24, status: Optional[str] = None, limit: int = 50
 ) -> dict:
@@ -44,7 +45,7 @@ def xsiam_get_incidents(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def xsiam_get_incident(incident_id: str, alerts_limit: int = 50) -> dict:
     """Get a single XSIAM incident with related alerts and artifacts.
 
@@ -57,7 +58,7 @@ def xsiam_get_incident(incident_id: str, alerts_limit: int = 50) -> dict:
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def xsiam_update_incident(
     incident_id: str,
     status: Optional[str] = None,
@@ -83,7 +84,7 @@ def xsiam_update_incident(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def xsiam_get_alerts(
     hours_back: int = 24, severity: Optional[str] = None, limit: int = 100
 ) -> dict:
@@ -102,7 +103,69 @@ def xsiam_get_alerts(
     )
 
 
-@mcp.tool()
+# Disabled to preserve Cortex query token budget. Re-enable by restoring @mcp.tool().
+# @mcp.tool(tags={"readonly"})
+def xsiam_run_xql(query: str, hours_back: int = 24, limit: int = 1000) -> dict:
+    """Run an XQL query against XSIAM and return result rows.
+
+    Use this for ad-hoc dataset searches (e.g. `dataset = proxy_zpa_raw | fields ... | limit 100`).
+    Orchestrates start_xql_query, polls get_query_results until the query
+    finishes, and pulls the gzipped stream if the result set exceeds the inline
+    1000-row cap.
+
+    Args:
+        query: XQL query string. Include your own `| limit N` to bound the result.
+        hours_back: Look-back window in hours (default 24, max 720). Mapped to _time from/to.
+        limit: Max rows to return (default 1000, max 5000). Truncates after fetch — does not push down to XQL.
+
+    Returns:
+        dict with keys: query_id, row_count, truncated (bool), rows (list of dicts).
+        On error: {"error": "..."}.
+    """
+    client = _get_client()
+    if not client.is_configured():
+        return {"error": "XSIAM not configured"}
+
+    hours_back = max(1, min(hours_back, 720))
+    limit = max(1, min(limit, 5000))
+
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    start = client.start_xql_query(
+        query=query,
+        time_from_ms=now_ms - hours_back * 3600 * 1000,
+        time_to_ms=now_ms,
+    )
+    if "error" in start:
+        return start
+
+    query_id = start.get("reply")
+    if not query_id or not isinstance(query_id, str):
+        return {"error": f"Unexpected start_xql_query response: {start}"}
+
+    res = client.get_query_results(query_id)
+    if "error" in res:
+        return res
+
+    results = (res.get("reply") or {}).get("results") or {}
+    rows = results.get("data") or []
+    stream_id = results.get("stream_id")
+
+    if stream_id:
+        stream = client.get_query_results_stream(stream_id)
+        if "error" in stream:
+            return stream
+        rows = stream.get("data") or []
+
+    truncated = len(rows) > limit
+    return {
+        "query_id": query_id,
+        "row_count": len(rows[:limit]),
+        "truncated": truncated,
+        "rows": rows[:limit],
+    }
+
+
+@mcp.tool(tags={"readonly"})
 def xsiam_get_endpoint(
     hostname: Optional[str] = None,
     ip: Optional[str] = None,

@@ -10,6 +10,7 @@ import re
 from typing import Optional
 
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 from services.dfir_iris import DFIRIrisClient, format_case_summary, format_case_list
 from src.utils.tool_decorator import log_tool_call
@@ -79,7 +80,7 @@ def _detect_ioc_type(value: str) -> str:
     return "other"
 
 
-@tool
+@mutating_tool
 @log_tool_call
 def create_iris_case(
     name: str,
@@ -126,7 +127,7 @@ def create_iris_case(
     return format_case_summary(result)
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_iris_case(case_id: int) -> str:
     """Get details of a DFIR-IRIS case.
@@ -154,7 +155,7 @@ def get_iris_case(case_id: int) -> str:
     return format_case_summary(result)
 
 
-@tool
+@mutating_tool
 @log_tool_call
 def add_ioc_to_iris_case(
     case_id: int,
@@ -206,7 +207,7 @@ def add_ioc_to_iris_case(
     return f"Added IOC to case {case_id}:\n- **Type:** {ioc_type}\n- **Value:** {ioc_value}\n- **ID:** {ioc_id}"
 
 
-@tool
+@mutating_tool
 @log_tool_call
 def add_note_to_iris_case(case_id: int, title: str, content: str) -> str:
     """Add a note to a DFIR-IRIS case.
@@ -236,7 +237,7 @@ def add_note_to_iris_case(case_id: int, title: str, content: str) -> str:
     return f"Added note to case {case_id}: **{title}**"
 
 
-@tool
+@mutating_tool
 @log_tool_call
 def add_asset_to_iris_case(
     case_id: int,
@@ -296,7 +297,7 @@ def add_asset_to_iris_case(
     return f"Added {status} asset to case {case_id}:\n- **Name:** {asset_name}\n- **Type:** {asset_type}\n- **ID:** {asset_id}"
 
 
-@tool
+@mutating_tool
 @log_tool_call
 def add_timeline_event_to_iris_case(
     case_id: int,
@@ -337,7 +338,7 @@ def add_timeline_event_to_iris_case(
     return f"Added timeline event to case {case_id}:\n- **Event:** {event_title}\n- **Date:** {event_date}"
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def search_iris_cases(
     limit: int = 20
@@ -370,7 +371,7 @@ def search_iris_cases(
     return format_case_list([])
 
 
-@tool
+@mutating_tool
 @log_tool_call
 def close_iris_case(case_id: int) -> str:
     """Close a DFIR-IRIS case.
@@ -397,7 +398,7 @@ def close_iris_case(case_id: int) -> str:
     return f"Case {case_id} has been closed."
 
 
-@tool
+@mutating_tool
 @log_tool_call
 def create_iris_alert(
     title: str,
@@ -417,7 +418,7 @@ def create_iris_alert(
     Args:
         title: Alert title
         description: Alert description (supports markdown)
-        source: Source of the alert (e.g., "the security assistant bot", "CrowdStrike", "QRadar")
+        source: Source of the alert (e.g., "Pokedex", "CrowdStrike", "QRadar")
         source_ref: Unique reference ID from the source system
         severity: Severity level - "info", "low", "medium", "high", "critical"
         iocs: Comma-separated IOCs in format "type:value" (e.g., "ip:1.2.3.4,domain:evil.com")

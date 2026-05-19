@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 from my_config import get_config
 from services.abnormal_security import AbnormalSecurityClient, AbnormalSecurityError
@@ -199,7 +200,7 @@ def _format_case_details(case: dict) -> str:
     return "\n".join(lines)
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_abnormal_threats(days: int = 7, limit: int = 20, attack_type: str = "") -> str:
     """Get recent email threats from Abnormal Security.
@@ -238,7 +239,7 @@ def get_abnormal_threats(days: int = 7, limit: int = 20, attack_type: str = "") 
         return f"Error fetching threats: {str(e)}"
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_abnormal_threat_details(threat_id: str) -> str:
     """Get detailed information about a specific Abnormal Security threat.
@@ -264,7 +265,7 @@ def get_abnormal_threat_details(threat_id: str) -> str:
         return f"Error fetching threat details: {str(e)}"
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_abnormal_phishing_threats(days: int = 7, limit: int = 10) -> str:
     """Get recent phishing and credential theft threats from Abnormal Security.
@@ -305,7 +306,7 @@ def get_abnormal_phishing_threats(days: int = 7, limit: int = 10) -> str:
         return f"Error fetching phishing threats: {str(e)}"
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_abnormal_bec_threats(days: int = 7, limit: int = 10) -> str:
     """Get recent Business Email Compromise (BEC) threats from Abnormal Security.
@@ -347,7 +348,7 @@ def get_abnormal_bec_threats(days: int = 7, limit: int = 10) -> str:
         return f"Error fetching BEC threats: {str(e)}"
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_abnormal_cases(days: int = 7, limit: int = 20) -> str:
     """Get recent cases from Abnormal Security.
@@ -384,7 +385,7 @@ def get_abnormal_cases(days: int = 7, limit: int = 20) -> str:
         return f"Error fetching cases: {str(e)}"
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_abnormal_case_details(case_id: str) -> str:
     """Get detailed information about a specific Abnormal Security case.
@@ -410,7 +411,7 @@ def get_abnormal_case_details(case_id: str) -> str:
         return f"Error fetching case details: {str(e)}"
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def search_abnormal_threats_by_sender(sender_email: str, days: int = 30) -> str:
     """Search for threats from a specific sender email address.
@@ -451,7 +452,7 @@ def search_abnormal_threats_by_sender(sender_email: str, days: int = 30) -> str:
         return f"Error searching threats: {str(e)}"
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def search_abnormal_threats_by_recipient(recipient_email: str, days: int = 30) -> str:
     """Search for threats targeting a specific recipient email address.

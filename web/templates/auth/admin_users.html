@@ -1,0 +1,117 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'Users (admin)' %}
+{% from 'auth/_form_styles.html' import auth_styles %}
+
+{% block extra_css %}
+{{ auth_styles() }}
+<style>
+.adm-wrap { max-width: 1100px; margin: 32px auto; padding: 0 16px; color: var(--text-primary, #eee); }
+.adm-card { background: var(--bg-secondary, #1e1e1e); border: 1px solid var(--border, #444); border-radius: 10px; padding: 18px 22px; }
+.adm-card h2 { margin: 0 0 12px; font-size: 17px; font-weight: 600; }
+.adm-card p { color: var(--text-secondary, #aaa); font-size: 13px; margin: 0 0 14px; }
+.adm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.adm-table th { text-align: left; font-weight: 600; color: var(--text-secondary, #aaa); padding: 8px; border-bottom: 1px solid var(--border, #333); }
+.adm-table td { padding: 9px 8px; border-bottom: 1px solid var(--border, #2a2a2a); vertical-align: middle; }
+.adm-pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.3px; }
+.pill-ok    { background: rgba(16,185,129,0.15);  color: #86efac; }
+.pill-warn  { background: rgba(234,179,8,0.15);   color: #fde047; }
+.pill-muted { background: rgba(148,163,184,0.18); color: #cbd5e1; }
+.pill-admin { background: rgba(99,102,241,0.20);  color: #c7d2fe; }
+.adm-count { display:inline-block; min-width: 22px; padding: 1px 7px; border-radius: 999px; font-size: 11px; background: rgba(99,102,241,0.20); color: #c7d2fe; font-weight: 600; }
+.adm-dim { color: var(--text-secondary, #888); font-size: 12px; }
+.adm-snippet { position: relative; background: #0b1220; color: #e2e8f0; border: 1px solid #1f2a44; border-radius: 8px; padding: 14px 16px 14px 16px; font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-all; margin: 6px 0 0; }
+.adm-snippet code { background: transparent; color: inherit; padding: 0; font: inherit; }
+.adm-copy { position: absolute; top: 8px; right: 8px; background: rgba(99,102,241,0.18); color: #c7d2fe; border: 1px solid rgba(99,102,241,0.4); border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 600; letter-spacing: 0.3px; cursor: pointer; transition: background 0.15s; }
+.adm-copy:hover { background: rgba(99,102,241,0.35); }
+.adm-copy.copied { background: rgba(16,185,129,0.25); color: #86efac; border-color: rgba(16,185,129,0.5); }
+.adm-snippet-label { color: var(--text-secondary, #94a3b8); font-size: 11px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase; margin-top: 14px; }
+.adm-snippet-label:first-child { margin-top: 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="adm-wrap">
+    <div class="adm-card" style="margin-bottom: 18px;">
+        <h2>Onboarding snippets</h2>
+        <p>Copy-paste these to onboard a new user to the public MCP endpoint. One PAT (minted at <a href="/account">/account</a>) works for both the local-LLM CCR shim and the public MCP endpoint. The first three variants reuse the <code>ANTHROPIC_AUTH_TOKEN</code> the user has already exported for Claude Code, so they don't have to paste the token a second time — pick the one that matches their shell. Fall back to the literal-PAT variant if they haven't set up Claude Code yet.</p>
+
+        <div class="adm-snippet-label">macOS / Linux — bash / zsh</div>
+        <div class="adm-snippet"><button type="button" class="adm-copy" data-copy-target="snip-mcp-bash">Copy</button><code id="snip-mcp-bash">claude mcp add --transport http --scope user ir-mcp https://gdnr.the-company.com/mcp --header "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN"</code></div>
+
+        <div class="adm-snippet-label">Windows — PowerShell</div>
+        <div class="adm-snippet"><button type="button" class="adm-copy" data-copy-target="snip-mcp-pwsh">Copy</button><code id="snip-mcp-pwsh">claude mcp add --transport http --scope user ir-mcp https://gdnr.the-company.com/mcp --header "Authorization: Bearer $env:ANTHROPIC_AUTH_TOKEN"</code></div>
+
+        <div class="adm-snippet-label">Windows — CMD</div>
+        <div class="adm-snippet"><button type="button" class="adm-copy" data-copy-target="snip-mcp-cmd">Copy</button><code id="snip-mcp-cmd">claude mcp add --transport http --scope user ir-mcp https://gdnr.the-company.com/mcp --header "Authorization: Bearer %ANTHROPIC_AUTH_TOKEN%"</code></div>
+
+        <div class="adm-snippet-label">Literal PAT (fallback — if Claude Code env vars aren't set)</div>
+        <div class="adm-snippet"><button type="button" class="adm-copy" data-copy-target="snip-mcp-literal">Copy</button><code id="snip-mcp-literal">claude mcp add --transport http --scope user ir-mcp https://gdnr.the-company.com/mcp --header "Authorization: Bearer &lt;your-PAT&gt;"</code></div>
+    </div>
+
+    <div class="adm-card">
+        <h2>Registered users</h2>
+        <p>Every account that has registered, with a quick read on PAT activity. A user with 0 active PATs has either never minted one or has revoked all of them — hover the total count for context.</p>
+
+        <table class="adm-table">
+            <thead>
+                <tr>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Verified</th>
+                    <th>Registered</th>
+                    <th>Has PAT</th>
+                    <th>Active</th>
+                    <th>Last PAT minted</th>
+                    <th>Last PAT used</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr>
+                    <td>{{ u.email }}</td>
+                    <td>
+                        {% if u.is_admin %}<span class="adm-pill pill-admin">{{ u.role_label }}</span>
+                        {% else %}{{ u.role_label }}{% endif %}
+                    </td>
+                    <td>
+                        {% if u.email_verified %}<span class="adm-pill pill-ok">Yes</span>
+                        {% else %}<span class="adm-pill pill-warn">Pending</span>{% endif %}
+                    </td>
+                    <td><span class="adm-dim">{{ u.created_at }}</span></td>
+                    <td>
+                        {% if u.total_pats > 0 %}<span class="adm-pill pill-ok">Yes</span>
+                        {% else %}<span class="adm-pill pill-muted">No</span>{% endif %}
+                    </td>
+                    <td>
+                        <span class="adm-count" title="{{ u.total_pats }} total, {{ u.active_pats }} active">{{ u.active_pats }}</span>
+                        {% if u.total_pats and u.total_pats != u.active_pats %}
+                        <span class="adm-dim">/ {{ u.total_pats }}</span>
+                        {% endif %}
+                    </td>
+                    <td><span class="adm-dim">{{ u.last_pat_created_at or '—' }}</span></td>
+                    <td><span class="adm-dim">{{ u.last_pat_used_at or '—' }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+document.querySelectorAll('.adm-copy').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const target = document.getElementById(btn.dataset.copyTarget);
+        if (!target) return;
+        try {
+            await navigator.clipboard.writeText(target.innerText);
+            const original = btn.textContent;
+            btn.textContent = 'Copied';
+            btn.classList.add('copied');
+            setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+        } catch (e) {
+            btn.textContent = 'Copy failed';
+        }
+    });
+});
+</script>
+{% endblock %}

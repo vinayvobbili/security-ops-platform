@@ -9,6 +9,7 @@ import logging
 from typing import Optional
 
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 from services.varonis import VaronisClient
 from src.utils.tool_decorator import log_tool_call
@@ -28,7 +29,7 @@ def _get_varonis_client() -> Optional[VaronisClient]:
     return _varonis_client
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_varonis_user_alerts(username: str, ticket_id: str) -> str:
     """Fetch active Varonis DatAlert alerts involving a user.
@@ -76,7 +77,7 @@ def get_varonis_user_alerts(username: str, ticket_id: str) -> str:
     return "\n\n".join(lines)
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_varonis_data_activity(hostname: str, ticket_id: str) -> str:
     """Fetch Varonis data access activity for a host.

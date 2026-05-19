@@ -10,6 +10,7 @@ import re
 from typing import Optional
 
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 from services.thehive import TheHiveClient, format_case_summary, format_case_list
 from src.utils.tool_decorator import log_tool_call
@@ -75,7 +76,7 @@ def _detect_observable_type(value: str) -> str:
     return "other"
 
 
-@tool
+@mutating_tool
 @log_tool_call
 def create_thehive_case(
     title: str,
@@ -122,7 +123,7 @@ def create_thehive_case(
     return format_case_summary(result)
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_thehive_case(case_id: str) -> str:
     """Get details of a TheHive case.
@@ -157,7 +158,7 @@ def get_thehive_case(case_id: str) -> str:
     return format_case_summary(result)
 
 
-@tool
+@mutating_tool
 @log_tool_call
 def add_observable_to_thehive_case(
     case_id: str,
@@ -218,7 +219,7 @@ def add_observable_to_thehive_case(
     return f"✅ Added observable to case {case_id}:\n- **Type:** {observable_type}\n- **Value:** {observable_value}\n- **ID:** {obs_id}"
 
 
-@tool
+@mutating_tool
 @log_tool_call
 def add_comment_to_thehive_case(case_id: str, comment: str) -> str:
     """Add a comment/note to a TheHive case.
@@ -247,7 +248,7 @@ def add_comment_to_thehive_case(case_id: str, comment: str) -> str:
     return f"✅ Added comment to case {case_id}"
 
 
-@tool
+@mutating_tool
 @log_tool_call
 def update_thehive_case(
     case_id: str,
@@ -300,7 +301,7 @@ def update_thehive_case(
     return format_case_summary(result)
 
 
-@tool
+@mutating_tool
 @log_tool_call
 def close_thehive_case(
     case_id: str,
@@ -337,7 +338,7 @@ def close_thehive_case(
     return f"✅ Case {case_id} closed as **{resolution}**"
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def search_thehive_cases(
     query: str = "",
@@ -386,7 +387,7 @@ def search_thehive_cases(
     return format_case_list([])
 
 
-@tool
+@mutating_tool
 @log_tool_call
 def create_thehive_alert(
     title: str,
@@ -407,7 +408,7 @@ def create_thehive_alert(
     Args:
         title: Alert title
         description: Alert description (supports markdown)
-        source: Source of the alert (e.g., "the security assistant bot", "CrowdStrike", "QRadar")
+        source: Source of the alert (e.g., "Pokedex", "CrowdStrike", "QRadar")
         source_ref: Unique reference ID from the source system
         severity: Severity level - "low", "medium", "high", "critical"
         tags: Comma-separated tags
@@ -462,7 +463,7 @@ def create_thehive_alert(
     return f"✅ Created TheHive alert:\n- **ID:** {alert_id}\n- **Title:** {title}\n- **Source:** {source}"
 
 
-@tool
+@mutating_tool
 @log_tool_call
 def add_task_to_thehive_case(
     case_id: str,

@@ -183,6 +183,13 @@ BOTS = {
         'start_script': 'startup_scripts/start_web_server.sh',
         'log_port': 8039,
         'systemd_service': 'ir-web-app.service'
+    },
+    'mcp-public': {
+        'name': 'MCP Public',
+        'emoji': '🔌',
+        'process_pattern': 'mcp_server --public',
+        'log_port': 8047,
+        'systemd_service': 'ir-mcp-public.service'
     }
 }
 
@@ -204,7 +211,13 @@ LLM_ENDPOINTS = [
     # Mac Studio 1 (M3 Ultra, 96GB) — large analysis model via Ollama.
     # OpenAI-compatible /v1/models is exposed by Ollama natively.
     {'key': 's1-laguna', 'label': 'S1 Laguna', 'port': 8022, 'display_model': 'laguna-xs.2:q8_0', 'model_size': '~33 GB', 'remote': 'Studio1:11434'},
-    {'key': 's1-qwen', 'label': 'S1 Qwen3-32B', 'port': 8023, 'display_model': 'Qwen3-32B-8bit', 'model_size': '~33 GB', 'remote': 'Studio1:8000'},
+    # Studio1 Qwen3-Coder-30B-A3B-Instruct-8bit via vllm-mlx (parser=qwen3_coder).
+    # Sole Claude Code backend across all tiers — see project_studio1_qwen3_coder.md.
+    # Direct-bind from lab-vm1 (no tunnel); bearer shared with embeds endpoint.
+    {'key': 's1-coder', 'label': 'S1 Coder', 'port': None, 'probe_url': 'http://studio1.lab:8003', 'probe_auth_env': 'EMBEDS_API_KEY', 'display_model': 'Qwen3-Coder-30B-A3B-Instruct-8bit', 'model_size': '~30 GB', 'remote': 'Studio1:8003'},
+    # Mac Studio 2 (M3 Ultra, 96GB) — Gemma 4 31B-it Q8 via vllm-mlx. Direct-bind
+    # from lab-vm1 (studio2 is on the same /24, no tunnel).
+    {'key': 's2-gemma', 'label': 'S2 Gemma 4', 'port': None, 'probe_url': 'http://lab-lab-31.internal.local:8000', 'display_model': 'gemma-4-31b-it-8bit', 'model_size': '~34 GB', 'remote': 'Studio2:8000'},
 ]
 
 # Track when each endpoint was first seen as "up" (reset on transition to down)
@@ -1065,6 +1078,7 @@ def llm_health():
 MAC_HOSTS = [
     {'key': 'mac-m1', 'label': 'Mac M1', 'ssh_host': 'mac-m1', 'total_gb': 64},
     {'key': 'studio1', 'label': 'Studio 1', 'ssh_host': 'studio1', 'total_gb': 96},
+    {'key': 'studio2', 'label': 'Studio 2', 'ssh_host': 'studio2', 'total_gb': 96},
 ]
 _mac_cache: dict[str, dict] = {}
 _mac_cache_ts: dict[str, float] = {}

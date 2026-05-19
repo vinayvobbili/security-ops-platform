@@ -27,7 +27,7 @@ def _get_write_client():
     return _write_client
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def crowdstrike_get_device_details(hostname: str) -> dict:
     """Get full device details from CrowdStrike EDR by hostname."""
     client = _get_client()
@@ -37,7 +37,7 @@ def crowdstrike_get_device_details(hostname: str) -> dict:
     return client.get_device_details(device_id)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def crowdstrike_get_containment_status(hostname: str) -> dict:
     """Get network containment status for a host."""
     client = _get_client()
@@ -47,7 +47,7 @@ def crowdstrike_get_containment_status(hostname: str) -> dict:
     return {"hostname": hostname, "containment_status": status}
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def crowdstrike_get_online_state(hostname: str) -> dict:
     """Get the online/offline state of a host."""
     client = _get_client()
@@ -57,7 +57,7 @@ def crowdstrike_get_online_state(hostname: str) -> dict:
     return {"hostname": hostname, "online_state": state}
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def crowdstrike_get_detections(
     limit: int = 20,
     filter_query: Optional[str] = None,
@@ -68,21 +68,21 @@ def crowdstrike_get_detections(
     return client.get_detections(limit=limit, filter_query=filter_query, sort=sort)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def crowdstrike_get_detection_details(detection_id: str) -> dict:
     """Get details for a single CrowdStrike detection by ID."""
     client = _get_client()
     return client.get_detection_by_id(detection_id)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def crowdstrike_get_detections_by_host(hostname: str, limit: int = 20) -> dict:
     """Get CrowdStrike detections for a specific hostname."""
     client = _get_client()
     return client.get_detections_by_hostname(hostname.strip().upper(), limit=limit)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def crowdstrike_get_incidents(
     limit: int = 20,
     filter_query: Optional[str] = None,
@@ -93,42 +93,42 @@ def crowdstrike_get_incidents(
     return client.get_incidents(limit=limit, filter_query=filter_query, sort=sort)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def crowdstrike_get_incident_details(incident_id: str) -> dict:
     """Get details for a single CrowdStrike incident by ID."""
     client = _get_client()
     return client.get_incident_by_id(incident_id)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def crowdstrike_search_ioc(ioc_value: str, ioc_type: Optional[str] = None) -> dict:
     """Search CrowdStrike custom IOC indicators by value. Optional ioc_type filter."""
     client = _get_client()
     return client.search_ioc_by_value(ioc_value, ioc_type=ioc_type)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def crowdstrike_search_by_ip(ip: str, hours: int = 168) -> dict:
     """Search CrowdStrike detections involving a specific IP address."""
     client = _get_client()
     return client.search_detections_by_ip(ip, hours=hours)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def crowdstrike_search_by_hash(file_hash: str, hours: int = 168) -> dict:
     """Search CrowdStrike detections involving a file hash (SHA256/MD5)."""
     client = _get_client()
     return client.search_detections_by_hash(file_hash, hours=hours)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def crowdstrike_search_threatgraph(domain: str) -> dict:
     """Search CrowdStrike ThreatGraph for a domain."""
     client = _get_client()
     return client.search_threatgraph_domain(domain)
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def crowdstrike_update_tags(action_name: str, ids: list, tags: list) -> dict:
     """Add or remove grouping tags on CrowdStrike devices.
 
@@ -141,7 +141,7 @@ def crowdstrike_update_tags(action_name: str, ids: list, tags: list) -> dict:
     return client.update_device_tags(action_name, ids, tags)
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def crowdstrike_rtr_run_script(
     hostname: str, cloud_script_name: str, command_line: str = ""
 ) -> dict:

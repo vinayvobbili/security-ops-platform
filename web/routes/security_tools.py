@@ -11,7 +11,7 @@ from pathlib import Path
 from flask import Blueprint, Response, jsonify, render_template, request, send_file
 
 from src.utils.logging_utils import log_web_activity
-from src.components.web.edit_auth import check_s3_password
+from web.auth import helpers
 from services import domain_lookalike
 from services import s3_brand_scanner
 from services.virustotal import VirusTotalClient
@@ -342,9 +342,9 @@ def api_s3_bucket_history_load(scan_id):
 @security_tools_bp.route('/api/domain-lookalikes/s3-buckets/verify-auth', methods=['POST'])
 @log_web_activity
 def api_s3_verify_auth():
-    """Verify password for S3 scan authorization."""
-    if not check_s3_password(request):
-        return jsonify({'success': False, 'error': 'Invalid password'}), 403
+    """Confirm the caller is signed in — UI uses this to gate the S3 scan flow."""
+    if not helpers.current_user():
+        return jsonify({'success': False, 'error': 'login_required'}), 401
     return jsonify({'success': True})
 
 
@@ -366,9 +366,9 @@ def api_s3_bucket_classify():
     if classification not in ('ours', 'investigate', 'unknown'):
         return jsonify({'success': False, 'error': 'classification must be ours, investigate, or unknown'}), 400
 
-    # "Ours" requires password — it adds to the known-good allowlist
-    if classification == 'ours' and not check_s3_password(request):
-        return jsonify({'success': False, 'error': 'Invalid password'}), 403
+    # "Ours" adds to the known-good allowlist — require a signed-in user.
+    if classification == 'ours' and not helpers.current_user():
+        return jsonify({'success': False, 'error': 'login_required'}), 401
 
     try:
         _save_bucket_classification(domain, bucket, classification)

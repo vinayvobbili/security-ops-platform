@@ -18,7 +18,7 @@ def _get_client():
     return _client
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def attackiq_list_templates() -> dict:
     """List available AttackIQ assessment templates."""
     client = _get_client()
@@ -26,7 +26,7 @@ def attackiq_list_templates() -> dict:
     return {"count": len(templates), "templates": templates}
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def attackiq_create_assessment(
     azdo_id: int,
     title: str,
@@ -53,7 +53,7 @@ def attackiq_create_assessment(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def attackiq_run_assessment(assessment_id: str) -> dict:
     """Execute an AttackIQ assessment.
 
@@ -64,7 +64,7 @@ def attackiq_run_assessment(assessment_id: str) -> dict:
     return client.run_assessment(assessment_id)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def attackiq_get_results(assessment_id: str) -> dict:
     """Get results for an AttackIQ assessment.
 

@@ -10,6 +10,7 @@ import json
 from datetime import datetime
 import pytz
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 # Import the essential staffing functions from secops
 from src.secops import (
@@ -25,7 +26,7 @@ from src.secops import (
 from src.utils.tool_decorator import log_tool_call
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_current_shift_info() -> str:
     """Get current shift information including shift name and time boundaries."""
@@ -54,7 +55,7 @@ def get_current_shift_info() -> str:
         return f"Unable to retrieve current shift information: {str(e)}"
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_current_staffing() -> str:
     """Get current shift staffing information."""
@@ -100,7 +101,7 @@ def get_current_staffing() -> str:
         return f"Unable to retrieve current staffing information: {str(e)}"
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_shift_lead_info(day_name: str = None, shift_name: str = None) -> str:
     """
@@ -138,7 +139,7 @@ def get_shift_lead_info(day_name: str = None, shift_name: str = None) -> str:
         })
 
 
-@tool
+@readonly_tool
 def get_basic_staffing_summary(day_name: str = None, shift_name: str = None) -> str:
     """
     Get basic staffing summary with team counts for a specific shift.
@@ -178,7 +179,7 @@ def get_basic_staffing_summary(day_name: str = None, shift_name: str = None) -> 
         })
 
 
-@tool
+@readonly_tool
 def get_shift_performance_metrics(days_back: int = 0, shift_name: str = None) -> str:
     """
     Get performance metrics for a specific shift including ticket data and response times.
@@ -227,7 +228,7 @@ def get_shift_performance_metrics(days_back: int = 0, shift_name: str = None) ->
         })
 
 
-@tool
+@readonly_tool
 def get_comprehensive_shift_data(day_name: str = None, shift_name: str = None, days_back: int = 0) -> str:
     """
     Get comprehensive shift data combining staffing, leadership, and performance metrics.

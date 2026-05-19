@@ -1,4 +1,4 @@
-"""Adaptive card definitions for the notification service bot.
+"""Adaptive card definitions for Toodles bot.
 
 This package contains all card definitions organized by functionality:
 - ticket_cards: XSOAR ticket and hunt creation cards
@@ -18,12 +18,15 @@ from .azdo_cards import AZDO_CARD
 from .testing_cards import APPROVED_TESTING_CARD
 from .import_cards import TICKET_IMPORT_CARD
 from .tuning_cards import TUNING_REQUEST_CARD
+from .url_cards import URL_BLOCK_VERDICT_CARD
 from .domain_cards import DOMAIN_LOOKALIKE_CARD
 from .birthday_cards import BIRTHDAY_ANNIVERSARY_CARD
 from .crowdstrike_cards import BROWSER_HISTORY_CARD, FILE_PULL_CARD
+from .block_url_cards import BLOCK_URL_FORM_CARD
 from .navigation_cards import all_options_card, get_all_options_card
 from .ticket_cannon_cards import TICKET_CANNON_CARD, NOISE_SUPPRESSOR_CARD
 from .contacts_cards import CONTACTS_MENU_CARD, build_contacts_add_card
+from .poi_cards import POI_INVESTIGATE_CARD
 
 __all__ = [
     # Ticket/Hunt cards
@@ -38,6 +41,8 @@ __all__ = [
     'TICKET_IMPORT_CARD',
     # Tuning cards
     'TUNING_REQUEST_CARD',
+    # URL cards
+    'URL_BLOCK_VERDICT_CARD',
     # Domain cards
     'DOMAIN_LOOKALIKE_CARD',
     # Birthday cards
@@ -45,6 +50,8 @@ __all__ = [
     # CrowdStrike cards
     'BROWSER_HISTORY_CARD',
     'FILE_PULL_CARD',
+    # Block URL
+    'BLOCK_URL_FORM_CARD',
     # Navigation
     'all_options_card',
     'get_all_options_card',
@@ -54,4 +61,6 @@ __all__ = [
     # Contacts cards
     'CONTACTS_MENU_CARD',
     'build_contacts_add_card',
+    # Person of Interest OSINT
+    'POI_INVESTIGATE_CARD',
 ]

@@ -7,7 +7,7 @@ from mcp_server.server import mcp
 logger = logging.getLogger(__name__)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def contacts_lookup(query: str) -> str:
     """Search for escalation contacts, teams, or points of contact.
 

@@ -4,7 +4,7 @@
 {% set page_title_right_icon = '⭐' %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/favorite_urls.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/favorite_urls.css') }}?v=20260506a">
 {% endblock %}
 
 {% block content %}
@@ -13,11 +13,25 @@
     <!-- Toolbar -->
     <div class="fu-toolbar">
         <div class="fu-toolbar-left">
+            <div class="fu-search-wrap">
+                <span class="fu-search-icon" aria-hidden="true">🔍</span>
+                <input type="search" id="fuSearchInput" class="fu-search-input"
+                       placeholder="Search name, URL, phone…" autocomplete="off" spellcheck="false">
+                <button type="button" class="fu-search-clear" id="fuSearchClear" aria-label="Clear search" title="Clear (Esc)">&times;</button>
+            </div>
             <span class="fu-count" id="urlCount"></span>
         </div>
         <div class="fu-toolbar-right">
+            {% if current_user %}
             <button class="fu-btn fu-btn-add" onclick="openAddModal()">+ Add URL</button>
+            {% endif %}
         </div>
+    </div>
+
+    <!-- No-results state (shown when search matches nothing) -->
+    <div class="fu-no-results" id="fuNoResults" style="display:none;">
+        <div class="fu-no-results-icon">🔍</div>
+        <div>No items match <strong id="fuNoResultsQuery"></strong></div>
     </div>
 
     <!-- Category Tabs -->
@@ -52,8 +66,10 @@
                             {% endif %}
                         </td>
                         <td class="fu-actions">
+                            {% if current_user %}
                             <button class="fu-btn-icon fu-btn-edit" onclick="startEdit({{ item.id }}, '{{ 'url' if item.url is defined and item.url else 'phone' }}')" title="Edit">&#9998;</button>
                             <button class="fu-btn-icon fu-btn-delete" onclick="deleteUrl({{ item.id }})" title="Delete">&times;</button>
+                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}
@@ -121,7 +137,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/favorite_urls.js') }}"></script>
+<script src="{{ url_for('static', filename='js/favorite_urls.js') }}?v=20260506a"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     if (typeof initTheme === 'function') initTheme();

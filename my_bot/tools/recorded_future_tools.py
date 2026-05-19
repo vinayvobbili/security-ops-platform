@@ -9,6 +9,7 @@ import logging
 from typing import Optional
 
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 from services.recorded_future import RecordedFutureClient
 from src.utils.tool_decorator import log_tool_call
@@ -193,7 +194,7 @@ def _format_actor_summary(summary: dict) -> str:
     return "\n".join(output)
 
 
-@tool
+@readonly_tool
 @validate_args(ip_address=IP_ADDRESS_PATTERN)
 @log_tool_call
 def lookup_ip_recorded_future(ip_address: str) -> str:
@@ -216,7 +217,7 @@ def lookup_ip_recorded_future(ip_address: str) -> str:
     return _format_enrichment_result(data, "IP", ip_address)
 
 
-@tool
+@readonly_tool
 @validate_args(domain=DOMAIN_PATTERN)
 @log_tool_call
 def lookup_domain_recorded_future(domain: str) -> str:
@@ -243,7 +244,7 @@ def lookup_domain_recorded_future(domain: str) -> str:
     return _format_enrichment_result(data, "Domain", domain)
 
 
-@tool
+@readonly_tool
 @validate_args(file_hash=HASH_PATTERN)
 @log_tool_call
 def lookup_hash_recorded_future(file_hash: str) -> str:
@@ -266,7 +267,7 @@ def lookup_hash_recorded_future(file_hash: str) -> str:
     return _format_enrichment_result(data, "Hash", file_hash)
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def lookup_url_recorded_future(url: str) -> str:
     """Look up a URL in Recorded Future for threat intelligence.
@@ -288,7 +289,7 @@ def lookup_url_recorded_future(url: str) -> str:
     return _format_enrichment_result(data, "URL", url)
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def lookup_cve_recorded_future(cve_id: str) -> str:
     """Look up a CVE/vulnerability in Recorded Future for intelligence.
@@ -309,7 +310,7 @@ def lookup_cve_recorded_future(cve_id: str) -> str:
     return _format_enrichment_result(data, "CVE", cve_id)
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def search_threat_actor_recorded_future(actor_name: str) -> str:
     """Search for a threat actor in Recorded Future.
@@ -330,7 +331,7 @@ def search_threat_actor_recorded_future(actor_name: str) -> str:
     return _format_actor_result(data)
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def triage_for_phishing_recorded_future(indicator: str) -> str:
     """Triage an indicator (domain, URL, or IP) for phishing risk using Recorded Future.
@@ -405,7 +406,7 @@ def _is_ip_address(value: str) -> bool:
 
 
 # =============================================================================
-# Sample Test Prompts for the security assistant bot Bot
+# Sample Test Prompts for Pokedex Bot
 # =============================================================================
 #
 # IP Lookup:

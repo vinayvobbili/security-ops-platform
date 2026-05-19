@@ -8,6 +8,7 @@ Usage:
 """
 import json
 import logging
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -899,7 +900,28 @@ class TaniumClient:
         """
         self.config = config or get_config()
         self.instances = []
+        self.skipped_instances: Dict[str, str] = {}  # name -> last_error from setup-time validation
         self._setup_instances(instance=instance)
+
+    @staticmethod
+    def _validate_token_with_retry(instance: 'TaniumInstance', retries: int = 1, delay: float = 2.0) -> bool:
+        """Validate an instance's token, retrying on failure to absorb transient errors.
+
+        The cloud gateway has been observed to return a one-off 403 that succeeds on a
+        second attempt seconds later; without a retry, a single bad response excludes
+        the instance for the rest of the run.
+        """
+        if instance.validate_token():
+            return True
+        for attempt in range(retries):
+            logger.info(
+                f"Retrying token validation for {instance.name} in {delay}s "
+                f"(attempt {attempt + 2}/{retries + 1}) after error: {instance.last_error}"
+            )
+            time.sleep(delay)
+            if instance.validate_token():
+                return True
+        return False
 
     def _setup_instances(self, instance: Optional[str] = None):
         """Initialize cloud and/or on-prem instances based on instance parameter"""
@@ -915,24 +937,26 @@ class TaniumClient:
                 verify_ssl=True
             )
             # Validate token before adding to ensure instance is accessible
-            if cloud_instance.validate_token():
+            if self._validate_token_with_retry(cloud_instance):
                 self.instances.append(cloud_instance)
             else:
-                logger.warning(f"⚠️  Cloud instance configured but unreachable - skipping")
+                self.skipped_instances["Cloud"] = cloud_instance.last_error or "Unknown error"
+                logger.warning(f"⚠️  Cloud instance configured but unreachable - skipping ({cloud_instance.last_error})")
 
         # On-prem instance (disable SSL verification for on-prem)
-        if (instance is None or instance.lower() == "onprem") and hasattr(self.config, 'tanium_onprem_api_url') and self.config.tanium_onprem_api_url and self.config.tanium_onprem_api_token:
+        if (instance is None or instance.lower() == "onprem") and hasattr(self.config, 'tanium_onprem_api_url') and self.config.tanium_onprem_api_url and self.config.tanium_onprem_api_token_ch:
             onprem_instance = TaniumInstance(
                 "On-Prem",
                 self.config.tanium_onprem_api_url,
-                self.config.tanium_onprem_api_token,
+                self.config.tanium_onprem_api_token_ch,
                 verify_ssl=False
             )
             # Validate token before adding to ensure instance is accessible
-            if onprem_instance.validate_token():
+            if self._validate_token_with_retry(onprem_instance):
                 self.instances.append(onprem_instance)
             else:
-                logger.warning(f"⚠️  On-Prem instance configured but unreachable - skipping")
+                self.skipped_instances["On-Prem"] = onprem_instance.last_error or "Unknown error"
+                logger.warning(f"⚠️  On-Prem instance configured but unreachable - skipping ({onprem_instance.last_error})")
 
     def validate_all_tokens(self) -> Dict[str, bool]:
         """Validate tokens for all instances"""
@@ -946,13 +970,15 @@ class TaniumClient:
 
         Raises:
             ConnectionError: If no computers could be retrieved and all instances failed,
-                           includes the actual error messages from each failed instance.
+                           includes the actual error messages from each failed instance
+                           (including any dropped during client setup).
         """
         all_computers = []
-        instance_errors = {}
+        # Seed with setup-time validation failures so the eventual error names the real cause
+        instance_errors: Dict[str, str] = dict(self.skipped_instances)
 
         for instance in self.instances:
-            if instance.validate_token():
+            if self._validate_token_with_retry(instance):
                 computers = instance.get_computers(limit)
                 all_computers.extend(computers)
             else:

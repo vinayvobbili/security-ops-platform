@@ -6,10 +6,11 @@ This module provides escalation contact lookup tools for the security operations
 """
 
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 from src.utils.tool_decorator import log_tool_call
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def lookup_escalation_contacts(query: str) -> str:
     """ALWAYS call this tool when the user asks about contacts, escalation, or who to contact.

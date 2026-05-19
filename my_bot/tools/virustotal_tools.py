@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Optional
 
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 from services.virustotal import VirusTotalClient
 from src.utils.tool_decorator import log_tool_call
@@ -181,7 +182,7 @@ def _format_hash_result(data: dict) -> str:
     return "\n".join(result)
 
 
-@tool
+@readonly_tool
 @validate_args(ip_address=IP_ADDRESS_PATTERN)
 @log_tool_call
 def lookup_ip_virustotal(ip_address: str) -> str:
@@ -205,7 +206,7 @@ def lookup_ip_virustotal(ip_address: str) -> str:
     return _format_ip_result(data)
 
 
-@tool
+@readonly_tool
 @validate_args(domain=DOMAIN_PATTERN)
 @log_tool_call
 def lookup_domain_virustotal(domain: str) -> str:
@@ -229,7 +230,7 @@ def lookup_domain_virustotal(domain: str) -> str:
     return _format_domain_result(data)
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def lookup_url_virustotal(url: str) -> str:
     """Look up a URL in VirusTotal for threat intelligence.
@@ -252,7 +253,7 @@ def lookup_url_virustotal(url: str) -> str:
     return _format_url_result(data)
 
 
-@tool
+@readonly_tool
 @validate_args(file_hash=HASH_PATTERN)
 @log_tool_call
 def lookup_hash_virustotal(file_hash: str) -> str:
@@ -356,7 +357,7 @@ def _get_original_analysis_date(indicator: str, indicator_type: str) -> Optional
     return data.get("data", {}).get("attributes", {}).get("last_analysis_date")
 
 
-@tool
+@mutating_tool
 @log_tool_call
 def reanalyze_virustotal(indicator: str) -> str:
     """Request fresh re-analysis of an indicator in VirusTotal and return updated results.

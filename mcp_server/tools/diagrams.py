@@ -16,7 +16,7 @@ MAX_MERMAID_SOURCE_CHARS = 8000
 
 # ---------------------------------------------------------------------------
 # Visual theme — injected into every Mermaid source.
-# Pastel Material Design palette with dark text. Matches the security assistant bot diagrams.
+# Pastel Material Design palette with dark text. Matches Pokedex diagrams.
 # ---------------------------------------------------------------------------
 THEME_INIT = (
     '%%{init: {"theme":"base",'
@@ -144,7 +144,7 @@ def _decorate_mermaid(source: str, title: str = "") -> str:
     return THEME_INIT + "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def render_diagram(
     mermaid_source: str,
     room_id: str,

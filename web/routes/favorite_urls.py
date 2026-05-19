@@ -5,7 +5,8 @@ import logging
 from flask import Blueprint, jsonify, render_template, request
 
 from src.utils.logging_utils import log_web_activity
-from src.components.web.edit_auth import check_edit_password, notify_edit_async
+from src.components.web.edit_auth import notify_edit_async
+from web.auth import helpers
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +30,8 @@ def favorite_urls_page():
 @favorite_urls_bp.route("/api/favorite-urls", methods=["POST"])
 @log_web_activity
 def create_url():
-    if not check_edit_password(request, "favorites"):
-        return jsonify({"success": False, "error": "Invalid password"}), 403
+    if not helpers.current_user():
+        return jsonify({"success": False, "error": "login_required"}), 401
     try:
         from src.components.web import favorite_urls_handler as h
 
@@ -65,8 +66,8 @@ def create_url():
 @favorite_urls_bp.route("/api/favorite-urls/<int:url_id>", methods=["PUT"])
 @log_web_activity
 def update_url(url_id):
-    if not check_edit_password(request, "favorites"):
-        return jsonify({"success": False, "error": "Invalid password"}), 403
+    if not helpers.current_user():
+        return jsonify({"success": False, "error": "login_required"}), 401
     try:
         from src.components.web import favorite_urls_handler as h
 
@@ -88,8 +89,8 @@ def update_url(url_id):
 @favorite_urls_bp.route("/api/favorite-urls/<int:url_id>", methods=["DELETE"])
 @log_web_activity
 def delete_url(url_id):
-    if not check_edit_password(request, "favorites"):
-        return jsonify({"success": False, "error": "Invalid password"}), 403
+    if not helpers.current_user():
+        return jsonify({"success": False, "error": "login_required"}), 401
     try:
         from src.components.web import favorite_urls_handler as h
 

@@ -5,6 +5,30 @@
 
 {% block extra_css %}
 <style>
+/* All-Pages-palette scrollbar — light mode, thick & multi-colored from the six section accents
+   (gold → orange → green → teal → blue → purple). */
+::-webkit-scrollbar { width: 16px; height: 16px; }
+::-webkit-scrollbar-track {
+    background: linear-gradient(180deg, rgba(202,138,4,0.08), rgba(0,70,173,0.10) 50%, rgba(124,58,237,0.08));
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #ca8a04 0%, #d97706 20%, #00a651 40%, #0d9488 60%, #0046ad 80%, #7c3aed 100%);
+    border-radius: 10px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35);
+}
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #7c3aed 0%, #0046ad 20%, #0d9488 40%, #00a651 60%, #d97706 80%, #ca8a04 100%);
+    background-clip: padding-box;
+}
+::-webkit-scrollbar-corner { background: transparent; }
+/* Force classic always-on scrollbars on Chromium (Edge/Chrome) so the
+   ::-webkit-scrollbar rules render — without this, Edge's overlay-scrollbar
+   path renders only the single-color Firefox-style fallback (thin + purple). */
+html { scrollbar-gutter: stable; }
+
 /* --- All Pages Directory --- */
 .ap-container { max-width: 1200px; margin: 24px auto; padding: 0 20px 40px; }
 
@@ -99,14 +123,41 @@
 .ap-section[data-accent="orange"] { --ap-accent: #d97706; --ap-accent-bg-a: rgba(217,119,6,0.08); --ap-accent-bg-b: rgba(217,119,6,0.02); --ap-accent-border: rgba(217,119,6,0.22); --ap-accent-shadow: rgba(217,119,6,0.22); }
 .ap-section[data-accent="purple"] { --ap-accent: #7c3aed; --ap-accent-bg-a: rgba(124,58,237,0.08); --ap-accent-bg-b: rgba(124,58,237,0.02); --ap-accent-border: rgba(124,58,237,0.22); --ap-accent-shadow: rgba(124,58,237,0.22); }
 .ap-section[data-accent="gold"]   { --ap-accent: #ca8a04; --ap-accent-bg-a: rgba(202,138,4,0.10); --ap-accent-bg-b: rgba(202,138,4,0.02); --ap-accent-border: rgba(202,138,4,0.25); --ap-accent-shadow: rgba(202,138,4,0.25); }
+.ap-section[data-accent="teal"]   { --ap-accent: #0d9488; --ap-accent-bg-a: rgba(13,148,136,0.10); --ap-accent-bg-b: rgba(13,148,136,0.02); --ap-accent-border: rgba(13,148,136,0.22); --ap-accent-shadow: rgba(13,148,136,0.22); }
 
-/* Frequent section */
-#ap-frequent { display: none; }
-#ap-frequent.show { display: block; }
+/* Recent + Frequent sections */
+#ap-recent, #ap-frequent { display: none; }
+#ap-recent.show, #ap-frequent.show { display: block; }
+/* Recent + Frequent cards: stack the badge UNDER the icon so the label
+   gets the full remaining row width — keeps long labels (e.g. "Claude
+   Code with Local Models") from being elbowed onto two lines by a tiny
+   "2h ago" / "×16" pill on the right. */
+#ap-recent .ap-card, #ap-frequent .ap-card {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-areas: "icon  label" "badge label";
+    column-gap: 14px;
+    row-gap: 2px;
+    align-items: center;
+}
+#ap-recent .ap-card-icon, #ap-frequent .ap-card-icon {
+    grid-area: icon; justify-self: center;
+}
+#ap-recent .ap-card-label, #ap-frequent .ap-card-label {
+    grid-area: label;
+}
 #ap-frequent .ap-card-badge {
-    margin-left: auto; font-size: 0.7rem; font-weight: 700;
+    grid-area: badge; justify-self: center; margin-left: 0;
+    font-size: 0.7rem; font-weight: 700;
     color: #ca8a04; background: rgba(202,138,4,0.12);
     padding: 2px 7px; border-radius: 999px;
+}
+#ap-recent .ap-card-badge {
+    grid-area: badge; justify-self: center; margin-left: 0;
+    font-size: 0.7rem; font-weight: 600;
+    color: #0d9488; background: rgba(13,148,136,0.12);
+    padding: 2px 7px; border-radius: 999px;
+    white-space: nowrap;
 }
 
 /* Dark mode */
@@ -115,7 +166,20 @@ body.dark-mode .ap-search-input { background: #1e293b; color: #e2e8f0; border-co
 body.dark-mode .ap-search-input:focus { border-color: rgba(0,166,81,0.6); }
 body.dark-mode .ap-card { color: #e2e8f0; background: linear-gradient(135deg, rgba(30,41,59,0.7) 0%, rgba(15,23,42,0.7) 100%); }
 body.dark-mode .ap-card:hover { background: linear-gradient(135deg, rgba(30,41,59,0.9) 0%, var(--ap-accent-bg-a) 100%); }
-body.dark-mode { background: #0f172a; }
+
+/* All-Pages-palette scrollbar — dark mode, thick & multi-colored */
+body.dark-mode ::-webkit-scrollbar-track {
+    background: linear-gradient(180deg, rgba(252,211,77,0.08), rgba(125,211,252,0.10) 50%, rgba(196,181,253,0.08));
+}
+body.dark-mode ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #fcd34d 0%, #fdba74 20%, #6ee7b7 40%, #5eead4 60%, #7dd3fc 80%, #c4b5fd 100%);
+    background-clip: padding-box;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18);
+}
+body.dark-mode ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #c4b5fd 0%, #7dd3fc 20%, #5eead4 40%, #6ee7b7 60%, #fdba74 80%, #fcd34d 100%);
+    background-clip: padding-box;
+}
 </style>
 {% endblock %}
 
@@ -129,6 +193,11 @@ body.dark-mode { background: #0f172a; }
             <button type="button" class="ap-search-clear" id="ap-search-clear" title="Clear">✕</button>
         </div>
         <div class="ap-search-hint">Tip: press <kbd>/</kbd> to jump to search · <kbd>Esc</kbd> to clear</div>
+    </div>
+
+    <div class="ap-section" id="ap-recent" data-accent="teal">
+        <div class="ap-section-title">🕒 Recent</div>
+        <div class="ap-grid" id="ap-recent-grid"></div>
     </div>
 
     <div class="ap-section" id="ap-frequent" data-accent="gold">
@@ -145,7 +214,7 @@ body.dark-mode { background: #0f172a; }
             <a href="/epp-tagging-metrics" target="_blank" class="ap-card"><span class="ap-card-icon">🏷️</span><span class="ap-card-label">EPP Tagging Metrics</span></a>
             <a href="/threat-intel-dashboard" target="_blank" class="ap-card"><span class="ap-card-icon">🕵️</span><span class="ap-card-label">Threat Intel Dashboard</span></a>
             <a href="/detection-rules" target="_blank" class="ap-card"><span class="ap-card-icon">🛡️</span><span class="ap-card-label">Detection Rules Catalog</span></a>
-            <a href="/defense-pulse" target="_blank" class="ap-card"><span class="ap-card-icon">💓</span><span class="ap-card-label">control-efficacy analytics</span></a>
+            <a href="/defense-pulse" target="_blank" class="ap-card"><span class="ap-card-icon">💓</span><span class="ap-card-label">Defense Pulse</span></a>
             <a href="/xsoar" target="_blank" class="ap-card"><span class="ap-card-icon">📋</span><span class="ap-card-label">XSOAR Dashboard</span></a>
             <a href="/domain-monitoring" target="_blank" class="ap-card"><span class="ap-card-icon">📡</span><span class="ap-card-label">Domain Monitoring</span></a>
             <a href="/powerbi" target="_blank" class="ap-card"><span class="ap-card-icon">📊</span><span class="ap-card-label">Power BI Explorer</span></a>
@@ -173,6 +242,10 @@ body.dark-mode { background: #0f172a; }
             <a href="/escalation-contacts" target="_blank" class="ap-card"><span class="ap-card-icon">📇</span><span class="ap-card-label">DnR Contacts</span></a>
             <a href="/favorite-urls" target="_blank" class="ap-card"><span class="ap-card-icon">🔗</span><span class="ap-card-label">DnR URLs</span></a>
             <a href="/docs-library" target="_blank" class="ap-card"><span class="ap-card-icon">📚</span><span class="ap-card-label">Docs Library</span></a>
+            <a href="/claude-code-with-local-models" target="_blank" class="ap-card"><span class="ap-card-icon">🤖</span><span class="ap-card-label">Claude Code with Local Models</span></a>
+            <a href="/bench-local" target="_blank" class="ap-card"><span class="ap-card-icon">📊</span><span class="ap-card-label">Local LLM Benchmarks</span></a>
+            <a href="/gitlab" target="_blank" class="ap-card"><span class="ap-card-icon">🦊</span><span class="ap-card-label">GitLab Onboarding</span></a>
+            <a href="/vibe-coding" target="_blank" class="ap-card"><span class="ap-card-icon">🎧</span><span class="ap-card-label">Vibe Coding Workshop</span></a>
             <a href="/meeting-qa" target="_blank" class="ap-card"><span class="ap-card-icon">📝</span><span class="ap-card-label">Meeting Minutes QA</span></a>
             <a href="/recap" target="_blank" class="ap-card"><span class="ap-card-icon">🎙️</span><span class="ap-card-label">Meeting Recap</span></a>
             <a href="/wiki" target="_blank" class="ap-card"><span class="ap-card-icon">🧠</span><span class="ap-card-label">GDnR Wiki</span></a>
@@ -184,11 +257,12 @@ body.dark-mode { background: #0f172a; }
         <div class="ap-grid">
             <a href="/apt-other-names-search" target="_blank" class="ap-card"><span class="ap-card-icon">🔎</span><span class="ap-card-label">APT Other Names Search</span></a>
             <a href="/domain-lookalike" target="_blank" class="ap-card"><span class="ap-card-icon">🌐</span><span class="ap-card-label">Domain Lookalike Detector</span></a>
+            <a href="/person-of-interest" target="_blank" class="ap-card"><span class="ap-card-icon">🕵️</span><span class="ap-card-label">Person of Interest (OSINT)</span></a>
             <a href="/cribl-diagnostics" target="_blank" class="ap-card"><span class="ap-card-icon">📡</span><span class="ap-card-label">Cribl Edge Diagnostics</span></a>
             <a href="/qradar" target="_blank" class="ap-card"><span class="ap-card-icon">📡</span><span class="ap-card-label">QRadar Explorer</span></a>
             <a href="/db-security" target="_blank" class="ap-card"><span class="ap-card-icon">🛢️</span><span class="ap-card-label">Database Security</span></a>
             <a href="/db-config" target="_blank" class="ap-card"><span class="ap-card-icon">⚙️</span><span class="ap-card-label">DB Config</span></a>
-            <a href="/ai-spm" target="_blank" class="ap-card"><span class="ap-card-icon">🤖</span><span class="ap-card-label">AI SPM</span></a>
+            <a href="/ai-drt" target="_blank" class="ap-card"><span class="ap-card-icon">🤖</span><span class="ap-card-label">AI DRT</span></a>
             <a href="/dspm" target="_blank" class="ap-card"><span class="ap-card-icon">🛡️</span><span class="ap-card-label">DSPM</span></a>
             <a href="/exposed-api-scanner" target="_blank" class="ap-card"><span class="ap-card-icon">🔑</span><span class="ap-card-label">Exposed API Scanner</span></a>
             <a href="/cyber-simulator" target="_blank" class="ap-card"><span class="ap-card-icon">🎮</span><span class="ap-card-label">Cyber Simulator</span></a>
@@ -197,9 +271,12 @@ body.dark-mode { background: #0f172a; }
             <a href="/s3-scanner" target="_blank" class="ap-card"><span class="ap-card-icon">🪣</span><span class="ap-card-label">S3 Bucket Scanner</span></a>
             <a href="/ticket-cannon" target="_blank" class="ap-card"><span class="ap-card-icon">🔇</span><span class="ap-card-label">Ticket Cannon Silencer</span></a>
             <a href="/cyber-tool-inventory" target="_blank" class="ap-card"><span class="ap-card-icon">🧰</span><span class="ap-card-label">Cyber Tool Inventory</span></a>
+            <a href="/regulatory-acceleration-matrix" target="_blank" class="ap-card"><span class="ap-card-icon">⚖️</span><span class="ap-card-label">Regulatory Acceleration Matrix</span></a>
+            <a href="/tipper-automation" target="_blank" class="ap-card"><span class="ap-card-icon">📨</span><span class="ap-card-label">Tipper Automation</span></a>
         </div>
     </div>
 
+    {% if current_user and current_user.role == 'admin' %}
     <div class="ap-section" data-accent="purple">
         <div class="ap-section-title">🔒 Admin</div>
         <div class="ap-grid">
@@ -211,6 +288,7 @@ body.dark-mode { background: #0f172a; }
             {% endif %}
         </div>
     </div>
+    {% endif %}
 
     <div class="ap-no-results" id="ap-no-results">
         No pages match your search. <a href="#" id="ap-clear-link">Clear</a>
@@ -226,7 +304,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- Frequent-pages tracking (localStorage) ---
     const FREQ_KEY = 'ap_card_clicks_v1';
-    const FREQ_TOP_N = 6;
+    const FREQ_TOP_N = 5;
+    const RECENT_KEY = 'ap_card_recents_v1';
+    const RECENT_TOP_N = 5;
 
     function loadFreq() {
         try { return JSON.parse(localStorage.getItem(FREQ_KEY) || '{}'); }
@@ -243,6 +323,32 @@ document.addEventListener('DOMContentLoaded', function() {
         saveFreq(m);
     }
 
+    function loadRecent() {
+        try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); }
+        catch (e) { return []; }
+    }
+    function saveRecent(a) {
+        try { localStorage.setItem(RECENT_KEY, JSON.stringify(a)); } catch (e) {}
+    }
+    function bumpRecent(href) {
+        if (!href) return;
+        const now = Date.now();
+        const list = loadRecent().filter(e => e && e.href !== href);
+        list.unshift({ href, last: now });
+        saveRecent(list.slice(0, 24));
+    }
+
+    function relTime(ts) {
+        const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+        if (s < 60) return 'just now';
+        const m = Math.round(s / 60);
+        if (m < 60) return m + 'm ago';
+        const h = Math.round(m / 60);
+        if (h < 24) return h + 'h ago';
+        const d = Math.round(h / 24);
+        return d + 'd ago';
+    }
+
     // Build the Frequent row from the top-N most-clicked cards
     function renderFrequent() {
         const freq = loadFreq();
@@ -255,8 +361,8 @@ document.addEventListener('DOMContentLoaded', function() {
         grid.innerHTML = '';
         if (entries.length === 0) { section.classList.remove('show'); return; }
 
-        // Build a href → source-card map from the real sections (skip the frequent grid itself)
-        const sourceCards = document.querySelectorAll('.ap-section:not(#ap-frequent) .ap-card');
+        // Build a href → source-card map from the real sections (skip the recent + frequent grids)
+        const sourceCards = document.querySelectorAll('.ap-section:not(#ap-recent):not(#ap-frequent) .ap-card');
         const byHref = {};
         sourceCards.forEach(c => { byHref[c.getAttribute('href')] = c; });
 
@@ -276,14 +382,44 @@ document.addEventListener('DOMContentLoaded', function() {
         if (added > 0) section.classList.add('show'); else section.classList.remove('show');
     }
 
-    // Bump counter on click (for the original cards; the Frequent clones inherit the listener via delegation)
+    // Build the Recent row from the most-recently-clicked cards (deduped, newest first)
+    function renderRecent() {
+        const list = loadRecent().slice(0, RECENT_TOP_N);
+        const section = document.getElementById('ap-recent');
+        const grid = document.getElementById('ap-recent-grid');
+        grid.innerHTML = '';
+        if (list.length === 0) { section.classList.remove('show'); return; }
+
+        const sourceCards = document.querySelectorAll('.ap-section:not(#ap-recent):not(#ap-frequent) .ap-card');
+        const byHref = {};
+        sourceCards.forEach(c => { byHref[c.getAttribute('href')] = c; });
+
+        let added = 0;
+        list.forEach(({ href, last }) => {
+            const src = byHref[href];
+            if (!src) return;
+            const clone = src.cloneNode(true);
+            clone.classList.remove('ap-hidden');
+            const badge = document.createElement('span');
+            badge.className = 'ap-card-badge';
+            badge.textContent = relTime(last);
+            clone.appendChild(badge);
+            grid.appendChild(clone);
+            added++;
+        });
+        if (added > 0) section.classList.add('show'); else section.classList.remove('show');
+    }
+
+    // Bump counters on click (for the original cards; the Frequent/Recent clones share the same href)
     document.addEventListener('click', function(ev) {
         const card = ev.target.closest('.ap-card');
         if (!card) return;
-        // For clones inside #ap-frequent, use the href directly (same href as source)
-        bumpFreq(card.getAttribute('href'));
+        const href = card.getAttribute('href');
+        bumpFreq(href);
+        bumpRecent(href);
     }, true);
 
+    renderRecent();
     renderFrequent();
 
     // --- Search / filter ---
@@ -294,7 +430,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const clearLink = document.getElementById('ap-clear-link');
 
     // Cache haystacks once for perf
-    const realSections = Array.from(document.querySelectorAll('.ap-section')).filter(s => s.id !== 'ap-frequent');
+    const realSections = Array.from(document.querySelectorAll('.ap-section')).filter(s => s.id !== 'ap-frequent' && s.id !== 'ap-recent');
     const sectionData = realSections.map(section => {
         const cards = Array.from(section.querySelectorAll('.ap-card')).map(card => ({
             el: card,
@@ -303,13 +439,15 @@ document.addEventListener('DOMContentLoaded', function() {
         return { el: section, cards };
     });
     const frequentSection = document.getElementById('ap-frequent');
+    const recentSection = document.getElementById('ap-recent');
 
     function applyFilter(qRaw) {
         const q = (qRaw || '').trim().toLowerCase();
         box.classList.toggle('has-text', q.length > 0);
 
-        // Hide the Frequent row while filtering — the user wants to find something specific
+        // Hide the Recent + Frequent rows while filtering — the user wants to find something specific
         if (frequentSection) frequentSection.style.display = q ? 'none' : '';
+        if (recentSection) recentSection.style.display = q ? 'none' : '';
 
         let anyVisible = 0;
         sectionData.forEach(({ el, cards }) => {

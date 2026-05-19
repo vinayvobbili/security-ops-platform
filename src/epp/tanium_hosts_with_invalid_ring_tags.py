@@ -225,6 +225,9 @@ def generate_report(instance_filter="cloud", progress_callback=None):
         filename=f"all_tanium_hosts_{instance_label}.xlsx"
     )
     if not all_hosts_file:
+        if client.skipped_instances:
+            skip_details = "; ".join(f"{n}: {e}" for n, e in client.skipped_instances.items())
+            raise ValueError(f"No computers retrieved from Tanium ({instance_filter})! Skipped: {skip_details}")
         raise ValueError(f"No computers retrieved from Tanium ({instance_filter})!")
 
     # Step 2: Filter hosts that already have ring tags

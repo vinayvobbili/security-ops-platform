@@ -13,6 +13,7 @@ KillMode=mixed
 TimeoutStopSec=10
 RestartSec=10
 Environment=PYTHONUNBUFFERED=1
+Environment=CCR_SHIM_CAPTURE_DIR=/home/vinay/security-ops-platform/data/transient/shim_captures
 StandardOutput=append:/home/vinay/security-ops-platform/data/transient/logs/claude_router_shim.log
 StandardError=append:/home/vinay/security-ops-platform/data/transient/logs/claude_router_shim.log
 

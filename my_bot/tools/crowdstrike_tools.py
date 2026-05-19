@@ -10,6 +10,7 @@ containment status checking, and device information retrieval.
 import logging
 from typing import Optional
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 # Import CrowdStrike client
 from services.crowdstrike import CrowdStrikeClient
@@ -33,7 +34,7 @@ def _get_crowdstrike_client() -> Optional[CrowdStrikeClient]:
     return _crowdstrike_client
 
 
-@tool
+@readonly_tool
 @validate_args(hostname=HOSTNAME_PATTERN)
 @log_tool_call
 def get_device_containment_status(hostname: str) -> str:
@@ -74,7 +75,7 @@ def get_device_containment_status(hostname: str) -> str:
     return f"Unable to retrieve containment status for hostname '{hostname}'."
 
 
-@tool
+@readonly_tool
 @validate_args(hostname=HOSTNAME_PATTERN)
 @log_tool_call
 def get_device_online_status(hostname: str) -> str:
@@ -99,7 +100,7 @@ def get_device_online_status(hostname: str) -> str:
     return f"Unable to retrieve online status for hostname '{hostname}'. Device may not exist in CrowdStrike."
 
 
-@tool
+@readonly_tool
 @validate_args(hostname=HOSTNAME_PATTERN)
 @log_tool_call
 def get_device_details_cs(hostname: str) -> str:
@@ -267,7 +268,7 @@ def _format_cs_incident_result(incidents: list) -> str:
     return "\n".join(lines)
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_crowdstrike_detections(limit: int = 10, status: str = "") -> str:
     """Get recent detections from CrowdStrike Falcon EDR platform.
@@ -304,7 +305,7 @@ def get_crowdstrike_detections(limit: int = 10, status: str = "") -> str:
     return _format_cs_detection_result(detections)
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_crowdstrike_detection_details(detection_id: str) -> str:
     """Get detailed information about a specific CrowdStrike alert/detection.
@@ -381,7 +382,7 @@ def get_crowdstrike_detection_details(detection_id: str) -> str:
     return "\n".join(lines)
 
 
-@tool
+@readonly_tool
 @validate_args(hostname=HOSTNAME_PATTERN)
 @log_tool_call
 def search_crowdstrike_detections_by_hostname(hostname: str, limit: int = 10) -> str:
@@ -414,7 +415,7 @@ def search_crowdstrike_detections_by_hostname(hostname: str, limit: int = 10) ->
     return _format_cs_detection_result(detections)
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_crowdstrike_incidents(limit: int = 10, status: str = "") -> str:
     """Get recent incidents from CrowdStrike Falcon platform.
@@ -450,7 +451,7 @@ def get_crowdstrike_incidents(limit: int = 10, status: str = "") -> str:
     return _format_cs_incident_result(incidents)
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_crowdstrike_incident_details(incident_id: str) -> str:
     """Get detailed information about a specific CrowdStrike incident.
@@ -536,7 +537,7 @@ def get_and_clear_generated_file_path():
     return path
 
 
-@tool
+@readonly_tool
 @validate_args(hostname=HOSTNAME_PATTERN)
 @log_tool_call
 def collect_browser_history(hostname: str, days: int = 7, platform: str = None) -> str:
@@ -951,7 +952,7 @@ def save_to_excel(entries: list[dict], filename_prefix: str, columns: list[str] 
 # LogScale Event Search Tool
 # =============================================================================
 
-@tool
+@readonly_tool
 @validate_args(hostname=HOSTNAME_PATTERN)
 @log_tool_call
 def search_falcon_events(

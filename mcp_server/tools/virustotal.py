@@ -17,35 +17,35 @@ def _get_client():
     return _client
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def virustotal_lookup_ip(ip_address: str) -> dict:
     """Get VirusTotal reputation and analysis for an IP address."""
     client = _get_client()
     return client.lookup_ip(ip_address)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def virustotal_lookup_domain(domain: str) -> dict:
     """Get VirusTotal reputation and analysis for a domain."""
     client = _get_client()
     return client.lookup_domain(domain)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def virustotal_lookup_url(url: str) -> dict:
     """Get VirusTotal reputation and analysis for a URL."""
     client = _get_client()
     return client.lookup_url(url)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def virustotal_lookup_hash(file_hash: str) -> dict:
     """Get VirusTotal analysis for a file hash (MD5/SHA1/SHA256)."""
     client = _get_client()
     return client.lookup_hash(file_hash)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def virustotal_search_malware(name: str, limit: int = 5) -> dict:
     """Search VirusTotal for malware families by name.
 
@@ -57,7 +57,7 @@ def virustotal_search_malware(name: str, limit: int = 5) -> dict:
     return client.search_malware_name(name, limit=limit)
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def virustotal_reanalyze(indicator: str) -> dict:
     """Request VirusTotal to re-scan an indicator with the latest engines.
 

@@ -225,6 +225,9 @@ class TaniumDataLoader:
         all_hosts_filename = client.get_and_export_all_computers()
 
         if not all_hosts_filename:
+            if client.skipped_instances:
+                skip_details = "; ".join(f"{n}: {e}" for n, e in client.skipped_instances.items())
+                raise ValueError(f"No computers retrieved from any instance! Skipped: {skip_details}")
             raise ValueError("No computers retrieved from any instance!")
 
         computers = self._parse_excel_file(all_hosts_filename)

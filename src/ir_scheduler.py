@@ -201,22 +201,25 @@ def safe_run(*jobs: Callable[[], None], timeout: int = DEFAULT_JOB_TIMEOUT, name
 # Helper functions for cleaner scheduling
 # ----------------------------------------------------------------------------------
 
-def schedule_daily(time_str: str, *jobs: Callable[[], None], name: str = None) -> None:
+def schedule_daily(time_str: str, *jobs: Callable[[], None], name: str = None,
+                   timeout: int = DEFAULT_JOB_TIMEOUT) -> None:
     """Schedule a set of jobs to run daily at a given time (Eastern).
 
     Args:
         time_str: Time in 'HH:MM' format (Eastern timezone)
         *jobs: One or more callable jobs to execute
         name: Optional descriptive name for logs
+        timeout: Per-job timeout in seconds (applied to each job in the set)
     """
-    schedule.every().day.at(time_str, eastern).do(lambda: safe_run(*jobs, name=name))
+    schedule.every().day.at(time_str, eastern).do(lambda: safe_run(*jobs, name=name, timeout=timeout))
 
 
-def schedule_group(time_str: str, name: str, jobs: Iterable[Callable[[], None]]) -> None:
+def schedule_group(time_str: str, name: str, jobs: Iterable[Callable[[], None]],
+                   timeout: int = DEFAULT_JOB_TIMEOUT) -> None:
     """Schedule a named group of jobs and log registration."""
     job_list = list(jobs)
-    logger.info(f"Scheduling {name} ({len(job_list)} job(s)) at {time_str} ET")
-    schedule_daily(time_str, *job_list, name=name)
+    logger.info(f"Scheduling {name} ({len(job_list)} job(s)) at {time_str} ET, per-job timeout={timeout}s")
+    schedule_daily(time_str, *job_list, name=name, timeout=timeout)
 
 
 def schedule_shift(time_str: str, shift_name: str, room_id: str) -> None:
@@ -275,6 +278,9 @@ CHART_GROUPS: List[dict] = [
     {
         'time': '00:02',
         'name': 'Group 1: Basic metrics charts',
+        # inflow.make_chart paginates 12 months of XSOAR tickets; longer
+        # timeout absorbs slow-network days without firing a false alarm.
+        'timeout': 3600,
         'jobs': [
             _lazy_chart('aging_tickets'),
             _lazy_chart('inflow'),
@@ -282,7 +288,6 @@ CHART_GROUPS: List[dict] = [
             _lazy_chart('mttr_mttc'),
             _lazy_chart('sla_breaches'),
             _lazy_chart('threatcon_level'),
-            lambda: __import__('secops').send_daily_operational_report_charts(get_config().webex_room_id_metrics)
         ]
     },
     {
@@ -359,7 +364,16 @@ def main() -> None:
 
     # Chart groups (data-driven)
     for group in CHART_GROUPS:
-        schedule_group(group['time'], group['name'], group['jobs'])
+        schedule_group(group['time'], group['name'], group['jobs'],
+                       timeout=group.get('timeout', DEFAULT_JOB_TIMEOUT))
+
+    # Daily operational report dispatch runs after all chart groups so it
+    # sees today's PNGs; inline dispatch races inflow's 12-month fetch.
+    schedule_daily(
+        '00:45',
+        lambda: __import__('secops').send_daily_operational_report_charts(get_config().webex_room_id_metrics),
+        name="daily_operational_report_dispatch"
+    )
 
     # Ticket cache - RUNS LAST to avoid interfering with chart generation
     # Scheduled after all chart jobs complete (charts finish by ~00:30)
@@ -484,17 +498,17 @@ def main() -> None:
         lambda: safe_run(_xsoar_timeline_monthly_sync, name="xsoar_timeline_sync", timeout=3600)
     )
 
-    # Biweekly control-efficacy analytics analysis - systemic security gap charts + strategic report
+    # Biweekly Defense Pulse analysis - systemic security gap charts + strategic report
     # Runs on even ISO weeks (Monday after ticket cache has refreshed)
     def _defense_pulse_biweekly():
         iso_week = datetime.now(eastern).isocalendar()[1]
         if iso_week % 2 != 0:
-            logger.info(f"control-efficacy analytics skipped — odd ISO week {iso_week} (runs biweekly on even weeks)")
+            logger.info(f"Defense Pulse skipped — odd ISO week {iso_week} (runs biweekly on even weeks)")
             return
         from src.charts import defense_pulse
         safe_run(lambda: defense_pulse.make_chart(room_id=config.webex_room_id_metrics), name="defense_pulse_biweekly")
 
-    logger.info("Scheduling biweekly control-efficacy analytics analysis (even-week Monday 06:00 ET)...")
+    logger.info("Scheduling biweekly Defense Pulse analysis (even-week Monday 06:00 ET)...")
     schedule.every().monday.at('06:00', eastern).do(_defense_pulse_biweekly)
 
     # Weekly ticket pattern analysis - identifies top offenders and creates AZDO user story

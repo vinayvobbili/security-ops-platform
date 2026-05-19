@@ -1,0 +1,468 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'Regulatory Acceleration Matrix' %}
+{% set page_title_left_icon = '⚖️' %}
+{% set page_title_right_icon = '🛡️' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/regulatory_acceleration_matrix.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/chat_widget.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="ram-container">
+
+    <div class="ram-info-strip">
+        <button class="ram-info-btn" onclick="document.getElementById('ramInfoModal').style.display='flex'" title="How does this work?">
+            <span class="ram-info-btn-icon">✦</span> How does this work?
+        </button>
+    </div>
+
+    <div class="ram-intro">
+        v1 prototype for AI Intake #7 (the stakeholder). Crosswalks <strong>GDPR / CCPA / HIPAA</strong>
+        against <strong>NIST CSF 2.0</strong> control families. A few cells pull live evidence
+        from CrowdStrike and ServiceNow; everything else is seeded placeholder data so the
+        shape is reactable. Answer the <strong>Questions for v2</strong> at the bottom to drive
+        the next iteration.
+    </div>
+
+    <div class="ram-synthetic-banner">
+        🦸 <strong>Mostly demo data:</strong> Live cells are badged
+        <span class="ram-pill ram-pill-live">LIVE</span>; everything else is
+        <span class="ram-pill ram-pill-seed">DEMO</span> placeholder. The matrix structure is
+        the deliverable here, not the specific numbers.
+    </div>
+
+    <div class="ram-summary" id="ramSummary">
+        <div class="ram-kpi ram-kpi-covered"><div class="ram-kpi-val" id="kpiCovered">…</div><div class="ram-kpi-lbl">Covered</div></div>
+        <div class="ram-kpi ram-kpi-partial"><div class="ram-kpi-val" id="kpiPartial">…</div><div class="ram-kpi-lbl">Partial</div></div>
+        <div class="ram-kpi ram-kpi-gap"><div class="ram-kpi-val" id="kpiGap">…</div><div class="ram-kpi-lbl">Gap</div></div>
+        <div class="ram-kpi ram-kpi-unknown"><div class="ram-kpi-val" id="kpiUnknown">…</div><div class="ram-kpi-lbl">Unknown</div></div>
+        <div class="ram-kpi ram-kpi-total"><div class="ram-kpi-val" id="kpiTotal">…</div><div class="ram-kpi-lbl">Total cells</div></div>
+    </div>
+
+    <h2 class="ram-section-title">📋 Crosswalk</h2>
+    <div class="ram-matrix-wrap">
+        <table class="ram-matrix" id="ramMatrix">
+            <thead>
+                <tr id="ramMatrixHead"><th class="ram-col-family">Control Family (NIST CSF 2.0)</th></tr>
+            </thead>
+            <tbody id="ramMatrixBody">
+                <tr><td colspan="4" class="ram-empty">Loading crosswalk…</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h2 class="ram-section-title">📡 Regulatory Pulse <span class="ram-section-tag">demo feed</span></h2>
+    <div class="ram-pulse" id="ramPulse">Loading…</div>
+
+    <h2 class="ram-section-title">❓ Questions for v2 <span class="ram-section-tag">for stakeholders</span></h2>
+    <div class="ram-v2-intro">
+        These are the scoping questions that drive v2. Answer inline or in our follow-up — each
+        answer either narrows scope or unblocks a real integration.
+    </div>
+    <div class="ram-v2" id="ramV2">Loading…</div>
+
+</div>
+
+<!-- Cell detail side panel -->
+<div class="ram-side-backdrop" id="ramSideBackdrop" style="display:none;" onclick="if(event.target===this)closeSidePanel()">
+    <aside class="ram-side" id="ramSide">
+        <div class="ram-side-head">
+            <h3 id="ramSideTitle">Cell detail</h3>
+            <button class="ram-side-close" onclick="closeSidePanel()">&times;</button>
+        </div>
+        <div class="ram-side-body" id="ramSideBody"></div>
+    </aside>
+</div>
+
+{% include '_chat_widget.html' %}
+
+<!-- How does this work? modal -->
+<div class="ram-info-backdrop" id="ramInfoModal" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+    <div class="ram-info-modal" onclick="event.stopPropagation()">
+        <div class="ram-info-header">
+            <h3>How does the Regulatory Acceleration Matrix work?</h3>
+            <button class="ram-info-close" onclick="document.getElementById('ramInfoModal').style.display='none'">&times;</button>
+        </div>
+        <div class="ram-info-body">
+
+            <div class="ram-info-section">
+                <div class="ram-info-icon">🎯</div>
+                <div>
+                    <h4>The problem it solves</h4>
+                    <p>Regulatory changes land in legal/compliance inboxes and stay there. By the time a security team learns that GDPR Art 32 just got tightened or CCPA expanded "sensitive PI", control coverage gaps have already opened. This page is a <strong>live crosswalk</strong> from regulations to control families, so a single new regulation maps instantly to "which control rows do I need to re-check?"</p>
+                </div>
+            </div>
+
+            <div class="ram-info-section">
+                <div class="ram-info-icon">🧩</div>
+                <div>
+                    <h4>1. Crosswalk matrix</h4>
+                    <p>Rows are NIST CSF 2.0 control families (placeholder for the company's internal control catalog — that's a v2 question). Columns are regulations. Each cell is colored by coverage state — <strong>covered / partial / gap / unknown</strong> — and clicking any cell shows the regulation citations and the evidence backing the call.</p>
+                </div>
+            </div>
+
+            <div class="ram-info-section">
+                <div class="ram-info-icon">📡</div>
+                <div>
+                    <h4>2. Real evidence where we have it</h4>
+                    <p>The <span class="ram-pill ram-pill-live">LIVE</span> badge means the evidence number came from an actual API at page load (cached 10 min): <strong>CrowdStrike</strong> fleet size + active detection counts, <strong>ServiceNow</strong> MIM incident volume. Everything else is <span class="ram-pill ram-pill-seed">DEMO</span> — clearly placeholder, designed to be replaced by Varonis / PAM / DLP / IAM hookups in v2.</p>
+                </div>
+            </div>
+
+            <div class="ram-info-section">
+                <div class="ram-info-icon">🤖</div>
+                <div>
+                    <h4>3. AI: regulatory impact diff</h4>
+                    <p>The Regulatory Pulse panel surfaces incoming regulatory changes. Clicking <strong>Analyze impact</strong> sends the change to an LLM with the current control families and asks: "which rows does this update touch, and what action is implied?" Output is a structured JSON answer with rationale + suggested action per affected row. <strong>This is the AI wedge.</strong> The rest of the product is GRC workflow.</p>
+                </div>
+            </div>
+
+            <div class="ram-info-section">
+                <div class="ram-info-icon">💬</div>
+                <div>
+                    <h4>4. Ask the matrix</h4>
+                    <p>The chat widget bottom-right has the <strong>full crosswalk + live evidence + pulse feed</strong> loaded as context. Ask things like <em>"which rows are gap?"</em>, <em>"what's HIPAA coverage today?"</em>, <em>"which controls back our breach-notification posture?"</em> — answers come from the actual matrix on this page.</p>
+                </div>
+            </div>
+
+            <div class="ram-info-section">
+                <div class="ram-info-icon">🗺️</div>
+                <div>
+                    <h4>5. v1 → v2 path</h4>
+                    <p>v1 (today): crosswalk shape, two real integrations, AI impact-diff loop, scoping questions surfaced on-page. v2 (after stakeholders answer the questions): the company internal control catalog, real regulatory-update feed, live Varonis/PAM/DLP evidence cells, gap → ServiceNow workflow, posture-portal overlap resolved.</p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    var COV_ORDER = ['covered', 'partial', 'gap', 'unknown'];
+    var data = null;
+
+    function el(tag, cls, txt) {
+        var e = document.createElement(tag);
+        if (cls) e.className = cls;
+        if (txt != null) e.textContent = txt;
+        return e;
+    }
+
+    function renderSummary(s) {
+        document.getElementById('kpiCovered').textContent = s.covered;
+        document.getElementById('kpiPartial').textContent = s.partial;
+        document.getElementById('kpiGap').textContent = s.gap;
+        document.getElementById('kpiUnknown').textContent = s.unknown;
+        document.getElementById('kpiTotal').textContent = s.total_cells;
+    }
+
+    function renderMatrix() {
+        var head = document.getElementById('ramMatrixHead');
+        var body = document.getElementById('ramMatrixBody');
+        head.innerHTML = '';
+        body.innerHTML = '';
+
+        var th0 = el('th', 'ram-col-family', 'Control Family (NIST CSF 2.0)');
+        head.appendChild(th0);
+        data.regulations.forEach(function(r) {
+            var th = el('th', 'ram-col-reg');
+            th.innerHTML = '<div class="ram-reg-name">' + r.name + '</div><div class="ram-reg-scope">' + r.scope + '</div>';
+            head.appendChild(th);
+        });
+
+        data.control_families.forEach(function(fam) {
+            var tr = el('tr');
+            var tdFam = el('td', 'ram-fam-cell');
+            tdFam.innerHTML = '<div class="ram-fam-id">' + fam.id + '</div><div class="ram-fam-name">' + fam.name + '</div><div class="ram-fam-func">' + fam.function + '</div>';
+            tr.appendChild(tdFam);
+
+            data.regulations.forEach(function(r) {
+                var cell = (data.cells[fam.id] || {})[r.id] || {coverage:'unknown', citations:[], evidence:[]};
+                var td = el('td', 'ram-cell ram-cov-' + cell.coverage);
+                td.setAttribute('data-fam', fam.id);
+                td.setAttribute('data-reg', r.id);
+
+                var hasLive = (cell.evidence || []).some(function(e){ return e.kind === 'live'; });
+                td.innerHTML =
+                    '<div class="ram-cov-label">' + cell.coverage + '</div>' +
+                    '<div class="ram-cell-meta">' +
+                        (hasLive ? '<span class="ram-pill ram-pill-live">LIVE</span>' : '<span class="ram-pill ram-pill-seed">DEMO</span>') +
+                        ' <span class="ram-cite-count">' + (cell.citations || []).length + ' cite' + ((cell.citations||[]).length===1?'':'s') + '</span>' +
+                    '</div>';
+                td.addEventListener('click', function() { openSidePanel(fam, r, cell); });
+                tr.appendChild(td);
+            });
+
+            body.appendChild(tr);
+        });
+    }
+
+    function openSidePanel(fam, reg, cell) {
+        document.getElementById('ramSideTitle').textContent = reg.name + ' × ' + fam.id + ' — ' + fam.name;
+        var body = document.getElementById('ramSideBody');
+        body.innerHTML = '';
+
+        var cov = el('div', 'ram-side-cov ram-cov-' + cell.coverage);
+        cov.textContent = 'Coverage: ' + cell.coverage;
+        body.appendChild(cov);
+
+        body.appendChild(el('h4', 'ram-side-h', 'Regulation citations'));
+        var citeList = el('ul', 'ram-side-cite');
+        (cell.citations || []).forEach(function(c) { citeList.appendChild(el('li', null, c)); });
+        if (!(cell.citations || []).length) citeList.appendChild(el('li', 'ram-muted', '— none recorded —'));
+        body.appendChild(citeList);
+
+        body.appendChild(el('h4', 'ram-side-h', 'Evidence'));
+        if (!(cell.evidence || []).length) {
+            body.appendChild(el('div', 'ram-muted', '— no evidence sources mapped —'));
+        } else {
+            cell.evidence.forEach(function(ev) {
+                var ebox = el('div', 'ram-evidence ' + (ev.kind === 'live' ? 'ram-evidence-live' : 'ram-evidence-seed'));
+                var lbl = el('div', 'ram-evidence-lbl');
+                var pill = el('span', 'ram-pill ' + (ev.kind === 'live' ? 'ram-pill-live' : 'ram-pill-seed'), ev.kind.toUpperCase());
+                lbl.appendChild(pill);
+                lbl.appendChild(document.createTextNode(' ' + ev.label));
+                ebox.appendChild(lbl);
+                ebox.appendChild(el('div', 'ram-evidence-val', ev.value));
+                ebox.appendChild(el('div', 'ram-evidence-src', 'source: ' + ev.source));
+                if (ev.error) ebox.appendChild(el('div', 'ram-evidence-err', 'error: ' + ev.error));
+                body.appendChild(ebox);
+            });
+        }
+
+        document.getElementById('ramSideBackdrop').style.display = 'flex';
+    }
+    window.closeSidePanel = function() {
+        document.getElementById('ramSideBackdrop').style.display = 'none';
+    };
+
+    var POLL_INTERVAL_MS = 5000;
+    var pollTimer = null;
+
+    function renderImpactPayload(payload) {
+        if (!payload || payload.status === 'pending') {
+            return '<div class="ram-pulse-loading">' +
+                       '<span class="ram-spinner"></span> ' +
+                       '🤖 Generating impact analysis…' +
+                   '</div>';
+        }
+        if (payload.status === 'error') {
+            return '<div class="ram-pulse-err">LLM error: ' + (payload.error || 'unknown') + '</div>';
+        }
+        var html = '<div class="ram-pulse-headline">' + (payload.headline || '') + '</div>';
+        (payload.affected || []).forEach(function(a) {
+            html += '<div class="ram-pulse-impact">' +
+                        '<div class="ram-pulse-impact-fam"><code>' + a.family_id + '</code></div>' +
+                        '<div class="ram-pulse-impact-text">' +
+                            '<div>' + (a.rationale || '') + '</div>' +
+                            '<div class="ram-pulse-impact-action">→ ' + (a.action || '') + '</div>' +
+                        '</div>' +
+                   '</div>';
+        });
+        if (payload.generated_at) {
+            html += '<div class="ram-pulse-gen">Generated ' + payload.generated_at + '</div>';
+        }
+        return html;
+    }
+
+    function renderPulse() {
+        var wrap = document.getElementById('ramPulse');
+        wrap.innerHTML = '';
+        data.pulse.forEach(function(p) {
+            var impact = (data.pulse_impacts || {})[p.id];
+            var card = el('div', 'ram-pulse-card');
+            card.innerHTML =
+                '<div class="ram-pulse-top">' +
+                    '<span class="ram-pulse-reg">' + p.regulation + '</span>' +
+                    '<span class="ram-pulse-eff">Effective: ' + p.effective_date + '</span>' +
+                '</div>' +
+                '<h4 class="ram-pulse-title">' + p.title + '</h4>' +
+                '<p class="ram-pulse-summary">' + p.summary + '</p>' +
+                '<div class="ram-pulse-likely">Likely affects: ' + (p.likely_affects || []).map(function(f){return '<code>'+f+'</code>';}).join(' ') + '</div>' +
+                '<div class="ram-pulse-impact-block" id="pulse-impact-' + p.id + '">' + renderImpactPayload(impact) + '</div>' +
+                '<div class="ram-pulse-actions">' +
+                    '<button class="ram-pulse-btn" data-id="' + p.id + '" ' + ((!impact || impact.status === 'pending') ? 'disabled' : '') + '>↻ Re-analyze</button>' +
+                '</div>';
+            wrap.appendChild(card);
+        });
+
+        wrap.querySelectorAll('.ram-pulse-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var pid = btn.getAttribute('data-id');
+                var block = document.getElementById('pulse-impact-' + pid);
+                btn.disabled = true;
+                btn.textContent = '⏳ Analyzing…';
+                block.innerHTML = renderImpactPayload({status: 'pending'});
+                fetch('/api/regulatory-acceleration-matrix/impact/' + pid + '?force=true', {method: 'POST'})
+                    .then(function(r) { return r.json(); })
+                    .then(function(out) {
+                        btn.disabled = false;
+                        btn.textContent = '↻ Re-analyze';
+                        block.innerHTML = renderImpactPayload(out);
+                        if (data.pulse_impacts) data.pulse_impacts[pid] = out;
+                    })
+                    .catch(function(e) {
+                        btn.disabled = false;
+                        btn.textContent = '↻ Re-analyze';
+                        block.innerHTML = '<div class="ram-pulse-err">Request failed: ' + e + '</div>';
+                    });
+            });
+        });
+
+        // If any impact is still pending (initial warmup), poll until they're all ready.
+        var anyPending = (data.pulse || []).some(function(p) {
+            var imp = (data.pulse_impacts || {})[p.id];
+            return !imp || imp.status === 'pending';
+        });
+        if (anyPending && !pollTimer) {
+            pollTimer = setInterval(pollImpacts, POLL_INTERVAL_MS);
+        }
+    }
+
+    function pollImpacts() {
+        fetch('/api/regulatory-acceleration-matrix/impacts')
+            .then(function(r) { return r.json(); })
+            .then(function(impacts) {
+                data.pulse_impacts = impacts;
+                var stillPending = false;
+                data.pulse.forEach(function(p) {
+                    var imp = impacts[p.id];
+                    var block = document.getElementById('pulse-impact-' + p.id);
+                    if (block) block.innerHTML = renderImpactPayload(imp);
+                    var btn = document.querySelector('.ram-pulse-btn[data-id="' + p.id + '"]');
+                    if (btn) btn.disabled = (!imp || imp.status === 'pending');
+                    if (!imp || imp.status === 'pending') stillPending = true;
+                });
+                if (!stillPending && pollTimer) {
+                    clearInterval(pollTimer);
+                    pollTimer = null;
+                }
+            })
+            .catch(function() { /* swallow — try again next tick */ });
+    }
+
+    function renderV2() {
+        var wrap = document.getElementById('ramV2');
+        wrap.innerHTML = '';
+        data.v2_questions.forEach(function(q, i) {
+            var card = el('div', 'ram-v2-card');
+            card.innerHTML =
+                '<div class="ram-v2-num">' + (i + 1) + '</div>' +
+                '<div class="ram-v2-body">' +
+                    '<h4 class="ram-v2-q">' + q.question + '</h4>' +
+                    '<p class="ram-v2-ctx">' + q.context + '</p>' +
+                '</div>';
+            wrap.appendChild(card);
+        });
+    }
+
+    function hasLoadingLiveEvidence(d) {
+        if (!d || !d.cells) return false;
+        var fids = Object.keys(d.cells);
+        for (var i = 0; i < fids.length; i++) {
+            var row = d.cells[fids[i]];
+            var rids = Object.keys(row);
+            for (var j = 0; j < rids.length; j++) {
+                var evs = (row[rids[j]].evidence || []);
+                for (var k = 0; k < evs.length; k++) {
+                    if (evs[k].kind === 'live' && evs[k].status === 'loading') return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    var matrixPollAttempts = 0;
+    var MATRIX_POLL_MAX = 12;       // ~1 min ceiling
+    var MATRIX_POLL_INTERVAL_MS = 5000;
+
+    function loadMatrixData(isPoll) {
+        fetch('/api/regulatory-acceleration-matrix/data')
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                data = d;
+                window._ramData = d;
+                renderSummary(d.summary);
+                renderMatrix();
+                if (!isPoll) {
+                    renderPulse();
+                    renderV2();
+                }
+                if (hasLoadingLiveEvidence(d) && matrixPollAttempts < MATRIX_POLL_MAX) {
+                    matrixPollAttempts++;
+                    setTimeout(function() { loadMatrixData(true); }, MATRIX_POLL_INTERVAL_MS);
+                }
+            })
+            .catch(function(e) {
+                if (!isPoll) {
+                    document.getElementById('ramMatrixBody').innerHTML = '<tr><td colspan="4" class="ram-empty">Failed to load: ' + e + '</td></tr>';
+                }
+            });
+    }
+
+    loadMatrixData(false);
+})();
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="{{ url_for('static', filename='js/chat_widget.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    initChatWidget({
+        title: 'Ask about the matrix',
+        greeting: 'Hi! I have the full crosswalk, live evidence, and pulse feed loaded. Ask me about coverage gaps, citations, or which rows a new regulation touches.',
+        loadingMessages: [
+            'Reading the crosswalk…',
+            'Looking up citations…',
+            'Cross-referencing controls…'
+        ],
+        chips: [
+            {label: 'Which rows are gaps?', q: 'Which control families × regulation cells are currently in "gap" status?'},
+            {label: 'HIPAA coverage', q: 'Summarize our HIPAA coverage across all control families.'},
+            {label: 'Breach-notification posture', q: 'Which controls back our breach-notification posture, and what evidence supports them?'},
+            {label: 'Top 3 v2 priorities', q: 'Based on the gaps and the v2 questions, what would you prioritize first?'}
+        ],
+        getContext: function() {
+            var d = window._ramData;
+            if (!d) return '# Regulatory Acceleration Matrix\n\n(still loading)';
+            var lines = [
+                '# Regulatory Acceleration Matrix — v1 demo',
+                '',
+                'NOTE: Cells marked LIVE pull from real APIs (CrowdStrike, ServiceNow). Cells marked DEMO are seeded placeholders.',
+                '',
+                'Summary: ' + d.summary.covered + ' covered, ' + d.summary.partial + ' partial, ' + d.summary.gap + ' gap, ' + d.summary.unknown + ' unknown (of ' + d.summary.total_cells + ' cells).',
+                '',
+                '## Crosswalk',
+                '',
+                '| Control Family | ' + d.regulations.map(function(r){return r.name;}).join(' | ') + ' |',
+                '| --- | ' + d.regulations.map(function(){return '---';}).join(' | ') + ' |'
+            ];
+            d.control_families.forEach(function(fam) {
+                var row = '| ' + fam.id + ' — ' + fam.name + ' |';
+                d.regulations.forEach(function(reg) {
+                    var c = (d.cells[fam.id] || {})[reg.id] || {};
+                    var ev = (c.evidence || []).map(function(e){ return '[' + e.kind + '] ' + e.label + ': ' + e.value; }).join('; ');
+                    row += ' ' + (c.coverage || 'unknown') + ' (cites: ' + (c.citations||[]).join(', ') + '; evidence: ' + ev + ') |';
+                });
+                lines.push(row);
+            });
+            lines.push('');
+            lines.push('## Regulatory pulse (demo feed)');
+            d.pulse.forEach(function(p) {
+                lines.push('- ' + p.regulation + ': ' + p.title + ' (effective ' + p.effective_date + ') — likely affects ' + (p.likely_affects||[]).join(', '));
+            });
+            lines.push('');
+            lines.push('## v2 questions for stakeholders');
+            d.v2_questions.forEach(function(q, i) {
+                lines.push((i+1) + '. ' + q.question + ' — ' + q.context);
+            });
+            return lines.join('\n');
+        }
+    });
+});
+</script>
+{% endblock %}

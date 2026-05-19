@@ -8,6 +8,7 @@ details and local runbook/playbook documentation (GDnR guides).
 import logging
 from typing import Dict, Any, List
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 from src.utils.tool_decorator import log_tool_call
 from services.xsoar.ticket_handler import TicketHandler
@@ -228,7 +229,7 @@ IMPORTANT GUIDELINES:
         return f"Error generating remediation guidance: {str(e)}"
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def suggest_remediation(ticket_id: str, environment: str = "prod") -> str:
     """

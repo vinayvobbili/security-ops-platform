@@ -60,7 +60,7 @@ def _resolve_hostname(employee_id: str) -> Optional[str]:
     return employee_id
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def get_network_connections(
     employee_id: str, days: int = 30, limit: int = 100
 ) -> dict:
@@ -93,7 +93,7 @@ def get_network_connections(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def get_process_timeline(
     employee_id: str, days: int = 30, summary_only: bool = False, limit: int = 100
 ) -> dict:
@@ -127,7 +127,7 @@ def get_process_timeline(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def get_installed_software(employee_id: str) -> dict:
     """Get installed software inventory for an employee's device from Tanium.
 

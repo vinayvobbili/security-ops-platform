@@ -9,6 +9,7 @@ import logging
 from typing import Optional
 
 from langchain_core.tools import tool
+from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 from services.vectra import VectraClient
 from src.utils.tool_decorator import log_tool_call
@@ -204,7 +205,7 @@ def _format_single_entity(ent: dict) -> str:
     return "\n".join(lines)
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_vectra_detections(
     limit: int = 20,
@@ -241,7 +242,7 @@ def get_vectra_detections(
     return _format_detection_result(detections)
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_vectra_detection_details(detection_id: int) -> str:
     """Get detailed information about a specific Vectra detection.
@@ -264,7 +265,7 @@ def get_vectra_detection_details(detection_id: int) -> str:
     return _format_single_detection(data)
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_high_threat_detections(min_threat: int = 50, limit: int = 10) -> str:
     """Get high-threat detections from Vectra requiring immediate attention.
@@ -297,7 +298,7 @@ def get_high_threat_detections(min_threat: int = 50, limit: int = 10) -> str:
     return _format_detection_result(detections)
 
 
-@tool
+@readonly_tool
 @validate_args(hostname=HOSTNAME_PATTERN)
 @log_tool_call
 def search_vectra_entity_by_hostname(hostname: str) -> str:
@@ -327,7 +328,7 @@ def search_vectra_entity_by_hostname(hostname: str) -> str:
     return _format_entity_result(entities)
 
 
-@tool
+@readonly_tool
 @validate_args(ip_address=IP_ADDRESS_PATTERN)
 @log_tool_call
 def search_vectra_entity_by_ip(ip_address: str) -> str:
@@ -357,7 +358,7 @@ def search_vectra_entity_by_ip(ip_address: str) -> str:
     return _format_entity_result(entities)
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_vectra_entity_details(entity_id: int) -> str:
     """Get detailed information about a specific Vectra entity.
@@ -380,7 +381,7 @@ def get_vectra_entity_details(entity_id: int) -> str:
     return _format_single_entity(data)
 
 
-@tool
+@readonly_tool
 @log_tool_call
 def get_prioritized_vectra_entities(limit: int = 10) -> str:
     """Get prioritized entities from Vectra requiring investigation.
@@ -429,7 +430,7 @@ def get_prioritized_vectra_entities(limit: int = 10) -> str:
 # =============================================================================
 # SAMPLE TEST PROMPTS
 # =============================================================================
-# Use these prompts to test Vectra tools via the the security assistant bot bot:
+# Use these prompts to test Vectra tools via the Pokedex bot:
 #
 # --- Detection Tools ---
 #

@@ -17,7 +17,7 @@ def _get_client():
     return _client
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def varonis_get_user_alerts(username: str, days: int = 7) -> dict:
     """Get Varonis security alerts for a specific user.
 
@@ -33,7 +33,7 @@ def varonis_get_user_alerts(username: str, days: int = 7) -> dict:
     return client.get_user_alerts(username, days=days)
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def varonis_get_data_activity(username: str, days: int = 7) -> dict:
     """Get Varonis data access activity for a user.
 

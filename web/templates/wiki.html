@@ -112,6 +112,7 @@
     {% else %}
     <!-- Home: tag filter + article cards grid -->
     <div class="wk-container" id="wkHomePanel">
+        {% if current_user %}
         <!-- Admin toolbar -->
         <div class="wk-admin-bar">
             <span class="wk-admin-label">Admin</span>
@@ -121,6 +122,7 @@
             </button>
             <button class="wk-admin-btn wk-admin-btn-alt" onclick="triggerCompile(true)" title="Force recompile all docs">Rebuild All</button>
         </div>
+        {% endif %}
 
         <!-- Tag Filter -->
         {% if all_tags %}

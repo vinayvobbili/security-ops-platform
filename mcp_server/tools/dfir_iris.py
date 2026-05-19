@@ -18,7 +18,7 @@ def _get_client():
     return _client
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def iris_list_cases(limit: int = 50) -> dict:
     """List all DFIR-IRIS cases.
 
@@ -30,7 +30,7 @@ def iris_list_cases(limit: int = 50) -> dict:
     return {"count": len(cases), "cases": cases}
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def iris_get_case(case_id: int) -> dict:
     """Get full details for a DFIR-IRIS case.
 
@@ -41,7 +41,7 @@ def iris_get_case(case_id: int) -> dict:
     return client.get_case(case_id)
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def iris_create_case(
     name: str,
     description: str,
@@ -74,7 +74,7 @@ def iris_create_case(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def iris_add_ioc(
     case_id: int,
     ioc_value: str,
@@ -104,7 +104,7 @@ def iris_add_ioc(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def iris_add_note(
     case_id: int, note_title: str, note_content: str, group_id: int = 1
 ) -> dict:
@@ -125,7 +125,7 @@ def iris_add_note(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def iris_add_timeline(
     case_id: int,
     event_title: str,
@@ -152,7 +152,7 @@ def iris_add_timeline(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def iris_create_alert(
     title: str,
     description: str,
@@ -188,7 +188,7 @@ def iris_create_alert(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def iris_add_asset(
     case_id: int,
     asset_name: str,
@@ -221,7 +221,7 @@ def iris_add_asset(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"readonly"})
 def iris_search_cases(query: str, limit: int = 20) -> dict:
     """Search DFIR-IRIS cases by keyword or filter.
 
@@ -242,7 +242,7 @@ def iris_search_cases(query: str, limit: int = 20) -> dict:
     return {"count": len(cases), "cases": cases}
 
 
-@mcp.tool()
+@mcp.tool(tags={"mutating"})
 def iris_close_case(case_id: int) -> dict:
     """Close a DFIR-IRIS case.
 
