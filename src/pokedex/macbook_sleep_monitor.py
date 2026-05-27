@@ -3,7 +3,7 @@
 MacBook Sleep/Wake Monitor for the security assistant bot Bot
 
 This script monitors macOS system events to detect when the MacBook goes to sleep
-and immediately restarts the the security assistant bot bot to prevent ZScaler from killing connections.
+and immediately restarts the security assistant bot to prevent the corporate proxy from killing connections.
 
 Uses multiple detection methods:
 1. System log monitoring for sleep/wake events
@@ -75,7 +75,7 @@ class MacBookSleepMonitor:
         return datetime.now() - self.last_restart_time > self.restart_cooldown
 
     def _restart_pokedex_bot(self, reason):
-        """Restart the the security assistant bot bot"""
+        """Restart the security assistant bot"""
         if not self._should_restart_bot():
             logger.info(f"Restart requested ({reason}) but cooldown active")
             return False

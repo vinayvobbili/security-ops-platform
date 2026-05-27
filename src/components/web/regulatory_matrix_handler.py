@@ -126,7 +126,7 @@ def _evidence_cs_fleet() -> Dict[str, Any]:
     """Live: total endpoints under CrowdStrike management.
 
     Falls back to a 'service unreachable' marker if auth fails — we don't want
-    the page to die because the corp network blocked us at request time.
+    the page to die because the network blocked us at request time.
     """
     cached = _cache_get("live_cs_fleet")
     if cached is not None:

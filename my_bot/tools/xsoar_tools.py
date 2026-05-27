@@ -823,7 +823,7 @@ def search_xsoar_tickets_by_hostname(hostname: str, limit: int = 30) -> str:
         cfg = _get_xsoar_config()
         app = get_config()
         client = get_prod_client()
-        team = app.team_name or "METCIRT"
+        team = app.team_name or "CIRT"
 
         rows = get_tickets(
             client, cfg.xsoar_prod_api_base_url, hostname, team,
@@ -927,7 +927,7 @@ def check_approved_testing_entries(identifier: str) -> str:
         cfg = _get_xsoar_config()
         app = get_config()
         client = get_prod_client()
-        team = app.team_name or "METCIRT"
+        team = app.team_name or "CIRT"
 
         rows = get_tickets(
             client, cfg.xsoar_prod_api_base_url, identifier, team,

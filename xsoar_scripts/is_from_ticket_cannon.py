@@ -8,7 +8,7 @@ and notify the Approved Testing Webex room.
 The silencer list is managed via the IR web app — all edits go through the web UI
 so that Webex notifications fire on every change.
 
-List name: METCIRT_Ticket_Cannon_Silencer
+List name: CIRT_Ticket_Cannon_Silencer
 
 Context outputs:
   - TicketCannonSilencer.IsMatch (bool): whether a silencer matched
@@ -24,7 +24,7 @@ import json
 import requests
 from datetime import datetime
 
-LIST_NAME = "METCIRT_Ticket_Cannon_Silencer"
+LIST_NAME = "CIRT_Ticket_Cannon_Silencer"
 
 # Fields that live at the top level of the incident (not under CustomFields)
 TOP_LEVEL_FIELDS = {"name", "type", "severity"}
@@ -63,9 +63,9 @@ def check_silencer_match(silencer, incident, custom_fields, labels_map):
 
 
 def get_webex_config():
-    """Fetch Webex config from the METCIRT Webex list."""
+    """Fetch Webex config from the CIRT Webex list."""
     try:
-        raw = demisto.executeCommand("getList", {"listName": "METCIRT Webex"})[0].get("Contents", "{}")
+        raw = demisto.executeCommand("getList", {"listName": "CIRT Webex"})[0].get("Contents", "{}")
         return json.loads(raw) if raw else {}
     except Exception:
         return {}
@@ -77,7 +77,7 @@ def notify_webex_suppression(incident, silencer):
         webex_config = get_webex_config()
         room_id = webex_config.get("channels", {}).get("vinay_test_dev", "")  # TODO: switch to security_testing_notifs for prod
         api_url = webex_config.get("api_url", "")
-        bot_token = webex_config.get("METCIRT_Bot_access_token", "")
+        bot_token = webex_config.get("CIRT_Bot_access_token", "")
 
         if not (room_id and api_url and bot_token):
             return

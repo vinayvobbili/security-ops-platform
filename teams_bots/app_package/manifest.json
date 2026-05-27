@@ -45,7 +45,7 @@
             { "title": "azdo_wit", "description": "Create Azure DevOps work item" },
             { "title": "tuning_request", "description": "Submit a detection tuning request" },
             { "title": "import", "description": "Import XSOAR ticket from prod to dev" },
-            { "title": "get_url_block_verdict_form", "description": "Test URL block status in ZScaler/Bloxone" },
+            { "title": "get_url_block_verdict_form", "description": "Test URL block status in the corporate proxy/Bloxone" },
             { "title": "domain_lookalike", "description": "Scan for lookalike domains" },
             { "title": "holidays", "description": "Show company holidays" },
             { "title": "health", "description": "Check bot health status" },

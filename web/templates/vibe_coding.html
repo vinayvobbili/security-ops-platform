@@ -537,7 +537,7 @@ body.dark-mode ::-webkit-scrollbar-thumb:hover {
             <div class="vc-prereq-card-text">
                 <div class="vc-prereq-card-label">Step 1 — Repo</div>
                 <div class="vc-prereq-card-title">GitLab Onboarding</div>
-                <div class="vc-prereq-card-sub">Self-serve a repo on the internal GitLab so you can push what you build.</div>
+                <div class="vc-prereq-card-sub">Self-serve a repo on the self-hosted GitLab so you can push what you build.</div>
             </div>
             <div class="vc-prereq-card-arrow">→</div>
         </a>
@@ -546,7 +546,7 @@ body.dark-mode ::-webkit-scrollbar-thumb:hover {
             <div class="vc-prereq-card-text">
                 <div class="vc-prereq-card-label">Step 2 — AI</div>
                 <div class="vc-prereq-card-title">Claude Code on the Local LLM</div>
-                <div class="vc-prereq-card-sub">Wire <code>claude</code> CLI to the internal local LLM. No API key, no cloud.</div>
+                <div class="vc-prereq-card-sub">Wire <code>claude</code> CLI to the self-hosted local LLM. No API key, no cloud.</div>
             </div>
             <div class="vc-prereq-card-arrow">→</div>
         </a>
@@ -566,8 +566,8 @@ body.dark-mode ::-webkit-scrollbar-thumb:hover {
         </div>
         <div class="vc-kpi-card" style="border-left-color:#06b6d4;">
             <div class="vc-kpi-icon">🏠</div>
-            <div class="vc-kpi-title">Stays on corp infra</div>
-            <div class="vc-kpi-body">Routes through the internal local LLM. Your prompts, your code, your weather joke — none of it leaves the network.</div>
+            <div class="vc-kpi-title">Stays on your own infra</div>
+            <div class="vc-kpi-body">Routes through the self-hosted local LLM. Your prompts, your code, your weather joke — none of it leaves the network.</div>
         </div>
     </div>
 
@@ -594,7 +594,7 @@ body.dark-mode ::-webkit-scrollbar-thumb:hover {
     <div class="vc-section" id="what-is">
         <h2>💡 What is vibe coding?</h2>
         <p>Loose term for low-ceremony, idea-first coding — describe what you want in plain English, let the AI write the heavy stuff, iterate fast. The point of this workshop is to feel the loop: prompt → working code → run → improve → repeat, until you've shipped something real in under 15 minutes.</p>
-        <p>Everything here is driven from the terminal with <code>claude</code> — the Claude Code CLI — pointed at the internal local LLM. The prompts work just as well with Copilot or any other agent; the IDE doesn't matter, the loop does.</p>
+        <p>Everything here is driven from the terminal with <code>claude</code> — the Claude Code CLI — pointed at the self-hosted local LLM. The prompts work just as well with Copilot or any other agent; the IDE doesn't matter, the loop does.</p>
         <div class="vc-callout note">
             <div class="vc-callout-icon">🧭</div>
             <div class="vc-callout-body">
@@ -610,7 +610,7 @@ body.dark-mode ::-webkit-scrollbar-thumb:hover {
 
         <h3>📋 Prereqs</h3>
         <ul>
-            <li>A GitLab account on the internal instance — see <a href="/gitlab">🦊 GitLab Onboarding</a>.</li>
+            <li>A GitLab account on the self-hosted instance — see <a href="/gitlab">🦊 GitLab Onboarding</a>.</li>
             <li>Claude Code CLI installed and pointed at the local LLM — see <a href="/claude-code-with-local-models">🤖 Claude Code on the Local LLM</a>.</li>
             <li>A free OpenWeatherMap API key — there's a step-by-step in <a href="#part-2">Part 2</a>.</li>
             <li><em>Optional, for stretch goals:</em> a Webex bot access token and a Webex room/space ID — step-by-step in <a href="#stretch">Stretch goals</a>.</li>
@@ -701,7 +701,7 @@ claude</code></pre><button class="vc-copy-btn">Copy</button></div>
             <div class="vc-detour-body">
                 <ol>
                     <li>Go to <a href="https://openweathermap.org/api" target="_blank" rel="noopener">openweathermap.org/api</a> and click <strong>Sign In</strong> (top-right). New user? Click <strong>Create an Account</strong> instead.</li>
-                    <li>Sign up with any email — it's a public service, you don't need a corp email.</li>
+                    <li>Sign up with any email — it's a public service, you don't need a work email.</li>
                     <li>Confirm the email link they send you.</li>
                     <li>Sign in → click your username (top-right) → <strong>My API keys</strong>.</li>
                     <li>A default key is created for you automatically. Click <strong>copy</strong> next to it.</li>
@@ -939,7 +939,7 @@ claude</code></pre><button class="vc-copy-btn">Copy</button></div>
             <li>Have your OpenWeatherMap API key ready in your clipboard.</li>
             <li>Have your Webex bot token + room ID ready if you plan to do stretch goals.</li>
             <li>Pre-open a browser tab on <a href="https://www.timeanddate.com/timer/" target="_blank" rel="noopener">timeanddate.com/timer</a> set to 15:00.</li>
-            <li>Confirm Claude Code is actually pointed at the local LLM — run <code>claude</code>, ask "what model are you?", and verify the answer matches the expected internal model.</li>
+            <li>Confirm Claude Code is actually pointed at the local LLM — run <code>claude</code>, ask "what model are you?", and verify the answer matches the expected self-hosted model.</li>
         </ul>
         <h3>During the demo</h3>
         <ul>
@@ -970,7 +970,7 @@ claude</code></pre><button class="vc-copy-btn">Copy</button></div>
                 <div class="vc-next-card-icon">🦊</div>
                 <div class="vc-next-card-text">
                     <div class="vc-next-card-label">Ship it</div>
-                    <div class="vc-next-card-title">Push to internal GitLab</div>
+                    <div class="vc-next-card-title">Push to self-hosted GitLab</div>
                 </div>
             </a>
             <a class="vc-next-card" href="/claude-code-with-local-models">
@@ -1111,10 +1111,10 @@ claude</code></pre><button class="vc-copy-btn">Copy</button></div>
 // questions about the workshop using exactly what's on the page.
 const VIBE_CODING_CONTEXT = `# Vibe Coding Workshop — Claude Code CLI + Local LLM
 
-A 15-minute live workshop. Goal: feel the loop of prompt → working code → run → improve → ship, end-to-end. Built on the Claude Code CLI pointed at the internal local LLM. No cloud, no Copilot — just \`claude\` in a terminal.
+A 15-minute live workshop. Goal: feel the loop of prompt → working code → run → improve → ship, end-to-end. Built on the Claude Code CLI pointed at the self-hosted local LLM. No cloud, no Copilot — just \`claude\` in a terminal.
 
 Sister pages on the same site:
-- /gitlab — sign up for the internal GitLab so you have a repo to push to.
+- /gitlab — sign up for the self-hosted GitLab so you have a repo to push to.
 - /claude-code-with-local-models — install Claude Code CLI and point it at the local LLM.
 
 ## Prerequisites

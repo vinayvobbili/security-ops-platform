@@ -2,7 +2,7 @@
 Codebase Indexer for the Windows triage agent
 
 Indexes a curated set of Python and Markdown source files into a dedicated
-ChromaDB collection (chroma_win_ai) for the the Windows triage agent tutor bot.
+ChromaDB collection (chroma_win_ai) for the Windows triage agent tutor bot.
 
 The indexed set is intentionally explicit — only directories listed in
 CURATED_DIRS are walked. This eliminates any risk of indexing .env,
@@ -359,8 +359,8 @@ def _pull_xsoar_repo(repo_path: Path) -> None:
         logger.warning("AZDO_PERSONAL_ACCESS_TOKEN not set — skipping XSOAR git pull")
         return
     remote_url = (
-        f"https://the company-US:{pat}@dev.azure.com/the company-US/"
-        f"the company-Cyber-Platforms/_git/the companyCyberPlatformsXSOAR.git"
+        f"https://your-org:{pat}@dev.azure.com/your-org/"
+        f"your-project/_git/xsoar-content.git"
     )
     try:
         # Update stored remote URL so a rotated PAT always works

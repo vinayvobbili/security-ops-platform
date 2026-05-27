@@ -124,7 +124,7 @@ CANNED_DRAFTS: List[Dict[str, Any]] = [
         ),
         "confidence": 0.91,
         "citations": [
-            {"source_path": "the company-InfoSec-Standard-v4.2.pdf", "chunk_text": "All customer data at rest shall be encrypted using AES-256 or equivalent approved algorithm.", "score": 0.93},
+            {"source_path": "Acme-InfoSec-Standard-v4.2.pdf", "chunk_text": "All customer data at rest shall be encrypted using AES-256 or equivalent approved algorithm.", "score": 0.93},
             {"source_path": "SOC2-TypeII-2025.pdf", "chunk_text": "Encryption at rest controls were tested and found operating effectively for the period under review.", "score": 0.81},
             {"source_path": "KMS-Operating-Procedures.docx", "chunk_text": "Keys are rotated annually and access is logged in the central SIEM.", "score": 0.74},
         ],
@@ -360,7 +360,7 @@ def generate_demo_draft(question_text: str) -> Dict[str, Any]:
 # without actually needing real documents.
 
 DEMO_KB_FILENAMES = [
-    "the company-InfoSec-Standard-v4.2.pdf",
+    "Acme-InfoSec-Standard-v4.2.pdf",
     "SOC2-TypeII-2025.pdf",
     "KMS-Operating-Procedures.docx",
     "Access-Control-Policy.pdf",

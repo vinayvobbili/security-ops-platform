@@ -6,8 +6,8 @@
 	<string>com.ir.vllm-mlx-keepalive</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>/Users/vvobbilichetty/vllm-venv/bin/python</string>
-		<string>/Users/vvobbilichetty/vllm_keepalive.py</string>
+		<string>/Users/labuser/vllm-venv/bin/python</string>
+		<string>/Users/labuser/vllm_keepalive.py</string>
 	</array>
 	<key>RunAtLoad</key>
 	<true/>

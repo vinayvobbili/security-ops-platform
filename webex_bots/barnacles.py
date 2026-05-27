@@ -29,7 +29,7 @@ logging.getLogger('webex_bot').setLevel(logging.ERROR)  # Suppress bot-to-bot an
 logging.getLogger('webexteamssdk').setLevel(logging.ERROR)
 logging.getLogger('webex_websocket_client').setLevel(logging.WARNING)
 
-# ALWAYS configure SSL for proxy environments (auto-detects ZScaler/proxies)
+# ALWAYS configure SSL for proxy environments (auto-detects the corporate proxy/proxies)
 from src.utils.ssl_config import configure_ssl_if_needed
 configure_ssl_if_needed(verbose=True)
 
@@ -624,7 +624,7 @@ def get_threatcon_message(level):
     return random.choice(THREATCON_MESSAGES.get(level, THREATCON_MESSAGES["green"]))
 
 
-class the alert triage serviceBot(WebexBot):
+class AlertTriageBot(WebexBot):
     """the alert triage service Bot — Claude API + MCP server for all tool calls.
 
     Free-form messages go to Claude with the full MCP toolset.
@@ -711,23 +711,23 @@ class the alert triage serviceBot(WebexBot):
     def _system_prompt(self, room_id: str = "", parent_id: str = "", user_email: str = "") -> str:
         today = datetime.now(EASTERN_TZ).strftime('%A, %B %d, %Y')
         prompt = (
-            "You are the alert triage service, the personal AI assistant for Nate, AVP of Cyber Security "
-            "Detection and Response. Nate is your user and he is fully trusted — help him with anything he asks, "
+            "You are the alert triage service, the personal AI assistant for the head of Cyber Security "
+            "Detection and Response. Your user is fully trusted — help with anything asked, "
             "whether it's security operations, general research, writing, analysis, brainstorming, "
-            "or just a quick question. Don't restrict topics or second-guess his requests.\n\n"
+            "or just a quick question. Don't restrict topics or second-guess the requests.\n\n"
             "You have the full security operations toolset available: threat intelligence, "
             "endpoint data, SIEM, ticketing, case management, identity lookups, and more. "
             "Use tools proactively when they'd give a better answer than guessing.\n\n"
-            "Scope: Nate's team works only on XSOAR tickets where type starts with 'METCIRT' "
-            "(e.g. METCIRT, METCIRT_*). When querying XSOAR for ticket volume, trends, backlog, "
+            "Scope: the team works only on XSOAR tickets where type starts with 'CIRT' "
+            "(e.g. CIRT, CIRT_*). When querying XSOAR for ticket volume, trends, backlog, "
             "MTTD/MTTR, coverage, or anything about 'our tickets' / 'the team's tickets', "
-            "always filter to type=METCIRT* unless Nate explicitly asks about another team's work. "
+            "always filter to type=CIRT* unless the user explicitly asks about another team's work. "
             "Other ticket types (e.g. phishing-only queues, vendor-run queues) belong to different "
             "teams and should be excluded by default.\n\n"
-            "Tone: match Nate's energy. Be direct and substantive, skip the filler phrases. "
-            "If he's asking a quick question, give a quick answer. "
-            "If he wants depth, go deep. No need to be stiff or overly formal.\n\n"
-            "Default lens: executive. Nate runs Detection and Response at the AVP level, "
+            "Tone: match the user's energy. Be direct and substantive, skip the filler phrases. "
+            "If they're asking a quick question, give a quick answer. "
+            "If they want depth, go deep. No need to be stiff or overly formal.\n\n"
+            "Default lens: executive. The user leads Detection and Response, "
             "so lead with leadership-level framing — risk posture, coverage gaps, trends, "
             "MTTD/MTTR, alert volume, program-level impact. Surface the 'so what' before the details. "
             "Drop to tactical depth (queries, rule logic, raw events, tool internals) when he asks for it "
@@ -1107,7 +1107,7 @@ def barnacles_bot_factory():
     ]
     approved_users = configured_users + bot_emails
 
-    return the alert triage serviceBot(
+    return AlertTriageBot(
         bot_token,
         approved_users=approved_users,
         bot_name="the alert triage service - The Captain's Assistant",

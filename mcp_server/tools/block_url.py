@@ -29,7 +29,7 @@ def block_url(
 ) -> dict:
     """Block a malicious URL or domain via XSOAR.
 
-    Creates an XSOAR METCIRT Case (or uses an existing ticket) with the
+    Creates an XSOAR CIRT Case (or uses an existing ticket) with the
     offending URL and required fields. The analyst should review the ticket
     and close it manually.
 
@@ -75,8 +75,8 @@ def block_url(
         logger.info(f"Completed acknowledgement task in ticket {ticket_id}")
 
         # Execute the URL block script in the ticket's war room
-        handler.execute_command_in_war_room(ticket_id, f'!METCIRT_Start_URL_Block Reason="{reason}"')
-        logger.info(f"Executed !METCIRT_Start_URL_Block in ticket {ticket_id}")
+        handler.execute_command_in_war_room(ticket_id, f'!CIRT_Start_URL_Block Reason="{reason}"')
+        logger.info(f"Executed !CIRT_Start_URL_Block in ticket {ticket_id}")
 
         # Add audit note
         handler.create_new_entry_in_existing_ticket(
@@ -88,7 +88,7 @@ def block_url(
             "success": True,
             "url": clean,
             "ticket_id": ticket_id,
-            "message": f"XSOAR ticket #{ticket_id} has been created for this URL block (`{clean}`) and `!METCIRT_Start_URL_Block` executed. Please review the ticket and close it.",
+            "message": f"XSOAR ticket #{ticket_id} has been created for this URL block (`{clean}`) and `!CIRT_Start_URL_Block` executed. Please review the ticket and close it.",
         }
 
     except Exception as e:

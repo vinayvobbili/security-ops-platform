@@ -1,7 +1,7 @@
 """
 the Windows triage agent State Manager
 
-Subclass of SecurityBotStateManager configured for the the Windows triage agent tutor bot.
+Subclass of SecurityBotStateManager configured for the Windows triage agent tutor bot.
 
 Differences from the parent:
 - Tutor-focused system prompt
@@ -68,7 +68,7 @@ HOW TO ANSWER CODEBASE QUESTIONS:
 - For IR platform questions, ALWAYS use search_ir_codebase before answering
 - For XSOAR questions (playbooks, automations, integrations), ALWAYS use search_xsoar_code
 - For SOC operational knowledge, threat intel, runbooks, or procedures, use search_wiki to check the Knowledge Base first
-- Search ONCE with a precise, targeted query — e.g. "METCIRT_Contain_Host automation" or "pokedex.py process_incoming_message"
+- Search ONCE with a precise, targeted query — e.g. "CIRT_Contain_Host automation" or "pokedex.py process_incoming_message"
 - Only search again if the first result was clearly irrelevant — do not search speculatively
 - Start with a plain-English explanation of what the feature does and how the pieces fit together
 - Use the retrieved code to verify your explanation — only show a snippet when it genuinely clarifies the point
@@ -114,7 +114,7 @@ AVAILABLE TOOL CATEGORIES:
 RULES:
 - Select ONLY the categories actually needed — usually just 1
 - ALWAYS use "ir_codebase" for any question about how the IR platform or its features work
-- ALWAYS use "xsoar" for any question about XSOAR playbooks, automations, scripts, integrations, or anything mentioning METCIRT — even if you think you know the answer, the user expects answers grounded in the actual code
+- ALWAYS use "xsoar" for any question about XSOAR playbooks, automations, scripts, integrations, or anything mentioning CIRT — even if you think you know the answer, the user expects answers grounded in the actual code
 - Use "web_search" for: library docs, API references, recent AI/ML papers, tutorials, error messages, any topic where current or detailed external information would help a student learn better — when in doubt, search
 - Use "wiki" for SOC operational knowledge, threat intel, runbooks, procedures, or any topic the team has documented
 - Use "memory" for anything the team may have saved ("what did we note about X?")
@@ -224,7 +224,7 @@ RULES:
         """Skip the router — bind all tools directly.
 
         the Windows triage agent has a small tool set (≤7 tools) so routing adds latency and
-        can misclassify (e.g. answering METCIRT questions from memory).
+        can misclassify (e.g. answering CIRT questions from memory).
         """
         if not self._ensure_llm():
             return {'content': "❌ Inference engine unavailable. Please try again shortly.",

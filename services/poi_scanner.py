@@ -42,7 +42,7 @@ PUBLIC_BASE_URL = "https://gdnr.the-company.com"
 # whitespace normalization, applied to name / username / email inputs.
 EXCEPTION_LIST: set[str] = {
     "vinay vobbilichetty",
-    "vvobbilichetty",
+    "labuser",
     "vinayvobbilichetty",
     "vinayvobbilichetty11@gmail.com",
     "<redacted-email>",

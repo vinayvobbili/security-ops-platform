@@ -435,7 +435,7 @@ def list_uploads(request_id: int) -> List[Dict[str, Any]]:
 
 # Header keywords used to locate the question / section columns inside an
 # uploaded vendor security questionnaire .xlsx. Vendor templates vary widely
-# (HCL VRA, DOL Cyber, the company TPRM, Farmers Group CRQ all look different) so
+# (HCL VRA, DOL Cyber, Acme TPRM, Farmers Group CRQ all look different) so
 # detection is keyword-based, not positional. We use word-boundary regex so
 # "question" doesn't substring-match "questionnaire" in banner/title rows.
 import re as _re
@@ -484,7 +484,7 @@ def _scan_for_xlsx_header(ws, max_scan: int = 10) -> Optional[Dict[str, Any]]:
 
     def _is_label_cell(c: str) -> bool:
         # Headers are short labels. Real keyword-bearing headers across all
-        # four sample questionnaires (HCL VRA, DOL Cyber, the company TPRM,
+        # four sample questionnaires (HCL VRA, DOL Cyber, Acme TPRM,
         # Farmers CRQ) max out at ~32 chars / 4 words ("YES/NO       In
         # Process  Partial" on the DOL sheet). Tighten beyond that to keep
         # narrative cells like "Full assessment (High Default Questions &
@@ -1568,7 +1568,7 @@ def export_request_docx(request_id: int) -> Optional[Path]:
     doc.add_heading(f"Security Questionnaire Response — {req['customer_name']}", level=0)
     doc.add_paragraph(f"Request: {req['title']}")
     doc.add_paragraph(f"Type: {req['request_type']} | Segment: {req['customer_segment']}")
-    doc.add_paragraph(f"Prepared by: the company Customer Assurance Team")
+    doc.add_paragraph(f"Prepared by: the Customer Assurance Team")
     doc.add_paragraph("")
 
     current_section = None

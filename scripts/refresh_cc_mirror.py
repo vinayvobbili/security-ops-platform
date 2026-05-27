@@ -196,7 +196,7 @@ def _fetch_claude_code(staging: Path) -> tuple[dict[str, dict], str]:
 
 
 def _copy_corp_ca(staging: Path) -> dict[str, dict]:
-    published = "the company-corp-ca-bundle.pem"
+    published = "corp-ca-bundle.pem"
     dest = staging / published
     if not CORP_CA_SRC.exists():
         print(f"[ca] skip — {CORP_CA_SRC} missing", flush=True)

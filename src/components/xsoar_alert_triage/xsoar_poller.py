@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 CONFIG = my_config.get_config()
 
-XSOAR_QUERY_BASE = f'type:{CONFIG.team_name} -category:job -owner:"" -type:"METCIRT IOC Hunt"'
+XSOAR_QUERY_BASE = f'type:{CONFIG.team_name} -category:job -owner:"" -type:"CIRT IOC Hunt"'
 DEFAULT_LOOKBACK_MINUTES = 5
 MAX_LOOKBACK_MINUTES = 120  # 2-hour cap after long outages
 MAX_TRIAGE_WORKERS = 4

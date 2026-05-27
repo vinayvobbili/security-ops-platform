@@ -215,7 +215,7 @@ def patch_websocket_client():
 
                 logger.debug(f"Opening websocket connection to {connection_url}")
 
-                # Create SSL context - unverified for corporate proxy (ZScaler) compatibility
+                # Create SSL context - unverified for corporate proxy compatibility
                 ssl_context = ssl._create_unverified_context()
                 ssl_context.check_hostname = False
                 ssl_context.verify_mode = ssl.CERT_NONE

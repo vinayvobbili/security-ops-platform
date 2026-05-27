@@ -448,7 +448,7 @@ def get_aggregation(dimension: str, granularity: str = 'monthly',
         ORDER BY period, cnt DESC
     """
 
-    # Build a prefix to strip from ticket type names (e.g. "METCIRT " → "")
+    # Build a prefix to strip from ticket type names (e.g. "CIRT " → "")
     type_prefix = ''
     if dimension == 'type':
         try:

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start a SOCKS5 proxy on localhost:1080 routed through the Mac (corp network).
+# Start a SOCKS5 proxy on localhost:1080 routed through the Mac on the LAN.
 #
 # Requires the Mac tunnel to be running (misc_scripts/start_tunnel_to_vm.py)
 # which reverse-forwards port 2222 -> Mac SSH.
@@ -10,7 +10,7 @@ set -euo pipefail
 
 SOCKS_PORT=1080
 REVERSE_SSH_PORT=2222
-SSH_USER="${REVERSE_SSH_USER:-vvobbilichetty}"
+SSH_USER="${REVERSE_SSH_USER:-labuser}"
 
 # Check if the reverse SSH tunnel is up
 if ! nc -z localhost "$REVERSE_SSH_PORT" 2>/dev/null; then

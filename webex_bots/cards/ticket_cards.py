@@ -134,7 +134,7 @@ NEW_TICKET_CARD = {
                                         {"title": "Tanium", "value": "Tanium"},
                                         {"title": "Vectra MDR", "value": "Vectra MDR"},
                                         {"title": "ZeroFox", "value": "ZeroFox"},
-                                        {"title": "ZScaler", "value": "ZScaler"},
+                                        {"title": "the corporate proxy", "value": "the corporate proxy"},
                                         {"title": "Other", "value": "Other"}
                                     ],
                                     "placeholder": "Select source",

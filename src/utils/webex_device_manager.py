@@ -49,7 +49,7 @@ def cleanup_stale_devices(access_token: str, verbose: bool = True) -> bool:
         response = requests.get(
             'https://wdm-a.wbx2.com/wdm/api/v1/devices',
             headers=headers,
-            verify=False  # Corporate proxy (ZScaler) compatibility
+            verify=False  # Corporate proxy (the corporate proxy) compatibility
         )
 
         if response.status_code != 200:

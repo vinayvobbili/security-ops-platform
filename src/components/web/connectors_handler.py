@@ -104,8 +104,8 @@ def _probe_qradar():
 
 
 def _probe_proxy():
-    from services.proxy import the corporate proxyClient
-    client = the corporate proxyClient()
+    from services.proxy import ProxyClient
+    client = ProxyClient()
     if not client.is_configured():
         raise RuntimeError('Not configured')
     result = client.get_status()

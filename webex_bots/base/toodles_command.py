@@ -1,7 +1,7 @@
 """Base command classes for the notification service bot.
 
 This module provides base classes that reduce boilerplate in the notification service commands:
-- the notification serviceCommand: Base class with common configuration and logging
+- NotificationCommand: Base class with common configuration and logging
 - CardOnlyCommand: For commands that only display a card with no execute logic
 """
 
@@ -10,7 +10,7 @@ from webex_bot.models.response import Response
 from src.utils.toodles_decorators import toodles_log_activity
 
 
-class the notification serviceCommand(Command):
+class NotificationCommand(Command):
     """
     Base class for the notification service commands with common configuration.
 
@@ -22,7 +22,7 @@ class the notification serviceCommand(Command):
     - exact_command_keyword_match: bool (default: True) - Whether to require exact match
 
     Example:
-        class MyCommand(the notification serviceCommand):
+        class MyCommand(NotificationCommand):
             command_keyword = "mycommand"
             help_message = "Do something cool"
             card = MY_CARD
@@ -61,7 +61,7 @@ class the notification serviceCommand(Command):
         )
 
 
-class CardOnlyCommand(the notification serviceCommand):
+class CardOnlyCommand(NotificationCommand):
     """
     Base class for commands that only display a card with no execute logic.
 

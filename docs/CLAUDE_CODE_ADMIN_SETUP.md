@@ -1,8 +1,8 @@
 # 🛠️ Claude Code Local Stack — Admin Guide
 
-> **scope: lab-vm1 + Mac fleet** · **consumers: any Claude Code client on corp net** · **status: production**
+> **scope: lab-vm1 + Mac fleet** · **consumers: any Claude Code client on the LAN** · **status: production**
 
-Operating manual for the router that lets Claude Code clients talk to our self-hosted vllm-mlx and Ollama backends.
+Operating manual for the router that lets Claude Code clients talk to self-hosted vllm-mlx and Ollama backends.
 
 | 🧠 2 backends | 🚪 1 endpoint | ⚙️ 2 services |
 |---|---|---|
@@ -47,7 +47,7 @@ Two services on lab-vm1, two Mac backends — both on studio1. The shim is the p
   (each is a reverse SSH tunnel from studio1 into lab-vm1)
 ```
 
-> **📌 Why two layers** — ccr handles the Anthropic↔OpenAI translation and multi-provider routing, but expects requests in `provider,model` form and doesn't expose `/v1/models` for discovery. The shim adds `/v1/models` (for SDK / curl / IDE-plugin enumeration), translates friendly model ids to ccr's `provider,model` form on incoming `/v1/messages`, and gates everything behind a bearer token. Note: Claude Code's `/model` picker is hardcoded to Opus / Sonnet / Haiku and does NOT read `/v1/models` — users wire each tier to one of our ids via `ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL`. ~120 lines of FastAPI; no logic of its own beyond the rewrite.
+> **📌 Why two layers** — ccr handles the Anthropic↔OpenAI translation and multi-provider routing, but expects requests in `provider,model` form and doesn't expose `/v1/models` for discovery. The shim adds `/v1/models` (for SDK / curl / IDE-plugin enumeration), translates friendly model ids to ccr's `provider,model` form on incoming `/v1/messages`, and gates everything behind a bearer token. Note: Claude Code's `/model` picker is hardcoded to Opus / Sonnet / Haiku and does NOT read `/v1/models` — users wire each tier to one of these ids via `ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL`. ~120 lines of FastAPI; no logic of its own beyond the rewrite.
 
 ---
 
@@ -192,19 +192,19 @@ All three Claude Code backends now live on **studio1**, behind a single reverse-
 ### 🎙️ studio1 (GLM + Laguna, two stacks)
 - vllm-mlx GLM: `mlx-community/GLM-4.7-Flash-8bit`, parser `glm47`, reasoning `deepseek_r1`, tunnel `lab-vm1:8024 → studio1:8002` (~30 GB on disk)
 - Ollama: `laguna-xs.2:q8_0`, tunnel `lab-vm1:8022 → studio1:11434` (~40 GB cold, `KEEP_ALIVE=30s` so it unloads when idle)
-- SSH backchannel: `ssh -p 2224 vvobbilichetty@127.0.0.1` from lab-vm1
+- SSH backchannel: `ssh -p 2224 labuser@127.0.0.1` from lab-vm1
 - GLM reload: `launchctl bootout gui/$(id -u)/com.ir.vllm-mlx-glm && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.ir.vllm-mlx-glm.plist`
 - Qwen3-32B vllm-mlx is downloaded (~33 GB) but the launchctl agent is **disabled** (2026-05-06) to avoid memory contention with GLM. Re-enable with `launchctl enable gui/$(id -u)/com.ir.vllm-mlx-qwen && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.ir.vllm-mlx-qwen.plist`.
 
 > **⚠️ launchctl domain** — studio1's vllm-mlx services run in the `gui/$UID` domain, but the tunnel agent is in `user/$UID`. `launchctl print user/501` shows the vllm services as "enabled" but kickstart/bootout there fails with "Could not find service in domain." Use `gui/$(id -u)/...` for vllm; `user/$(id -u)/...` for the tunnel.
 
-> **⚡ System-prompt KV cache patch** — vllm-mlx's `--continuous-batching` flag (which gates the engine-level prefix cache) crashes mlx-lm on first cache-hit decode with `RuntimeError: There is no Stream(gpu, X) in current thread`. We work around it with a local patch to `vllm_mlx/engine/simple.py` that adds single-slot system-prompt KV caching to the pure-LLM `stream_chat()` path. Result: ~17x speedup on cache hits (9.8s cold → 0.58s hit on Qwen2.5-Coder with a 2.5K-token system prompt). Patch + idempotent apply script: `deployment/vllm_mlx_patches/`. Re-run `apply.sh` after every `pip install --upgrade vllm-mlx` and bounce the launchctl agent.
+> **⚡ System-prompt KV cache patch** — vllm-mlx's `--continuous-batching` flag (which gates the engine-level prefix cache) crashes mlx-lm on first cache-hit decode with `RuntimeError: There is no Stream(gpu, X) in current thread`. It's worked around with a local patch to `vllm_mlx/engine/simple.py` that adds single-slot system-prompt KV caching to the pure-LLM `stream_chat()` path. Result: ~17x speedup on cache hits (9.8s cold → 0.58s hit on Qwen2.5-Coder with a 2.5K-token system prompt). Patch + idempotent apply script: `deployment/vllm_mlx_patches/`. Re-run `apply.sh` after every `pip install --upgrade vllm-mlx` and bounce the launchctl agent.
 
 ---
 
 ## 🔐 Security & secrets
 - Single bearer (`CCR_APIKEY`) validates both the shim and ccr.
-- Shim binds `0.0.0.0` — accessible from any host on the corp network. No external exposure.
+- Shim binds `0.0.0.0` — accessible from any host on the LAN. No external exposure.
 - ccr is bound `0.0.0.0` too but should only be hit via the shim. Future hardening: bind ccr to `127.0.0.1`.
 - All traffic between lab-vm1 and the Macs is over reverse SSH tunnels (encrypted + key-auth).
 - vllm-mlx and Ollama on the Macs bind `127.0.0.1` only — not reachable except through the tunnel.
@@ -257,8 +257,5 @@ Recovery: restore those four files, `systemctl --user daemon-reload`, then start
 ---
 
 ## 📚 References
-- User-facing setup guide: `docs/CLAUDE_CODE_USER_SETUP.docx`
+- User-facing setup guide: `docs/CLAUDE_CODE_USER_SETUP.md`
 - claude-code-router repo: https://github.com/musistudio/claude-code-router
-- Memory: `~/.claude/projects/-home-vinay-IR/memory/project_claude_code_router.md`
-- Memory: `~/.claude/projects/-home-vinay-IR/memory/project_studio1_qwen3_vllm.md`
-- Generator script: `misc_scripts/build_claude_code_docs.py`

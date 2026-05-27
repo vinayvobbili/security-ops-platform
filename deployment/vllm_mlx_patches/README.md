@@ -74,7 +74,7 @@ comfortably; the engine continued to serve the embeddings collocated tenant
 ### Applying
 
 ```bash
-bash deployment/vllm_mlx_patches/apply.sh /Users/vvobbilichetty/vllm-venv
+bash deployment/vllm_mlx_patches/apply.sh /Users/labuser/vllm-venv
 launchctl kickstart -k gui/$(id -u)/com.ir.vllm-mlx-coder
 ```
 

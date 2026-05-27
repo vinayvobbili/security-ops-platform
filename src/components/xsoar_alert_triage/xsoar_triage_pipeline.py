@@ -178,7 +178,7 @@ group." Do not interpret 0/0 scores as "absence of signal" on a triaged detectio
 IPs", "Web Proxies", or scanner groups are infrastructure, not user endpoints — \
 do not infer "compromised user credentials" from an entity name that looks like \
 an email when the source is a connector. Destinations in groups like "M365 \
-worldwide IPs", "the company Domains", or vendor IP groups are expected destinations; \
+worldwide IPs", "corporate domains", or vendor IP groups are expected destinations; \
 proxy fanout to those is not by itself a compromise indicator. Always name the \
 specific group when citing it as evidence.
 - "Session Shape" carries the discriminator numbers within a detection class. For \

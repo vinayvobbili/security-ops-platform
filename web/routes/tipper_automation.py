@@ -1,8 +1,8 @@
 """Tipper Automation page — same-origin reverse-proxy to the standalone sidecar (ir-tipper-automation.service on :8033).
 
-Vendor (Anthony) ships an end-to-end app that takes a pasted CTI tipper email body,
+The vendor ships an end-to-end app that takes a pasted CTI tipper email body,
 parses it, matches MITRE techniques against AttackIQ scenarios, and creates +
-runs an assessment in the the company AttackIQ tenant. Runs live by default; vendor
+runs an assessment in the company AttackIQ tenant. Runs live by default; vendor
 UI should fall back to seeded demo data when creds are absent or the API fails,
 and surface a LIVE/DEMO badge on screen.
 
@@ -137,10 +137,10 @@ def _docker_build(src_dir: Path, version_id: str, timeout_s: int = 600) -> dict:
         return {"ok": False, "error": "Dockerfile missing in source directory"}
     tag = f"{DOCKER_IMAGE}:{version_id}"
     try:
-        # --network host: inr106 is behind a corp firewall doing TLS MITM
-        # (post 2026-05-12). The default `bridge` network used during docker
-        # build has no corp DNS, so pip install fails to resolve pypi.
-        # Using the host's network namespace inherits corp DNS + CA trust.
+        # --network host: in environments behind a TLS-inspecting proxy, the
+        # default `bridge` network used during docker build has no access to
+        # the host's DNS or CA trust, so pip install fails to resolve PyPI.
+        # Using the host's network namespace inherits its DNS + CA trust.
         result = subprocess.run(
             ["docker", "build", "--network", "host", "-t", tag, str(src_dir)],
             capture_output=True, timeout=timeout_s,

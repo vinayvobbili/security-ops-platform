@@ -54,7 +54,7 @@ def xsoar_search_tickets(
     days_back: int = 30,
     status: Optional[str] = None,
     severity: Optional[str] = None,
-    incident_type: str = "METCIRT",
+    incident_type: str = "CIRT",
     size: int = 50,
 ) -> dict:
     """Free-text live search across XSOAR tickets via the XSOAR API.
@@ -73,9 +73,9 @@ def xsoar_search_tickets(
         status: Optional 'Active' or 'closed'.
         severity: Optional 'Low', 'Medium', 'High', or 'Critical'.
         incident_type: XSOAR incident type, exact match
-                       (default 'METCIRT'). Empty string to search all
-                       types. Note: 'METCIRT' does NOT include
-                       'METCIRT IOC Hunt' — those are a separate type.
+                       (default 'CIRT'). Empty string to search all
+                       types. Note: 'CIRT' does NOT include
+                       'CIRT IOC Hunt' — those are a separate type.
         size: Max results to return (default 50).
 
     Returns:
@@ -129,7 +129,7 @@ def xsoar_get_closed_tickets_by_period(
     include_notes: bool = True,
     size: int = 200,
 ) -> dict:
-    """Fetch METCIRT tickets closed within a time window. Useful for shift
+    """Fetch CIRT tickets closed within a time window. Useful for shift
     performance evaluation (e.g. day shift 07:00-19:00 ET, overnight 19:00-07:00 ET)
     or daily/weekly close-rate review.
 
@@ -167,8 +167,8 @@ def xsoar_get_closed_tickets_by_period(
     parts = [
         "status:closed",
         "-category:job",
-        "type:METCIRT",
-        '-type:"METCIRT IOC Hunt"',
+        "type:CIRT",
+        '-type:"CIRT IOC Hunt"',
     ]
     if not include_unowned:
         parts.append('-owner:""')

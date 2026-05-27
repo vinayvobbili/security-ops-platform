@@ -159,10 +159,10 @@ class SOCBotHealthTester:
 
             # Test queries with specific expected content to verify actual document search
             test_queries = [
-                ("Who are our contacts for AIX servers?", ["Akash Mudgal", "Todd Winkler"], "Should find specific AIX contacts"),
+                ("Who are our contacts for AIX servers?", ["Jane Smith", "John Doe"], "Should find specific AIX contacts"),
                 ("Scattered Spider", ["malicious software", "social engineering", "phishing"], "Should find threat intelligence"),
                 ("RSA token", ["SecurID", "emergency", "tokencode"], "Should find RSA procedures"),
-                ("network blocking", ["Prisma", "Zscaler", "block"], "Should find network control docs")
+                ("network blocking", ["firewall", "proxy", "block"], "Should find network control docs")
             ]
 
             search_results = []

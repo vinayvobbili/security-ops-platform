@@ -12,9 +12,9 @@ The rule: only one of the two analysis services should be running at a time
 finds and is quiet about the rest.
 
 Install on studio1:
-  cp deployment/vllm_keepalive.py /Users/vvobbilichetty/vllm_keepalive.py
+  cp deployment/vllm_keepalive.py /Users/labuser/vllm_keepalive.py
   cp deployment/com.ir.vllm-mlx-keepalive.plist \\
-     /Users/vvobbilichetty/Library/LaunchAgents/
+     /Users/labuser/Library/LaunchAgents/
   launchctl bootstrap gui/$(id -u) \\
      ~/Library/LaunchAgents/com.ir.vllm-mlx-keepalive.plist
 """

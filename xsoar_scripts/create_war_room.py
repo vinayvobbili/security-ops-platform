@@ -85,13 +85,13 @@ def main():
         # Get war room details
         try:
             war_room_results = execute_command_with_error_handling("getList", {
-                "listName": "METCIRT_War_Room"
+                "listName": "CIRT_War_Room"
             })
             war_room_details = json.loads(war_room_results[0]['Contents'])
             ms_teams_name = war_room_details["microsoft_team_name"]
         except Exception as e:
             demisto.error(f"Failed to get war room details: {str(e)}")
-            raise Exception(f"Failed to get war room details from the METCIRT_War_Room list: {str(e)}")
+            raise Exception(f"Failed to get war room details from the CIRT_War_Room list: {str(e)}")
 
         # Create MS Teams channel
         war_room_starter = demisto.executeCommand("getUsers", args={
@@ -225,12 +225,12 @@ def main():
                     "Contents": f"⚠️ Could not remove functional account: {str(e)}"
                 })
         else:
-            demisto.debug("No functional_account_email in METCIRT_War_Room list, skipping removal")
+            demisto.debug("No functional_account_email in CIRT_War_Room list, skipping removal")
 
         # Send Webex notification
         try:
             webex_results = execute_command_with_error_handling("getList", {
-                "listName": "METCIRT Webex"
+                "listName": "CIRT Webex"
             })
             webex_details = json.loads(webex_results[0]['Contents'])
             room_id = webex_details['channels']['threat_con_collab']

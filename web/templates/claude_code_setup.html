@@ -565,7 +565,7 @@ body.dark-mode ::-webkit-scrollbar-thumb:hover {
         <nav class="ccs-side-toc-list" id="ccsSideTocList">
             <a href="#what-is">🧠 What is Claude Code?</a>
             <a href="#getting">🎯 What you're getting</a>
-            {# <a href="#mirror">📦 Trusted internal mirror</a>  — reverted, kept for revival #}
+            {# <a href="#mirror">📦 Trusted local mirror</a>  — reverted, kept for revival #}
             <a href="#install-node">1️⃣ Install Node.js</a>
             <a href="#install-claude">2️⃣ Install Claude Code</a>
             <a href="#configure">3️⃣ Configure env vars</a>
@@ -594,12 +594,12 @@ body.dark-mode ::-webkit-scrollbar-thumb:hover {
 
     <!-- HERO -->
     <div class="ccs-hero">
-        <h1>🤖 Claude Code &rarr; Our Internal LLM</h1>
-        <p>Run Anthropic's Claude Code CLI against our self-hosted internal model. No API key, no usage caps, no per-token billing — just point and go.</p>
+        <h1>🤖 Claude Code &rarr; A Self-Hosted LLM</h1>
+        <p>Run Anthropic's Claude Code CLI against your own self-hosted model. No API key, no usage caps, no per-token billing — just point and go.</p>
         <div class="ccs-hero-pills">
             <span class="ccs-hero-pill">● status: live</span>
-            <span class="ccs-hero-pill">● backend: internal</span>
-            <span class="ccs-hero-pill">● corp network only</span>
+            <span class="ccs-hero-pill">● backend: self-hosted</span>
+            <span class="ccs-hero-pill">● LAN only</span>
             <span class="ccs-hero-pill">● cost: $0</span>
         </div>
     </div>
@@ -609,7 +609,7 @@ body.dark-mode ::-webkit-scrollbar-thumb:hover {
         <div class="ccs-kpi-card">
             <div class="ccs-kpi-icon">🔒</div>
             <div class="ccs-kpi-title">100% Local</div>
-            <div class="ccs-kpi-body">Every prompt, every response, every byte of code stays on our hardware. Nothing leaves the corp network.</div>
+            <div class="ccs-kpi-body">Every prompt, every response, every byte of code stays on your hardware. Nothing leaves the LAN.</div>
         </div>
         <div class="ccs-kpi-card" style="border-left-color:#00a651;">
             <div class="ccs-kpi-icon">💰</div>
@@ -618,8 +618,8 @@ body.dark-mode ::-webkit-scrollbar-thumb:hover {
         </div>
         <div class="ccs-kpi-card" style="border-left-color:#7c3aed;">
             <div class="ccs-kpi-icon">🏢</div>
-            <div class="ccs-kpi-title">Our Infra</div>
-            <div class="ccs-kpi-body">Runs on hardware we own, behind our firewall, under our control. No external vendor in the loop.</div>
+            <div class="ccs-kpi-title">Your Infra</div>
+            <div class="ccs-kpi-body">Runs on hardware you own, behind your own firewall, under your control. No external vendor in the loop.</div>
         </div>
     </div>
 
@@ -629,7 +629,7 @@ body.dark-mode ::-webkit-scrollbar-thumb:hover {
         <div class="ccs-toc-grid">
             <a href="#what-is">🧠 What is Claude Code?</a>
             <a href="#getting">🎯 What you're getting</a>
-            {# <a href="#mirror">📦 Trusted internal mirror</a>  — reverted, kept for revival #}
+            {# <a href="#mirror">📦 Trusted local mirror</a>  — reverted, kept for revival #}
             <a href="#install-node">1️⃣ Install Node.js</a>
             <a href="#install-claude">2️⃣ Install Claude Code</a>
             <a href="#configure">3️⃣ Configure env vars</a>
@@ -660,7 +660,7 @@ body.dark-mode ::-webkit-scrollbar-thumb:hover {
             <div class="ccs-callout-icon">⚠️</div>
             <div class="ccs-callout-body">
                 <strong>Important — Privacy posture</strong>
-                Prompts and responses are processed entirely on internal hardware and are <em>never</em> sent to Anthropic, OpenAI, Google, or any third party. The model runs fully offline. No telemetry, no cloud round-trips.
+                Prompts and responses are processed entirely on your hardware and are <em>never</em> sent to Anthropic, OpenAI, Google, or any third party. The model runs fully offline. No telemetry, no cloud round-trips.
             </div>
         </div>
         <div class="ccs-callout tip">
@@ -676,7 +676,7 @@ body.dark-mode ::-webkit-scrollbar-thumb:hover {
     <div class="ccs-section" id="what-is">
         <h2>🧠 What is Claude Code?</h2>
         <p>Claude Code is a terminal-based AI pair-programmer. You run <code>claude</code> inside a project directory, type what you want in plain English, and it reads files, writes code, runs commands, and shows you a diff before saving. Think "a teammate who pair-programs with you in your repo" — not "a chatbot in a browser tab."</p>
-        <p>With this setup, all of that runs against our internal model instead of Anthropic's cloud. Same CLI, same workflow — just our hardware doing the thinking.</p>
+        <p>With this setup, all of that runs against your self-hosted model instead of Anthropic's cloud. Same CLI, same workflow — just your hardware doing the thinking.</p>
     </div>
 
     <!-- WHAT YOU'RE GETTING -->
@@ -688,16 +688,16 @@ body.dark-mode ::-webkit-scrollbar-thumb:hover {
                     <tr>
                         <th>Aspect</th>
                         <th>Claude Code on Anthropic API</th>
-                        <th>Claude Code on our LLM</th>
+                        <th>Claude Code on a self-hosted LLM</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr><td><strong>Cost</strong></td><td>💵 per token</td><td><span class="ccs-pill green">🆓 free</span></td></tr>
-                    <tr><td><strong>Network</strong></td><td>🌍 internet</td><td>🏢 corp network only</td></tr>
+                    <tr><td><strong>Network</strong></td><td>🌍 internet</td><td>🏢 LAN only</td></tr>
                     <tr><td><strong>Auth</strong></td><td>Anthropic key</td><td>your personal access token (PAT)</td></tr>
-                    <tr><td><strong>Backend</strong></td><td>Claude (Opus / Sonnet / Haiku)</td><td>internal model</td></tr>
+                    <tr><td><strong>Backend</strong></td><td>Claude (Opus / Sonnet / Haiku)</td><td>self-hosted model</td></tr>
                     <tr><td><strong>Quality</strong></td><td>🟢🟢🟢🟢🟢</td><td>🟢🟢🟢⚪⚪</td></tr>
-                    <tr><td><strong>Privacy</strong></td><td>sent to Anthropic</td><td><span class="ccs-pill green">stays on our network</span></td></tr>
+                    <tr><td><strong>Privacy</strong></td><td>sent to Anthropic</td><td><span class="ccs-pill green">stays on your network</span></td></tr>
                 </tbody>
             </table>
         </div>
@@ -712,15 +712,15 @@ body.dark-mode ::-webkit-scrollbar-thumb:hover {
 
     {# TRUSTED INTERNAL MIRROR — reverted 2026-05-16 (too complex; double-click install UX gap). Plumbing kept (route + refresh_cc_mirror.py + manifest) so this can be revived. Uncomment the block below to re-enable.
     <div class="ccs-section" id="mirror">
-        <h2>📦 Trusted internal mirror <span style="font-size:13px; font-weight:normal; color:#6b7280;">(no admin rights needed)</span></h2>
+        <h2>📦 Trusted local mirror <span style="font-size:13px; font-weight:normal; color:#6b7280;">(no admin rights needed)</span></h2>
         <div class="ccs-callout tip">
             <div class="ccs-callout-icon">🏢</div>
             <div class="ccs-callout-body">
                 <strong>Use this if any of the following is true:</strong>
                 <ul style="margin-top:6px;">
                     <li>You don't have admin / sudo on your machine.</li>
-                    <li>winget / brew / apt fail behind corp SSL inspection.</li>
-                    <li>You'd rather pull a hash-pinned artifact from an internal source you trust than something off the public internet.</li>
+                    <li>winget / brew / apt fail behind TLS inspection.</li>
+                    <li>You'd rather pull a hash-pinned artifact from a source you trust than something off the public internet.</li>
                 </ul>
                 Every file below is mirrored from the upstream release, scanned, hash-pinned, and refreshed weekly. The portable archives extract into your home directory — no installer, no UAC prompt, no sudo.
             </div>
@@ -909,27 +909,20 @@ claude --version</code></pre><button class="ccs-copy-btn">Copy</button></div>
 
         <div class="ccs-tab-panel ccs-active" data-tab-group="node" data-tab="win">
             <div class="ccs-callout tip">
-                <div class="ccs-callout-icon">🏢</div>
+                <div class="ccs-callout-icon">💡</div>
                 <div class="ccs-callout-body">
-                    <strong>Corp-managed laptop? Try Software Center first</strong>
-                    <ol style="margin-top:6px;">
-                        <li>Open <strong>Software Center</strong> (Start menu → "Software Center").</li>
-                        <li>Search for <strong>Claude</strong>.</li>
-                        <li>Click <strong>Install</strong>.</li>
-                    </ol>
-                    If it's there, you're done — the package is pre-approved (no admin prompt, no PATH wrangling). <strong>Skip ahead to <a href="#configure">Step 3 (env vars)</a></strong>.
-                    <div style="margin-top:8px;"><strong>Don't see Claude in Software Center?</strong> The rollout is still in progress, so most laptops don't have it yet. Use the winget steps below to install Node, then continue to Step 2 for the <code>npm install</code> one-liner.</div>
+                    <strong>No admin rights?</strong> The winget one-liner below installs Node into your user profile only — no elevation needed.
                 </div>
             </div>
-            <h3 style="margin-top:18px;">If Software Center doesn't list Claude — install Node manually</h3>
-            <p>One-liner via winget (built into Windows 10/11). The flags below work <strong>without admin rights</strong> and <strong>on corp Wi-Fi</strong>:</p>
+            <h3 style="margin-top:18px;">Install Node manually</h3>
+            <p>One-liner via winget (built into Windows 10/11). The flags below work <strong>without admin rights</strong> and <strong>on a TLS-inspecting network</strong>:</p>
             <div class="ccs-code-wrap"><pre><code>winget install OpenJS.NodeJS.LTS --source winget --scope user</code></pre><button class="ccs-copy-btn">Copy</button></div>
             <div class="ccs-callout note">
                 <div class="ccs-callout-icon">📘</div>
                 <div class="ccs-callout-body">
                     <strong>Why those two flags</strong>
                     <ul style="margin-top:6px;">
-                        <li><code>--source winget</code> — pins the Microsoft <em>winget</em> source instead of the default <em>msstore</em>, which fails with <code>0x8a15005e</code> (server certificate did not match) on corp Wi-Fi because SSL inspection breaks the Microsoft Store source.</li>
+                        <li><code>--source winget</code> — pins the Microsoft <em>winget</em> source instead of the default <em>msstore</em>, which fails with <code>0x8a15005e</code> (server certificate did not match) on a TLS-inspecting network because SSL inspection breaks the Microsoft Store source.</li>
                         <li><code>--scope user</code> — installs Node into your profile only and modifies your user PATH. No admin elevation needed.</li>
                     </ul>
                     Close and reopen your terminal after install so the new PATH takes effect.
@@ -955,14 +948,7 @@ npm --version</code></pre><button class="ccs-copy-btn">Copy</button></div>
     <div class="ccs-section" id="install-claude">
         <details class="ccs-collapse">
         <summary><h2><span class="ccs-step">2</span> Install Claude Code</h2></summary>
-        <div class="ccs-callout tip">
-            <div class="ccs-callout-icon">🏢</div>
-            <div class="ccs-callout-body">
-                <strong>Installed via Software Center on Windows?</strong>
-                You're done — SC installs Claude Code alongside Node. Skip to <a href="#configure">Step 3 (env vars)</a>.
-            </div>
-        </div>
-        <p>Otherwise (Software Center doesn't list Claude yet, or you're on Mac/Linux), same one-liner everywhere:</p>
+        <p>Same one-liner everywhere (Windows, macOS, Linux):</p>
         <div class="ccs-code-wrap"><pre><code>npm install -g @anthropic-ai/claude-code</code></pre><button class="ccs-copy-btn">Copy</button></div>
         <p>Verify the install:</p>
         <div class="ccs-code-wrap"><pre><code>claude --version    # &rarr; claude-code v1.x.x  ✅</code></pre><button class="ccs-copy-btn">Copy</button></div>
@@ -983,7 +969,7 @@ npm --version</code></pre><button class="ccs-copy-btn">Copy</button></div>
     <!-- STEP 3 - CONFIGURE ENV VARS -->
     <div class="ccs-section" id="configure">
         <h2><span class="ccs-step">3</span> Configure the six magic env vars</h2>
-        <p>These point Claude Code at our internal endpoint and pick which local model each tier resolves to.</p>
+        <p>These point Claude Code at your self-hosted endpoint and pick which local model each tier resolves to.</p>
 
         <div class="ccs-table-wrap">
             <table class="ccs-table">
@@ -1007,7 +993,7 @@ npm --version</code></pre><button class="ccs-copy-btn">Copy</button></div>
                 <strong>Get your personal access token (PAT)</strong>
                 Every user mints their own token — no shared secret. Three steps:
                 <ol style="margin:8px 0 0 20px;">
-                    <li>If you haven't yet, <a href="/register">register</a> with your the company email and verify the link we email you.</li>
+                    <li>If you haven't yet, <a href="/register">register</a> with your work email and verify the link we email you.</li>
                     <li>Sign in at <a href="/login">/login</a>, then head to <a href="/account">/account</a>.</li>
                     <li>Click <strong>Create token</strong>, give it a name (e.g. <code>laptop</code>), and copy the value shown <em>once</em>. Paste it into <code>ANTHROPIC_AUTH_TOKEN</code> below.</li>
                 </ol>
@@ -1057,7 +1043,7 @@ setx CLAUDE_CODE_DISABLE_1M_CONTEXT  "1"</code></pre><button class="ccs-copy-btn
             <p>Append to <code>~/.zshrc</code> (use <code>~/.bashrc</code> if you're on bash):</p>
             <div class="ccs-code-wrap"><pre><code>cat &gt;&gt; ~/.zshrc &lt;&lt;'EOF'
 
-# 🤖 Claude Code &rarr; internal LLM
+# 🤖 Claude Code &rarr; self-hosted LLM
 export ANTHROPIC_BASE_URL="{{ local_llm_public_url }}"
 export ANTHROPIC_AUTH_TOKEN="REPLACE_WITH_YOUR_PAT"
 export ANTHROPIC_DEFAULT_OPUS_MODEL="qwen3-coder-30b-a3b-128k"
@@ -1099,7 +1085,7 @@ source ~/.zshrc</code></pre><button class="ccs-copy-btn">Copy</button></div>
             <div class="ccs-callout-icon">🛑</div>
             <div class="ccs-callout-body">
                 <strong>What about the Claude desktop app (the GUI with "Continue with Google" / "Continue with email")?</strong>
-                That's Anthropic's consumer Claude.ai client — it talks <em>only</em> to Anthropic's cloud and there's no env var, settings file, or hidden flag that points it at a local backend. <strong>You can't use it with our internal LLM.</strong> If you want a GUI experience on the local model, use one of these instead — they all ride on the CLI's auth, so the env vars above are all the config they need:
+                That's Anthropic's consumer Claude.ai client — it talks <em>only</em> to Anthropic's cloud and there's no env var, settings file, or hidden flag that points it at a local backend. <strong>You can't use it with your self-hosted LLM.</strong> If you want a GUI experience on the local model, use one of these instead — they all ride on the CLI's auth, so the env vars above are all the config they need:
                 <ul style="margin:8px 0 0 20px;">
                     <li><strong>VS Code</strong> — install Anthropic's official "Claude Code" extension.</li>
                     <li><strong>JetBrains</strong> (IntelliJ / PyCharm / GoLand / …) — install the official "Claude Code" plugin.</li>
@@ -1161,7 +1147,7 @@ claude</code></pre><button class="ccs-copy-btn">Copy</button></div>
             </table>
         </div>
 
-        <h3>Tips for getting good results from the internal model</h3>
+        <h3>Tips for getting good results from the self-hosted model</h3>
         <ul>
             <li><strong>Be specific.</strong> "Refactor this function for clarity, keep the public signature" beats "make it better."</li>
             <li><strong>Smaller scopes win.</strong> One file at a time. Long multi-file refactors are where the local model struggles.</li>
@@ -1174,7 +1160,7 @@ claude</code></pre><button class="ccs-copy-btn">Copy</button></div>
     <!-- MCP TEASER -->
     <div class="ccs-section" id="mcp">
         <h2>🔌 Want SOC tools inside Claude Code?</h2>
-        <p>There's an internal MCP (Model Context Protocol) server that exposes our SOC integrations as <em>read-only</em> tools your Claude Code session can call directly. Examples of what's available:</p>
+        <p>There's a built-in MCP (Model Context Protocol) server that exposes the SOC integrations as <em>read-only</em> tools your Claude Code session can call directly. Examples of what's available:</p>
         <ul style="margin:8px 0 14px 22px;">
             <li><code>xsoar_get_case</code> — pull a full XSOAR ticket with notes &amp; tasks</li>
             <li><code>crowdstrike_get_device_details</code>, <code>crowdstrike_get_detections</code> — CS host + EDR detection lookups</li>
@@ -1196,7 +1182,7 @@ claude</code></pre><button class="ccs-copy-btn">Copy</button></div>
     <!-- VIDEO WALKTHROUGH -->
     <div class="ccs-section" id="walkthrough">
         <h2>📺 Watch a walkthrough</h2>
-        <p>If you'd rather watch than read, here's a community walkthrough of Claude Code in action. The CLI looks identical when pointed at our internal LLM — only the underlying model differs.</p>
+        <p>If you'd rather watch than read, here's a community walkthrough of Claude Code in action. The CLI looks identical when pointed at your self-hosted LLM — only the underlying model differs.</p>
         <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;max-width:900px;margin:16px 0;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,0.08);">
             <iframe style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;border-radius:8px;"
                     src="https://www.youtube-nocookie.com/embed/6eBSHbLKuN0"
@@ -1380,7 +1366,7 @@ GitHub Actions to AWS ECS.
     <div class="ccs-section" id="vscode">
         <details class="ccs-collapse">
         <summary><h2>🆚 Prefer an IDE? Use the VS Code extension</h2></summary>
-        <p>If living in a terminal isn't your thing, install the "Claude Code" extension from the VS Code marketplace. It opens Claude Code as a side panel inside VS Code, with the same env-var config you set up above — point it at our internal endpoint and it works identically.</p>
+        <p>If living in a terminal isn't your thing, install the "Claude Code" extension from the VS Code marketplace. It opens Claude Code as a side panel inside VS Code, with the same env-var config you set up above — point it at your self-hosted endpoint and it works identically.</p>
         <ul>
             <li>Diffs render inline in the editor instead of in the terminal</li>
             <li>Selected code is auto-attached as context</li>
@@ -1440,7 +1426,7 @@ reg delete "HKCU\Environment" /F /V CLAUDE_CODE_DISABLE_1M_CONTEXT</code></pre><
     <div class="ccs-section" id="caveats">
         <details class="ccs-collapse">
         <summary><h2>⚠️ Caveats — read this once</h2></summary>
-        <p>This is an internal model. It is <em>not</em> Claude.</p>
+        <p>This is a self-hosted model. It is <em>not</em> Claude.</p>
         <div class="ccs-table-wrap">
             <table class="ccs-table">
                 <thead>
@@ -1465,7 +1451,7 @@ reg delete "HKCU\Environment" /F /V CLAUDE_CODE_DISABLE_1M_CONTEXT</code></pre><
                 Context window is smaller than Claude's 200K / 1M. Don't paste a 50K-line file and expect it to fit.
             </div>
         </div>
-        <p>If something's genuinely broken (not just "lower quality than Claude"), file it — the bridge between Claude Code and our endpoint can be patched.</p>
+        <p>If something's genuinely broken (not just "lower quality than Claude"), file it — the bridge between Claude Code and your endpoint can be patched.</p>
         </details>
     </div>
 
@@ -1477,16 +1463,16 @@ reg delete "HKCU\Environment" /F /V CLAUDE_CODE_DISABLE_1M_CONTEXT</code></pre><
             <div class="ccs-callout-icon">🌐</div>
             <div class="ccs-callout-body">
                 <strong>Important</strong>
-                The endpoint lives on a private corp-network address. Any corp-network path works — office WiFi/LAN, corp VPN from home, or the corporate proxy. Off-network won't reach it.
+                The endpoint lives on a private in-network address. Any in-network path works — your LAN, or your VPN from home. Off-network won't reach it.
             </div>
         </div>
         <div class="ccs-table-wrap">
             <table class="ccs-table">
                 <thead><tr><th>Where you are</th><th>Will it work?</th></tr></thead>
                 <tbody>
-                    <tr><td>🏢 In the office, on corp WiFi or ethernet</td><td><span class="ccs-pill green">✅ Yes</span></td></tr>
-                    <tr><td>🏠 Working from home, on corp VPN or the corporate proxy</td><td><span class="ccs-pill green">✅ Yes</span></td></tr>
-                    <tr><td>☕ Coffee shop, hotel, off-network</td><td><span class="ccs-pill red">❌ No — connect to corp VPN/the corporate proxy first</span></td></tr>
+                    <tr><td>🏢 In the office, on your LAN</td><td><span class="ccs-pill green">✅ Yes</span></td></tr>
+                    <tr><td>🏠 Working from home, on your VPN</td><td><span class="ccs-pill green">✅ Yes</span></td></tr>
+                    <tr><td>☕ Coffee shop, hotel, off-network</td><td><span class="ccs-pill red">❌ No — connect to your VPN first</span></td></tr>
                 </tbody>
             </table>
         </div>
@@ -1509,8 +1495,8 @@ curl -s -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \
         <p>Click any question to expand. Stuck on something not listed here? <strong>Use the chat widget at bottom-right</strong> to ask.</p>
         <div class="ccs-faq" id="ccsFaq">
             <div class="ccs-faq-item">
-                <button class="ccs-faq-q">🪟 What's the easiest way to install on a corp-managed Windows laptop?</button>
-                <div class="ccs-faq-a">Try <strong>Software Center</strong> first — search for <strong>Claude</strong>; if it's listed, click <strong>Install</strong> and you're done (no admin prompt, no PATH fiddling, jump to Step 3). The SC rollout is still in progress though, so most laptops don't have it yet — if Claude isn't there for you, fall back to the winget + npm steps in <a href="#install-node">Step 1</a> and <a href="#install-claude">Step 2</a>.</div>
+                <button class="ccs-faq-q">🪟 What's the easiest way to install on a locked-down Windows laptop?</button>
+                <div class="ccs-faq-a">Use the winget + npm steps in <a href="#install-node">Step 1</a> and <a href="#install-claude">Step 2</a> — the <code>--scope user</code> flag installs into your profile with no admin rights required.</div>
             </div>
             <div class="ccs-faq-item">
                 <button class="ccs-faq-q">🪟 Should I run Claude in Command Prompt or Windows Terminal?</button>
@@ -1518,11 +1504,11 @@ curl -s -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \
             </div>
             <div class="ccs-faq-item">
                 <button class="ccs-faq-q">🪟 winget install fails with "server certificate did not match" (0x8a15005e).</button>
-                <div class="ccs-faq-a">If Claude is in your Software Center, that path skips winget entirely (search "Claude" → Install). Otherwise: corp SSL inspection breaks the Microsoft Store source. Pin winget explicitly: <code>winget install OpenJS.NodeJS.LTS --source winget</code>. The error message lists <code>winget</code> as a working source — that's the one to use.</div>
+                <div class="ccs-faq-a">TLS inspection on some networks breaks the default Microsoft Store source. Pin winget explicitly: <code>winget install OpenJS.NodeJS.LTS --source winget</code>. The error message lists <code>winget</code> as a working source — that's the one to use.</div>
             </div>
             <div class="ccs-faq-item">
                 <button class="ccs-faq-q">🪟 I don't have admin rights on my Windows laptop — can I still install?</button>
-                <div class="ccs-faq-a">Yes. Easiest path is Software Center if Claude is listed for you (no admin needed). If it isn't, use winget with <code>--scope user</code>: <code>winget install OpenJS.NodeJS.LTS --source winget --scope user</code>. Node installs into your profile and only your user PATH is modified. Last-resort fallback is the portable zip from <a href="https://nodejs.org/dist/" target="_blank" rel="noopener">nodejs.org/dist</a>: extract to <code>%USERPROFILE%\nodejs</code>, then add that folder to your <strong>user</strong> PATH (System Properties → Environment Variables → User variables → Path → New).</div>
+                <div class="ccs-faq-a">Yes. Use winget with <code>--scope user</code>: <code>winget install OpenJS.NodeJS.LTS --source winget --scope user</code>. Node installs into your profile and only your user PATH is modified. Last-resort fallback is the portable zip from <a href="https://nodejs.org/dist/" target="_blank" rel="noopener">nodejs.org/dist</a>: extract to <code>%USERPROFILE%\nodejs</code>, then add that folder to your <strong>user</strong> PATH (System Properties → Environment Variables → User variables → Path → New).</div>
             </div>
             <div class="ccs-faq-item">
                 <button class="ccs-faq-q">It told me it can't access the internet. Is something broken?</button>
@@ -1542,7 +1528,7 @@ curl -s -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \
             </div>
             <div class="ccs-faq-item">
                 <button class="ccs-faq-q">Tool calls are failing or producing malformed JSON.</button>
-                <div class="ccs-faq-a">Occasional issue with the local model — it's noted in the caveats above. Retry the prompt; if it persists, simplify the request (fewer tools, smaller scope) or file a bug with the team lead.</div>
+                <div class="ccs-faq-a">Occasional issue with the local model — it's noted in the caveats above. Retry the prompt; if it persists, simplify the request (fewer tools, smaller scope) or file a bug with the maintainer.</div>
             </div>
             <div class="ccs-faq-item">
                 <button class="ccs-faq-q">My first turn took 2 minutes but my second was 8 seconds. What changed?</button>
@@ -1558,7 +1544,7 @@ curl -s -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \
             </div>
             <div class="ccs-faq-item">
                 <button class="ccs-faq-q">Tool output appeared in one chunk instead of streaming. Is something stuck?</button>
-                <div class="ccs-faq-a">Expected. The Coder alias buffers tool calls because the underlying parser streams JSON as text deltas instead of structured <code>tool_use</code> blocks — we fall back to non-streaming for that alias and synthesize a clean tool block at the end. You lose the typewriter effect on tool calls; chat output still streams.</div>
+                <div class="ccs-faq-a">Expected. The Coder alias buffers tool calls because the underlying parser streams JSON as text deltas instead of structured <code>tool_use</code> blocks — the shim falls back to non-streaming for that alias and synthesize a clean tool block at the end. You lose the typewriter effect on tool calls; chat output still streams.</div>
             </div>
             <div class="ccs-faq-item">
                 <button class="ccs-faq-q">It "thinks" for 30 seconds before answering on a reasoning model.</button>
@@ -1566,7 +1552,7 @@ curl -s -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \
             </div>
             <div class="ccs-faq-item">
                 <button class="ccs-faq-q">Can I use this for confidential / customer data?</button>
-                <div class="ccs-faq-a">Prompts and responses stay on our hardware — nothing is sent to Anthropic or any third party. Follow your normal data-handling policy (don't paste PII you wouldn't paste into an internal Confluence page), but you don't have the "sending to a vendor" worry here.</div>
+                <div class="ccs-faq-a">Prompts and responses stay on your hardware — nothing is sent to Anthropic or any third party. Follow your normal data-handling policy (don't paste PII you wouldn't paste into an internal wiki page), but you don't have the "sending to a vendor" worry here.</div>
             </div>
             <div class="ccs-faq-item">
                 <button class="ccs-faq-q">Can I run two <code>claude</code> sessions at once?</button>
@@ -1604,9 +1590,9 @@ curl -s -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \
         <summary><h2>🆘 Where to get help</h2></summary>
         <ul>
             <li><strong>Inside Claude Code:</strong> type <code>/help</code> to see the full command list.</li>
-            <li><strong>Setup or routing issues</strong> ("my requests aren't going to the internal endpoint"): ping the team lead in Webex.</li>
-            <li><strong>Bugs in the model itself</strong> (refused a reasonable task, kept hallucinating, malformed tool calls): file with the team lead so we can patch the bridge or tweak the model config.</li>
-            <li><strong>Questions about Claude Code itself</strong> (CLI flags, slash commands, extensions): <a href="https://docs.anthropic.com/en/docs/claude-code" target="_blank" rel="noopener">https://docs.anthropic.com/en/docs/claude-code</a> — the public docs apply, just substitute our endpoint for the Anthropic API.</li>
+            <li><strong>Setup or routing issues</strong> ("my requests aren't going to the self-hosted endpoint"): ping the maintainer.</li>
+            <li><strong>Bugs in the model itself</strong> (refused a reasonable task, kept hallucinating, malformed tool calls): file with the maintainer so the bridge can be patched or tweak the model config.</li>
+            <li><strong>Questions about Claude Code itself</strong> (CLI flags, slash commands, extensions): <a href="https://docs.anthropic.com/en/docs/claude-code" target="_blank" rel="noopener">https://docs.anthropic.com/en/docs/claude-code</a> — the public docs apply, just substitute your endpoint for the Anthropic API.</li>
             <li><strong>Or use the chat widget</strong> at the bottom-right of this page — it knows everything in this guide and can help you debug.</li>
         </ul>
         </details>
@@ -1627,7 +1613,7 @@ curl -s -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \
             <li><code>$0.42</code> — session cost so far</li>
             <li><code>1h20m</code> — session duration</li>
             <li><code>(main)</code> — current git branch</li>
-            <li><code>[Opus 4.7 (1M context)]</code> — model in use (will read "default" when pointed at our internal LLM)</li>
+            <li><code>[Opus 4.7 (1M context)]</code> — model in use (will read "default" when pointed at your self-hosted LLM)</li>
             <li><code>ctx:12% (120k/1M)</code> — context window usage</li>
             <li><code>in:1 out:53k</code> — input / output token counts for the session</li>
             <li><code>t/s:68.9</code> — output tokens per second</li>
@@ -1641,7 +1627,7 @@ curl -s -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \
     <div class="ccs-section" id="cowork">
         <details class="ccs-collapse">
         <summary><h2>👥 What about Claude Cowork?</h2></summary>
-        <p>Claude Cowork is the autonomous task agent inside the Claude desktop app — it plans, calls tools, reads results, and handles multi-step work across your local files and apps. Common question: can we point it at the internal LLM the same way we point Claude Code? <strong>Yes — and you don't need IT or MDM to do it.</strong></p>
+        <p>Claude Cowork is the autonomous task agent inside the Claude desktop app — it plans, calls tools, reads results, and handles multi-step work across your local files and apps. Common question: can we point it at the self-hosted LLM the same way we point Claude Code? <strong>Yes — and you don't need IT or MDM to do it.</strong></p>
 
         <h3>🛠️ Configure Cowork — per-user, no MDM</h3>
         <p>In the Claude desktop app:</p>
@@ -1660,7 +1646,7 @@ curl -s -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \
             <div class="ccs-callout-icon">📘</div>
             <div class="ccs-callout-body">
                 <strong>Note</strong>
-                Cowork accepts any gateway that exposes <code>/v1/messages</code> and forwards the <code>anthropic-beta</code> and <code>anthropic-version</code> headers. Our internal proxy already does (Claude Code wouldn't work otherwise), so the same endpoint just works.
+                Cowork accepts any gateway that exposes <code>/v1/messages</code> and forwards the <code>anthropic-beta</code> and <code>anthropic-version</code> headers. Your self-hosted proxy already does (Claude Code wouldn't work otherwise), so the same endpoint just works.
             </div>
         </div>
 
@@ -1683,13 +1669,13 @@ curl -s -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \
 
         <h3>⚠️ Caveats specific to Cowork</h3>
         <ul>
-            <li><strong>Quality drop is more painful here.</strong> Cowork's pitch is autonomous multi-step orchestration — exactly the workload our local model struggles with (long tool-use chains, multi-file reasoning, big-context inference).</li>
+            <li><strong>Quality drop is more painful here.</strong> Cowork's pitch is autonomous multi-step orchestration — exactly the workload the local model struggles with (long tool-use chains, multi-file reasoning, big-context inference).</li>
             <li><strong>Tool calling is flakier than Claude Code.</strong> Reported across the community on non-Claude backends. If a Cowork session goes off the rails, simplify the prompt or fall back to Claude Code.</li>
-            <li><strong>Corp DNS required to resolve the hostname.</strong> Reachable from any corp-network path: office WiFi/LAN, corp VPN from home, or the corporate proxy. Not reachable when fully off-network.</li>
+            <li><strong>DNS must resolve the hostname.</strong> Reachable from any in-network path: your LAN, or your VPN from home. Not reachable when fully off-network.</li>
             <li><strong>Some Cowork-vs-Code config keys don't propagate identically yet.</strong> If a setting "feels off" in Cowork after working fine in Code, re-check the Developer-mode dialog rather than assuming the gateway is broken.</li>
         </ul>
 
-        <h3>🆚 Claude Code vs Claude Cowork on the internal LLM</h3>
+        <h3>🆚 Claude Code vs Claude Cowork on the self-hosted LLM</h3>
         <div class="ccs-table-wrap">
             <table class="ccs-table">
                 <thead>
@@ -1698,7 +1684,7 @@ curl -s -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \
                 <tbody>
                     <tr><td><strong>Setup</strong></td><td>4 env vars in shell rc</td><td>Developer-mode dialog (per user)</td></tr>
                     <tr><td><strong>Backend protocol</strong></td><td><code>/v1/messages</code> (Anthropic)</td><td><code>/v1/messages</code> (Anthropic)</td></tr>
-                    <tr><td><strong>Network</strong></td><td>Corp only</td><td>Corp only</td></tr>
+                    <tr><td><strong>Network</strong></td><td>LAN only</td><td>LAN only</td></tr>
                     <tr><td><strong>Local-model fit</strong></td><td>🟢🟢🟢🟢⚪ focused edits</td><td>🟢🟢⚪⚪⚪ multi-step loops degrade</td></tr>
                     <tr><td><strong>Tool-call reliability</strong></td><td>🟢🟢🟢🟢⚪</td><td>🟢🟢🟢⚪⚪ flakier</td></tr>
                     <tr><td><strong>Best for</strong></td><td>Code Q&amp;A, single-file edits, tests</td><td>Hands-off multi-step tasks (when it works)</td></tr>
@@ -1710,7 +1696,7 @@ curl -s -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \
             <div class="ccs-callout-icon">💡</div>
             <div class="ccs-callout-body">
                 <strong>Tip</strong>
-                For most workflows, prefer Claude Code with the internal endpoint over Cowork. Same backend either way, and Claude Code's tighter scope (one repo, focused edits) plays to the local model's strengths.
+                For most workflows, prefer Claude Code with the self-hosted endpoint over Cowork. Same backend either way, and Claude Code's tighter scope (one repo, focused edits) plays to the local model's strengths.
             </div>
         </div>
         </details>
@@ -1745,7 +1731,7 @@ print(response.json())</code></pre><button class="ccs-copy-btn">Copy</button></d
             <li><a href="https://docs.anthropic.com/en/docs/claude-code" target="_blank" rel="noopener">Claude Code official documentation</a></li>
             <li><a href="https://support.claude.com/en/articles/14680729-use-claude-cowork-with-third-party-platforms" target="_blank" rel="noopener">Use Claude Cowork with third-party platforms — Anthropic Help Center</a></li>
         </ul>
-        <p style="margin-top:14px; font-style: italic; color:#475569;">Happy hacking. 🎉  Questions, broken stuff, feature requests &rarr; ping the team lead.</p>
+        <p style="margin-top:14px; font-style: italic; color:#475569;">Happy hacking. 🎉  Questions, broken stuff, feature requests &rarr; ping the maintainer.</p>
     </div>
 
 </div>
@@ -1929,25 +1915,25 @@ print(response.json())</code></pre><button class="ccs-copy-btn">Copy</button></d
 // (errors, env vars, FAQ, troubleshooting) using exactly what users see here.
 const CLAUDE_CODE_SETUP_CONTEXT = `# Claude Code → Internal LLM — Setup Guide
 
-Run Anthropic's Claude Code CLI against our self-hosted internal model.
+Run Anthropic's Claude Code CLI against your own self-hosted model.
 No API key. No usage caps. No per-token billing. Free for the whole team.
-Available only on the corp network (private 10.x endpoint).
+Available only on the LAN (private 10.x endpoint).
 
 ## Headline guarantees
-- 100% Local: every prompt/response stays on our hardware. Nothing goes to Anthropic, OpenAI, Google, or any third party.
+- 100% Local: every prompt/response stays on your hardware. Nothing goes to Anthropic, OpenAI, Google, or any third party.
 - $0 cost: no API key, no per-token billing, no usage caps.
-- Runs on hardware we own, behind our firewall.
+- Runs on hardware you own, behind your firewall.
 
 ## What you're getting (vs Claude on Anthropic API)
 - Cost: free vs per-token
-- Network: corp-network only vs internet
+- Network: LAN only vs internet
 - Auth: your personal access token (PAT) minted at /account vs Anthropic key
-- Backend: internal model vs Claude (Opus / Sonnet / Haiku)
+- Backend: self-hosted model vs Claude (Opus / Sonnet / Haiku)
 - Quality: 3/5 vs 5/5
-- Privacy: stays on our network vs sent to Anthropic
+- Privacy: stays on your network vs sent to Anthropic
 
 ## Step 1 — Install Node.js (LTS, v18+)
-- Windows: Software Center → "Claude" → Install (if listed). Otherwise: \`winget install OpenJS.NodeJS.LTS --source winget --scope user\` (no admin, no corp-SSL cert issue).
+- Windows: \`winget install OpenJS.NodeJS.LTS --source winget --scope user\` (no admin, no TLS-cert issue).
 - macOS:   \`brew install node\` (or .pkg from https://nodejs.org)
 - Linux:   \`curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -\` then \`sudo apt install -y nodejs\`
 - Verify:  \`node --version\` (≥ v20 ✅) and \`npm --version\`
@@ -2007,7 +1993,7 @@ Close and reopen cmd after setting.
 - Open a fresh terminal. Run \`claude\`.
 - Inside the prompt: \`/status\` — should show the custom ANTHROPIC_BASE_URL.
 - Say hi: \`> hi! introduce yourself in one sentence.\`
-- Sign of success: it WON'T claim to be Claude (because it isn't — it's our local model).
+- Sign of success: it WON'T claim to be Claude (because it isn't — it's the local model).
 
 ## Step 5 — First real task tutorial
 1. \`mkdir hello-claude && cd hello-claude && claude\`
@@ -2069,8 +2055,8 @@ Close and reopen cmd after setting.
 - Context window is smaller than Claude's 200K/1M. Don't paste a 50K-line file.
 
 ## Network gotchas
-- Endpoint is on the corp network. Reachable from any corp-network path: office WiFi/LAN, corp VPN from home, or the corporate proxy.
-- Off-network (coffee shop, hotel, no VPN/the corporate proxy): ❌ — connect to corp VPN or the corporate proxy first.
+- Endpoint is on the LAN. Reachable from any in-network path: your LAN, or your VPN from home.
+- Off-network (coffee shop, hotel, no VPN/your VPN): ❌ — connect to your VPN first.
 
 ### Reachability check
 \`\`\`
@@ -2089,7 +2075,7 @@ curl -s -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \\
 - "It refused to do something benign." Rephrase. The model can be over-cautious. Add context like "this is my own project, the file is mine to edit."
 - "Tool calls are failing or producing malformed JSON." Local model occasional issue. Retry; if persistent, simplify the request or file a bug.
 - "First response slow, later ones fast." Normal — model warms up after first query (KV cache).
-- "Can I use this for confidential / customer data?" Stays on our hardware, never sent to a third party. Follow normal data-handling policy.
+- "Can I use this for confidential / customer data?" Stays on your hardware, never sent to a third party. Follow normal data-handling policy.
 - "Can I run two claude sessions at once?" Yes — independent contexts.
 - "How do I see what env vars Claude Code is actually using?" Type /status inside the prompt.
 
@@ -2098,7 +2084,7 @@ curl -s -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \\
 - "/status shows the wrong base URL" → env vars not loaded; reopen the terminal, or check your shell rc / Windows User-scope vars.
 - 401 from \`curl ... /v1/models\` → token wrong/missing.
 - 200 from curl but Claude Code still fails → most often a stale ANTHROPIC_AUTH_TOKEN env var in the current shell. Reopen terminal.
-- Connection refused / timeout → not on the corp network. Connect to corp VPN/the corporate proxy, or move to office WiFi/wired LAN.
+- Connection refused / timeout → not on the LAN. Connect to your VPN, or move to office WiFi/wired LAN.
 - Tool/JSON malformed → simplify the prompt (fewer tools, smaller scope), retry; persistent issue → file a bug with team lead.
 
 ## Status line — bottom-of-terminal display
@@ -2106,7 +2092,7 @@ Format: host (machine-label) you@example.com project-name $cost duration (branch
 Permission mode line: ⏵⏵ accept edits on (shift+tab to cycle)
 - Customize via /statusline or hand-edit ~/.claude/settings.json (statusLine key).
 
-## Claude Cowork on the internal LLM
+## Claude Cowork on the self-hosted LLM
 - Works the same way as Claude Code — no IT or MDM needed.
 - In the desktop app: Help → Troubleshooting → Enable Developer Mode.
 - Developer menu → Configure third-party inference.
@@ -2117,7 +2103,7 @@ Permission mode line: ⏵⏵ accept edits on (shift+tab to cycle)
 
 ## Where to get help
 - /help inside Claude Code — full command list.
-- Setup or routing issues, bugs in the model itself → ping the team lead in Webex.
+- Setup or routing issues, bugs in the model itself → ping the maintainer.
 - Generic CLI questions → https://docs.anthropic.com/en/docs/claude-code
 
 ## Python smoke test

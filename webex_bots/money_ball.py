@@ -26,7 +26,7 @@ logging.getLogger('webex_bot').setLevel(logging.ERROR)  # Suppress bot-to-bot an
 logging.getLogger('webexteamssdk').setLevel(logging.ERROR)
 logging.getLogger('webex_websocket_client').setLevel(logging.WARNING)
 
-# ALWAYS configure SSL for proxy environments (auto-detects ZScaler/proxies)
+# ALWAYS configure SSL for proxy environments (auto-detects the corporate proxy/proxies)
 from src.utils.ssl_config import configure_ssl_if_needed
 
 configure_ssl_if_needed(verbose=True)

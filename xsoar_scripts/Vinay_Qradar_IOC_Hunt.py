@@ -1,5 +1,5 @@
 '''
-    Author: Nate Rooth
+    Author: Detection & Response team
     Created: April 7th, 2023
     Updated: July 26th, 2024
     Description: Wrapper script to handle IOC Hunts in Qradar

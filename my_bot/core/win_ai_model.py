@@ -32,7 +32,7 @@ HELP_TEXT = """## the Windows triage agent — Codebase Tutor
 
 ### Example questions
 ```
-How does the the security assistant bot bot route tool calls?
+How does the security assistant bot route tool calls?
 Show me how the domain monitoring alerts work
 Explain how ChromaDB is used here
 What does the wiki say about phishing response?

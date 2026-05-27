@@ -353,7 +353,7 @@ def api_s3_verify_auth():
 def api_s3_bucket_classify():
     """Classify an S3 bucket as ours/investigate/unknown.
 
-    JSON body: { "domain": "the-company.com", "bucket": "the company-cdn", "classification": "ours" }
+    JSON body: { "domain": "the-company.com", "bucket": "example-cdn", "classification": "ours" }
     Valid classifications: "ours", "investigate", "unknown"
     """
     data = request.get_json(silent=True) or {}

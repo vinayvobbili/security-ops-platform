@@ -10,12 +10,12 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/vvobbilichetty/PycharmProjects/IR/.venv/bin/python3</string>
-        <string>/Users/vvobbilichetty/PycharmProjects/IR/misc_scripts/ollama_serializer.py</string>
+        <string>/Users/labuser/PycharmProjects/IR/.venv/bin/python3</string>
+        <string>/Users/labuser/PycharmProjects/IR/misc_scripts/ollama_serializer.py</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/vvobbilichetty/PycharmProjects/IR</string>
+    <string>/Users/labuser/PycharmProjects/IR</string>
 
     <key>EnvironmentVariables</key>
     <dict>
@@ -35,9 +35,9 @@
     </dict>
 
     <key>StandardOutPath</key>
-    <string>/Users/vvobbilichetty/PycharmProjects/IR/logs/ollama_serializer.log</string>
+    <string>/Users/labuser/PycharmProjects/IR/logs/ollama_serializer.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/vvobbilichetty/PycharmProjects/IR/logs/ollama_serializer.log</string>
+    <string>/Users/labuser/PycharmProjects/IR/logs/ollama_serializer.log</string>
 </dict>
 </plist>

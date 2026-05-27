@@ -479,7 +479,7 @@ wait
             logger.info("Routing pings through Mac reverse SSH tunnel (port %d)", REVERSE_SSH_PORT)
             ping_results = self._ping_via_ssh(unique_names, ip_by_hostname)
         else:
-            logger.warning("SSH tunnel unavailable — falling back to local pings (may not reach corp network)")
+            logger.warning("SSH tunnel unavailable — falling back to local pings (may not reach internal hosts)")
             ping_results = self._ping_local(unique_names)
 
         # Apply results to all hosts

@@ -153,8 +153,8 @@ def execute_url_block(room_id: str, url: str, xsoar_ticket_id: str, reason: str,
         logger.info(f"Completed acknowledgement task in ticket {ticket_id}")
 
         # Execute the URL block script in the ticket's war room
-        handler.execute_command_in_war_room(ticket_id, f'!METCIRT_Start_URL_Block Reason="{reason}"')
-        logger.info(f"Executed !METCIRT_Start_URL_Block in ticket {ticket_id}")
+        handler.execute_command_in_war_room(ticket_id, f'!CIRT_Start_URL_Block Reason="{reason}"')
+        logger.info(f"Executed !CIRT_Start_URL_Block in ticket {ticket_id}")
 
         # Add audit note
         audit_note = f"URL block requested by {user_email}\nReason: {reason}"
@@ -168,7 +168,7 @@ def execute_url_block(room_id: str, url: str, xsoar_ticket_id: str, reason: str,
             f"- **XSOAR Ticket:** {ticket_link}\n"
             f"- **Reason:** {reason}\n"
             f"- **Requested by:** {user_email}\n"
-            f"- `!METCIRT_Start_URL_Block` executed in war room\n"
+            f"- `!CIRT_Start_URL_Block` executed in war room\n"
             f"- Please review the ticket and close it."
         )
         webex_api.messages.create(

@@ -16,7 +16,7 @@ def toodles_log_activity(func):
     Usage:
         from src.utils.toodles_decorators import toodles_log_activity
 
-        class MyCommand(the notification serviceCommand):
+        class MyCommand(NotificationCommand):
             @toodles_log_activity
             def execute(self, message, attachment_actions, activity):
                 ...

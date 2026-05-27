@@ -1,12 +1,12 @@
-# 🤖 Claude Code → Our Internal LLM
+# 🤖 Claude Code → A Self-Hosted LLM
 
-> **status: live** · **backend: internal** · **corp network only** · **cost: $0**
+> **status: live** · **backend: self-hosted** · **LAN only** · **cost: $0**
 
-Run Anthropic's Claude Code CLI against our self-hosted models. No API key. No usage caps. No per-token billing. Just point and go. ⚡
+Run Anthropic's Claude Code CLI against your own self-hosted models. No API key. No usage caps. No per-token billing. Just point and go. ⚡
 
-| 🔒 100% Local | 💰 $0 Cost | 🏢 Our Infra |
+| 🔒 100% Local | 💰 $0 Cost | 🏢 Your Hardware |
 |---|---|---|
-| Every prompt and response stays on hardware we own. | No API key, no per-token billing, no usage caps. | Runs on Macs we own, fronted by lab-vm1 on the corp network. |
+| Every prompt and response stays on hardware you own. | No API key, no per-token billing, no usage caps. | Runs on local Macs, fronted by a gateway host on your LAN. |
 
 ## 📑 Table of contents
 - [What is Claude Code?](#-what-is-claude-code)
@@ -35,7 +35,7 @@ Run Anthropic's Claude Code CLI against our self-hosted models. No API key. No u
 ## 🧠 What is Claude Code?
 Claude Code is a terminal AI pair programmer. You run `claude` in a project directory, type what you want in plain English, and it reads files, writes code, runs commands, and shows you a diff before saving. Think "a teammate who pair-programs in your repo," not "a chatbot in a browser tab."
 
-With this setup, all of that runs against our self-hosted models instead of Anthropic's cloud. Same CLI, same workflow — just our hardware doing the thinking.
+With this setup, all of that runs against your own self-hosted models instead of Anthropic's cloud. Same CLI, same workflow — just your hardware doing the thinking.
 
 ## ✨ The headline
 Three local models exposed through one endpoint.
@@ -50,7 +50,7 @@ Three local models exposed through one endpoint.
 
 ## ⏱️ Speed & latency — what to expect
 
-> **❗ First turn pays for the whole session.** First turn in a fresh `claude` session takes 1–3 minutes — that's the floor, not a bug. Every follow-up turn drops to seconds because we cache the system prompt + tool definitions on the first turn and reuse them. If a follow-up is also slow, see the FAQ below.
+> **❗ First turn pays for the whole session.** First turn in a fresh `claude` session takes 1–3 minutes — that's the floor, not a bug. Every follow-up turn drops to seconds because the router caches the system prompt + tool definitions on the first turn and reuses them. If a follow-up is also slow, see the FAQ below.
 
 Measured on studio1 (Apple Silicon, GLM-4.7-Flash 8-bit) with Claude Code's stock system prompt + ~60 tools:
 
@@ -62,7 +62,7 @@ Measured on studio1 (Apple Silicon, GLM-4.7-Flash 8-bit) with Claude Code's stoc
 | Long session (10+ turns, large files in context) | Grows turn-over-turn | The cached prefix stays cheap; what grows is conversation history. `/compact` keeps it lean. |
 
 ### 🤔 Why so much slower than anthropic.com?
-- **Cache scope** — Anthropic caches the entire conversation. We cache only the system prompt + tool definitions (the constant 23–38K-token prefix). Your message and prior turns still pay compute every turn.
+- **Cache scope** — Anthropic caches the entire conversation. This setup caches only the system prompt + tool definitions (the constant 23–38K-token prefix). Your message and prior turns still pay compute every turn.
 - **Hardware** — a Mac Studio is not a datacenter GPU. Cloud Claude runs on accelerator clusters with orders-of-magnitude more memory bandwidth.
 - **Model size** — GLM-4.7-Flash is ~30 GB on disk; Opus / Sonnet are far larger and run on far bigger machines. Smaller model partly compensates for the slower hardware, but only partly.
 
@@ -86,14 +86,12 @@ You need Node 18+ (LTS recommended).
 
 ### 🪟 Windows
 
-> **🏢 Corp-managed laptop? Try Software Center first.** Open Software Center (Start menu → "Software Center"), search for **Claude**, click **Install**. If it's there, you're done — no admin prompt, no PATH wrangling. **Skip ahead to Step 3 (env vars)**. The rollout is still in progress though, so most laptops don't have it yet — if Claude isn't listed for you, use the winget steps below to install Node, then continue to Step 2.
-
-If Software Center doesn't list Claude — install Node manually. The flags below work **without admin rights** and **on corp Wi-Fi**:
+Install Node manually. The flags below work **without admin rights**, even on locked-down machines behind a TLS-inspecting proxy:
 ```powershell
 winget install OpenJS.NodeJS.LTS --source winget --scope user
 ```
 
-> **📘 Why those two flags** — `--source winget` pins the Microsoft *winget* source instead of the default *msstore*, which fails with `0x8a15005e` (server certificate did not match) on corp Wi-Fi because SSL inspection breaks the Microsoft Store source. `--scope user` installs Node into your profile only and modifies your user PATH; no admin elevation needed. Close and reopen your terminal afterwards so the new PATH takes effect.
+> **📘 Why those two flags** — `--source winget` pins the Microsoft *winget* source instead of the default *msstore*, which fails with `0x8a15005e` (server certificate did not match) on networks where TLS inspection breaks the Microsoft Store source. `--scope user` installs Node into your profile only and modifies your user PATH; no admin elevation needed. Close and reopen your terminal afterwards so the new PATH takes effect.
 
 ### 🍎 macOS
 ```bash
@@ -114,9 +112,7 @@ node -v && npm -v
 
 ## 2️⃣ Install Claude Code
 
-> **🏢 Installed via Software Center on Windows?** You're done — SC installs Claude Code alongside Node. Skip to Step 3 (env vars).
-
-Otherwise (Software Center doesn't list Claude yet, or you're on Mac/Linux), same one-liner everywhere:
+Same one-liner everywhere (Windows, macOS, Linux):
 ```bash
 npm install -g @anthropic-ai/claude-code
 ```
@@ -128,7 +124,7 @@ claude --version
 ---
 
 ## 3️⃣ Configure five env vars
-These point Claude Code at our internal endpoint and pick which local model each tier resolves to. Get the API key from the team lead.
+These point Claude Code at your self-hosted endpoint and pick which local model each tier resolves to. Get the bearer token from whoever runs the gateway.
 
 ### 🍎🐧 macOS / Linux — make it permanent
 Open `~/.zshrc` (or `~/.bashrc` on bash) in your editor — pick whichever you have:
@@ -342,8 +338,8 @@ Then `claude login` to authenticate.
 ---
 
 ## 🌐 Network gotchas
-- Reachable from corp WiFi/wired LAN, or from home over the corp VPN.
-- Not reachable from the corporate proxy-only or fully off-VPN networks.
+- Reachable from your LAN (wired or Wi-Fi), or remotely over your VPN.
+- Not reachable from networks with no route to the gateway host.
 - If `claude` hangs at startup, check that you can reach the gateway.
 
 ### 🩺 Quick reachability check
@@ -356,14 +352,14 @@ Expected: a JSON list with `glm-4.7-flash` and `laguna`.
 
 ## ❓ FAQ — things people ping me about
 
-**Q: 🪟 What's the easiest way to install on a corp-managed Windows laptop?**
-A: Try **Software Center** first — search for **Claude**; if it's listed, click **Install** and you're done (no admin prompt, no PATH fiddling, jump to Step 3). The SC rollout is still in progress though, so most laptops don't have it yet — if Claude isn't there for you, fall back to the winget + npm steps in Step 1 and Step 2.
+**Q: 🪟 What's the easiest way to install on a locked-down Windows laptop?**
+A: Use the winget + npm steps in Step 1 and Step 2 — the `--scope user` flag installs into your profile with no admin rights required.
 
 **Q: 🪟 winget install fails with "server certificate did not match" (`0x8a15005e`).**
-A: If Claude is in your Software Center, that path skips winget entirely (search "Claude" → Install). Otherwise: corp SSL inspection breaks the Microsoft Store source. Pin winget explicitly: `winget install OpenJS.NodeJS.LTS --source winget`. The error message lists `winget` as a working source — that's the one to use.
+A: TLS inspection on some networks breaks the default Microsoft Store source. Pin winget explicitly: `winget install OpenJS.NodeJS.LTS --source winget`. The error message lists `winget` as a working source — that's the one to use.
 
 **Q: 🪟 I don't have admin rights on my Windows laptop — can I still install?**
-A: Yes. Easiest path is Software Center if Claude is listed for you (no admin needed). If it isn't, use winget with `--scope user`: `winget install OpenJS.NodeJS.LTS --source winget --scope user`. Node installs into your profile and only your user PATH is modified. Last-resort fallback is the portable zip from https://nodejs.org/dist/: extract to `%USERPROFILE%
+A: Yes. Use winget with `--scope user`: `winget install OpenJS.NodeJS.LTS --source winget --scope user`. Node installs into your profile and only your user PATH is modified. Last-resort fallback is the portable zip from https://nodejs.org/dist/: extract to `%USERPROFILE%
 odejs`, then add that folder to your **user** PATH (System Properties → Environment Variables → User variables → Path → New).
 
 **Q: It told me it can't access the internet. Is something broken?**
@@ -391,13 +387,13 @@ A: Three common causes: (1) you switched model mid-session — each model has it
 A: That syntax is bash-only. PowerShell needs either `$env:ANTHROPIC_MODEL="qwen2.5-coder-32b"; claude` (one line, semicolon between assignment and command) or just `claude --model qwen2.5-coder-32b`. The `--model` flag is the easiest cross-shell way to switch models for one session.
 
 **Q: Tool output appeared in one chunk instead of streaming. Is something stuck?**
-A: Expected for some models. The Coder alias buffers tool calls because the underlying parser streams JSON as text deltas instead of structured `tool_use` blocks — we fall back to non-streaming for that alias and synthesize a clean tool block at the end. You lose the typewriter effect on tool calls; chat output still streams. Switch to `glm-4.7-flash` if streaming during tool use matters.
+A: Expected for some models. The Coder alias buffers tool calls because the underlying parser streams JSON as text deltas instead of structured `tool_use` blocks — the shim falls back to non-streaming for that alias and synthesizes a clean tool block at the end. You lose the typewriter effect on tool calls; chat output still streams. Switch to `glm-4.7-flash` if streaming during tool use matters.
 
 **Q: It "thinks" for 30 seconds before answering on a reasoning model.**
 A: That's generation time, not prefill. The cache eliminates prefill (the constant prefix); it can't shorten how many tokens the model generates before the answer. Reasoning-flavored models (anything with a `<think>` block) emit hundreds of reasoning tokens before the user-facing answer, every turn. Switch to `glm-4.7-flash` (non-thinking) for snappy chat; keep thinking models for hard problems.
 
-**Q: Can I use this for confidential / customer data?**
-A: Prompts and responses stay on our hardware — nothing is sent to Anthropic or any third party. Follow normal data-handling policy.
+**Q: Can I use this for confidential / sensitive data?**
+A: Prompts and responses stay on your hardware — nothing is sent to Anthropic or any third party. Follow your own data-handling policy.
 
 **Q: Can I run two `claude` sessions at once?**
 A: Yes — but if you're running different models in each, expect cache contention (single-slot cache; the second session's cold prefill evicts the first session's warm slot, and vice versa). Same model in both sessions = no contention.
@@ -409,13 +405,13 @@ A: Type `/status` inside the prompt — shows resolved BASE_URL, model, permissi
 
 ## 🆘 Where to get help
 - Inside Claude Code: `/help` for the full command list.
-- Setup or routing issues: ping the team lead.
-- Bugs in the model itself: file with the team lead so we can patch the bridge or tweak the config.
-- Questions about Claude Code: https://docs.anthropic.com/en/docs/claude-code — public docs apply, just substitute our endpoint.
+- Setup or routing issues: check the admin guide below.
+- Bugs in the model itself: open an issue so the bridge can be patched or the config tweaked.
+- Questions about Claude Code: https://docs.anthropic.com/en/docs/claude-code — public docs apply, just substitute your endpoint.
 
 ---
 
 ## 📚 References
 - Claude Code official docs: https://docs.anthropic.com/en/docs/claude-code
 - VS Code extension: search "Claude Code" in the marketplace
-- Internal admin guide: `docs/CLAUDE_CODE_ADMIN_SETUP.md`
+- Admin guide: `docs/CLAUDE_CODE_ADMIN_SETUP.md`
