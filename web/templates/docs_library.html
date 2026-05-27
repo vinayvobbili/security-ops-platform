@@ -62,15 +62,15 @@
             <thead>
                 <tr>
                     <th style="width:36px;"></th>
-                    <th>Filename</th>
-                    <th style="width:90px;">Size</th>
-                    <th style="width:140px;">Modified</th>
+                    <th class="dl-sortable" data-sort-key="name" aria-sort="none" title="Click to sort by name">Filename <span class="dl-sort-ind">↕</span></th>
+                    <th class="dl-sortable" data-sort-key="size" aria-sort="none" style="width:90px;" title="Click to sort by size">Size <span class="dl-sort-ind">↕</span></th>
+                    <th class="dl-sortable" data-sort-key="mtime" aria-sort="none" style="width:140px;" title="Click to sort by date modified">Modified <span class="dl-sort-ind">↕</span></th>
                     <th class="dl-th-actions">Actions</th>
                 </tr>
             </thead>
             <tbody id="dlTbody">
                 {% for doc in docs %}
-                <tr data-filename="{{ doc.filename | e }}">
+                <tr data-filename="{{ doc.filename | e }}" data-bytes="{{ doc.size }}" data-mtime="{{ doc.mtime }}">
                     <td class="dl-type-icon">
                         {% if doc.ext == '.pdf' %}📄
                         {% elif doc.ext in ['.docx', '.doc'] %}📝
@@ -103,9 +103,9 @@
             <thead>
                 <tr>
                     <th style="width:36px;"></th>
-                    <th>Filename</th>
-                    <th style="width:90px;">Size</th>
-                    <th style="width:140px;">Modified</th>
+                    <th class="dl-sortable" data-sort-key="name" aria-sort="none" title="Click to sort by name">Filename <span class="dl-sort-ind">↕</span></th>
+                    <th class="dl-sortable" data-sort-key="size" aria-sort="none" style="width:90px;" title="Click to sort by size">Size <span class="dl-sort-ind">↕</span></th>
+                    <th class="dl-sortable" data-sort-key="mtime" aria-sort="none" style="width:140px;" title="Click to sort by date modified">Modified <span class="dl-sort-ind">↕</span></th>
                     <th class="dl-th-actions">Actions</th>
                 </tr>
             </thead>

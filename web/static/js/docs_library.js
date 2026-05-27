@@ -74,6 +74,85 @@ function updateChunkCount(chroma) {
     }
 }
 
+// ── Column Sorting (persisted in localStorage) ──
+const DL_SORT_KEY = 'dlSortPref';
+
+function getSortPref() {
+    try {
+        const p = JSON.parse(localStorage.getItem(DL_SORT_KEY) || 'null');
+        if (p && ['name', 'size', 'mtime'].includes(p.key) && (p.dir === 'asc' || p.dir === 'desc')) {
+            return p;
+        }
+    } catch (e) { /* ignore corrupt value */ }
+    return null;
+}
+
+function saveSortPref(key, dir) {
+    try { localStorage.setItem(DL_SORT_KEY, JSON.stringify({ key, dir })); } catch (e) {}
+}
+
+function rowSortValue(tr, key) {
+    if (key === 'size')  return parseFloat(tr.getAttribute('data-bytes')) || 0;
+    if (key === 'mtime') return parseFloat(tr.getAttribute('data-mtime')) || 0;
+    return (tr.getAttribute('data-filename') || '').toLowerCase(); // name
+}
+
+function updateSortIndicators(key, dir) {
+    document.querySelectorAll('.dl-table th.dl-sortable').forEach(th => {
+        const active = th.getAttribute('data-sort-key') === key;
+        const ind = th.querySelector('.dl-sort-ind');
+        th.classList.toggle('dl-sorted', active);
+        th.setAttribute('aria-sort', active ? (dir === 'desc' ? 'descending' : 'ascending') : 'none');
+        if (ind) ind.textContent = active ? (dir === 'desc' ? '▼' : '▲') : '↕';
+    });
+}
+
+// Reorder the table body by `key`/`dir`. Pass persist=true to remember the choice.
+function applySort(key, dir, persist) {
+    updateSortIndicators(key, dir);
+    if (persist) saveSortPref(key, dir);
+
+    const tbody = document.getElementById('dlTbody');
+    if (!tbody) return;
+    const rows = Array.from(tbody.querySelectorAll('tr[data-filename]'));
+    if (rows.length < 2) return;
+
+    const numeric = (key === 'size' || key === 'mtime');
+    const mult = (dir === 'desc') ? -1 : 1;
+    rows.sort((a, b) => {
+        const va = rowSortValue(a, key), vb = rowSortValue(b, key);
+        const cmp = numeric ? (va - vb)
+                            : va.localeCompare(vb, undefined, { numeric: true, sensitivity: 'base' });
+        return cmp * mult;
+    });
+    rows.forEach(r => tbody.appendChild(r)); // appendChild moves existing nodes in order
+}
+
+// Re-apply the current sort (used after rows are added dynamically)
+function reapplySort() {
+    const pref = getSortPref();
+    if (pref) applySort(pref.key, pref.dir, false);
+}
+
+function setupSorting() {
+    const ths = document.querySelectorAll('.dl-table th.dl-sortable');
+    if (!ths.length) return;
+    ths.forEach(th => {
+        th.addEventListener('click', () => {
+            const key = th.getAttribute('data-sort-key');
+            const cur = getSortPref();
+            let dir;
+            if (cur && cur.key === key) {
+                dir = (cur.dir === 'asc') ? 'desc' : 'asc'; // toggle on repeat click
+            } else {
+                dir = (key === 'name') ? 'asc' : 'desc';     // names A→Z, size/date biggest/newest first
+            }
+            applySort(key, dir, true);
+        });
+    });
+    reapplySort(); // honour saved preference on load
+}
+
 // ── Upload Modal ──
 let _selectedFile = null;
 
@@ -202,6 +281,8 @@ function addDocRow(doc) {
     const icon = fileTypeIcon(doc.filename);
     const tr = document.createElement('tr');
     tr.setAttribute('data-filename', escapeAttr(doc.filename));
+    tr.setAttribute('data-bytes', doc.size != null ? doc.size : 0);
+    tr.setAttribute('data-mtime', Math.floor(Date.now() / 1000));
     tr.innerHTML = `
         <td class="dl-type-icon">${icon}</td>
         <td class="dl-filename">${escapeHtml(doc.filename)}</td>
@@ -212,6 +293,7 @@ function addDocRow(doc) {
             <button class="dl-btn-icon dl-btn-delete" onclick="deleteDoc('${escapeAttr(doc.filename)}')" title="Delete">&#128465;</button>
         </td>`;
     tbody.appendChild(tr);
+    reapplySort(); // keep the new row in the user's chosen order
 }
 
 function updateDocCount() {
@@ -281,6 +363,7 @@ function escapeAttr(str) {
 document.addEventListener('DOMContentLoaded', function () {
     if (typeof initTheme === 'function') initTheme();
     setupDropZone();
+    setupSorting();
     updateDocCount();
     // Poll immediately to pick up any in-progress sync from a previous upload
     fetch('/api/docs-library/status')

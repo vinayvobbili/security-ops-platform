@@ -2,12 +2,23 @@
 
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List
+from zoneinfo import ZoneInfo
 
 from werkzeug.utils import secure_filename
 
 logger = logging.getLogger(__name__)
+
+# Modified timestamps are shown in US Eastern (EST/EDT) regardless of the
+# server's local timezone, so the display abbreviation is always correct.
+_EASTERN = ZoneInfo("America/New_York")
+
+
+def _fmt_mtime(epoch: float) -> str:
+    """Format an epoch mtime as 'MM/DD/YYYY HH:MM AM/PM EST/EDT' in US Eastern."""
+    dt = datetime.fromtimestamp(epoch, tz=timezone.utc).astimezone(_EASTERN)
+    return dt.strftime("%m/%d/%Y %I:%M %p %Z")
 
 # Paths (src/components/web/ → up 3 levels → project root)
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -43,7 +54,8 @@ def list_docs() -> List[Dict[str, Any]]:
             "ext": ext,
             "size": stat.st_size,
             "size_str": _fmt_size(stat.st_size),
-            "modified": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M"),
+            "mtime": int(stat.st_mtime),
+            "modified": _fmt_mtime(stat.st_mtime),
         })
     return docs
 

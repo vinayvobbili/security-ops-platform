@@ -68,6 +68,12 @@
 .dl-table td { padding: 9px 14px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
 .dl-table tbody tr:hover { background: rgba(0,70,173,0.03); }
 .dl-table tbody tr:last-child td { border-bottom: none; }
+.dl-table th.dl-sortable { cursor: pointer; user-select: none; }
+.dl-table th.dl-sortable:hover { background: rgba(255,255,255,0.14); }
+.dl-table th.dl-sorted { background: rgba(255,255,255,0.18); }
+/* Neutral glyph is dimmed so columns read as "sortable"; the active column's arrow is full-strength. */
+.dl-sort-ind { display: inline-block; width: 0.9em; font-size: 0.72rem; opacity: 0.4; }
+.dl-table th.dl-sorted .dl-sort-ind { opacity: 1; }
 .dl-th-actions { width: 80px; text-align: center; }
 .dl-td-actions { text-align: center; }
 .dl-filename { font-weight: 500; color: #1e293b; word-break: break-word; }
