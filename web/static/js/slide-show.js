@@ -54,6 +54,12 @@ function initializeSlider() {
 }
 
 function playSlideshow() {
+    // Never let two advance-timers run at once: clear any existing one first.
+    // Without this, paths that call playSlideshow() while a timer is alive
+    // orphan an interval that nothing tracks and pause can never stop.
+    if (intervalId) {
+        clearInterval(intervalId);
+    }
     intervalId = setInterval(() => {
         moveSlide(1);
     }, slideInterval);
@@ -63,6 +69,11 @@ function playSlideshow() {
 function startProgressBar() {
     if (!timingProgressBar) {
         return;
+    }
+
+    // Clear any in-flight progress timer so we don't stack them
+    if (progressIntervalId) {
+        clearInterval(progressIntervalId);
     }
 
     // Reset progress bar
@@ -94,11 +105,12 @@ function stopProgressBar() {
 }
 
 function toggleSlideshow() {
-    const srcFileName = pausePlayButton.src.split('/').pop(); // Extract filename
-    const isSlideshowRunning = srcFileName === "pause-solid.svg";
-
-    if (isSlideshowRunning) {
+    // intervalId is the source of truth — NOT the button's src. Static URLs get
+    // a "?v=..." cache-buster appended, so parsing the filename out of src
+    // mis-detects state on the first toggle and the keypress gets swallowed.
+    if (intervalId) {
         clearInterval(intervalId);
+        intervalId = null;
         stopProgressBar();
         pausePlayButton.src = "/static/icons/play-solid.svg";
     } else {
@@ -230,8 +242,8 @@ initBurgerMenu();
 function restartSlideshow() {
     currentSlide = 0;
     updateSlider();
-    // If paused, also resume the slideshow
-    if (pausePlayButton.src.split('/').pop() === "play-solid.svg") {
+    // If paused, also resume the slideshow (intervalId is the source of truth)
+    if (!intervalId) {
         playSlideshow();
         pausePlayButton.src = "/static/icons/pause-solid.svg";
     }

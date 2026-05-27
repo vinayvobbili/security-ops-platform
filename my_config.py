@@ -35,7 +35,6 @@ except EncryptionError as e:
     else:
         raise
 
-
 def _env_with_prefix(bot_name: str | None, key: str, default: str = "") -> str:
     """Check BOT_NAME_KEY first, then KEY, then default."""
     if bot_name:
@@ -81,6 +80,7 @@ def get_config(bot_name: str | None = None):
         webex_room_id_aging_tickets=os.environ.get("WEBEX_ROOM_ID_AGING_TICKETS"),
         webex_room_id_dev_test_space=os.environ.get("WEBEX_ROOM_ID_DEV_TEST_SPACE"),
         webex_room_id_soc_shift_updates=os.environ.get("WEBEX_ROOM_ID_SOC_SHIFT_UPDATES"),
+        webex_room_id_soc_in_a_box=os.environ.get("WEBEX_ROOM_ID_SOC_IN_A_BOX"),
         webex_room_id_epp_crowdstrike_tagging=os.environ.get("WEBEX_ROOM_ID_EPP_CROWDSTRIKE_TAGGING"),
         webex_room_id_epp_tanium_cloud_tagging=os.environ.get("WEBEX_ROOM_ID_EPP_TANIUM_CLOUD_TAGGING"),
         webex_room_id_epp_tanium_onprem_tagging=os.environ.get("WEBEX_ROOM_ID_EPP_TANIUM_ONPREM_TAGGING"),
@@ -101,6 +101,7 @@ def get_config(bot_name: str | None = None):
         webex_room_id_threat_tipper_analysis=os.environ.get("WEBEX_ROOM_ID_THREAT_TIPPER_ANALYSIS"),
         webex_room_id_sentinel_triage=os.environ.get("WEBEX_ROOM_ID_SENTINEL_TRIAGE"),
         webex_room_id_gs_ai=os.environ.get("WEBEX_ROOM_ID_GS_AI"),
+        eai_portal_base_url=os.environ.get("EAI_PORTAL_BASE_URL"),
         xsoar_prod_api_base_url=os.environ.get("XSOAR_PROD_API_BASE_URL"),
         xsoar_prod_ui_base_url=os.environ.get("XSOAR_PROD_UI_BASE_URL"),
         xsoar_dev_api_base_url=os.environ.get("XSOAR_DEV_API_BASE_URL"),
@@ -125,8 +126,8 @@ def get_config(bot_name: str | None = None):
         m1_router_base_url=_env_with_prefix(bot_name, "M1_ROUTER_BASE_URL", ""),
         studio1_laguna_base_url=_env_with_prefix(bot_name, "STUDIO1_LAGUNA_BASE_URL", ""),
         studio1_qwen_base_url=_env_with_prefix(bot_name, "STUDIO1_QWEN_BASE_URL", ""),
+        studio1_router_base_url=_env_with_prefix(bot_name, "STUDIO1_ROUTER_BASE_URL", ""),
         local_llm_public_url=os.environ.get("LOCAL_LLM_PUBLIC_URL", ""),
-        pokedex_web_password=os.environ.get("POKEDEX_WEB_PASSWORD"),
         data_security_upload_token=os.environ.get("DATA_SECURITY_UPLOAD_TOKEN"),
         scanner_upload_token=os.environ.get("SCANNER_UPLOAD_TOKEN"),
         anthony_upload_token=os.environ.get("ANTHONY_UPLOAD_TOKEN"),
@@ -160,8 +161,15 @@ def get_config(bot_name: str | None = None):
         snow_client_secret=os.environ.get("SNOW_CLIENT_SECRET"),
         snow_functional_account_id=os.environ.get("SNOW_FUNCTIONAL_ACCOUNT_ID"),
         snow_functional_account_password=os.environ.get("SNOW_FUNCTIONAL_ACCOUNT_PASSWORD"),
+        gdnr_functional_account_id_dev=os.environ.get("GDNR_FUNCTIONAL_ACCOUNT_ID_DEV"),
+        gdnr_functional_account_password_dev=os.environ.get("GDNR_FUNCTIONAL_ACCOUNT_PASSWORD_DEV"),
+        gdnr_functional_account_id_qa=os.environ.get("GDNR_FUNCTIONAL_ACCOUNT_ID_QA"),
+        gdnr_functional_account_password_qa=os.environ.get("GDNR_FUNCTIONAL_ACCOUNT_PASSWORD_QA"),
+        gdnr_functional_account_id_prod=os.environ.get("GDNR_FUNCTIONAL_ACCOUNT_ID_PROD"),
+        gdnr_functional_account_password_prod=os.environ.get("GDNR_FUNCTIONAL_ACCOUNT_PASSWORD_PROD"),
         snow_base_url=os.environ.get("SNOW_BASE_URL"),
         snow_instance_url=os.environ.get("SNOW_INSTANCE_URL"),
+        snow_service_base_url=_env_with_prefix(bot_name, "SNOW_SERVICE_BASE_URL", ""),
         my_name=os.environ.get("MY_NAME"),
         watermark_author=os.environ.get("WATERMARK_AUTHOR", ""),
         watermark_tag=os.environ.get("WATERMARK_TAG", ""),
@@ -300,6 +308,7 @@ class Config:
     webex_room_id_aging_tickets: Optional[str] = None
     webex_room_id_dev_test_space: Optional[str] = None
     webex_room_id_soc_shift_updates: Optional[str] = None
+    webex_room_id_soc_in_a_box: Optional[str] = None
     webex_room_id_epp_crowdstrike_tagging: Optional[str] = None
     webex_room_id_epp_tanium_cloud_tagging: Optional[str] = None
     webex_room_id_epp_tanium_onprem_tagging: Optional[str] = None
@@ -320,6 +329,7 @@ class Config:
     webex_room_id_threat_tipper_analysis: Optional[str] = None
     webex_room_id_sentinel_triage: Optional[str] = None
     webex_room_id_gs_ai: Optional[str] = None
+    eai_portal_base_url: Optional[str] = None
     xsoar_prod_api_base_url: Optional[str] = None
     xsoar_prod_ui_base_url: Optional[str] = None
     xsoar_dev_api_base_url: Optional[str] = None
@@ -343,8 +353,8 @@ class Config:
     m1_router_base_url: Optional[str] = None
     studio1_laguna_base_url: Optional[str] = None
     studio1_qwen_base_url: Optional[str] = None
+    studio1_router_base_url: Optional[str] = None
     local_llm_public_url: Optional[str] = None
-    pokedex_web_password: Optional[str] = None
     data_security_upload_token: Optional[str] = None
     scanner_upload_token: Optional[str] = None
     anthony_upload_token: Optional[str] = None
@@ -379,8 +389,15 @@ class Config:
     snow_client_secret: Optional[str] = None
     snow_functional_account_id: Optional[str] = None
     snow_functional_account_password: Optional[str] = None
+    gdnr_functional_account_id_dev: Optional[str] = None
+    gdnr_functional_account_password_dev: Optional[str] = None
+    gdnr_functional_account_id_qa: Optional[str] = None
+    gdnr_functional_account_password_qa: Optional[str] = None
+    gdnr_functional_account_id_prod: Optional[str] = None
+    gdnr_functional_account_password_prod: Optional[str] = None
     snow_base_url: Optional[str] = None
     snow_instance_url: Optional[str] = None
+    snow_service_base_url: str = ""
     my_name: Optional[str] = None
     watermark_author: str = ""
     watermark_tag: str = ""

@@ -7,7 +7,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-def cleanup_old_transient_data(retention_days: int = 30) -> dict:
+def cleanup_old_transient_data(retention_days: int = 7) -> dict:
     """
     Remove transient data folders older than the specified retention period.
 
@@ -16,7 +16,7 @@ def cleanup_old_transient_data(retention_days: int = 30) -> dict:
     - web/static/charts/ (daily chart images ~300MB/day)
 
     Args:
-        retention_days: Number of days to retain data (default: 30)
+        retention_days: Number of days to retain data (default: 7)
 
     Returns:
         dict with cleanup statistics

@@ -1345,6 +1345,26 @@
                 </div>
             </div>
         </div>
+        <div class="log-card llm-card" id="card-llm-s1-router">
+            <div class="card-header">
+                <h3>🧠 S1 Router</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-llm-s1-router"></span>
+                    <span id="status-llm-s1-router">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-llm-s1-router">
+                <div class="card-overlay-content">
+                    <div class="metric-row"><span class="metric-label">Port:</span><span class="metric-value">Studio1:8005 (direct)</span></div>
+                    <div class="metric-row"><span class="metric-label">Latency:</span><span class="metric-value" id="latency-llm-s1-router">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Model:</span><span class="metric-value" id="model-llm-s1-router">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Size:</span><span class="metric-value" id="size-llm-s1-router">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Uptime:</span><span class="metric-value" id="uptime-llm-s1-router">--</span></div>
+                    <div class="metric-row"><span class="metric-label">SSH:</span><span class="metric-value" id="tunnel-llm-s1-router">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">tool-router shim</span></div>
+                </div>
+            </div>
+        </div>
         <div class="log-card llm-card" id="card-llm-s2-gemma">
             <div class="card-header">
                 <h3>🧠 S2 Gemma 4</h3>
@@ -1476,6 +1496,9 @@
         { key: 'de',        name: 'DE Scheduler',    emoji: '🔍', port: 8046, group: 'services' },
         { key: 'webserver', name: 'Web App',         emoji: '🌐', port: 8039, group: 'services' },
         { key: 'mcp-public', name: 'MCP Public',      emoji: '🔌', port: 8047, group: 'services' },
+        { key: 'soc-tier2',        name: 'SOC Tier 2',      emoji: '🔍', group: 'services' },
+        { key: 'soc-ir-lead',      name: 'SOC IR Lead',     emoji: '🚨', group: 'services' },
+        { key: 'soc-threat-intel', name: 'SOC Threat Intel', emoji: '🌐', group: 'services' },
     ];
 
     // Initialize
@@ -1520,7 +1543,7 @@
                     <div><span>Status:</span><span>Checking...</span></div>
                 </div>
                 <div class="card-actions">
-                    <button class="btn-card" onclick="window.open('http://' + window.location.hostname + ':${bot.port}', '_blank')">View Logs</button>
+                    ${bot.port ? `<button class="btn-card" onclick="window.open('http://' + window.location.hostname + ':${bot.port}', '_blank')">View Logs</button>` : ''}
                     <button class="btn-card btn-start" id="start-${bot.key}" onclick="controlBot('${bot.key}', 'start')" disabled>Start</button>
                     <button class="btn-card" id="restart-${bot.key}" onclick="controlBot('${bot.key}', 'restart')" disabled>Restart</button>
                     <button class="btn-card btn-stop" id="stop-${bot.key}" onclick="controlBot('${bot.key}', 'stop')" disabled>Stop</button>
@@ -1704,6 +1727,10 @@
         Object.values(bots).forEach(bot => {
             const card = document.getElementById(`card-${bot.key}`);
             const dot = document.getElementById(`dot-${bot.key}`);
+            // The API may return bots that have no card here (e.g. new services not
+            // yet added to the JS BOTS list). Skip them rather than throwing — one
+            // missing card must not abort the whole dashboard refresh.
+            if (!card || !dot) return;
             const status = document.getElementById(`status-${bot.key}`);
             const desc = document.getElementById(`desc-${bot.key}`);
             const info = document.getElementById(`info-${bot.key}`);
@@ -1753,11 +1780,12 @@
                 status.textContent = 'Live';
 
                 // Show all PIDs if multiple processes are running
+                const hostSuffix = bot.host ? ` • on <span style="color:#60a5fa; font-weight:600;">${bot.host}</span>` : '';
                 if (bot.pid_count > 1) {
                     const pidList = bot.pids.join(', ');
-                    desc.innerHTML = `<span style="color: #f56565; font-weight: 600;">⚠️ ${bot.pid_count} processes running!</span> • PIDs: ${pidList}`;
+                    desc.innerHTML = `<span style="color: #f56565; font-weight: 600;">⚠️ ${bot.pid_count} processes running!</span> • PIDs: ${pidList}${hostSuffix}`;
                 } else {
-                    desc.innerHTML = `Running • PID ${bot.pid}`;
+                    desc.innerHTML = `Running • PID ${bot.pid}${hostSuffix}`;
                 }
                 card.classList.remove('status-down');
 

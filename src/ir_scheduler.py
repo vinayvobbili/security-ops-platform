@@ -346,7 +346,7 @@ def main() -> None:
         make_dir_for_todays_charts(helper_methods.CHARTS_DIR_PATH)
     schedule_daily('00:01', _chart_dir_prep, name="chart_dir_prep")
 
-    # Cleanup old transient data (secOps and charts folders older than 30 days)
+    # Cleanup old transient data (secOps and charts folders older than 7 days)
     logger.info("Scheduling daily cleanup of old transient data (02:00 ET)...")
     def _transient_cleanup():
         from src.utils.fs_utils import cleanup_old_transient_data
@@ -406,6 +406,18 @@ def main() -> None:
         toodles_api = WebexAPI(access_token=config.webex_bot_access_token_toodles)
         process_pending(toodles_api)
     schedule.every(15).minutes.do(lambda: safe_run(_run_deferred_rtr, name="deferred_rtr", timeout=600))
+
+    # Tipper replay sweep — re-queries CS for in-flight tipper IOC hashes
+    # so hosts that were offline at tipper-receipt time still get swept.
+    # See XSOAR 1205966 (Nx Console / ShaiHulud) for the case study.
+    logger.info("Scheduling daily tipper replay sweep (04:00 ET)...")
+    def _run_tipper_replay():
+        from src.components.tipper_replay import run_sweep
+        summary = run_sweep()
+        logger.info(f"tipper_replay sweep complete: {summary}")
+    schedule.every().day.at('04:00', eastern).do(
+        lambda: safe_run(_run_tipper_replay, name="tipper_replay_sweep", timeout=1800)
+    )
 
     # Peer ping keepalive for bot NAT paths
     logger.info("Scheduling peer ping keepalive Hi messages...")
@@ -541,7 +553,7 @@ def main() -> None:
 
     # Major Incident monitoring (polls ServiceNow for new incidents assigned to configured groups)
     logger.info("Scheduling Major Incident monitoring (every 15 minutes)...")
-    schedule_sla('minutes:15', lambda: __import__('src.components.major_incident_monitor', fromlist=['check_for_new_incidents']).check_for_new_incidents(config.webex_room_id_threatcon_collab), name="major_incident_monitor", timeout=300)
+    schedule_sla('minutes:15', lambda: __import__('src.components.major_incident_monitor', fromlist=['check_for_new_incidents']).check_for_new_incidents(config.webex_room_id_gosc_t2), name="major_incident_monitor", timeout=300)
 
     total_jobs = len(schedule.get_jobs())
     logger.info(f"All jobs scheduled successfully! Total jobs: {total_jobs}")

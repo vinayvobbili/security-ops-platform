@@ -81,7 +81,7 @@ BOTS = {
         'process_pattern': 'webex_bots/pokedex',
         'start_script': 'startup_scripts/start_pokedex.sh',
         'log_port': 8042,
-        'systemd_service': 'ir-pokedex.service'
+        'systemd_service': 'ir-pokedex.service',
     },
     'toodles': {
         'name': 'Toodles',
@@ -89,7 +89,7 @@ BOTS = {
         'process_pattern': 'webex_bots/toodles',
         'start_script': 'startup_scripts/start_toodles.sh',
         'log_port': 8032,
-        'systemd_service': 'ir-toodles.service'
+        'systemd_service': 'ir-toodles.service',
     },
     'msoar': {
         'name': 'MSOAR',
@@ -97,7 +97,7 @@ BOTS = {
         'process_pattern': 'webex_bots/msoar',
         'start_script': 'startup_scripts/start_msoar.sh',
         'log_port': 8033,
-        'systemd_service': 'ir-msoar.service'
+        'systemd_service': 'ir-msoar.service',
     },
     'moneyball': {
         'name': 'MoneyBall',
@@ -105,7 +105,7 @@ BOTS = {
         'process_pattern': 'webex_bots/money_ball',
         'start_script': 'startup_scripts/start_money_ball.sh',
         'log_port': 8034,
-        'systemd_service': 'ir-money-ball.service'
+        'systemd_service': 'ir-money-ball.service',
     },
     'jarvis': {
         'name': 'Jarvis',
@@ -113,7 +113,7 @@ BOTS = {
         'process_pattern': 'webex_bots/jarvis',
         'start_script': 'startup_scripts/start_jarvis.sh',
         'log_port': 8035,
-        'systemd_service': 'ir-jarvis.service'
+        'systemd_service': 'ir-jarvis.service',
     },
     'barnacles': {
         'name': 'Barnacles',
@@ -121,7 +121,7 @@ BOTS = {
         'process_pattern': 'webex_bots/barnacles',
         'start_script': 'startup_scripts/start_barnacles.sh',
         'log_port': 8036,
-        'systemd_service': 'ir-barnacles.service'
+        'systemd_service': 'ir-barnacles.service',
     },
     'tars': {
         'name': 'TARS',
@@ -129,7 +129,7 @@ BOTS = {
         'process_pattern': 'webex_bots/tars',
         'start_script': 'startup_scripts/start_tars.sh',
         'log_port': 8038,
-        'systemd_service': 'ir-tars.service'
+        'systemd_service': 'ir-tars.service',
     },
     'case': {
         'name': 'CASE',
@@ -137,7 +137,7 @@ BOTS = {
         'process_pattern': 'webex_bots/case',
         'start_script': 'startup_scripts/start_case.sh',
         'log_port': 8041,
-        'systemd_service': 'ir-case.service'
+        'systemd_service': 'ir-case.service',
     },
     'jobs': {
         'name': 'IR Scheduler',
@@ -190,6 +190,29 @@ BOTS = {
         'process_pattern': 'mcp_server --public',
         'log_port': 8047,
         'systemd_service': 'ir-mcp-public.service'
+    },
+    # ── SOC-in-a-Box long-running consumers ────────────────────────────────
+    # Timer-driven SOC agents (soc-manager, detection-eng, threat-hunter)
+    # are intentionally NOT here — oneshot services have MainPID=0 between
+    # runs and would always show as stopped. See /soc-in-a-box for their
+    # last-run / next-run status instead.
+    'soc-tier2': {
+        'name': 'SOC Tier 2',
+        'emoji': '🔍',
+        'process_pattern': 'src.components.soc_in_box.agents.tier2',
+        'systemd_service': 'ir-soc-tier2.service',
+    },
+    'soc-ir-lead': {
+        'name': 'SOC IR Lead',
+        'emoji': '🚨',
+        'process_pattern': 'src.components.soc_in_box.agents.ir_lead',
+        'systemd_service': 'ir-soc-ir-lead.service',
+    },
+    'soc-threat-intel': {
+        'name': 'SOC Threat Intel',
+        'emoji': '🌐',
+        'process_pattern': 'src.components.soc_in_box.agents.threat_intel',
+        'systemd_service': 'ir-soc-threat-intel.service',
     }
 }
 
@@ -201,7 +224,7 @@ LLM_ENDPOINTS = [
     {'key': 'm1-router',   'label': 'M1 Router',     'port': 8016, 'model_size': '4.3 GB', 'remote': 'M1:8001'},
     # Embeddings, reranker, transcription, TTS: all on studio1 since 2026-05-07.
     # mac-m3 retired (converted to a workstation) — its services migrated here.
-    {'key': 'embed',       'label': 'S1 Embeddings', 'port': None, 'probe_url': 'http://studio1.lab:8004', 'probe_auth_env': 'EMBEDS_API_KEY', 'display_model': 'Qwen3-Embedding-8B-4bit-DWQ', 'model_size': '4.0 GB', 'health_timeout': 60, 'remote': 'Studio1:8004'},
+    {'key': 'embed',       'label': 'S1 Embeddings', 'port': 8004, 'probe_auth_env': 'EMBEDS_API_KEY', 'display_model': 'Qwen3-Embedding-8B-4bit-DWQ', 'model_size': '4.0 GB', 'health_timeout': 60, 'remote': 'Studio1:8004 (reverse tunnel)'},
     {'key': 's1-reranker', 'label': 'S1 Reranker',   'port': 8020, 'display_model': 'bge-reranker-v2-m3-finetuned', 'model_size': '2.2 GB', 'remote': 'Studio1:8020'},
     # Transcription: faster-whisper-large-v3-turbo + pyannote diarization on studio1.
     # Uses /health instead of /v1/models — health_path override below.
@@ -213,8 +236,16 @@ LLM_ENDPOINTS = [
     {'key': 's1-laguna', 'label': 'S1 Laguna', 'port': 8022, 'display_model': 'laguna-xs.2:q8_0', 'model_size': '~33 GB', 'remote': 'Studio1:11434'},
     # Studio1 Qwen3-Coder-30B-A3B-Instruct-8bit via vllm-mlx (parser=qwen3_coder).
     # Sole Claude Code backend across all tiers — see project_studio1_qwen3_coder.md.
-    # Direct-bind from lab-vm1 (no tunnel); bearer shared with embeds endpoint.
-    {'key': 's1-coder', 'label': 'S1 Coder', 'port': None, 'probe_url': 'http://studio1.lab:8003', 'probe_auth_env': 'EMBEDS_API_KEY', 'display_model': 'Qwen3-Coder-30B-A3B-Instruct-8bit', 'model_size': '~30 GB', 'remote': 'Studio1:8003'},
+    # Reached on localhost via studio1's reverse tunnel (lab-vm1 is on the
+    # isolated lab net — no direct dial to s1); bearer shared with embeds.
+    # health_timeout 30s (vs 5s default): vllm-mlx serializes /v1/models behind
+    # in-flight chat completions, so a 25-30s prefill on a 38K-tool prompt makes
+    # the cheap probe wait too. Without the bump, Mission Control flips Down
+    # mid-prompt even when the Coder is doing real work.
+    {'key': 's1-coder', 'label': 'S1 Coder', 'port': 8003, 'probe_auth_env': 'EMBEDS_API_KEY', 'display_model': 'Qwen3-Coder-30B-A3B-Instruct-8bit', 'model_size': '~30 GB', 'health_timeout': 30, 'remote': 'Studio1:8003 (reverse tunnel)'},
+    # Studio1 Qwen3-4B-Instruct-8bit via vllm-mlx — small fast router model for
+    # tool-routing and other cheap turns. Same SOCKS-forward path, shared bearer.
+    {'key': 's1-router', 'label': 'S1 Router', 'port': 8005, 'probe_auth_env': 'EMBEDS_API_KEY', 'display_model': 'Qwen3-4B-Instruct-8bit', 'model_size': '~4 GB', 'remote': 'Studio1:8005 (reverse tunnel)'},
     # Mac Studio 2 (M3 Ultra, 96GB) — Gemma 4 31B-it Q8 via vllm-mlx. Direct-bind
     # from lab-vm1 (studio2 is on the same /24, no tunnel).
     {'key': 's2-gemma', 'label': 'S2 Gemma 4', 'port': None, 'probe_url': 'http://lab-lab-31.internal.local:8000', 'display_model': 'gemma-4-31b-it-8bit', 'model_size': '~34 GB', 'remote': 'Studio2:8000'},
@@ -267,6 +298,19 @@ def log_audit_event(ip_address, action, bot_name, success, message=''):
         print(f"Warning: Failed to write audit log: {e}")
 
 
+def _run_for_bot(args, bot_config, **kwargs):
+    """Run a subprocess command for a bot's host — local if `host` is unset,
+    over SSH otherwise. SSH wraps args as a single shell string, which is
+    fine for the systemctl/ps/pgrep/pkill payloads we use here (no embedded
+    spaces in any argument)."""
+    host = bot_config.get('host')
+    if host:
+        cmd = ['ssh', '-o', 'ConnectTimeout=5', '-o', 'BatchMode=yes', host, ' '.join(args)]
+    else:
+        cmd = args
+    return subprocess.run(cmd, **kwargs)
+
+
 def get_bot_status(bot_key):
     """
     Get detailed status for a specific bot.
@@ -281,9 +325,9 @@ def get_bot_status(bot_key):
         service_name = bot_config.get('systemd_service')
         main_pid = None
         if service_name:
-            pid_result = subprocess.run(
+            pid_result = _run_for_bot(
                 ['systemctl', '--user', 'show', service_name, '--property=MainPID', '--value'],
-                capture_output=True, text=True, timeout=5
+                bot_config, capture_output=True, text=True, timeout=10,
             )
             if pid_result.returncode == 0 and pid_result.stdout.strip() not in ('', '0'):
                 main_pid = int(pid_result.stdout.strip())
@@ -292,9 +336,9 @@ def get_bot_status(bot_key):
         if main_pid:
             pid_list = [main_pid]
         else:
-            result = subprocess.run(
+            result = _run_for_bot(
                 ['pgrep', '-f', bot_config['process_pattern']],
-                capture_output=True, text=True, timeout=5
+                bot_config, capture_output=True, text=True, timeout=10,
             )
             if result.returncode == 0 and result.stdout.strip():
                 pids = result.stdout.strip().split('\n')
@@ -311,13 +355,14 @@ def get_bot_status(bot_key):
                 'uptime': None,
                 'cpu_percent': 0,
                 'memory_mb': 0,
-                'memory_percent': 0
+                'memory_percent': 0,
+                'host': bot_config.get('host'),
             }
 
         # Get process details for all PIDs using ps
-        ps_result = subprocess.run(
+        ps_result = _run_for_bot(
             ['ps', '-p', ','.join(map(str, pid_list)), '-o', 'pid,etime,%cpu,%mem,rss', '--no-headers'],
-            capture_output=True, text=True, timeout=5
+            bot_config, capture_output=True, text=True, timeout=10,
         )
 
         if ps_result.returncode == 0:
@@ -346,7 +391,8 @@ def get_bot_status(bot_key):
                 'uptime': uptime,
                 'cpu_percent': total_cpu,
                 'memory_mb': total_mem_mb,
-                'memory_percent': total_mem_percent
+                'memory_percent': total_mem_percent,
+                'host': bot_config.get('host'),
             }
 
         # Process not running
@@ -358,7 +404,8 @@ def get_bot_status(bot_key):
             'uptime': None,
             'cpu_percent': 0,
             'memory_mb': 0,
-            'memory_percent': 0
+            'memory_percent': 0,
+            'host': bot_config.get('host'),
         }
 
     except Exception as e:
@@ -372,7 +419,8 @@ def get_bot_status(bot_key):
             'uptime': None,
             'cpu_percent': 0,
             'memory_mb': 0,
-            'memory_percent': 0
+            'memory_percent': 0,
+            'host': bot_config.get('host'),
         }
 
 
@@ -450,10 +498,9 @@ def control_bot(bot_key, action):
             if 'systemd_service' in bot_config:
                 # Stop via systemd (may take time for graceful shutdown)
                 try:
-                    result = subprocess.run(
+                    result = _run_for_bot(
                         ['systemctl', '--user', 'stop', bot_config['systemd_service']],
-                        timeout=90,
-                        capture_output=True
+                        bot_config, timeout=90, capture_output=True,
                     )
                 except subprocess.TimeoutExpired:
                     # Systemd stop may take longer than timeout but still succeed
@@ -462,9 +509,9 @@ def control_bot(bot_key, action):
                 time.sleep(2)  # Give systemd time to complete shutdown
             else:
                 # Kill the bot process using pkill
-                subprocess.run(
+                _run_for_bot(
                     ['pkill', '-f', bot_config['process_pattern']],
-                    timeout=10
+                    bot_config, timeout=10,
                 )
 
                 # Wait for process to actually terminate (up to 10 seconds)
@@ -477,11 +524,9 @@ def control_bot(bot_key, action):
                     elapsed += wait_interval
 
                     # Check if process is still running
-                    check_result = subprocess.run(
+                    check_result = _run_for_bot(
                         ['pgrep', '-f', bot_config['process_pattern']],
-                        capture_output=True,
-                        text=True,
-                        timeout=5
+                        bot_config, capture_output=True, text=True, timeout=10,
                     )
 
                     # If pgrep returns non-zero, process is gone
@@ -489,9 +534,9 @@ def control_bot(bot_key, action):
                         break
                 else:
                     # Process still running after max_wait, force kill it
-                    subprocess.run(
+                    _run_for_bot(
                         ['pkill', '-9', '-f', bot_config['process_pattern']],
-                        timeout=10
+                        bot_config, timeout=10,
                     )
                     time.sleep(1)  # Give force kill a moment
 
@@ -499,10 +544,9 @@ def control_bot(bot_key, action):
 
         elif action == 'start':
             if 'systemd_service' in bot_config:
-                subprocess.run(
+                _run_for_bot(
                     ['systemctl', '--user', 'start', bot_config['systemd_service']],
-                    timeout=30,
-                    capture_output=True
+                    bot_config, timeout=30, capture_output=True,
                 )
                 time.sleep(2)
             else:
@@ -521,10 +565,9 @@ def control_bot(bot_key, action):
             if 'systemd_service' in bot_config:
                 # Restart via systemd (may take time for graceful shutdown + startup)
                 try:
-                    result = subprocess.run(
+                    result = _run_for_bot(
                         ['systemctl', '--user', 'restart', bot_config['systemd_service']],
-                        timeout=120,
-                        capture_output=True
+                        bot_config, timeout=120, capture_output=True,
                     )
                 except subprocess.TimeoutExpired:
                     # Systemd restart may take longer than timeout but still succeed
