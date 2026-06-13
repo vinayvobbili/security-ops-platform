@@ -1,5 +1,5 @@
 ---
-layout: default
+layout: doc
 title: n8n Workflow Automation
 ---
 

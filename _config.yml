@@ -5,7 +5,7 @@
 
 title: The Whole Truth
 description: Security Operations Automation Platform
-baseurl: "/ir"        # project page served at https://<user>.github.io/ir
+baseurl: "/security-ops-platform"   # project page served at https://<user>.github.io/security-ops-platform
 markdown: kramdown
 kramdown:
   input: GFM           # GitHub-flavored markdown (fenced code, tables, etc.)

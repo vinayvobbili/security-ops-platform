@@ -1,5 +1,5 @@
 ---
-layout: default
+layout: doc
 title: "The 81 bytes killing my self-hosted Claude Code"
 date: 2026-05-07
 ---
