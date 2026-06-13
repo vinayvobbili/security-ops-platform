@@ -88,8 +88,15 @@ The platform provides consistent, production-grade integrations across the secur
 |----------|--------------|
 | **Certificate Transparency** | SSL certificate monitoring via Censys API and CertStream |
 | **WHOIS** | Domain registration lookup and change tracking |
-| **Domain Lookalike Detection** | Typosquat and brand impersonation with Recorded Future enrichment |
-| **Domain Monitor** | Multi-source domain threat correlation and alerting |
+| **Lookalike Engine (domainflow)** | Typosquat / homoglyph / brand-impersonation discovery, weaponization triage, and campaign clustering |
+| **Domain Monitor** | Multi-source domain threat correlation, takedown SLA tracking, and alerting |
+
+### SCA / Exposure
+
+| Platform | Capabilities |
+|----------|--------------|
+| **Veracode SCA** | CVE/package → affected-application exposure lookup |
+| **JFrog Xray** | Artifact + CVE exposure reporting |
 
 ### Dark Web & Phishing
 

@@ -16,13 +16,16 @@ Explore the core capabilities of the Security Operations Automation Platform.
 | [LLM-Powered Assistant](llm-assistant) | AI investigation engine with 38 security tools |
 | [MCP Server](mcp-server) | 30 tools exposed via Model Context Protocol; public mode with per-user PATs |
 | [Self-Healing Bots](webex-bots) | 10 production chat bots (Webex + Teams) with enterprise reliability |
-| [SOC Dashboard](soc-dashboard) | Real-time metrics, dashboards, and 40+ web app pages |
+| [SOC Dashboard](soc-dashboard) | Real-time metrics, dashboards, and 50+ web app pages |
 | [30+ Integrations](integrations) | Unified security tool ecosystem |
+| [Domain Monitoring](domain-monitoring) | Discover → weaponization triage → exposure hunt → block/takedown → campaign clustering (powered by `domainflow`) |
+| [Vulnerability Deep Dive](vulnerability-deep-dive) | CVE → P1–P4 verdict (EPSS/KEV/pre-auth) + which apps are affected |
+| [Threat Hunt Workbench](hunt-workbench) | Paste CTI → IOC fan-out + behavioral SIEM hunts + ATT&CK coverage |
+| [Detection as Code](detection-as-code) | Sigma → lint → compile → live dry-run → review → MR (powered by `detflow`) |
 | [Customer Assurance](customer-assurance) | LLM-assisted questionnaire drafting with `.xlsx` round-trip |
 | Person-of-Interest OSINT | Streaming investigation page with HIBP, holehe, maigret, dorks + LLM commentary |
 | Self-Serve Auth + PATs | Register/login/verify, per-user PATs, admin console, role-gated routes |
 | [n8n Workflows](n8n-workflows) | 33 automation workflows for SOC operations |
-| [Domain Monitoring](domain-monitoring) | Multi-source domain threat monitoring |
 
 ---
 
@@ -86,11 +89,35 @@ the same row + response column they came from.
 
 ### [Domain Threat Monitoring →](domain-monitoring)
 
-Multi-source domain security monitoring:
-- Certificate Transparency (Censys + CertStream)
-- Domain lookalike and typosquat detection
-- WHOIS registration change tracking
-- Dark web and abuse feed correlation
+Brand-protection monitoring that goes past "a lookalike exists":
+- Lookalike discovery powered by the open-source `domainflow` engine
+- Weaponization triage (P1–P4) and a "were we touched?" SIEM/EDR hunt
+- One-click XSOAR block + PhishFort takedown with SLA metrics
+- Campaign clustering of coordinated waves by shared infrastructure
+- Certificate Transparency, WHOIS, dark web, and abuse-feed correlation
+
+### [Vulnerability Deep Dive →](vulnerability-deep-dive)
+
+War-room CVE triage with a prioritized verdict:
+- NVD / CVE.org / SCA fact-gathering with EPSS, KEV, and pre-auth signals
+- LLM P1–P4 priority + attack-layer mapping
+- "Which apps are affected?" via Veracode SCA + JFrog Xray exposure
+- Batch, fill-holes, and re-enrich passes
+
+### [Threat Hunt Workbench →](hunt-workbench)
+
+On-demand analyst hunting from a paste:
+- IOC extraction + live fan-out across threat-intel services
+- LLM-authored **behavioral** SIEM hunts ("were we touched?")
+- ATT&CK coverage-vs-rules ("can we detect this?")
+- Async worker + persisted hunt history
+
+### [Detection as Code →](detection-as-code)
+
+Sigma → reviewed, packaged merge request:
+- Lint → LLM compile to XQL → **real read-only dry-run** on the live SIEM
+- LLM senior-engineer review with FP, ATT&CK, and catalog-overlap checks
+- Human-gated GitLab MR; built on the open-source `detflow` core
 
 ### Person-of-Interest OSINT Tool
 

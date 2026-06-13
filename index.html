@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Whole Truth · Security Operations Automation Platform</title>
+  <meta name="description" content="Enterprise-grade security operations automation: incident response orchestration, asset enrichment, threat intel, and intelligent bots across XSOAR, ServiceNow, Tanium, and CrowdStrike." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --bg-2: #0e1230;
+      --surface: rgba(255, 255, 255, 0.04);
+      --surface-border: rgba(255, 255, 255, 0.09);
+      --text: #eef0ff;
+      --muted: #a3a8c9;
+      --grad-1: #7c3aed; /* violet  */
+      --grad-2: #2563eb; /* blue    */
+      --grad-3: #06b6d4; /* cyan    */
+      --grad-4: #ec4899; /* pink    */
+      --grad-5: #22d3ee; /* sky     */
+      --accent: #a78bfa;
+      --radius: 18px;
+      --maxw: 1120px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Animated aurora background */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: -30%;
+      z-index: -2;
+      background:
+        radial-gradient(40% 40% at 20% 25%, rgba(124, 58, 237, 0.40), transparent 60%),
+        radial-gradient(45% 45% at 80% 15%, rgba(6, 182, 212, 0.32), transparent 60%),
+        radial-gradient(50% 50% at 65% 80%, rgba(236, 72, 153, 0.28), transparent 60%),
+        radial-gradient(40% 40% at 10% 85%, rgba(37, 99, 235, 0.30), transparent 60%);
+      filter: blur(20px);
+      animation: drift 22s ease-in-out infinite alternate;
+    }
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      background:
+        linear-gradient(180deg, rgba(10,10,26,0.2), rgba(10,10,26,0.85)),
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Cpath d='M0 .5H39.5V40' fill='none' stroke='%23ffffff' stroke-opacity='0.03'/%3E%3C/svg%3E");
+    }
+    @keyframes drift {
+      0%   { transform: translate3d(0,0,0) scale(1); }
+      100% { transform: translate3d(0,-4%,0) scale(1.08); }
+    }
+
+    a { color: inherit; text-decoration: none; }
+    .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+
+    /* ---------- Nav ---------- */
+    nav {
+      position: sticky; top: 0; z-index: 50;
+      backdrop-filter: blur(12px);
+      background: rgba(10, 10, 26, 0.55);
+      border-bottom: 1px solid var(--surface-border);
+    }
+    .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+    .brand { display: flex; align-items: center; gap: 10px; font-family: "Space Grotesk", sans-serif; font-weight: 700; font-size: 1.05rem; }
+    .brand .dot {
+      width: 26px; height: 26px; border-radius: 8px;
+      background: linear-gradient(135deg, var(--grad-1), var(--grad-3));
+      box-shadow: 0 0 18px rgba(124,58,237,.6);
+    }
+    .nav-links { display: flex; gap: 28px; font-size: .92rem; color: var(--muted); }
+    .nav-links a:hover { color: var(--text); }
+    .nav-cta {
+      padding: 9px 18px; border-radius: 999px; font-size: .9rem; font-weight: 600;
+      background: linear-gradient(135deg, var(--grad-1), var(--grad-2));
+      box-shadow: 0 6px 20px rgba(37, 99, 235, .35);
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+    .nav-cta:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(124, 58, 237, .5); }
+    @media (max-width: 720px) { .nav-links { display: none; } }
+
+    /* ---------- Hero ---------- */
+    header { padding: 96px 0 72px; text-align: center; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 7px 16px; border-radius: 999px; font-size: .82rem; font-weight: 600;
+      color: var(--accent); letter-spacing: .3px;
+      background: rgba(167, 139, 250, .12);
+      border: 1px solid rgba(167, 139, 250, .28);
+      margin-bottom: 26px;
+    }
+    .pill .ping { width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 0 0 rgba(52,211,153,.7); animation: ping 1.8s infinite; }
+    @keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(52,211,153,.6);} 70%{ box-shadow: 0 0 0 10px rgba(52,211,153,0);} 100%{box-shadow:0 0 0 0 rgba(52,211,153,0);} }
+
+    h1 {
+      font-family: "Space Grotesk", sans-serif;
+      font-size: clamp(2.4rem, 6vw, 4.4rem);
+      line-height: 1.05; font-weight: 700; letter-spacing: -1.5px;
+      margin-bottom: 22px;
+    }
+    .grad-text {
+      background: linear-gradient(100deg, var(--grad-5), var(--grad-1) 40%, var(--grad-4));
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      background-size: 200% auto; animation: shimmer 6s linear infinite;
+    }
+    @keyframes shimmer { to { background-position: 200% center; } }
+    .lede { max-width: 680px; margin: 0 auto 36px; font-size: clamp(1.05rem, 2vw, 1.25rem); color: var(--muted); }
+    .hero-cta { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      padding: 14px 28px; border-radius: 12px; font-weight: 600; font-size: 1rem;
+      transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--grad-1), var(--grad-2) 55%, var(--grad-3));
+      box-shadow: 0 10px 30px rgba(37, 99, 235, .4);
+    }
+    .btn-primary:hover { transform: translateY(-3px); box-shadow: 0 16px 40px rgba(124, 58, 237, .55); }
+    .btn-ghost { border: 1px solid var(--surface-border); background: var(--surface); }
+    .btn-ghost:hover { border-color: var(--accent); transform: translateY(-3px); }
+
+    /* ---------- Stats ---------- */
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-top: 72px; }
+    .stat { background: var(--surface); border: 1px solid var(--surface-border); border-radius: var(--radius); padding: 26px 18px; text-align: center; }
+    .stat .num { font-family: "Space Grotesk", sans-serif; font-size: 2.1rem; font-weight: 700; background: linear-gradient(120deg, var(--grad-3), var(--grad-1)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .stat .lbl { color: var(--muted); font-size: .85rem; margin-top: 4px; }
+    @media (max-width: 720px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+
+    /* ---------- Sections ---------- */
+    section { padding: 84px 0; }
+    .sec-head { text-align: center; max-width: 640px; margin: 0 auto 52px; }
+    .sec-head .kicker { color: var(--accent); font-weight: 600; font-size: .85rem; letter-spacing: 2px; text-transform: uppercase; }
+    .sec-head h2 { font-family: "Space Grotesk", sans-serif; font-size: clamp(1.8rem, 4vw, 2.6rem); margin: 12px 0 14px; letter-spacing: -1px; }
+    .sec-head p { color: var(--muted); }
+
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+    @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 620px) { .grid { grid-template-columns: 1fr; } }
+
+    .card {
+      position: relative; background: var(--surface); border: 1px solid var(--surface-border);
+      border-radius: var(--radius); padding: 30px 26px; overflow: hidden;
+      transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+    }
+    .card::before {
+      content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px;
+      background: linear-gradient(135deg, transparent, transparent);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor; mask-composite: exclude; opacity: 0; transition: opacity .3s ease;
+    }
+    .card:hover { transform: translateY(-6px); border-color: transparent; box-shadow: 0 20px 50px rgba(0,0,0,.45); }
+    .card:hover::before { opacity: 1; background: linear-gradient(135deg, var(--grad-1), var(--grad-3)); }
+    .card .icon {
+      width: 50px; height: 50px; border-radius: 14px; display: grid; place-items: center;
+      font-size: 1.5rem; margin-bottom: 18px;
+      background: linear-gradient(135deg, rgba(124,58,237,.25), rgba(6,182,212,.25));
+      border: 1px solid var(--surface-border);
+    }
+    .card h3 { font-family: "Space Grotesk", sans-serif; font-size: 1.18rem; margin-bottom: 10px; }
+    .card p { color: var(--muted); font-size: .94rem; }
+
+    /* ---------- Integrations ---------- */
+    .integrations { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 10px; padding: 14px 22px;
+      border-radius: 14px; font-weight: 600; font-size: .95rem;
+      background: var(--surface); border: 1px solid var(--surface-border);
+      transition: transform .2s ease, border-color .2s ease, background .2s ease;
+    }
+    .chip:hover { transform: translateY(-4px) scale(1.03); border-color: var(--accent); background: rgba(167,139,250,.08); }
+    .chip .swatch { width: 12px; height: 12px; border-radius: 50%; }
+
+    /* ---------- CTA band ---------- */
+    .cta-band {
+      position: relative; border-radius: 28px; padding: 64px 32px; text-align: center; overflow: hidden;
+      background: linear-gradient(120deg, rgba(124,58,237,.9), rgba(37,99,235,.85) 50%, rgba(6,182,212,.85));
+    }
+    .cta-band::after { content:""; position:absolute; inset:0; background: radial-gradient(60% 120% at 50% 0%, rgba(255,255,255,.18), transparent 60%); }
+    .cta-band h2 { font-family: "Space Grotesk", sans-serif; font-size: clamp(1.8rem, 4vw, 2.6rem); position: relative; }
+    .cta-band p { color: rgba(255,255,255,.85); margin: 14px auto 28px; max-width: 520px; position: relative; }
+    .cta-band .btn-primary { background: #0a0a1a; box-shadow: 0 10px 30px rgba(0,0,0,.4); position: relative; }
+    .cta-band .btn-primary:hover { background: #15163a; }
+
+    /* ---------- Footer ---------- */
+    footer { border-top: 1px solid var(--surface-border); padding: 44px 0; color: var(--muted); font-size: .88rem; }
+    .foot-inner { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+
+    /* ---------- Reveal animation ---------- */
+    .reveal { opacity: 0; transform: translateY(26px); transition: opacity .7s ease, transform .7s ease; }
+    .reveal.in { opacity: 1; transform: none; }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="wrap nav-inner">
+      <a class="brand" href="#top"><span class="dot"></span> The Whole Truth</a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#integrations">Integrations</a>
+        <a href="#usecases">Use Cases</a>
+        <a href="docs/">Docs</a>
+      </div>
+      <a class="nav-cta" href="https://github.com/vinayvobbili/ir">View on GitHub →</a>
+    </div>
+  </nav>
+
+  <header id="top">
+    <div class="wrap">
+      <span class="pill"><span class="ping"></span> Enterprise Security Operations · Automated</span>
+      <h1>Orchestrate your SOC<br /><span class="grad-text">at machine speed.</span></h1>
+      <p class="lede">
+        An enterprise-grade automation platform that unifies incident response, threat
+        intelligence, and asset enrichment across XSOAR, ServiceNow, Tanium, and CrowdStrike —
+        eliminating manual toil and slashing response times.
+      </p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="#features">Explore the Platform</a>
+        <a class="btn btn-ghost" href="https://github.com/vinayvobbili/ir">⭐ Star on GitHub</a>
+      </div>
+
+      <div class="stats">
+        <div class="stat reveal"><div class="num">7+</div><div class="lbl">Platform Integrations</div></div>
+        <div class="stat reveal"><div class="num">&lt;1s</div><div class="lbl">Bot Response Time</div></div>
+        <div class="stat reveal"><div class="num">24/7</div><div class="lbl">Self-Healing Uptime</div></div>
+        <div class="stat reveal"><div class="num">55k+</div><div class="lbl">Lines of Automation</div></div>
+      </div>
+    </div>
+  </header>
+
+  <section id="features">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="kicker">Capabilities</span>
+        <h2>Everything your SOC needs, automated</h2>
+        <p>From intelligent triage to multi-source enrichment — built to scale from small teams to large security operations centers.</p>
+      </div>
+      <div class="grid">
+        <div class="card reveal">
+          <div class="icon">🤖</div>
+          <h3>Intelligent Automation Bots</h3>
+          <p>Conversational Webex bots with natural-language commands, concurrent incident processing, and a self-healing architecture that recovers from API and network failures automatically.</p>
+        </div>
+        <div class="card reveal">
+          <div class="icon">🎯</div>
+          <h3>Incident Response Orchestration</h3>
+          <p>Automated XSOAR/Cortex ticket management, ServiceNow bidirectional sync, intelligent triage and routing, plus SLA countdown timers with automated escalation.</p>
+        </div>
+        <div class="card reveal">
+          <div class="icon">📊</div>
+          <h3>Asset Intelligence & Enrichment</h3>
+          <p>Correlate data from ServiceNow CMDB, Tanium, CrowdStrike, and Active Directory. Dynamic tagging, ring assignment, and real-time asset discovery across global infrastructure.</p>
+        </div>
+        <div class="card reveal">
+          <div class="icon">📈</div>
+          <h3>Metrics & Dashboards</h3>
+          <p>Real-time web dashboards for ticket aging, volume trending, and team performance — with exportable, timestamped custom reports for capacity planning.</p>
+        </div>
+        <div class="card reveal">
+          <div class="icon">🔗</div>
+          <h3>Deep Platform Integrations</h3>
+          <p>Full API integration across XSOAR, ServiceNow, Tanium, CrowdStrike, Azure DevOps, Webex, and OAuth2 email — one unified interface for your entire toolset.</p>
+        </div>
+        <div class="card reveal">
+          <div class="icon">🚀</div>
+          <h3>Resilient by Design</h3>
+          <p>Automatic reconnection, retry logic, and circuit breakers. Configuration-as-code, batch processing with progress tracking, and graceful degradation under load.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="integrations">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="kicker">Connected</span>
+        <h2>Plays nicely with your stack</h2>
+        <p>Native, API-level integrations with the platforms your security operations already run on.</p>
+      </div>
+      <div class="integrations">
+        <div class="chip reveal"><span class="swatch" style="background:#ec4899"></span> XSOAR / Cortex</div>
+        <div class="chip reveal"><span class="swatch" style="background:#22c55e"></span> ServiceNow</div>
+        <div class="chip reveal"><span class="swatch" style="background:#06b6d4"></span> Tanium</div>
+        <div class="chip reveal"><span class="swatch" style="background:#ef4444"></span> CrowdStrike</div>
+        <div class="chip reveal"><span class="swatch" style="background:#3b82f6"></span> Azure DevOps</div>
+        <div class="chip reveal"><span class="swatch" style="background:#a78bfa"></span> Webex</div>
+        <div class="chip reveal"><span class="swatch" style="background:#f59e0b"></span> Microsoft 365</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="usecases">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="kicker">In Practice</span>
+        <h2>Built for real SOC workflows</h2>
+      </div>
+      <div class="grid">
+        <div class="card reveal">
+          <div class="icon">⚡</div>
+          <h3>Automated Incident Response</h3>
+          <p>Enrich alerts with asset context, correlate indicators across tools, execute XSOAR playbooks, and track SLAs with countdown timers — automatically.</p>
+        </div>
+        <div class="card reveal">
+          <div class="icon">🗂️</div>
+          <h3>Asset Management Automation</h3>
+          <p>Sync inventory across CMDB, Tanium, and CrowdStrike with automated tagging, ring classification, and geographic asset mapping.</p>
+        </div>
+        <div class="card reveal">
+          <div class="icon">💬</div>
+          <h3>Team Collaboration</h3>
+          <p>Real-time Webex notifications, interactive bot commands for common operations, and shared dashboards for collaborative investigation.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="docs">
+    <div class="wrap">
+      <div class="cta-band reveal">
+        <h2>Ready to dig into the truth?</h2>
+        <p>Explore the architecture, setup, and integration guides — or jump straight into the source.</p>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="docs/">Read the Docs →</a>
+          <a class="btn btn-ghost" href="https://github.com/vinayvobbili/ir">Browse the Repository</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap foot-inner">
+      <div>🛡️ <strong>The Whole Truth</strong> — Security Operations Automation Platform</div>
+      <div>MIT Licensed · Built with enterprise-grade reliability in mind</div>
+    </div>
+  </footer>
+
+  <script>
+    // Scroll-reveal
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } });
+    }, { threshold: 0.12 });
+    document.querySelectorAll(".reveal").forEach((el, i) => {
+      el.style.transitionDelay = (i % 6) * 60 + "ms";
+      io.observe(el);
+    });
+  </script>
+</body>
+</html>

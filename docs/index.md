@@ -17,7 +17,7 @@ An enterprise-grade security operations platform that automates and orchestrates
 | **MCP Server Tools** | 30 |
 | **LLM Investigation Tools** | 38 |
 | **Production Chat Bots** | 10 (Webex + Teams) |
-| **Web App Pages** | 40+ |
+| **Web App Pages** | 50+ |
 | **n8n Automation Workflows** | 33 |
 
 ---
@@ -119,7 +119,27 @@ Interactive web dashboard providing:
 
 ### Domain Threat Monitoring
 
-Multi-source domain monitoring with automated correlation across Certificate Transparency, WHOIS, dark web, abuse feeds, and lookalike detection with Webex alerting.
+Brand-protection monitoring that goes past "a lookalike exists": discovery
+(powered by the open-source [domainflow](https://pypi.org/project/domainflow/)
+engine) → **weaponization triage** (P1–P4) → a "were we touched?" SIEM/EDR hunt →
+one-click XSOAR block + PhishFort takedown with SLA metrics → **campaign
+clustering** of coordinated waves by shared infrastructure, correlated across
+Certificate Transparency, WHOIS, dark web, and abuse feeds.
+
+[Learn more about Domain Monitoring →](features/domain-monitoring)
+
+### Detection & Response Workbenches
+
+Three analyst-facing workbenches that turn raw input into a decision:
+
+- **[Vulnerability Deep Dive](features/vulnerability-deep-dive)** — CVE → P1–P4
+  verdict (EPSS / KEV / pre-auth) + which of your apps are affected (Veracode SCA
+  + JFrog Xray).
+- **[Threat Hunt Workbench](features/hunt-workbench)** — paste CTI → IOC fan-out
+  + LLM-authored behavioral SIEM hunts + ATT&CK coverage-vs-rules.
+- **[Detection as Code](features/detection-as-code)** — Sigma → lint → compile →
+  **real dry-run on the live SIEM** → review → packaged merge request, built on
+  the open-source [detflow](https://pypi.org/project/detflow/) core.
 
 ### 30+ Security Integrations
 
@@ -133,8 +153,9 @@ Unified API clients for the security ecosystem:
 | **Case Management** | DFIR-IRIS, TheHive |
 | **Threat Intel** | Recorded Future, VirusTotal, URLScan, AbuseIPDB, Abuse.ch, IntelX, Shodan, HIBP |
 | **BAS** | AttackIQ |
+| **SCA / Exposure** | Veracode SCA, JFrog Xray |
 | **Identity / Data** | Active Directory, Varonis |
-| **Domain Security** | Certificate Transparency, WHOIS, Domain Lookalike Detection |
+| **Domain Security** | Certificate Transparency, WHOIS, lookalike engine (domainflow) |
 | **Email Security** | Abnormal Security |
 | **ITSM** | ServiceNow |
 

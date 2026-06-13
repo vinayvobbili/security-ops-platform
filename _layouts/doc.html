@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% if page.title %}{{ page.title }} · {% endif %}The Whole Truth Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ '/assets/css/docs.css' | relative_url }}" />
+</head>
+<body>
+  <nav class="topnav">
+    <div class="topnav-inner">
+      <a class="brand" href="{{ '/' | relative_url }}"><span class="dot"></span> The Whole Truth</a>
+      <div class="links">
+        <a href="{{ '/' | relative_url }}">Home</a>
+        <a href="{{ '/docs/' | relative_url }}">Docs</a>
+        <a href="https://github.com/vinayvobbili/ir">GitHub →</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="shell">
+    <aside class="sidebar">
+      {% for group in site.data.docs_nav %}
+      <div class="group">
+        <div class="group-title">{{ group.title }}</div>
+        {% for item in group.items %}
+        <a href="{{ item.url | relative_url }}"{% if page.url == item.url %} class="active"{% endif %}>{{ item.label }}</a>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </aside>
+
+    <main class="content">
+      <article class="content-card">
+        {{ content }}
+      </article>
+      <div class="docfoot">
+        🛡️ <strong>The Whole Truth</strong> — Security Operations Automation Platform · MIT Licensed
+      </div>
+    </main>
+  </div>
+</body>
+</html>

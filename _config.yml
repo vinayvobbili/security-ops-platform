@@ -1,0 +1,54 @@
+# GitHub Pages / Jekyll configuration
+# Note: index.html (root) has no front matter, so it is served verbatim — the
+# custom landing page is unaffected by Jekyll. Only the docs/*.md guides are
+# rendered through the theme below.
+
+title: The Whole Truth
+description: Security Operations Automation Platform
+baseurl: "/ir"        # project page served at https://<user>.github.io/ir
+markdown: kramdown
+kramdown:
+  input: GFM           # GitHub-flavored markdown (fenced code, tables, etc.)
+
+# Apply the custom docs layout to everything under docs/ automatically,
+# so the individual guide files only need empty front matter.
+defaults:
+  - scope:
+      path: "docs"
+    values:
+      layout: doc
+
+# Keep the build lean and free of repo internals / binaries.
+exclude:
+  - "*.py"
+  - "*.docx"
+  - requirements.txt
+  - package.json
+  - check_xsoar_db.py
+  - my_config.py
+  - datasette_metadata.json
+  - src/
+  - web/
+  - services/
+  - webex_bots/
+  - teams_bots/
+  - my_bot/
+  - mcp_server/
+  - scripts/
+  - misc/
+  - misc_scripts/
+  - tests/
+  - data/
+  - deployment/
+  - demos/
+  - examples/
+  - n8n_workflows/
+  - startup_scripts/
+  - wiki_articles/
+  - xsoar_scripts/
+  - email_templates/
+  - skills/
+  - docx/
+  - vendor/
+  - .venv/
+  - node_modules/
