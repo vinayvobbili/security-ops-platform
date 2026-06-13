@@ -85,35 +85,6 @@
     }
     .deploy-back-link:hover { background: var(--deploy-accent-lite); }
 
-    .token-row {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        margin-bottom: 24px;
-        padding: 12px 16px;
-        background: var(--deploy-card);
-        border: 1px solid var(--deploy-border);
-        border-radius: 8px;
-    }
-    .token-row label { font-weight: 600; font-size: 13px; min-width: 120px; }
-    .token-row input {
-        flex: 1;
-        padding: 8px 12px;
-        border: 1px solid var(--deploy-border);
-        border-radius: 6px;
-        font-size: 14px;
-        font-family: ui-monospace, "SF Mono", Monaco, monospace;
-    }
-    .token-pill {
-        padding: 4px 12px;
-        border-radius: 999px;
-        font-size: 12px;
-        font-weight: 600;
-    }
-    .token-pill.ok { background: var(--deploy-green-lite); color: var(--deploy-green); }
-    .token-pill.bad { background: var(--deploy-red-lite); color: var(--deploy-red); }
-    .token-pill.unset { background: #f1f5f9; color: var(--deploy-muted); }
-
     .card {
         background: var(--deploy-card);
         border: 1px solid var(--deploy-border);
@@ -281,12 +252,6 @@
         </ul>
     </div>
 
-    <div class="token-row">
-        <label for="tokenInput">Deploy token</label>
-        <input type="password" id="tokenInput" placeholder="Enter shared token" autocomplete="off">
-        <span id="tokenPill" class="token-pill unset">Not checked</span>
-    </div>
-
     <div class="card" id="activeCard">
         <h2>🟢 Currently live</h2>
         <div id="activeContent"></div>
@@ -327,10 +292,7 @@
 <script>
 (function () {
     const API_BASE = '/api/tipper-automation';
-    const TOKEN_KEY = 'tipper_automation_deploy_token';
 
-    const tokenInput = document.getElementById('tokenInput');
-    const tokenPill = document.getElementById('tokenPill');
     const activeContent = document.getElementById('activeContent');
     const stagedList = document.getElementById('stagedList');
     const stagedCount = document.getElementById('stagedCount');
@@ -343,7 +305,9 @@
     const auditList = document.getElementById('auditList');
     const toast = document.getElementById('toast');
 
-    tokenInput.value = sessionStorage.getItem(TOKEN_KEY) || '';
+    function gotoLogin() {
+        window.location = '/login?next=' + encodeURIComponent(location.pathname);
+    }
 
     function showToast(msg, kind) {
         toast.textContent = msg;
@@ -363,14 +327,9 @@
         try { return new Date(iso).toLocaleString(); } catch { return iso; }
     }
 
-    function token() { return tokenInput.value.trim(); }
-
     async function apiGet(path) {
-        const res = await fetch(API_BASE + path, {
-            headers: { 'X-Upload-Token': token() },
-        });
-        if (res.status === 401) { setTokenPill(false); throw new Error('Bad token'); }
-        setTokenPill(true);
+        const res = await fetch(API_BASE + path, { headers: { 'Accept': 'application/json' } });
+        if (res.status === 401) { gotoLogin(); throw new Error('login required'); }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
     }
@@ -378,22 +337,13 @@
     async function apiJson(method, path, body) {
         const res = await fetch(API_BASE + path, {
             method,
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Upload-Token': token(),
-            },
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: body ? JSON.stringify(body) : undefined,
         });
-        if (res.status === 401) { setTokenPill(false); throw new Error('Bad token'); }
+        if (res.status === 401) { gotoLogin(); throw new Error('login required'); }
         const json = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
         return json;
-    }
-
-    function setTokenPill(ok) {
-        if (!token()) { tokenPill.className = 'token-pill unset'; tokenPill.textContent = 'Not checked'; return; }
-        if (ok) { tokenPill.className = 'token-pill ok'; tokenPill.textContent = 'Valid'; }
-        else    { tokenPill.className = 'token-pill bad'; tokenPill.textContent = 'Invalid'; }
     }
 
     function renderActive(state) {
@@ -498,7 +448,6 @@
     }
 
     async function refresh() {
-        if (!token()) { setTokenPill(null); return; }
         try {
             const state = await apiGet('/versions');
             renderActive(state);
@@ -508,7 +457,7 @@
             backupsCount.textContent = (state.backups || []).filter(Boolean).length;
             renderAudit(state.audit_recent || []);
         } catch (err) {
-            if (err.message !== 'Bad token') showToast('Refresh failed: ' + err.message, 'err');
+            if (err.message !== 'login required') showToast('Refresh failed: ' + err.message, 'err');
         }
     }
 
@@ -554,7 +503,6 @@
     }
 
     async function uploadFile(file) {
-        if (!token()) { showToast('Enter the deploy token first', 'err'); return; }
         uploadStatus.className = 'upload-progress';
         uploadStatus.textContent = `Uploading ${file.name} (${fmtBytes(file.size)})…`;
 
@@ -563,9 +511,10 @@
         try {
             const res = await fetch(API_BASE + '/upload', {
                 method: 'POST',
-                headers: { 'X-Upload-Token': token() },
+                headers: { 'Accept': 'application/json' },
                 body: form,
             });
+            if (res.status === 401) { gotoLogin(); return; }
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
             uploadStatus.className = 'upload-progress success';
@@ -578,11 +527,6 @@
             showToast('Upload failed', 'err');
         }
     }
-
-    tokenInput.addEventListener('input', () => {
-        sessionStorage.setItem(TOKEN_KEY, tokenInput.value);
-        refresh();
-    });
 
     dropZone.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', (e) => {

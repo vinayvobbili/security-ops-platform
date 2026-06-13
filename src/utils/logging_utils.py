@@ -20,8 +20,12 @@ config = get_config()
 
 
 def get_client_ip():
-    """Get real client IP, accounting for reverse proxy (nginx X-Forwarded-For)."""
-    return request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
+    """Get real client IP. ProxyFix middleware in web/app.py rewrites
+    request.remote_addr from the trusted X-Forwarded-For hop, so this is
+    safe against client-supplied XFF spoofing (the previous manual
+    header-parse trusted the first XFF entry, which a client could forge).
+    """
+    return request.remote_addr
 
 # Setup logger for this module
 logger = logging.getLogger(__name__)
@@ -108,7 +112,7 @@ def setup_logging(
     - Optional log rotation on startup (default: enabled)
 
     Args:
-        bot_name: Name of the bot (e.g., 'msoar', 'barnacles')
+        bot_name: Name of the bot (e.g., 'msoar', 'hal9000')
         log_level: Logging level for root logger (default: logging.INFO)
         log_dir: Directory for log files (default: 'logs')
         info_modules: List of module names to set to INFO level (useful when root is WARNING)
@@ -296,12 +300,6 @@ SCANNER_PATTERNS = [
 # Compile regex patterns for efficiency
 COMPILED_SCANNER_PATTERNS = [re.compile(pattern, re.IGNORECASE) for pattern in SCANNER_PATTERNS]
 
-# List of known scanner IP addresses to filter
-SCANNER_IPS = [
-    '<internal-host>',
-    # Add more known scanner IPs as needed
-]
-
 
 def log_activity(bot_access_token, log_file_name):
     """
@@ -351,13 +349,13 @@ def log_activity(bot_access_token, log_file_name):
 
 def is_scanner_request():
     """
-    Determine if a request is from a known scanner based on path or IP address.
-    Returns True if it matches scanner patterns, False otherwise.
-    """
-    # Check if the IP is a known scanner
-    if get_client_ip() in SCANNER_IPS:
-        return True
+    Determine if a request is from a known scanner based on its path.
+    Returns True if the path matches a known scanner/probe pattern.
 
+    (IP-based detection via SCANNER_IPS was removed once the app moved off
+    the MacBook that Qualys used to scan — the path patterns still catch
+    opportunistic bot probes like /wp-login.php on the internet-reachable VM.)
+    """
     # Check if the request path matches known scanner patterns
     for pattern in COMPILED_SCANNER_PATTERNS:
         if pattern.search(request.path):
@@ -380,7 +378,7 @@ def log_web_activity(func):
 
     @wraps(func)
     def wrapper(*args, **kwargs):
-        # Skip logging if this is a scanner request or admin user
+        # Skip logging scanner/probe traffic and the cookie-based opt-out.
         if is_scanner_request():
             return func(*args, **kwargs)
         if request.cookies.get('traffic_log_exclude') == 'true':
@@ -389,13 +387,31 @@ def log_web_activity(func):
         now_eastern = datetime.now(eastern).strftime('%Y-%m-%d %H:%M:%S')
         log_file_name = "web_server_activity_log.csv"
         try:
-            from src.utils.bot_logs_db import log_web_activity as _db_log_web
-            _db_log_web(
-                remote_addr=get_client_ip(),
-                method=request.method,
-                path=request.path,
-                timestamp_eastern=now_eastern,
-            )
+            user_email = None
+            skip_logging = False
+            try:
+                from web.auth.helpers import current_user, current_pat_user
+                u = current_user() or current_pat_user()
+                if u:
+                    # Per-user opt-out keyed on auth identity, not IP — follows
+                    # the person across networks/devices. Replaces the old
+                    # SCANNER_IPS self-exclusion hack.
+                    if u.get('exclude_from_traffic_log'):
+                        skip_logging = True
+                    else:
+                        user_email = u.get('email')
+            except Exception:
+                pass
+
+            if not skip_logging:
+                from src.utils.bot_logs_db import log_web_activity as _db_log_web
+                _db_log_web(
+                    remote_addr=get_client_ip(),
+                    method=request.method,
+                    path=request.path,
+                    timestamp_eastern=now_eastern,
+                    user_email=user_email,
+                )
 
         except Exception as e:
             logger.error(f"❌ Unexpected error logging web activity: {e}", exc_info=True)

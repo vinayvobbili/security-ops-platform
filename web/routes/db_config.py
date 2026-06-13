@@ -21,7 +21,6 @@ Expected vendor package shape:
 """
 
 import hashlib
-import hmac
 import json
 import logging
 import os
@@ -34,10 +33,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
-from flask import Blueprint, abort, jsonify, render_template, request, Response
+from flask import Blueprint, jsonify, render_template, request, Response
 
 from my_config import get_config
 from src.utils.logging_utils import log_web_activity
+from web.auth.helpers import login_required
+from web.auth.rbac import require_capability, DEPLOY_SIDECAR
 
 logger = logging.getLogger(__name__)
 
@@ -169,19 +170,6 @@ def _now_utc_iso():
 def _new_version_id(digest_hex: str) -> str:
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     return f"v{ts}_{digest_hex[:6]}"
-
-
-def _require_token():
-    expected = get_config().data_security_upload_token
-    if not expected:
-        abort(500, description="Upload token not configured on server")
-    provided = (
-        request.headers.get("X-Upload-Token")
-        or request.form.get("token")
-        or (request.get_json(silent=True) or {}).get("token", "")
-    )
-    if not provided or not hmac.compare_digest(str(provided), str(expected)):
-        abort(401, description="Invalid or missing upload token")
 
 
 def _audit(action: str, version_id: str | None, extra: dict | None = None):
@@ -420,6 +408,7 @@ def api_overview():
 
 @db_config_bp.route(f"{PROXY_PREFIX}/", defaults={"path": ""}, methods=["GET", "POST"])
 @db_config_bp.route(f"{PROXY_PREFIX}/<path:path>", methods=["GET", "POST"])
+@login_required
 def db_config_proxy(path):
     upstream_url = f"{DBCFG_BASE}/{path}"
     headers = {k: v for k, v in request.headers.items() if k.lower() != "host"}
@@ -451,8 +440,8 @@ def db_config_proxy(path):
 # ---------------------------------------------------------------------------
 
 @db_config_bp.route("/api/db-config/versions", methods=["GET"])
+@login_required
 def db_config_versions():
-    _require_token()
     active_info = _dir_info(ACTIVE_DIR)
     staged = sorted(
         (d for d in STAGING_DIR.iterdir() if d.is_dir()),
@@ -472,8 +461,8 @@ def db_config_versions():
 
 
 @db_config_bp.route("/api/db-config/upload", methods=["POST"])
+@require_capability(DEPLOY_SIDECAR, sidecar='db_config')
 def db_config_upload():
-    _require_token()
     f = request.files.get("zip")
     if not f or not f.filename:
         return jsonify({"ok": False, "error": "No 'zip' file in request"}), 400
@@ -532,8 +521,8 @@ def db_config_upload():
 
 
 @db_config_bp.route("/api/db-config/activate", methods=["POST"])
+@require_capability(DEPLOY_SIDECAR, sidecar='db_config')
 def db_config_activate():
-    _require_token()
     data = request.get_json(silent=True) or request.form
     version_id = (data.get("version_id") or "").strip()
     if not VERSION_ID_RE.match(version_id):
@@ -586,8 +575,8 @@ def db_config_activate():
 
 
 @db_config_bp.route("/api/db-config/rollback", methods=["POST"])
+@require_capability(DEPLOY_SIDECAR, sidecar='db_config')
 def db_config_rollback():
-    _require_token()
     data = request.get_json(silent=True) or request.form
     backup_id = (data.get("backup_id") or "").strip()
     if not VERSION_ID_RE.match(backup_id):
@@ -628,8 +617,8 @@ def db_config_rollback():
 
 
 @db_config_bp.route("/api/db-config/staged/<version_id>", methods=["DELETE"])
+@require_capability(DEPLOY_SIDECAR, sidecar='db_config')
 def db_config_delete_staged(version_id):
-    _require_token()
     if not VERSION_ID_RE.match(version_id):
         return jsonify({"ok": False, "error": "Invalid version_id"}), 400
     target = STAGING_DIR / version_id

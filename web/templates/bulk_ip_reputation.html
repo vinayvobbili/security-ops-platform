@@ -1,0 +1,1330 @@
+{% extends 'base_layout.html' %}
+
+{% block page_title_plain %}Bulk IP Reputation{% endblock %}
+
+{% block body_classes %}bulk-ip-page{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/chat_widget.css') }}">
+<style>
+/* ── Forensics-Lab palette (amber + teal on graphite) ─────────────────── */
+.bulk-ip-page {
+    --bip-bg:        #f6f1e7;            /* warm parchment (light) */
+    --bip-bg-2:      #efe6d3;
+    --bip-ink:       #1f2937;            /* deep ink */
+    --bip-ink-dim:   #5b6573;
+    --bip-amber:     #b8771c;            /* burnished amber */
+    --bip-amber-2:   #e09a3a;
+    --bip-teal:      #0f766e;            /* deep teal */
+    --bip-teal-2:    #14b8a6;
+    --bip-red:       #b91c1c;
+    --bip-green:     #15803d;
+    --bip-card:      #fffdf7;
+    --bip-line:      rgba(184, 119, 28, 0.25);
+    --bip-line-soft: rgba(184, 119, 28, 0.12);
+    --bip-shadow:    0 1px 2px rgba(31,41,55,0.06), 0 8px 20px rgba(31,41,55,0.08);
+    background: var(--bip-bg);
+    min-height: 100vh;
+    padding: 2rem 1rem; padding-top: 140px;
+    position: relative; overflow-x: hidden;
+    color: var(--bip-ink);
+    font-feature-settings: "ss01", "tnum";
+}
+body.dark-mode.bulk-ip-page {
+    --bip-bg:        #161614;            /* graphite */
+    --bip-bg-2:      #1f1d1a;
+    --bip-ink:       #f1e9d9;            /* parchment ink */
+    --bip-ink-dim:   #a59a85;
+    --bip-amber:     #f3a847;
+    --bip-amber-2:   #ffc875;
+    --bip-teal:      #38d4c0;
+    --bip-teal-2:    #5eead4;
+    --bip-red:       #f87171;
+    --bip-green:     #4ade80;
+    --bip-card:      rgba(36, 33, 28, 0.92);
+    --bip-line:      rgba(243, 168, 71, 0.30);
+    --bip-line-soft: rgba(243, 168, 71, 0.12);
+    --bip-shadow:    0 1px 2px rgba(0,0,0,0.5), 0 14px 30px rgba(0,0,0,0.45);
+}
+.bulk-ip-page .top-nav { background: rgba(0, 70, 173, 0.9) !important; border-bottom: 2px solid #00A651; }
+
+/* Dotted-grid background pattern (the "lab notebook" feel) */
+.bulk-ip-page {
+    background-image:
+        radial-gradient(var(--bip-line-soft) 1px, transparent 1px);
+    background-size: 22px 22px;
+}
+body.dark-mode .bulk-ip-page {
+    background-image:
+        radial-gradient(rgba(243, 168, 71, 0.07) 1px, transparent 1px),
+        radial-gradient(circle at 90% 10%, rgba(56, 212, 192, 0.10), transparent 50%),
+        radial-gradient(circle at 10% 90%, rgba(243, 168, 71, 0.10), transparent 50%);
+    background-size: 22px 22px, 100% 100%, 100% 100%;
+}
+
+.bip-wrap { max-width: 1280px; margin: 0 auto; padding-top: 24px; position: relative; z-index: 1; }
+
+/* ── Hero (file-folder tab look) ─────────────────────────────────────── */
+.bip-hero {
+    background: linear-gradient(180deg, var(--bip-card), var(--bip-bg-2));
+    border: 1px solid var(--bip-line);
+    border-radius: 16px;
+    padding: 26px 30px 24px;
+    margin-bottom: 22px;
+    position: relative; overflow: hidden;
+    box-shadow: var(--bip-shadow);
+}
+.bip-hero::after {
+    content: ''; position: absolute; left: 30px; top: -1px;
+    width: 140px; height: 14px;
+    background: var(--bip-amber); border-radius: 0 0 8px 8px;
+    box-shadow: 0 2px 6px rgba(184, 119, 28, 0.40);
+}
+body.dark-mode .bip-hero::after { background: var(--bip-amber-2); box-shadow: 0 2px 14px rgba(243, 168, 71, 0.50); }
+.bip-hero-eyebrow {
+    color: var(--bip-amber); font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 2.2px;
+    margin: 6px 0 6px; display: flex; align-items: center; gap: 8px;
+}
+body.dark-mode .bip-hero-eyebrow { color: var(--bip-amber-2); }
+.bip-hero-eyebrow::after {
+    content: ''; flex: 1; height: 1px; max-width: 80px;
+    background: linear-gradient(90deg, var(--bip-amber), transparent);
+}
+.bip-hero-title {
+    font-size: 32px; font-weight: 800; letter-spacing: -0.5px;
+    color: var(--bip-ink); margin: 0 0 10px 0;
+    display: flex; align-items: baseline; gap: 14px;
+    font-family: 'Georgia', 'Times New Roman', serif;
+}
+.bip-hero-title .ico { font-size: 32px; }
+.bip-hero-sub { color: var(--bip-ink-dim); margin: 0; line-height: 1.6; max-width: 780px; font-size: 15px; }
+.bip-hero-chips { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.bip-hero-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 12px; border-radius: 4px;
+    background: var(--bip-bg-2); border: 1px solid var(--bip-line);
+    font-size: 12px; color: var(--bip-ink); font-weight: 600;
+}
+body.dark-mode .bip-hero-chip { background: rgba(243, 168, 71, 0.08); }
+
+/* ── Lab-card (corner-mark + thin amber rail) ────────────────────────── */
+.bip-card {
+    background: var(--bip-card);
+    border: 1px solid var(--bip-line);
+    border-radius: 14px;
+    padding: 24px 26px;
+    margin-bottom: 20px;
+    box-shadow: var(--bip-shadow);
+    color: var(--bip-ink);
+    position: relative;
+}
+/* corner brackets (forensics feel) */
+.bip-card::before, .bip-card::after {
+    content: ''; position: absolute; width: 14px; height: 14px;
+    border-color: var(--bip-amber); pointer-events: none; opacity: .65;
+}
+.bip-card::before { top: 8px; left: 8px; border-top: 2px solid; border-left: 2px solid; border-top-left-radius: 4px; }
+.bip-card::after  { bottom: 8px; right: 8px; border-bottom: 2px solid; border-right: 2px solid; border-bottom-right-radius: 4px; }
+.bip-card h3 {
+    margin: 0 0 16px 0; font-size: 16px; color: var(--bip-ink);
+    display: flex; align-items: center; gap: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 1.5px;
+}
+.bip-card h3 .step-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 6px;
+    background: var(--bip-amber); color: white;
+    font-size: 13px; font-weight: 700; font-family: 'Georgia', serif;
+}
+body.dark-mode .bip-card h3 .step-num { background: var(--bip-amber-2); color: #1f1d1a; }
+
+/* ── Drop zone (manila-envelope vibe) ────────────────────────────────── */
+.bip-drop {
+    border: 1.5px dashed var(--bip-amber);
+    border-radius: 10px;
+    padding: 38px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all .2s;
+    background:
+        repeating-linear-gradient(135deg, transparent 0 8px, var(--bip-line-soft) 8px 9px),
+        var(--bip-bg-2);
+    position: relative; display: block;
+}
+.bip-drop:hover, .bip-drop.dragging {
+    background-color: rgba(184, 119, 28, 0.08);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(184, 119, 28, 0.20);
+}
+body.dark-mode .bip-drop {
+    background:
+        repeating-linear-gradient(135deg, transparent 0 8px, rgba(243, 168, 71, 0.05) 8px 9px),
+        rgba(31, 29, 26, 0.6);
+}
+body.dark-mode .bip-drop:hover { box-shadow: 0 0 24px rgba(243, 168, 71, 0.20); }
+.bip-drop input { display: none; }
+.bip-drop-icon { font-size: 40px; margin-bottom: 10px; }
+.bip-drop-text { color: var(--bip-ink); font-size: 15px; }
+.bip-drop-text strong { color: var(--bip-amber); }
+body.dark-mode .bip-drop-text strong { color: var(--bip-amber-2); }
+.bip-drop-hint { color: var(--bip-ink-dim); font-size: 12px; margin-top: 6px; letter-spacing: 1.5px; text-transform: uppercase; }
+
+/* ── Buttons (stamped ink look) ──────────────────────────────────────── */
+.bip-btn {
+    background: var(--bip-ink); color: var(--bip-card);
+    border: none; padding: 11px 22px; border-radius: 6px;
+    cursor: pointer; font-weight: 700; font-size: 13px;
+    display: inline-flex; align-items: center; gap: 8px;
+    transition: all .15s; box-shadow: 0 2px 0 var(--bip-amber);
+    letter-spacing: 0.6px; text-transform: uppercase;
+}
+.bip-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 0 var(--bip-amber); }
+.bip-btn:active:not(:disabled) { transform: translateY(1px); box-shadow: 0 0 0 var(--bip-amber); }
+.bip-btn:disabled { opacity: .45; cursor: not-allowed; }
+body.dark-mode .bip-btn { background: var(--bip-amber-2); color: #1f1d1a; box-shadow: 0 2px 0 var(--bip-teal-2); }
+body.dark-mode .bip-btn:hover:not(:disabled) { box-shadow: 0 4px 0 var(--bip-teal-2); }
+.bip-btn-ghost {
+    background: transparent; color: var(--bip-ink);
+    border: 1.5px solid var(--bip-ink); box-shadow: none;
+}
+body.dark-mode .bip-btn-ghost { color: var(--bip-ink); border-color: var(--bip-ink-dim); background: transparent; }
+.bip-btn-ghost:hover { background: rgba(31, 41, 55, 0.06); box-shadow: none; }
+
+/* ── Form controls ───────────────────────────────────────────────────── */
+.bip-row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.bip-meta { color: var(--bip-ink-dim); font-size: 13px; }
+.bip-select, .bip-input {
+    background: var(--bip-card); border: 1px solid var(--bip-line);
+    border-radius: 6px; color: var(--bip-ink); padding: 9px 14px;
+    font-size: 14px; outline: none; transition: border .15s, box-shadow .15s;
+}
+.bip-select:focus, .bip-input:focus { border-color: var(--bip-amber); box-shadow: 0 0 0 3px rgba(184, 119, 28, 0.18); }
+body.dark-mode .bip-select:focus, body.dark-mode .bip-input:focus { box-shadow: 0 0 0 3px rgba(243, 168, 71, 0.18); }
+
+/* ── Progress + jokes (radar/oscilloscope) ──────────────────────────── */
+.bip-progress-bar-wrap {
+    background: var(--bip-bg-2); border: 1px solid var(--bip-line);
+    border-radius: 999px; height: 12px; overflow: hidden;
+    flex: 1; min-width: 220px; position: relative;
+}
+.bip-progress-bar {
+    height: 100%; background: linear-gradient(90deg, var(--bip-teal), var(--bip-amber));
+    transition: width .25s; width: 0; position: relative;
+}
+.bip-progress-bar::after {
+    content: ''; position: absolute; inset: 0;
+    background: repeating-linear-gradient(90deg, transparent 0 8px, rgba(255,255,255,0.18) 8px 10px);
+    animation: bipShimmer 1.2s linear infinite;
+}
+@keyframes bipShimmer { 0% { transform: translateX(0); } 100% { transform: translateX(20px); } }
+
+.bip-joke-strip {
+    margin-top: 16px; padding: 16px 20px; border-radius: 10px;
+    background: linear-gradient(135deg, rgba(184, 119, 28, 0.06), rgba(15, 118, 110, 0.06));
+    border-left: 4px solid var(--bip-amber);
+    display: flex; align-items: center; gap: 14px; min-height: 60px;
+    position: relative; overflow: hidden;
+}
+body.dark-mode .bip-joke-strip {
+    background: linear-gradient(135deg, rgba(243, 168, 71, 0.06), rgba(56, 212, 192, 0.06));
+    border-left-color: var(--bip-amber-2);
+}
+.bip-joke-strip::before {
+    content: ''; position: absolute; left: -20px; top: 50%;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--bip-amber);
+    box-shadow: 0 0 0 0 var(--bip-amber);
+    animation: bipPulse 1.6s ease-out infinite;
+}
+body.dark-mode .bip-joke-strip::before { background: var(--bip-amber-2); box-shadow: 0 0 0 0 var(--bip-amber-2); }
+@keyframes bipPulse {
+    0%   { box-shadow: 0 0 0 0 rgba(184, 119, 28, 0.6); opacity: 1; }
+    70%  { box-shadow: 0 0 0 28px rgba(184, 119, 28, 0); opacity: .3; }
+    100% { box-shadow: 0 0 0 0 rgba(184, 119, 28, 0); opacity: .3; }
+}
+.bip-joke-icon { font-size: 22px; }
+.bip-joke-text {
+    flex: 1; color: var(--bip-ink); font-size: 14.5px; line-height: 1.45;
+    font-family: 'Georgia', 'Times New Roman', serif; font-style: italic;
+    opacity: 1; transition: opacity .35s ease-in-out;
+}
+.bip-joke-text.fading { opacity: 0; }
+.bip-joke-tag {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    color: var(--bip-amber); letter-spacing: 1.5px; font-family: inherit;
+    font-style: normal; margin-right: 6px;
+}
+body.dark-mode .bip-joke-tag { color: var(--bip-amber-2); }
+
+/* ── KPI cards (paper tape readout) ─────────────────────────────────── */
+.bip-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin: 22px 0 4px; }
+.bip-stat {
+    background: var(--bip-card); border: 1px solid var(--bip-line);
+    border-radius: 10px; padding: 14px 18px; position: relative; overflow: hidden;
+    transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+.bip-stat:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(31,41,55,0.10); }
+.bip-stat::before {
+    content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 4px;
+    background: var(--accent, var(--bip-amber));
+}
+.bip-stat.total { --accent: var(--bip-teal); }
+.bip-stat.high  { --accent: var(--bip-red); }
+.bip-stat.med   { --accent: var(--bip-amber); }
+.bip-stat.clean { --accent: var(--bip-green); }
+.bip-stat.err   { --accent: var(--bip-ink-dim); }
+.bip-stat-label { color: var(--bip-ink-dim); font-size: 10.5px; text-transform: uppercase; letter-spacing: 1.2px; font-weight: 700; }
+.bip-stat-value { font-size: 30px; font-weight: 800; margin-top: 4px; line-height: 1; font-family: 'Georgia', 'Times New Roman', serif; }
+.bip-stat.total .bip-stat-value { color: var(--bip-teal); }
+.bip-stat.high  .bip-stat-value { color: var(--bip-red); }
+.bip-stat.med   .bip-stat-value { color: var(--bip-amber); }
+.bip-stat.clean .bip-stat-value { color: var(--bip-green); }
+.bip-stat.err   .bip-stat-value { color: var(--bip-ink-dim); }
+
+/* ── Filter bar + Table (matches apply_professional_formatting palette) ─ */
+.bip-filter { display: flex; gap: 10px; align-items: center; margin: 16px 0; flex-wrap: wrap; }
+.bip-table-wrap {
+    max-height: 600px; overflow: auto;
+    border: 1px solid #CBD5E1; border-radius: 8px;
+    background: #ffffff;
+}
+body.dark-mode .bip-table-wrap { background: #1e293b; border-color: #334155; }
+
+table.bip-table { width: 100%; border-collapse: collapse; font-size: 13px; color: #1f2937; font-family: 'Calibri', 'Segoe UI', sans-serif; }
+body.dark-mode table.bip-table { color: #e2e8f0; }
+
+table.bip-table th {
+    position: sticky; top: 0; z-index: 2;
+    background: #4472C4;          /* same as apply_professional_formatting header_fill */
+    color: #ffffff;
+    padding: 10px 12px; text-align: left;
+    font-weight: 700; cursor: pointer; user-select: none;
+    border: 1px solid #3a63b0;    /* thin border to match the xlsx */
+    white-space: nowrap;
+    font-size: 12px;
+}
+table.bip-table th:hover { background: #3a63b0; }
+table.bip-table th[data-sort]::after {
+    content: ' ⇅'; opacity: .5; font-size: 10px;
+}
+
+table.bip-table td {
+    padding: 7px 12px;
+    border: 1px solid #E5E7EB;     /* thin grid lines, like xlsx borders */
+    font-variant-numeric: tabular-nums;
+    vertical-align: middle;
+}
+body.dark-mode table.bip-table td { border-color: #334155; }
+
+/* Zebra striping — light gray to match xlsx #F2F2F2 */
+table.bip-table tr:nth-child(even) td { background: #F2F2F2; }
+body.dark-mode table.bip-table tr:nth-child(even) td { background: rgba(241, 245, 249, 0.04); }
+
+table.bip-table tr:hover td { background: #E3EAFB; }
+body.dark-mode table.bip-table tr:hover td { background: rgba(68, 114, 196, 0.18); }
+
+/* Threat-level row tinting */
+table.bip-table tr.row-high td { background: #FCE7E7; }
+table.bip-table tr.row-med  td { background: #FEF3E2; }
+body.dark-mode table.bip-table tr.row-high td { background: rgba(220, 38, 38, 0.12); }
+body.dark-mode table.bip-table tr.row-med  td { background: rgba(217, 119, 6, 0.10); }
+
+/* Threat badges — same fills as the xlsx (DC2626 / D97706 / 15803D) */
+.bip-badge {
+    display: inline-block; padding: 3px 10px; border-radius: 3px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+    color: white; font-family: 'Calibri', 'Segoe UI', sans-serif;
+    min-width: 80px; text-align: center;
+}
+.bip-badge.high  { background: #DC2626; }
+.bip-badge.med   { background: #D97706; }
+.bip-badge.clean { background: #15803D; }
+.bip-badge.err   { background: #94A3B8; }
+.bip-badge.cache {
+    background: transparent; color: #4472C4;
+    border: 1px solid #4472C4; margin-left: 6px;
+    font-size: 9.5px; min-width: 0; padding: 1px 6px;
+}
+body.dark-mode .bip-badge.cache { color: #93b5e6; border-color: #93b5e6; }
+
+.bip-link { color: #0563C1; text-decoration: none; font-weight: 600; font-size: 14px; }
+body.dark-mode .bip-link { color: #60a5fa; }
+.bip-link:hover { text-decoration: underline; }
+.bip-empty { padding: 40px; text-align: center; color: #6b7280; font-style: italic; }
+
+/* ── Format-tip disclosure ──────────────────────────────────────────── */
+.bip-format-tip { margin-top: 16px; }
+.bip-format-tip > summary {
+    cursor: pointer; color: var(--bip-teal); font-weight: 700;
+    font-size: 13px; padding: 6px 0; list-style: none; user-select: none;
+    display: inline-flex; align-items: center; gap: 8px;
+}
+body.dark-mode .bip-format-tip > summary { color: var(--bip-teal-2); }
+.bip-format-tip > summary::-webkit-details-marker { display: none; }
+.bip-format-tip > summary::before {
+    content: '▶';
+    font-size: 10px;
+    transition: transform .18s ease;
+    display: inline-block;
+    color: var(--bip-amber);
+}
+body.dark-mode .bip-format-tip > summary::before { color: var(--bip-amber-2); }
+.bip-format-tip[open] > summary::before { transform: rotate(90deg); }
+.bip-format-tip > summary:hover { text-decoration: underline; }
+.bip-format-body {
+    margin-top: 8px; padding: 14px 18px;
+    background: var(--bip-bg-2); border: 1px dashed var(--bip-line);
+    border-radius: 8px; color: var(--bip-ink); font-size: 13.5px; line-height: 1.6;
+}
+.bip-format-body ul { margin: 6px 0 10px; padding-left: 22px; }
+.bip-format-body code { background: rgba(184, 119, 28, 0.10); padding: 1px 6px; border-radius: 3px; font-size: 12.5px; }
+body.dark-mode .bip-format-body code { background: rgba(243, 168, 71, 0.12); }
+.bip-sample-link {
+    display: inline-block; margin-top: 4px;
+    color: var(--bip-amber); font-weight: 700; text-decoration: none;
+    border-bottom: 1.5px dashed var(--bip-amber);
+}
+body.dark-mode .bip-sample-link { color: var(--bip-amber-2); border-bottom-color: var(--bip-amber-2); }
+.bip-sample-link:hover { color: var(--bip-teal); border-bottom-color: var(--bip-teal); }
+
+/* ── Preview table (editable) ───────────────────────────────────────── */
+.bip-preview-wrap {
+    max-height: 360px; overflow: auto;
+    border: 1px solid #CBD5E1; border-radius: 8px;
+    background: #ffffff;
+}
+body.dark-mode .bip-preview-wrap { background: #1e293b; border-color: #334155; }
+
+table.bip-preview {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+    color: #1f2937; font-family: 'Calibri', 'Segoe UI', sans-serif;
+}
+body.dark-mode table.bip-preview { color: #e2e8f0; }
+
+table.bip-preview th {
+    position: sticky; top: 0; z-index: 2;
+    background: #4472C4; color: #ffffff;
+    padding: 9px 12px; text-align: left;
+    font-weight: 700; border: 1px solid #3a63b0;
+    font-size: 12px; white-space: nowrap;
+}
+table.bip-preview th.bip-preview-ip-col {
+    background: linear-gradient(180deg, #4472C4 0%, #3559A0 100%);
+    box-shadow: inset 0 -3px 0 var(--bip-amber);
+}
+
+table.bip-preview td {
+    padding: 4px 0; border: 1px solid #E5E7EB;
+    vertical-align: middle; line-height: 1.3;
+}
+body.dark-mode table.bip-preview td { border-color: #334155; }
+table.bip-preview tr:nth-child(even) td { background: #F2F2F2; }
+body.dark-mode table.bip-preview tr:nth-child(even) td { background: rgba(241, 245, 249, 0.04); }
+
+/* Editable cell content area — input-like affordance on hover/focus */
+.bip-cell {
+    display: block; min-height: 1.3em; padding: 4px 10px;
+    outline: none; border: 1px solid transparent; border-radius: 3px;
+    font-variant-numeric: tabular-nums;
+}
+.bip-cell:hover { border-color: rgba(184, 119, 28, 0.30); background: rgba(255, 255, 255, 0.65); }
+.bip-cell:focus { border-color: var(--bip-amber); background: #fffdf5; box-shadow: 0 0 0 2px rgba(184, 119, 28, 0.18); }
+body.dark-mode .bip-cell:hover { background: rgba(243, 168, 71, 0.06); }
+body.dark-mode .bip-cell:focus { background: rgba(243, 168, 71, 0.10); }
+
+/* IP column gets monospace + faint amber bg */
+td.bip-cell-ip .bip-cell {
+    font-family: 'Consolas', 'Menlo', monospace;
+    background: rgba(184, 119, 28, 0.06);
+}
+body.dark-mode td.bip-cell-ip .bip-cell { background: rgba(243, 168, 71, 0.06); }
+td.bip-cell-ip .bip-cell.invalid {
+    background: rgba(220, 38, 38, 0.12);
+    border-color: rgba(220, 38, 38, 0.45);
+    color: #b91c1c;
+}
+body.dark-mode td.bip-cell-ip .bip-cell.invalid { color: #f87171; }
+
+/* Delete-row button column */
+th.bip-row-actions, td.bip-row-actions { width: 32px; text-align: center; padding: 4px; }
+.bip-row-del {
+    background: transparent; border: 1px solid transparent;
+    color: var(--bip-ink-dim); width: 22px; height: 22px;
+    border-radius: 4px; cursor: pointer; font-size: 14px; line-height: 1;
+    transition: all .12s;
+}
+.bip-row-del:hover { color: white; background: var(--bip-red); border-color: var(--bip-red); }
+
+/* Right-aligned action row */
+.bip-actions { justify-content: flex-end; margin-top: 18px; }
+
+/* ── Collapsed Step-1 card after upload ─────────────────────────────── */
+.bip-card.bip-collapsed { padding: 14px 26px; cursor: pointer; transition: background .15s; }
+.bip-card.bip-collapsed:hover { background: var(--bip-bg-2); }
+.bip-card.bip-collapsed h3 { margin: 0; }
+.bip-card.bip-collapsed > *:not(h3):not(.bip-card-accent):not(.bip-collapsed-summary):not(.bip-collapsed-row) { display: none; }
+.bip-card.bip-collapsed .bip-collapsed-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.bip-card.bip-collapsed h3 { display: inline-flex; }
+
+.bip-collapsed-summary {
+    margin-left: 16px; color: var(--bip-ink-dim); font-size: 13px;
+    display: inline-flex; align-items: center; gap: 10px; flex: 1;
+}
+.bip-collapsed-summary .bip-relink {
+    background: transparent; border: 1px dashed var(--bip-line);
+    color: var(--bip-teal); border-radius: 5px; padding: 3px 10px;
+    cursor: pointer; font-size: 12px; font-weight: 600;
+}
+body.dark-mode .bip-collapsed-summary .bip-relink { color: var(--bip-teal-2); }
+.bip-collapsed-summary .bip-relink:hover { border-color: var(--bip-teal); background: rgba(15, 118, 110, 0.08); }
+
+/* Expand/collapse chevron on the right of the collapsed card */
+.bip-collapse-toggle {
+    margin-left: auto; color: var(--bip-amber); font-size: 14px;
+    display: none; align-items: center; gap: 6px;
+    font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;
+    font-size: 11px;
+}
+body.dark-mode .bip-collapse-toggle { color: var(--bip-amber-2); }
+.bip-collapse-toggle::after { content: '▼'; font-size: 10px; transition: transform .18s ease; }
+.bip-card.bip-collapsed .bip-collapse-toggle { display: inline-flex; }
+.bip-card:not(.bip-collapsed) .bip-collapse-toggle::after { transform: rotate(180deg); }
+
+/* ── Upload error callout ───────────────────────────────────────────── */
+.bip-upload-error {
+    margin-top: 14px; padding: 14px 18px;
+    background: rgba(185, 28, 28, 0.06); border: 1px solid rgba(185, 28, 28, 0.30);
+    border-radius: 8px; color: var(--bip-ink); font-size: 14px; line-height: 1.5;
+}
+body.dark-mode .bip-upload-error { background: rgba(248, 113, 113, 0.08); border-color: rgba(248, 113, 113, 0.40); }
+.bip-upload-error .bip-err-title { font-weight: 700; color: var(--bip-red); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+body.dark-mode .bip-upload-error .bip-err-title { color: var(--bip-red); }
+.bip-upload-error ul { margin: 6px 0 10px; padding-left: 22px; font-size: 13px; }
+
+/* ── Login-required note under the Run button ───────────────────────── */
+.bip-login-note {
+    margin-top: 14px; padding: 14px 18px; text-align: right;
+    background: rgba(15, 118, 110, 0.07); border: 1px solid rgba(15, 118, 110, 0.30);
+    border-radius: 8px; color: var(--bip-ink); font-size: 14px; line-height: 1.55;
+}
+body.dark-mode .bip-login-note { background: rgba(56, 212, 192, 0.08); border-color: rgba(56, 212, 192, 0.35); }
+.bip-login-note a { color: var(--bip-teal); }
+body.dark-mode .bip-login-note a { color: var(--bip-teal-2); }
+
+/* Author watermark */
+</style>
+{% endblock %}
+
+{% set page_title_text = 'Bulk IP Reputation' %}
+{% set page_title_left_icon = '🔬' %}
+{% set page_title_right_icon = '📋' %}
+
+{% block content %}
+<div class="bip-wrap">
+
+    <!-- ── Hero ─────────────────────────────────────── -->
+    <div class="bip-hero">
+        <p class="bip-hero-sub">Drop in an <strong>Excel</strong> (.xlsx / .xls) or CSV file of IPs and we'll look each one up on <strong>VirusTotal</strong>. Results stream in live, you can sort and filter, ask the chat widget questions about the dataset, and download an Excel report of the enriched results when you're done.</p>
+        <div class="bip-hero-chips">
+            <span class="bip-hero-chip">⚡ Fast bulk lookups</span>
+            <span class="bip-hero-chip">📡 Live results</span>
+            <span class="bip-hero-chip">🤖 Ask-anything chat</span>
+            <span class="bip-hero-chip">📊 Excel report</span>
+        </div>
+    </div>
+
+    <!-- ── Step 1: Upload ───────────────────────────── -->
+    <div class="bip-card" id="step-upload">
+        <div class="bip-card-accent"></div>
+        <div class="bip-collapsed-row">
+            <h3 style="margin-bottom:16px;"><span class="step-num">1</span> Upload your file</h3>
+            <span class="bip-collapsed-summary" id="uploadCollapsedSummary" style="display:none;">
+                <span id="uploadCollapsedText"></span>
+                <button type="button" class="bip-relink" id="uploadChangeBtn">Change file</button>
+            </span>
+            <span class="bip-collapse-toggle" id="uploadCollapseToggle" title="Click to expand">Expand</span>
+        </div>
+        <label class="bip-drop" id="dropZone" for="fileInput">
+            <div class="bip-drop-icon">📊</div>
+            <div class="bip-drop-text"><strong>Click to choose</strong> &nbsp;or drag &amp; drop</div>
+            <div class="bip-drop-hint">Excel preferred &nbsp;·&nbsp; .xlsx &nbsp;·&nbsp; .xls &nbsp;·&nbsp; .csv</div>
+            <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+        </label>
+        <div id="uploadStatus" class="bip-meta" style="margin-top:14px; display:none;"></div>
+
+        <details class="bip-format-tip">
+            <summary>📋 Expected format</summary>
+            <div class="bip-format-body">
+                <p>Any of these work — we'll auto-detect the IP column:</p>
+                <ul>
+                    <li>One column of IPs <em>(header row optional)</em>:&nbsp;
+                        <code>ip</code> → <code>8.8.8.8</code></li>
+                    <li>Multiple columns — we'll pick the one with the most IP-like values:&nbsp;
+                        <code>timestamp,src_ip,dst_ip,user</code></li>
+                    <li>Extras like <code>1.2.3.4:443</code> (port) or <code>1.2.3.4/24</code> (CIDR) are tolerated.</li>
+                    <li>Both IPv4 (<code>8.8.8.8</code>) and IPv6 (<code>2001:db8::1</code>) are supported.</li>
+                </ul>
+                <p>
+                    <a href="/api/bulk-ip-reputation/sample" class="bip-sample-link">⬇️ Download a sample Excel file</a>
+                </p>
+            </div>
+        </details>
+    </div>
+
+    <!-- ── Step 2: Review + Column picker ───────────────────── -->
+    <div class="bip-card" id="step-column" style="display:none;">
+        <div class="bip-card-accent"></div>
+        <h3><span class="step-num">2</span> Review &amp; pick the IP column</h3>
+
+        <div class="bip-row">
+            <label for="columnSelect" class="bip-meta">IP column:</label>
+            <select id="columnSelect" class="bip-select"></select>
+            <span id="columnHint" class="bip-meta"></span>
+        </div>
+
+        <p class="bip-meta" id="previewHint" style="margin-top:14px; margin-bottom:6px;">
+            Edit cells directly or delete rows you want to skip. The IP column is highlighted.
+        </p>
+
+        <div class="bip-preview-wrap">
+            <table class="bip-preview" id="previewTable">
+                <thead><tr id="previewHeadRow"></tr></thead>
+                <tbody id="previewBody"></tbody>
+            </table>
+        </div>
+        <div id="previewTruncated" class="bip-meta" style="margin-top:8px; display:none;"></div>
+
+        <div class="bip-row bip-actions">
+            <button id="resetBtn" class="bip-btn bip-btn-ghost">↺ Reset</button>
+            <button id="startBtn" class="bip-btn">🚀 Run VirusTotal Lookups</button>
+        </div>
+        <div id="startStatus" class="bip-login-note" style="display:none;"></div>
+    </div>
+
+    <!-- ── Step 3: Live results ────────────────────── -->
+    <div class="bip-card" id="step-results" style="display:none;">
+        <div class="bip-card-accent"></div>
+        <h3><span class="step-num">3</span> Live results</h3>
+
+        <div class="bip-row" style="margin-bottom:6px;">
+            <strong id="progressLabel" style="color: var(--text-bright);">Looking up IPs…</strong>
+            <div class="bip-progress-bar-wrap"><div class="bip-progress-bar" id="progressBar"></div></div>
+            <span class="bip-meta" id="progressCount">0 / 0</span>
+        </div>
+
+        <div class="bip-joke-strip" id="jokeStrip">
+            <div class="bip-joke-icon">⚙️</div>
+            <div class="bip-joke-text" id="jokeText">Warming up the threat intel telescope…</div>
+        </div>
+
+        <div class="bip-stats" style="margin-top:18px;">
+            <div class="bip-stat total"><div class="bip-stat-label">Total</div><div class="bip-stat-value" id="statTotal">0</div></div>
+            <div class="bip-stat high"><div class="bip-stat-label">High Risk</div><div class="bip-stat-value" id="statHigh">0</div></div>
+            <div class="bip-stat med"><div class="bip-stat-label">Suspicious</div><div class="bip-stat-value" id="statMed">0</div></div>
+            <div class="bip-stat clean"><div class="bip-stat-label">Clean</div><div class="bip-stat-value" id="statClean">0</div></div>
+            <div class="bip-stat err"><div class="bip-stat-label">Errors</div><div class="bip-stat-value" id="statErr">0</div></div>
+        </div>
+
+        <div class="bip-filter">
+            <input type="text" id="filterInput" class="bip-input" placeholder="🔍 filter by IP, ASN, country…" style="flex:1; min-width:240px;">
+            <select id="threatFilter" class="bip-select">
+                <option value="all">All threat levels</option>
+                <option value="HIGH RISK">🔴 High Risk only</option>
+                <option value="SUSPICIOUS">🟡 Suspicious only</option>
+                <option value="CLEAN">🟢 Clean only</option>
+                <option value="ERROR">⚪ Errors only</option>
+            </select>
+            <button id="downloadBtn" class="bip-btn" disabled>⬇️ Download Excel</button>
+        </div>
+
+        <div class="bip-table-wrap">
+            <table class="bip-table" id="resultsTable">
+                <thead>
+                    <tr>
+                        <th data-sort="ip">IP</th>
+                        <th data-sort="threat_level">Threat</th>
+                        <th data-sort="malicious">Mal</th>
+                        <th data-sort="suspicious">Susp</th>
+                        <th data-sort="harmless">Harm</th>
+                        <th data-sort="undetected">Undet</th>
+                        <th data-sort="reputation">Rep</th>
+                        <th data-sort="asn">ASN</th>
+                        <th data-sort="as_owner">AS Owner</th>
+                        <th data-sort="country">Country</th>
+                        <th data-sort="threat_label">Label</th>
+                        <th>VT</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsBody"></tbody>
+            </table>
+            <div class="bip-empty" id="emptyHint" style="display:none;">No rows match your filter.</div>
+        </div>
+    </div>
+
+</div>
+
+{% include '_chat_widget.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="{{ url_for('static', filename='js/chat_widget.js') }}"></script>
+<script>
+(function() {
+    'use strict';
+
+    const stepUpload   = document.getElementById('step-upload');
+    const dropZone     = document.getElementById('dropZone');
+    const fileInput    = document.getElementById('fileInput');
+    const uploadStatus = document.getElementById('uploadStatus');
+    const uploadCollapsedSummary = document.getElementById('uploadCollapsedSummary');
+    const uploadCollapsedText = document.getElementById('uploadCollapsedText');
+    const uploadChangeBtn = document.getElementById('uploadChangeBtn');
+    const stepColumn   = document.getElementById('step-column');
+    const stepResults  = document.getElementById('step-results');
+    const columnSel    = document.getElementById('columnSelect');
+    const columnHint   = document.getElementById('columnHint');
+    const previewHead  = document.getElementById('previewHeadRow');
+    const previewBody  = document.getElementById('previewBody');
+    const previewTruncated = document.getElementById('previewTruncated');
+    const startBtn     = document.getElementById('startBtn');
+    const startStatus  = document.getElementById('startStatus');
+    const resetBtn     = document.getElementById('resetBtn');
+    const progressBar  = document.getElementById('progressBar');
+    const progressCnt  = document.getElementById('progressCount');
+    const progressLbl  = document.getElementById('progressLabel');
+    const resultsBody  = document.getElementById('resultsBody');
+    const downloadBtn  = document.getElementById('downloadBtn');
+    const filterInput  = document.getElementById('filterInput');
+    const threatFilter = document.getElementById('threatFilter');
+    const emptyHint    = document.getElementById('emptyHint');
+    const jokeText     = document.getElementById('jokeText');
+
+    const COLUMNS = ['ip','threat_level','malicious','suspicious','harmless','undetected',
+                     'reputation','asn','as_owner','country','threat_label','vt_link'];
+
+    // ── Rotating cyber jokes during enrichment ─────────────────────────
+    const JOKES = [
+        "Why did the IP address go to therapy? It couldn't handle its connection issues.",
+        "What's a hacker's favorite season? Phishing season. 🎣",
+        "I told my firewall a joke. It blocked it.",
+        "Why don't packets like Mondays? Too many retransmissions.",
+        "A SOC analyst walks into a bar. Then SIEMs it down. 🍺",
+        "Why was the IP banished? Bad reputation… 4 malicious votes.",
+        "What did 0.0.0.0 say to 127.0.0.1? \"There's no place like home.\"",
+        "I'd tell you a UDP joke but you might not get it.",
+        "How does an attacker stay calm? They IP-and-out, IP-and-out…",
+        "Two bytes meet. The first byte asks, \"Are you ill?\" The second says, \"No, just feeling a bit off.\"",
+        "Why did the DNS request break up with the IP? It had commitment issues — kept resolving differently.",
+        "Tier-1 analyst's favorite emoji: 🚨. Tier-3's favorite: 🤷.",
+        "If you can't block 'em, alert on 'em.",
+        "What do you call a rogue subnet? /24 hours of regret.",
+        "VirusTotal walks into a bar. 73 engines respond. 12 are wrong.",
+        "Phishing: when the URL goes for the throat.",
+        "Asked the IP for its alibi. It claimed to be in 4 countries at once.",
+        "How many SOC analysts does it take to change a lightbulb? It depends on the alert priority.",
+        "Why did Bob the BGP route disappear? He got withdrawn from polite society.",
+        "A botnet, a C2, and a beacon walk into a SIEM. The SIEM says 'I've seen this one before.'",
+        "Reputation score: it's like a credit score, but for being mean on the internet.",
+        "Threat intel feed: now with 80% more false positives! Limited time offer.",
+        "I'm not saying it's malware, but every AV vendor disagrees with my optimism.",
+        "Detected? No. Undetected? Also no. Schrödinger's IP.",
+        "Why did the IP go on a diet? Too many fat fingers in its octets.",
+        "Decrypting jokes… ETA: 4 trillion years.",
+    ];
+    let jokeIdx = Math.floor(Math.random() * JOKES.length);
+    let jokeTimer = null;
+    function rotateJoke() {
+        jokeText.classList.add('fading');
+        setTimeout(() => {
+            jokeIdx = (jokeIdx + 1) % JOKES.length;
+            jokeText.textContent = JOKES[jokeIdx];
+            jokeText.classList.remove('fading');
+        }, 350);
+    }
+    function startJokes() {
+        jokeText.textContent = JOKES[jokeIdx];
+        if (jokeTimer) clearInterval(jokeTimer);
+        jokeTimer = setInterval(rotateJoke, 5000);
+    }
+    function stopJokes() {
+        if (jokeTimer) { clearInterval(jokeTimer); jokeTimer = null; }
+    }
+
+    let jobId = null;
+    let originalName = '';
+    let chosenColumn = '';
+    let previewColumns = [];
+    let results = [];
+    let sortKey = null;
+    let sortDir = 'asc';
+    let activeSource = null;
+
+    // ── Upload ────────────────────────────────────────────────────────
+    ['dragover','dragenter'].forEach(ev => dropZone.addEventListener(ev, e => {
+        e.preventDefault(); dropZone.classList.add('dragging');
+    }));
+    ['dragleave','drop'].forEach(ev => dropZone.addEventListener(ev, e => {
+        e.preventDefault(); dropZone.classList.remove('dragging');
+    }));
+    dropZone.addEventListener('drop', e => {
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', e => {
+        if (e.target.files && e.target.files[0]) handleFile(e.target.files[0]);
+    });
+
+    function handleFile(file) {
+        expandUploadCard();
+        uploadStatus.style.display = 'block';
+        uploadStatus.innerHTML = `<span style="opacity:.8;">⏳ Uploading ${file.name}…</span>`;
+        const form = new FormData();
+        form.append('file', file);
+        fetch('/api/bulk-ip-reputation/upload', { method: 'POST', body: form })
+            .then(r => r.json().then(data => ({ ok: r.ok, data })))
+            .then(({ ok, data }) => {
+                if (!ok || !data.success) {
+                    renderUploadError(data);
+                    return;
+                }
+                originalName = data.original_name || file.name;
+                previewColumns = data.columns || [];
+
+                uploadStatus.innerHTML = '';
+                uploadStatus.style.display = 'none';
+
+                populateColumns(previewColumns, data.suggested_column, data.column_scores || {});
+                renderPreview(previewColumns, data.rows || [], data.suggested_column);
+                if (data.rows_truncated) {
+                    previewTruncated.style.display = 'block';
+                    previewTruncated.innerHTML = `Showing first <strong>${(data.rows || []).length.toLocaleString()}</strong> rows of <strong>${data.row_count.toLocaleString()}</strong>. Edits beyond the preview are ignored — only the rows shown here will be scanned.`;
+                } else {
+                    previewTruncated.style.display = 'none';
+                }
+
+                collapseUploadCard({
+                    fileName: originalName,
+                    rowCount: data.row_count,
+                    headerDetected: data.header_detected,
+                });
+
+                stepColumn.style.display = 'block';
+                stepResults.style.display = 'none';
+                stepColumn.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            })
+            .catch(err => { renderUploadError({ error: err.message || String(err), guidance: true, sample_url: '/api/bulk-ip-reputation/sample' }); });
+    }
+
+    function collapseUploadCard({ fileName, rowCount, headerDetected }) {
+        stepUpload.classList.add('bip-collapsed');
+        const headerBadge = headerDetected
+            ? '<span style="color: var(--bip-teal);">📑 header detected</span>'
+            : '<span style="color: var(--bip-amber);">⚠️ no header</span>';
+        uploadCollapsedText.innerHTML = `<code>${fileName}</code> · <strong>${(rowCount || 0).toLocaleString()}</strong> rows · ${headerBadge}`;
+        uploadCollapsedSummary.style.display = 'inline-flex';
+    }
+    function expandUploadCard() {
+        stepUpload.classList.remove('bip-collapsed');
+        uploadCollapsedSummary.style.display = 'none';
+    }
+    uploadChangeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();  // don't double-trigger via the card click
+        expandUploadCard();
+        fileInput.value = '';
+        stepColumn.style.display = 'none';
+        stepUpload.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    // Whole collapsed card is clickable to re-expand
+    stepUpload.addEventListener('click', () => {
+        if (!stepUpload.classList.contains('bip-collapsed')) return;
+        expandUploadCard();
+        stepUpload.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    function renderUploadError(data) {
+        const msg = (data && data.error) || 'Upload failed';
+        const showGuidance = data && data.guidance;
+        const sampleUrl = (data && data.sample_url) || '/api/bulk-ip-reputation/sample';
+        if (!showGuidance) {
+            uploadStatus.innerHTML = `❌ ${msg}`;
+            return;
+        }
+        uploadStatus.innerHTML = `
+            <div class="bip-upload-error">
+                <div class="bip-err-title">❌ ${msg}</div>
+                <div>Make sure your file matches one of these shapes:</div>
+                <ul>
+                    <li>A single column of IP addresses (header row is optional).</li>
+                    <li>Multiple columns where at least one column is mostly IPs — we'll pick it.</li>
+                    <li>Saved as <code>.xlsx</code> or <code>.xls</code> (Excel — preferred) or <code>.csv</code>. Not <code>.numbers</code> / <code>.ods</code>.</li>
+                    <li>No merged cells, no images, no formula errors (<code>#REF!</code>, <code>#N/A</code>) in the IP column.</li>
+                </ul>
+                <a class="bip-sample-link" href="${sampleUrl}">⬇️ Download a sample Excel file</a>
+            </div>`;
+    }
+
+    function populateColumns(columns, suggested, scores) {
+        columnSel.innerHTML = '';
+        columns.forEach(col => {
+            const opt = document.createElement('option');
+            opt.value = col;
+            const score = scores[col];
+            const pct = score != null ? ` (${Math.round(score*100)}% IP-like)` : '';
+            opt.textContent = col + pct;
+            columnSel.appendChild(opt);
+        });
+        if (suggested && columns.includes(suggested)) {
+            columnSel.value = suggested;
+            chosenColumn = suggested;
+            columnHint.innerHTML = `<span style="color: var(--bip-green);">✓</span> Auto-detected: <strong>${suggested}</strong>`;
+        } else {
+            chosenColumn = columnSel.value;
+            columnHint.textContent = '⚠️ No obvious IP column — pick one manually.';
+        }
+    }
+    columnSel.addEventListener('change', () => {
+        chosenColumn = columnSel.value;
+        highlightPreviewIpColumn();
+        validateAllPreviewIpCells();
+    });
+
+    // ── Editable preview ─────────────────────────────────────────────
+    function renderPreview(columns, rows, suggestedColumn) {
+        previewHead.innerHTML = '';
+        previewBody.innerHTML = '';
+
+        columns.forEach(col => {
+            const th = document.createElement('th');
+            th.textContent = col;
+            th.dataset.col = col;
+            previewHead.appendChild(th);
+        });
+        const thAction = document.createElement('th');
+        thAction.className = 'bip-row-actions';
+        thAction.title = 'Delete row';
+        thAction.textContent = '';
+        previewHead.appendChild(thAction);
+
+        rows.forEach(row => {
+            const tr = document.createElement('tr');
+            columns.forEach(col => {
+                const td = document.createElement('td');
+                td.dataset.col = col;
+                const cell = document.createElement('span');
+                cell.className = 'bip-cell';
+                cell.contentEditable = 'true';
+                cell.spellcheck = false;
+                cell.textContent = row[col] != null ? String(row[col]) : '';
+                cell.addEventListener('input', onCellEdit);
+                td.appendChild(cell);
+                tr.appendChild(td);
+            });
+            const tdAct = document.createElement('td');
+            tdAct.className = 'bip-row-actions';
+            const del = document.createElement('button');
+            del.type = 'button';
+            del.className = 'bip-row-del';
+            del.textContent = '✕';
+            del.title = 'Delete row';
+            del.addEventListener('click', () => tr.remove());
+            tdAct.appendChild(del);
+            tr.appendChild(tdAct);
+            previewBody.appendChild(tr);
+        });
+
+        highlightPreviewIpColumn();
+        validateAllPreviewIpCells();
+    }
+
+    function highlightPreviewIpColumn() {
+        const headers = previewHead.querySelectorAll('th');
+        headers.forEach(th => th.classList.toggle('bip-preview-ip-col', th.dataset.col === chosenColumn));
+        previewBody.querySelectorAll('td[data-col]').forEach(td => {
+            td.classList.toggle('bip-cell-ip', td.dataset.col === chosenColumn);
+        });
+    }
+
+    function onCellEdit(e) {
+        const td = e.target.closest('td');
+        if (td && td.dataset.col === chosenColumn) validateIpCell(e.target);
+    }
+
+    function validateIpCell(cell) {
+        const value = cell.textContent.trim();
+        if (!value) { cell.classList.remove('invalid'); return; }
+        cell.classList.toggle('invalid', !looksLikeIp(value));
+    }
+    function validateAllPreviewIpCells() {
+        previewBody.querySelectorAll('td.bip-cell-ip .bip-cell').forEach(validateIpCell);
+    }
+
+    // Permissive IP check — strips port / CIDR like the server does.
+    function looksLikeIp(raw) {
+        let s = (raw || '').trim();
+        if (!s) return false;
+        if (s.includes('/')) s = s.split('/', 1)[0].trim();
+        // [v6]:port
+        if (s.startsWith('[')) {
+            const end = s.indexOf(']');
+            if (end !== -1) s = s.slice(1, end);
+        } else if (s.indexOf(':') !== -1 && s.indexOf('.') !== -1 && s.split(':').length === 2) {
+            s = s.split(':', 1)[0];
+        }
+        // IPv4
+        const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(s);
+        if (v4) return v4.slice(1).every(o => { const n = +o; return n >= 0 && n <= 255; });
+        // IPv6 (loose — must contain ':' and only valid hex chars / "::")
+        return /^[0-9a-fA-F:]+$/.test(s) && s.includes(':');
+    }
+
+    function collectEditedIps() {
+        const out = [];
+        previewBody.querySelectorAll('tr').forEach(tr => {
+            const cell = tr.querySelector(`td[data-col="${cssEscape(chosenColumn)}"] .bip-cell`);
+            if (!cell) return;
+            const value = cell.textContent.trim();
+            if (value) out.push(value);
+        });
+        return out;
+    }
+    function cssEscape(s) {
+        return (window.CSS && CSS.escape) ? CSS.escape(s) : String(s).replace(/(["\\\]\[#.:>+~*^$|?()=!{}])/g, '\\$1');
+    }
+
+    resetBtn.addEventListener('click', resetAll);
+    function resetAll() {
+        if (activeSource) { activeSource.close(); activeSource = null; }
+        stopJokes();
+        jobId = null;
+        chosenColumn = '';
+        previewColumns = [];
+        results = [];
+        fileInput.value = '';
+        uploadStatus.style.display = 'none';
+        stepColumn.style.display = 'none';
+        stepResults.style.display = 'none';
+        previewHead.innerHTML = '';
+        previewBody.innerHTML = '';
+        previewTruncated.style.display = 'none';
+        resultsBody.innerHTML = '';
+        progressBar.style.width = '0%';
+        progressCnt.textContent = '0 / 0';
+        downloadBtn.disabled = true;
+        expandUploadCard();
+        updateStats();
+    }
+
+    // ── Run lookups ───────────────────────────────────────────────────
+    startBtn.addEventListener('click', () => {
+        chosenColumn = columnSel.value;
+        if (!chosenColumn) return;
+
+        const ips = collectEditedIps();
+        if (!ips.length) {
+            alert('No IPs to scan — every row in the IP column is empty.');
+            return;
+        }
+
+        startStatus.style.display = 'none';
+        startBtn.disabled = true;
+        const originalLabel = startBtn.innerHTML;
+        startBtn.innerHTML = '⏳ Preparing…';
+
+        fetch('/api/bulk-ip-reputation/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ ips }),
+        })
+            .then(r => r.json().then(d => ({ status: r.status, ok: r.ok, data: d }))
+                            .catch(() => ({ status: r.status, ok: r.ok, data: {} })))
+            .then(({ status, ok, data }) => {
+                if (status === 401 || data.error === 'login_required') {
+                    showLoginPrompt();
+                    return;
+                }
+                if (!ok || !data.success) {
+                    throw new Error(data.error || 'Could not start lookup');
+                }
+                jobId = data.job_id;
+                openStream(data.total);
+            })
+            .catch(err => {
+                alert(`Could not start lookup: ${err.message || err}`);
+            })
+            .finally(() => {
+                startBtn.disabled = false;
+                startBtn.innerHTML = originalLabel;
+            });
+    });
+
+    function showLoginPrompt() {
+        const next = encodeURIComponent('/bulk-ip-reputation');
+        startStatus.style.display = 'block';
+        startStatus.innerHTML =
+            '🔒 <strong>Please log in to run lookups.</strong> Running VirusTotal lookups uses the team quota, so it\'s tied to a signed-in user. ' +
+            `<a href="/login?next=${next}" style="font-weight:700; text-decoration:underline;">Log in</a> and your edited list will be right here when you come back.`;
+    }
+
+    function openStream(total) {
+        results = [];
+        resultsBody.innerHTML = '';
+        stepResults.style.display = 'block';
+        downloadBtn.disabled = true;
+        progressLbl.textContent = 'Looking up IPs…';
+        progressBar.style.width = '0%';
+        progressCnt.textContent = `0 / ${total}`;
+        updateStats();
+        startJokes();
+        stepResults.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+        const url = '/api/bulk-ip-reputation/stream?job_id=' + encodeURIComponent(jobId);
+        if (activeSource) activeSource.close();
+        activeSource = new EventSource(url);
+
+        activeSource.onmessage = (ev) => {
+            let msg;
+            try { msg = JSON.parse(ev.data); } catch { return; }
+            if (msg.type === 'start') {
+                progressCnt.textContent = `0 / ${msg.total}`;
+            } else if (msg.type === 'result') {
+                results.push(msg.row);
+                appendRow(msg.row);
+                const pct = msg.total ? (msg.done / msg.total) * 100 : 0;
+                progressBar.style.width = pct + '%';
+                progressCnt.textContent = `${msg.done} / ${msg.total}`;
+                updateStats();
+            } else if (msg.type === 'complete') {
+                progressLbl.textContent = '✅ Lookup complete';
+                progressBar.style.width = '100%';
+                downloadBtn.disabled = results.length === 0;
+                stopJokes();
+                jokeText.textContent = `🎉 Scanned ${results.length} IPs. Download the Excel report or ask the chat widget what you should do next.`;
+                activeSource.close(); activeSource = null;
+            } else if (msg.type === 'error') {
+                progressLbl.textContent = '⚠️ ' + (msg.error || 'Lookup failed');
+                stopJokes();
+                activeSource.close(); activeSource = null;
+            }
+        };
+        activeSource.onerror = () => {
+            if (activeSource && activeSource.readyState === EventSource.CLOSED) {
+                stopJokes();
+                activeSource = null;
+            }
+        };
+    }
+
+    // ── Render ────────────────────────────────────────────────────────
+    function badgeClass(level) {
+        if (!level) return 'err';
+        if (level === 'HIGH RISK' || level === 'MALWARE DETECTED') return 'high';
+        if (level === 'SUSPICIOUS') return 'med';
+        if (level === 'CLEAN') return 'clean';
+        return 'err';
+    }
+
+    function renderRow(row) {
+        const tr = document.createElement('tr');
+        tr.dataset.threat = row.error ? 'ERROR' : (row.threat_level || 'CLEAN');
+        if (!row.error) {
+            if (row.threat_level === 'HIGH RISK' || row.threat_level === 'MALWARE DETECTED') tr.classList.add('row-high');
+            else if (row.threat_level === 'SUSPICIOUS') tr.classList.add('row-med');
+        }
+        const cells = [
+            `<strong>${row.ip}</strong>`,
+            row.error
+                ? `<span class="bip-badge err">ERROR</span>`
+                : `<span class="bip-badge ${badgeClass(row.threat_level)}">${row.threat_level || 'CLEAN'}</span>${row.from_cache ? '<span class="bip-badge cache">cache</span>' : ''}`,
+            row.error ? '—' : (row.malicious ?? 0),
+            row.error ? '—' : (row.suspicious ?? 0),
+            row.error ? '—' : (row.harmless ?? 0),
+            row.error ? '—' : (row.undetected ?? 0),
+            row.error ? '—' : (row.reputation ?? 0),
+            row.error ? '—' : (row.asn || ''),
+            row.error ? row.error : (row.as_owner || ''),
+            row.error ? '—' : (row.country || ''),
+            row.error ? '—' : (row.threat_label || ''),
+            row.error
+                ? ''
+                : `<a class="bip-link" target="_blank" rel="noopener" href="${row.vt_link}">↗</a>`,
+        ];
+        tr.innerHTML = cells.map(c => `<td>${c}</td>`).join('');
+        return tr;
+    }
+
+    function appendRow(row) {
+        resultsBody.appendChild(renderRow(row));
+        applyFilter();
+    }
+
+    function rerender() {
+        resultsBody.innerHTML = '';
+        results.forEach(r => resultsBody.appendChild(renderRow(r)));
+        applyFilter();
+    }
+
+    // ── Sorting ───────────────────────────────────────────────────────
+    document.querySelectorAll('th[data-sort]').forEach(th => {
+        th.addEventListener('click', () => {
+            const key = th.dataset.sort;
+            if (sortKey === key) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+            else { sortKey = key; sortDir = 'asc'; }
+            results.sort((a, b) => {
+                const va = a[key], vb = b[key];
+                if (va == null && vb == null) return 0;
+                if (va == null) return 1;
+                if (vb == null) return -1;
+                if (typeof va === 'number' && typeof vb === 'number') return sortDir === 'asc' ? va - vb : vb - va;
+                return sortDir === 'asc'
+                    ? String(va).localeCompare(String(vb))
+                    : String(vb).localeCompare(String(va));
+            });
+            rerender();
+        });
+    });
+
+    // ── Filtering ─────────────────────────────────────────────────────
+    filterInput.addEventListener('input', applyFilter);
+    threatFilter.addEventListener('change', applyFilter);
+    function applyFilter() {
+        const term = filterInput.value.trim().toLowerCase();
+        const tfilt = threatFilter.value;
+        let visible = 0;
+        Array.from(resultsBody.children).forEach(tr => {
+            const text = tr.textContent.toLowerCase();
+            const threat = tr.dataset.threat;
+            const matchText = !term || text.includes(term);
+            const matchThreat = tfilt === 'all' || threat === tfilt;
+            tr.style.display = (matchText && matchThreat) ? '' : 'none';
+            if (matchText && matchThreat) visible++;
+        });
+        emptyHint.style.display = visible === 0 && results.length > 0 ? 'block' : 'none';
+    }
+
+    // ── Stats ─────────────────────────────────────────────────────────
+    function updateStats() {
+        let high = 0, med = 0, clean = 0, err = 0;
+        results.forEach(r => {
+            if (r.error) err++;
+            else if (r.threat_level === 'HIGH RISK' || r.threat_level === 'MALWARE DETECTED') high++;
+            else if (r.threat_level === 'SUSPICIOUS') med++;
+            else clean++;
+        });
+        document.getElementById('statTotal').textContent = results.length;
+        document.getElementById('statHigh').textContent  = high;
+        document.getElementById('statMed').textContent   = med;
+        document.getElementById('statClean').textContent = clean;
+        document.getElementById('statErr').textContent   = err;
+    }
+
+    // ── Excel download (server-formatted) ────────────────────────────
+    downloadBtn.addEventListener('click', () => {
+        if (!results.length) return;
+        const originalText = downloadBtn.innerHTML;
+        downloadBtn.disabled = true;
+        downloadBtn.innerHTML = '⏳ Building Excel…';
+
+        fetch('/api/bulk-ip-reputation/export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                original_name: originalName,
+                column: chosenColumn,
+                rows: results,
+            }),
+        })
+            .then(r => {
+                if (!r.ok) return r.json().then(d => Promise.reject(d.error || 'Export failed'));
+                return r.blob();
+            })
+            .then(blob => {
+                const base = (originalName || 'ip_reputation').replace(/\.[^.]+$/, '');
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `${base}_vt_reputation.xlsx`;
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                URL.revokeObjectURL(a.href);
+            })
+            .catch(err => alert(`Download failed: ${err}`))
+            .finally(() => {
+                downloadBtn.disabled = false;
+                downloadBtn.innerHTML = originalText;
+            });
+    });
+
+    // ── Chat widget context ──────────────────────────────────────────
+    function buildChatContext() {
+        if (!results.length) {
+            return 'No IP reputation results have been loaded on this page yet. Tell the user to upload a file and run the lookup first.';
+        }
+        let high = 0, med = 0, clean = 0, err = 0, cached = 0;
+        const byCountry = {}; const byAsn = {}; const byLabel = {};
+        const highRiskList = []; const suspiciousList = [];
+        results.forEach(r => {
+            if (r.from_cache) cached++;
+            if (r.error) { err++; return; }
+            if (r.threat_level === 'HIGH RISK' || r.threat_level === 'MALWARE DETECTED') {
+                high++; highRiskList.push(r);
+            } else if (r.threat_level === 'SUSPICIOUS') {
+                med++; suspiciousList.push(r);
+            } else {
+                clean++;
+            }
+            if (r.country)     byCountry[r.country] = (byCountry[r.country] || 0) + 1;
+            if (r.as_owner)    byAsn[r.as_owner]    = (byAsn[r.as_owner]    || 0) + 1;
+            if (r.threat_label) byLabel[r.threat_label] = (byLabel[r.threat_label] || 0) + 1;
+        });
+        const topN = (obj, n) => Object.entries(obj).sort((a,b)=>b[1]-a[1]).slice(0, n)
+            .map(([k,v]) => `${k} (${v})`).join(', ');
+        const rowLines = (list, limit) => list.slice(0, limit).map(r =>
+            `- ${r.ip} — mal=${r.malicious}, susp=${r.suspicious}, asn=${r.asn||'?'}, owner=${r.as_owner||'?'}, country=${r.country||'?'}, label=${r.threat_label||'-'}`
+        ).join('\n');
+
+        return [
+            `# Bulk IP Reputation Results`,
+            `Source file: ${originalName || '(unknown)'}`,
+            `IP column: ${chosenColumn || '(unknown)'}`,
+            ``,
+            `## Summary`,
+            `- Total IPs analyzed: ${results.length}`,
+            `- High Risk: ${high}`,
+            `- Suspicious: ${med}`,
+            `- Clean: ${clean}`,
+            `- Errors (not found / lookup failed): ${err}`,
+            `- Served from 24h cache: ${cached}`,
+            ``,
+            `## Top countries: ${topN(byCountry, 5) || 'n/a'}`,
+            `## Top AS owners: ${topN(byAsn, 5) || 'n/a'}`,
+            `## Top threat labels: ${topN(byLabel, 5) || 'n/a'}`,
+            ``,
+            `## High Risk IPs (up to 25)`,
+            high ? rowLines(highRiskList, 25) : '(none)',
+            ``,
+            `## Suspicious IPs (up to 25)`,
+            med ? rowLines(suspiciousList, 25) : '(none)',
+        ].join('\n');
+    }
+
+    initChatWidget({
+        title: 'Ask about this dataset',
+        greeting: 'Hi! Upload a file and I can answer questions about the VirusTotal results — e.g. "How many IPs are bad?" or "Show me the top ASNs."',
+        loadingMessages: [
+            'Counting bad reputations…',
+            'Grouping by ASN…',
+            'Summarizing country distribution…',
+            'Ranking the worst offenders…',
+            'Cross-referencing threat labels…',
+        ],
+        chips: [
+            { label: 'How many IPs are bad?', q: 'How many IPs in my dataset have a malicious or suspicious reputation?' },
+            { label: 'Top offenders',         q: 'List the top 10 highest-risk IPs in this dataset, ordered by detection count.' },
+            { label: 'Country breakdown',     q: 'Which countries do the malicious IPs come from?' },
+            { label: 'Recommended actions',   q: 'Based on these results, what blocking or hunting actions should I take?' },
+        ],
+        getContext: buildChatContext,
+    });
+})();
+</script>
+{% endblock %}

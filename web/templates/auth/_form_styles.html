@@ -58,27 +58,34 @@ body.dark-mode .auth-shell p.lead { color: #94a3b8; }
 }
 body.dark-mode .auth-shell label { color: #94a3b8; }
 
-.auth-shell input[type=email], .auth-shell input[type=password], .auth-shell input[type=text], .auth-shell select {
+.auth-shell input[type=email], .auth-shell input[type=password], .auth-shell input[type=text], .auth-shell select, .auth-shell textarea {
     width: 100%; padding: 11px 13px; box-sizing: border-box;
     background: var(--bg-primary, #f8fafc); color: var(--text-primary, #0f172a);
     border: 1px solid rgba(15,23,42,0.14); border-radius: 8px; font-size: 14px;
     transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
-.auth-shell input:focus, .auth-shell select:focus {
+.auth-shell textarea {
+    font-family: inherit; line-height: 1.5; min-height: 84px; resize: vertical;
+}
+.auth-shell input:focus, .auth-shell select:focus, .auth-shell textarea:focus {
     outline: none;
     border-color: #2563eb;
     box-shadow: 0 0 0 3px rgba(37,99,235,0.18);
     background: #ffffff;
 }
+.auth-shell .field-hint { display: block; margin: 6px 0 0; font-size: 11px; color: var(--text-secondary, #94a3b8); letter-spacing: 0; text-transform: none; font-weight: 400; }
+body.dark-mode .auth-shell .field-hint { color: #94a3b8; }
 body.dark-mode .auth-shell input[type=email],
 body.dark-mode .auth-shell input[type=password],
 body.dark-mode .auth-shell input[type=text],
-body.dark-mode .auth-shell select {
+body.dark-mode .auth-shell select,
+body.dark-mode .auth-shell textarea {
     background: rgba(15,23,42,0.55); color: #f1f5f9;
     border-color: rgba(148,163,184,0.25);
 }
 body.dark-mode .auth-shell input:focus,
-body.dark-mode .auth-shell select:focus {
+body.dark-mode .auth-shell select:focus,
+body.dark-mode .auth-shell textarea:focus {
     border-color: #6366f1;
     box-shadow: 0 0 0 3px rgba(99,102,241,0.30);
     background: rgba(15,23,42,0.85);

@@ -3,6 +3,8 @@
 {% set page_title_left_icon = '📂' %}
 {% set page_title_right_icon = '🗂️' %}
 
+{% block body_classes %}ap-body{% endblock %}
+
 {% block extra_css %}
 <style>
 /* All-Pages-palette scrollbar — light mode, thick & multi-colored from the six section accents
@@ -124,6 +126,9 @@ html { scrollbar-gutter: stable; }
 .ap-section[data-accent="purple"] { --ap-accent: #7c3aed; --ap-accent-bg-a: rgba(124,58,237,0.08); --ap-accent-bg-b: rgba(124,58,237,0.02); --ap-accent-border: rgba(124,58,237,0.22); --ap-accent-shadow: rgba(124,58,237,0.22); }
 .ap-section[data-accent="gold"]   { --ap-accent: #ca8a04; --ap-accent-bg-a: rgba(202,138,4,0.10); --ap-accent-bg-b: rgba(202,138,4,0.02); --ap-accent-border: rgba(202,138,4,0.25); --ap-accent-shadow: rgba(202,138,4,0.25); }
 .ap-section[data-accent="teal"]   { --ap-accent: #0d9488; --ap-accent-bg-a: rgba(13,148,136,0.10); --ap-accent-bg-b: rgba(13,148,136,0.02); --ap-accent-border: rgba(13,148,136,0.22); --ap-accent-shadow: rgba(13,148,136,0.22); }
+.ap-section[data-accent="cyan"]   { --ap-accent: #0891b2; --ap-accent-bg-a: rgba(8,145,178,0.10); --ap-accent-bg-b: rgba(8,145,178,0.02); --ap-accent-border: rgba(8,145,178,0.22); --ap-accent-shadow: rgba(8,145,178,0.22); }
+.ap-section[data-accent="indigo"] { --ap-accent: #4f46e5; --ap-accent-bg-a: rgba(79,70,229,0.09); --ap-accent-bg-b: rgba(79,70,229,0.02); --ap-accent-border: rgba(79,70,229,0.22); --ap-accent-shadow: rgba(79,70,229,0.22); }
+.ap-section[data-accent="red"]    { --ap-accent: #dc2626; --ap-accent-bg-a: rgba(220,38,38,0.09); --ap-accent-bg-b: rgba(220,38,38,0.02); --ap-accent-border: rgba(220,38,38,0.22); --ap-accent-shadow: rgba(220,38,38,0.22); }
 
 /* Recent + Frequent sections */
 #ap-recent, #ap-frequent { display: none; }
@@ -180,6 +185,41 @@ body.dark-mode ::-webkit-scrollbar-thumb:hover {
     background: linear-gradient(180deg, #c4b5fd 0%, #7dd3fc 20%, #5eead4 40%, #6ee7b7 60%, #fdba74 80%, #fcd34d 100%);
     background-clip: padding-box;
 }
+
+/* --- Softer backdrop (no more flat white) — woven from the six section accents --- */
+body.ap-body { background:
+    radial-gradient(900px 480px at 0% -6%, rgba(202,138,4,.11) 0%, transparent 55%),
+    radial-gradient(900px 480px at 100% -2%, rgba(124,58,237,.11) 0%, transparent 52%),
+    radial-gradient(1000px 560px at 12% 108%, rgba(0,166,81,.11) 0%, transparent 55%),
+    radial-gradient(1000px 560px at 92% 118%, rgba(13,148,136,.11) 0%, transparent 55%),
+    radial-gradient(1100px 620px at 50% 50%, rgba(0,70,173,.05) 0%, transparent 60%),
+    linear-gradient(160deg, #f3f7fc 0%, #f6f4fb 46%, #f1f9f5 100%) !important;
+    background-attachment: fixed !important; min-height: 100vh; }
+body.ap-body.dark-mode { background:
+    radial-gradient(900px 480px at 0% -6%, rgba(252,211,77,.08) 0%, transparent 55%),
+    radial-gradient(900px 480px at 100% 0%, rgba(196,181,253,.08) 0%, transparent 52%),
+    radial-gradient(1000px 560px at 90% 118%, rgba(94,234,212,.07) 0%, transparent 55%),
+    linear-gradient(135deg, #0a1020 0%, #0f1830 50%, #0a1422 100%) !important; }
+
+/* Frosted-glass cards so they lift off the new backdrop (light mode only;
+   dark-mode card rules above already handle dark). */
+body.ap-body:not(.dark-mode) .ap-card {
+    background: linear-gradient(135deg, rgba(255,255,255,.74), rgba(255,255,255,.56)),
+                linear-gradient(135deg, var(--ap-accent-bg-a, rgba(0,70,173,0.06)) 0%, var(--ap-accent-bg-b, rgba(0,166,81,0.06)) 100%);
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    box-shadow: 0 4px 14px rgba(30,50,90,.07);
+}
+body.ap-body:not(.dark-mode) .ap-card:hover {
+    box-shadow: 0 10px 26px var(--ap-accent-shadow, rgba(0,70,173,0.20));
+}
+
+/* Gradient underline under each section title for a touch more flair */
+body.ap-body .ap-section-title { position: relative; padding-bottom: 9px; }
+body.ap-body .ap-section-title::after {
+    content: ''; position: absolute; left: 4px; bottom: 0; width: 100%; max-width: 320px; height: 3px;
+    border-radius: 3px; opacity: .6;
+    background: linear-gradient(90deg, var(--ap-accent, #475569) 0%, transparent 72%);
+}
 </style>
 {% endblock %}
 
@@ -209,6 +249,7 @@ body.dark-mode ::-webkit-scrollbar-thumb:hover {
         <div class="ap-section-title">📊 Dashboards & Analytics</div>
         <div class="ap-grid">
             <a href="/" target="_blank" class="ap-card"><span class="ap-card-icon">🏠</span><span class="ap-card-label">Home</span></a>
+            <a href="/automation-roi" target="_blank" class="ap-card"><span class="ap-card-icon">🛡️</span><span class="ap-card-label">Automation Coverage & ROI</span></a>
             <a href="/meaningful-metrics" target="_blank" class="ap-card"><span class="ap-card-icon">💹</span><span class="ap-card-label">Analytics</span></a>
             <a href="/shift-performance" target="_blank" class="ap-card"><span class="ap-card-icon">⚖️</span><span class="ap-card-label">Shift Performance</span></a>
             <a href="/epp-tagging-metrics" target="_blank" class="ap-card"><span class="ap-card-icon">🏷️</span><span class="ap-card-label">EPP Tagging Metrics</span></a>
@@ -224,7 +265,7 @@ body.dark-mode ::-webkit-scrollbar-thumb:hover {
     </div>
 
     <div class="ap-section" data-accent="green">
-        <div class="ap-section-title">📝 Forms</div>
+        <div class="ap-section-title">📝 Forms & Intake</div>
         <div class="ap-grid">
             <a href="/msoc-form" target="_blank" class="ap-card"><span class="ap-card-icon">📋️</span><span class="ap-card-label">MSOC Form</span></a>
             <a href="/speak-up-form" target="_blank" class="ap-card"><span class="ap-card-icon">📣</span><span class="ap-card-label">Speak Up Form</span></a>
@@ -232,47 +273,96 @@ body.dark-mode ::-webkit-scrollbar-thumb:hover {
             <a href="/travel-form" target="_blank" class="ap-card"><span class="ap-card-icon">✈️</span><span class="ap-card-label">Travel Form</span></a>
             <a href="/red-team-testing-form" target="_blank" class="ap-card"><span class="ap-card-icon">🧪</span><span class="ap-card-label">Red Team Testing</span></a>
             <a href="/ai-intake" target="_blank" class="ap-card"><span class="ap-card-icon">🤖</span><span class="ap-card-label">AI Project Intake</span></a>
-            <a href="/ai-intake-submissions" target="_blank" class="ap-card"><span class="ap-card-icon">📊</span><span class="ap-card-label">AI Intake Submissions</span></a>
-            <a href="/customer-assurance" target="_blank" class="ap-card"><span class="ap-card-icon">🛡️</span><span class="ap-card-label">Customer Assurance</span></a>
-            <a href="/customer-assurance/requests" target="_blank" class="ap-card"><span class="ap-card-icon">📋</span><span class="ap-card-label">Customer Assurance Queue</span></a>
             <a href="/ruai-screening" target="_blank" class="ap-card"><span class="ap-card-icon">⚖️</span><span class="ap-card-label">RUAI Screening</span></a>
-            <a href="/ruai-dashboard" target="_blank" class="ap-card"><span class="ap-card-icon">📋</span><span class="ap-card-label">RUAI Dashboard</span></a>
-            <a href="/oncall" target="_blank" class="ap-card"><span class="ap-card-icon">📞</span><span class="ap-card-label">On-Call Schedule</span></a>
-            <a href="/roster" target="_blank" class="ap-card"><span class="ap-card-icon">👥</span><span class="ap-card-label">Daily Roster</span></a>
-            <a href="/escalation-contacts" target="_blank" class="ap-card"><span class="ap-card-icon">📇</span><span class="ap-card-label">DnR Contacts</span></a>
-            <a href="/favorite-urls" target="_blank" class="ap-card"><span class="ap-card-icon">🔗</span><span class="ap-card-label">DnR URLs</span></a>
-            <a href="/docs-library" target="_blank" class="ap-card"><span class="ap-card-icon">📚</span><span class="ap-card-label">Docs Library</span></a>
-            <a href="/claude-code-with-local-models" target="_blank" class="ap-card"><span class="ap-card-icon">🤖</span><span class="ap-card-label">Claude Code with Local Models</span></a>
-            <a href="/bench-local" target="_blank" class="ap-card"><span class="ap-card-icon">📊</span><span class="ap-card-label">Local LLM Benchmarks</span></a>
-            <a href="/gitlab" target="_blank" class="ap-card"><span class="ap-card-icon">🦊</span><span class="ap-card-label">GitLab Onboarding</span></a>
-            <a href="/vibe-coding" target="_blank" class="ap-card"><span class="ap-card-icon">🎧</span><span class="ap-card-label">Vibe Coding Workshop</span></a>
-            <a href="/meeting-qa" target="_blank" class="ap-card"><span class="ap-card-icon">📝</span><span class="ap-card-label">Meeting Minutes QA</span></a>
-            <a href="/recap" target="_blank" class="ap-card"><span class="ap-card-icon">🎙️</span><span class="ap-card-label">Meeting Recap</span></a>
-            <a href="/wiki" target="_blank" class="ap-card"><span class="ap-card-icon">🧠</span><span class="ap-card-label">GDnR Wiki</span></a>
+        </div>
+    </div>
+
+    <div class="ap-section" data-accent="purple">
+        <div class="ap-section-title">🔭 Threat Intel & Hunting</div>
+        <div class="ap-grid">
+            <a href="/apt-other-names-search" target="_blank" class="ap-card"><span class="ap-card-icon">🔎</span><span class="ap-card-label">APT Other Names Search</span></a>
+            <a href="/domain-lookalike" target="_blank" class="ap-card"><span class="ap-card-icon">🌐</span><span class="ap-card-label">Domain Lookalike Detector</span></a>
+            <a href="/bulk-ip-reputation" target="_blank" class="ap-card"><span class="ap-card-icon">🔬</span><span class="ap-card-label">Bulk IP Reputation</span></a>
+            <a href="/person-of-interest" target="_blank" class="ap-card"><span class="ap-card-icon">🕵️</span><span class="ap-card-label">Person of Interest (OSINT)</span></a>
+            <a href="/hunt-workbench" target="_blank" class="ap-card"><span class="ap-card-icon">🔭</span><span class="ap-card-label">Threat Hunt Workbench</span></a>
+            <a href="/aj-threat-hunting" target="_blank" class="ap-card"><span class="ap-card-icon">🎯</span><span class="ap-card-label">AJ Threat Hunting</span></a>
+            <a href="/zero-hour" target="_blank" class="ap-card"><span class="ap-card-icon">⚡</span><span class="ap-card-label">Zero Hour Threat Modeler</span></a>
+            <a href="/snr" target="_blank" class="ap-card"><span class="ap-card-icon">🛰️</span><span class="ap-card-label">SNR — Signal to Noise</span></a>
+            <a href="/phishing-sentiment" target="_blank" class="ap-card"><span class="ap-card-icon">🎣</span><span class="ap-card-label">Phishing Sentiment Analysis</span></a>
         </div>
     </div>
 
     <div class="ap-section" data-accent="orange">
-        <div class="ap-section-title">🔧 Security Tools</div>
+        <div class="ap-section-title">🚨 Detection & Response</div>
         <div class="ap-grid">
-            <a href="/apt-other-names-search" target="_blank" class="ap-card"><span class="ap-card-icon">🔎</span><span class="ap-card-label">APT Other Names Search</span></a>
-            <a href="/domain-lookalike" target="_blank" class="ap-card"><span class="ap-card-icon">🌐</span><span class="ap-card-label">Domain Lookalike Detector</span></a>
-            <a href="/person-of-interest" target="_blank" class="ap-card"><span class="ap-card-icon">🕵️</span><span class="ap-card-label">Person of Interest (OSINT)</span></a>
-            <a href="/cribl-diagnostics" target="_blank" class="ap-card"><span class="ap-card-icon">📡</span><span class="ap-card-label">Cribl Edge Diagnostics</span></a>
+            <a href="/detection-as-code" target="_blank" class="ap-card"><span class="ap-card-icon">🚀</span><span class="ap-card-label">Detection-as-Code Pipeline</span></a>
+            <a href="/oe-detection" target="_blank" class="ap-card"><span class="ap-card-icon">🔍</span><span class="ap-card-label">OE Detection</span></a>
+            <a href="/tipper-automation" target="_blank" class="ap-card"><span class="ap-card-icon">📨</span><span class="ap-card-label">Tipper Automation</span></a>
+            <a href="/cs-advisories" target="_blank" class="ap-card"><span class="ap-card-icon">🚨</span><span class="ap-card-label">Cyber Security Advisories</span></a>
+            <a href="/vulnerability-deep-dive" target="_blank" class="ap-card"><span class="ap-card-icon">🔬</span><span class="ap-card-label">Vulnerability Deep Dive</span></a>
+            <a href="/escalation-pmo" target="_blank" class="ap-card"><span class="ap-card-icon">🛟</span><span class="ap-card-label">Virtual Escalation PMO</span></a>
+            <a href="/ai-drt" target="_blank" class="ap-card"><span class="ap-card-icon">🤖</span><span class="ap-card-label">AI DRT</span></a>
+            <a href="/ticket-cannon" target="_blank" class="ap-card"><span class="ap-card-icon">🔇</span><span class="ap-card-label">Ticket Cannon Silencer</span></a>
+            <a href="/cyber-simulator" target="_blank" class="ap-card"><span class="ap-card-icon">🎮</span><span class="ap-card-label">Cyber Simulator</span></a>
             <a href="/qradar" target="_blank" class="ap-card"><span class="ap-card-icon">📡</span><span class="ap-card-label">QRadar Explorer</span></a>
+        </div>
+    </div>
+
+    <div class="ap-section" data-accent="teal">
+        <div class="ap-section-title">☁️ Cloud & Data Security</div>
+        <div class="ap-grid">
             <a href="/db-security" target="_blank" class="ap-card"><span class="ap-card-icon">🛢️</span><span class="ap-card-label">Database Security</span></a>
             <a href="/db-config" target="_blank" class="ap-card"><span class="ap-card-icon">⚙️</span><span class="ap-card-label">DB Config</span></a>
-            <a href="/ai-drt" target="_blank" class="ap-card"><span class="ap-card-icon">🤖</span><span class="ap-card-label">AI DRT</span></a>
             <a href="/dspm" target="_blank" class="ap-card"><span class="ap-card-icon">🛡️</span><span class="ap-card-label">DSPM</span></a>
-            <a href="/exposed-api-scanner" target="_blank" class="ap-card"><span class="ap-card-icon">🔑</span><span class="ap-card-label">Exposed API Scanner</span></a>
-            <a href="/cyber-simulator" target="_blank" class="ap-card"><span class="ap-card-icon">🎮</span><span class="ap-card-label">Cyber Simulator</span></a>
-            <a href="/oe-detection" target="_blank" class="ap-card"><span class="ap-card-icon">🔍</span><span class="ap-card-label">OE Detection</span></a>
             <a href="/salesforce-scanner" target="_blank" class="ap-card"><span class="ap-card-icon">☁️</span><span class="ap-card-label">Salesforce Scanner</span></a>
             <a href="/s3-scanner" target="_blank" class="ap-card"><span class="ap-card-icon">🪣</span><span class="ap-card-label">S3 Bucket Scanner</span></a>
-            <a href="/ticket-cannon" target="_blank" class="ap-card"><span class="ap-card-icon">🔇</span><span class="ap-card-label">Ticket Cannon Silencer</span></a>
-            <a href="/cyber-tool-inventory" target="_blank" class="ap-card"><span class="ap-card-icon">🧰</span><span class="ap-card-label">Cyber Tool Inventory</span></a>
+            <a href="/exposed-api-scanner" target="_blank" class="ap-card"><span class="ap-card-icon">🔑</span><span class="ap-card-label">Exposed API Scanner</span></a>
+        </div>
+    </div>
+
+    <div class="ap-section" data-accent="gold">
+        <div class="ap-section-title">🤝 Governance & Assurance</div>
+        <div class="ap-grid">
+            <a href="/customer-assurance" target="_blank" class="ap-card"><span class="ap-card-icon">🛡️</span><span class="ap-card-label">Customer Assurance</span></a>
+            <a href="/ruai-dashboard" target="_blank" class="ap-card"><span class="ap-card-icon">📋</span><span class="ap-card-label">RUAI Dashboard</span></a>
+            <a href="/ai-intake-submissions" target="_blank" class="ap-card"><span class="ap-card-icon">📊</span><span class="ap-card-label">AI Intake Submissions</span></a>
             <a href="/regulatory-acceleration-matrix" target="_blank" class="ap-card"><span class="ap-card-icon">⚖️</span><span class="ap-card-label">Regulatory Acceleration Matrix</span></a>
-            <a href="/tipper-automation" target="_blank" class="ap-card"><span class="ap-card-icon">📨</span><span class="ap-card-label">Tipper Automation</span></a>
+        </div>
+    </div>
+
+    <div class="ap-section" data-accent="cyan">
+        <div class="ap-section-title">👥 Team & Operations</div>
+        <div class="ap-grid">
+            <a href="/oncall" target="_blank" class="ap-card"><span class="ap-card-icon">📞</span><span class="ap-card-label">On-Call Schedule</span></a>
+            <a href="/roster" target="_blank" class="ap-card"><span class="ap-card-icon">👥</span><span class="ap-card-label">Daily Roster</span></a>
+            <a href="/escalation-contacts" target="_blank" class="ap-card"><span class="ap-card-icon">📇</span><span class="ap-card-label">DnR Contacts</span></a>
+            <a href="/favorite-urls" target="_blank" class="ap-card"><span class="ap-card-icon">🔗</span><span class="ap-card-label">DnR URLs</span></a>
+        </div>
+    </div>
+
+    <div class="ap-section" data-accent="indigo">
+        <div class="ap-section-title">📚 Knowledge & Enablement</div>
+        <div class="ap-grid">
+            <a href="/docs-library" target="_blank" class="ap-card"><span class="ap-card-icon">📚</span><span class="ap-card-label">Docs Library</span></a>
+            <a href="/wiki" target="_blank" class="ap-card"><span class="ap-card-icon">🧠</span><span class="ap-card-label">GDnR Wiki</span></a>
+            <a href="/lessons" target="_blank" class="ap-card"><span class="ap-card-icon">🎓</span><span class="ap-card-label">Mythos Lessons</span></a>
+            <a href="/vibe-coding" target="_blank" class="ap-card"><span class="ap-card-icon">🎧</span><span class="ap-card-label">Vibe Coding Workshop</span></a>
+            <a href="/claude-code-with-local-models" target="_blank" class="ap-card"><span class="ap-card-icon">🤖</span><span class="ap-card-label">Claude Code with Local Models</span></a>
+            <a href="/bench-local" target="_blank" class="ap-card"><span class="ap-card-icon">📊</span><span class="ap-card-label">Local LLM Benchmarks</span></a>
+            <a href="/gitlab" target="_blank" class="ap-card"><span class="ap-card-icon">🦊</span><span class="ap-card-label">GitLab Onboarding</span></a>
+            <a href="/cyber-tool-inventory" target="_blank" class="ap-card"><span class="ap-card-icon">🧰</span><span class="ap-card-label">Cyber Tool Inventory</span></a>
+        </div>
+    </div>
+
+    <div class="ap-section" data-accent="red">
+        <div class="ap-section-title">🧰 Utilities & Productivity</div>
+        <div class="ap-grid">
+            <a href="/meeting-qa" target="_blank" class="ap-card"><span class="ap-card-icon">📝</span><span class="ap-card-label">Meeting Minutes QA</span></a>
+            <a href="/recap" target="_blank" class="ap-card"><span class="ap-card-icon">🎙️</span><span class="ap-card-label">Meeting Recap</span></a>
+            <a href="/markdown-viewer" target="_blank" class="ap-card"><span class="ap-card-icon">📄</span><span class="ap-card-label">Markdown Viewer</span></a>
+            <a href="/cribl-diagnostics" target="_blank" class="ap-card"><span class="ap-card-icon">📡</span><span class="ap-card-label">Cribl Edge Diagnostics</span></a>
+            <a href="/app-logs" target="_blank" class="ap-card"><span class="ap-card-icon">📜</span><span class="ap-card-label">App Logs</span></a>
+            <a href="/soc-in-a-box/analyze" target="_blank" class="ap-card"><span class="ap-card-icon">🧪</span><span class="ap-card-label">SOC — Analyze Log/Email</span></a>
         </div>
     </div>
 
@@ -280,12 +370,18 @@ body.dark-mode ::-webkit-scrollbar-thumb:hover {
     <div class="ap-section" data-accent="purple">
         <div class="ap-section-title">🔒 Admin</div>
         <div class="ap-grid">
+            <a href="/admin-users" target="_blank" class="ap-card"><span class="ap-card-icon">👥</span><span class="ap-card-label">Users</span></a>
+            <a href="/admin-lessons" target="_blank" class="ap-card"><span class="ap-card-icon">🎓</span><span class="ap-card-label">Mythos Lessons Progress</span></a>
+            <a href="/pokedex" target="_blank" class="ap-card"><span class="ap-card-icon">⚡</span><span class="ap-card-label">Pokedex Chat</span></a>
+            <a href="/pokedex-demo" target="_blank" class="ap-card"><span class="ap-card-icon">🎬</span><span class="ap-card-label">Pokedex Demo</span></a>
+            <a href="/toodles" target="_blank" class="ap-card"><span class="ap-card-icon">🤖</span><span class="ap-card-label">Toodles Chat</span></a>
             <a href="/traffic-logs" target="_blank" class="ap-card"><span class="ap-card-icon">📈</span><span class="ap-card-label">Traffic Logs</span></a>
             <a href="/llm-usage" target="_blank" class="ap-card"><span class="ap-card-icon">🤖</span><span class="ap-card-label">LLM Usage</span></a>
             <a href="/connectors" target="_blank" class="ap-card"><span class="ap-card-icon">🔌</span><span class="ap-card-label">Connectors</span></a>
             {% if config.logs_viewer_url %}
             <a href="{{ config.logs_viewer_url }}" target="_blank" rel="noopener noreferrer" class="ap-card"><span class="ap-card-icon">🎛️</span><span class="ap-card-label">Mission Control</span></a>
             {% endif %}
+            <a href="/soc-in-a-box" target="_blank" class="ap-card"><span class="ap-card-icon">🛰️</span><span class="ap-card-label">SOC in the Box</span></a>
         </div>
     </div>
     {% endif %}
@@ -473,7 +569,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const typing = tag === 'input' || tag === 'textarea' || e.target.isContentEditable;
         if (e.key === '/' && !typing) { e.preventDefault(); input.focus(); input.select(); }
         else if (e.key === 'Escape' && document.activeElement === input) {
-            input.value = ''; applyFilter(''); input.blur();
+            input.value = ''; applyFilter(''); input.focus();
         }
     });
 

@@ -4,9 +4,33 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/domain_monitoring_report.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/chat_widget.css') }}">
+<style>
+  /* ===== Domain Monitoring theme — Cyan / Blue / Violet (radar) ===== */
+  body.dm-themed { background:
+      radial-gradient(1100px 520px at 4% -8%, #cdf0ff 0%, transparent 55%),
+      radial-gradient(1000px 560px at 98% 0%, #d6e2ff 0%, transparent 52%),
+      radial-gradient(1200px 720px at 50% 122%, #e7dcff 0%, transparent 55%),
+      linear-gradient(160deg, #ecfaff 0%, #eef3ff 48%, #f2edff 100%) !important;
+      background-attachment: fixed !important; min-height: 100vh; }
+  body.dm-themed.dark-mode { background:
+      linear-gradient(135deg, #06121f 0%, #0a1530 50%, #0d0a24 100%) !important; color: #d9e6f2; }
+  html { scrollbar-gutter: stable; }
+  ::-webkit-scrollbar { width: 16px; height: 16px; }
+  ::-webkit-scrollbar-track { border-radius: 10px;
+      background: linear-gradient(180deg, rgba(0,0,0,.04), rgba(0,0,0,.06) 50%, rgba(0,0,0,.04)); }
+  ::-webkit-scrollbar-thumb { border-radius: 10px; border: 2px solid transparent; background-clip: padding-box;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
+      background: linear-gradient(180deg, #06b6d4 0%, #0a8fd6 22%, #0046ad 46%, #6366f1 70%, #8f94fb 100%); }
+  ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, #8f94fb 0%, #6366f1 30%, #0046ad 54%, #0a8fd6 78%, #06b6d4 100%); }
+  ::-webkit-scrollbar-corner { background: transparent; }
+  body.dark-mode ::-webkit-scrollbar-track {
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.10) 50%, rgba(255,255,255,.06)); }
+</style>
 {% endblock %}
 
-{% block body_classes %}monitoring-report-page{% endblock %}
+{% block body_classes %}monitoring-report-page dm-themed{% endblock %}
 
 {% set page_title_text = 'Domain Monitoring Report' %}
 {% set page_title_left_icon = '📊' %}
@@ -73,11 +97,23 @@
 }
 </style>
 <div class="monitoring-container">
-    <div class="history-dropdown">
+    <div class="history-dropdown" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
         <label for="historySelect">View Report: </label>
         <select id="historySelect" onchange="loadReport(this.value)">
             <option value="">Latest</option>
         </select>
+        <button onclick="exportReport()" title="Download this report as a formatted Excel workbook"
+            style="margin-left:auto; display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border:none; border-radius:10px; cursor:pointer; font-weight:600; color:#fff; background:linear-gradient(135deg,#00A651,#0046AD); box-shadow:0 3px 12px rgba(0,70,173,.28);">
+            📊 Export to Excel
+        </button>
+        <button onclick="openManagePanel()" title="View and edit the monitored domain lists"
+            style="display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border:none; border-radius:10px; cursor:pointer; font-weight:600; color:#fff; background:linear-gradient(135deg,#6366f1,#0046AD); box-shadow:0 3px 12px rgba(99,102,241,.28);">
+            ⚙️ Manage Monitoring
+        </button>
+        <a href="/domain-monitoring/reports" title="Monthly Brand Protection report"
+            style="display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border-radius:10px; text-decoration:none; font-weight:600; color:#fff; background:linear-gradient(135deg,#0a8fd6,#0046AD); box-shadow:0 3px 12px rgba(10,143,214,.28);">
+            🛡️ Monthly Report
+        </a>
     </div>
 
     <div id="loadingIndicator" class="loading">
@@ -101,6 +137,7 @@
 
         <div class="tabs">
             <button class="tab active" onclick="showTab('lookalikes')">Lookalike Domains</button>
+            <button class="tab" onclick="showTab('rfwatchlist')">🛰️ RF Watchlist</button>
             <button class="tab" onclick="showTab('darkweb')">Public Leaks (GitHub/Paste)</button>
             <button class="tab" onclick="showTab('intelx')">Dark Web (Tor/I2P)</button>
             <button class="tab" onclick="showTab('ctlogs')">SSL Certificates</button>
@@ -113,6 +150,7 @@
         </div>
 
         <div id="lookalikes" class="tab-content active"></div>
+        <div id="rfwatchlist" class="tab-content"></div>
         <div id="darkweb" class="tab-content"></div>
         <div id="intelx" class="tab-content"></div>
         <div id="ctlogs" class="tab-content"></div>
@@ -138,6 +176,31 @@
         </div>
     </div>
 </div>
+
+<!-- Manage Monitoring Panel -->
+<div id="managePanel" class="modal-overlay" onclick="if(event.target===this)closeManagePanel()">
+    <div class="modal-content" style="max-width:760px;">
+        <div class="modal-header">
+            <h3>⚙️ Manage Monitoring</h3>
+            <button class="modal-close" onclick="closeManagePanel()">&times;</button>
+        </div>
+        <div class="modal-body" id="managePanelBody">
+            {% if can('manage.domain_monitoring_watchlist') %}
+            <div style="background:rgba(0,166,81,.08);border:1px solid rgba(0,166,81,.25);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:0.9em;">
+                ✅ You can add and remove entries. Changes take effect on the next daily monitoring run.
+            </div>
+            {% else %}
+            <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:0.9em;">
+                👁️ Read-only view. Editing requires the <strong>manage.domain_monitoring_watchlist</strong> capability — ask an admin to grant it.
+            </div>
+            {% endif %}
+            <div id="manageLists" style="display:flex;flex-direction:column;gap:18px;">
+                <div style="text-align:center;color:#888;padding:20px;">Loading…</div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>window.CAN_MANAGE_WATCHLIST = {{ 'true' if can('manage.domain_monitoring_watchlist') else 'false' }};</script>
 
 <script>
 let currentData = null;
@@ -225,6 +288,7 @@ async function loadReport(filename) {
         currentData = data.results;
         renderReport(data.results);
         document.getElementById('reportContent').style.display = 'block';
+        paintBlockSlots();  // reflect any already-blocked domains on freshly-rendered rows
 
     } catch (e) {
         console.error('Failed to load report:', e);
@@ -265,6 +329,9 @@ async function renderReport(results) {
     const abusechMalicious = results.total_abusech_malicious || 0;
     const abuseipdbMalicious = results.total_abuseipdb_malicious || 0;
     const s3BrandSquatting = results.total_s3_brand_squatting || 0;
+    const rfWatchlistTotal = results.total_rf_watchlist || 0;
+    const rfWatchlistHighRisk = results.total_rf_watchlist_high_risk || 0;
+    const brandKwImpersonation = results.total_brand_keyword_impersonation || 0;
     const ctFindings = outstandingThreatsCount;
 
     // High risk = became active + abuse.ch malicious + abuseIPDB malicious
@@ -320,6 +387,14 @@ async function renderReport(results) {
             <div class="value">${s3BrandSquatting}</div>
             <div class="label">S3 Buckets</div>
         </div>
+        <div class="summary-card ${rfWatchlistHighRisk > 0 ? 'alert' : (rfWatchlistTotal > 0 ? 'warning' : 'success')}" onclick="showTab('rfwatchlist', true)" style="${cardStyle}" title="Recorded Future watchlist domains across all brand keywords">
+            <div class="value">${rfWatchlistTotal}</div>
+            <div class="label">RF Watchlist${rfWatchlistHighRisk > 0 ? ' · ' + rfWatchlistHighRisk + ' high risk' : ''}</div>
+        </div>
+        <div class="summary-card ${brandKwImpersonation > 0 ? 'alert' : 'success'}" onclick="showTab('rfwatchlist', true)" style="${cardStyle}" title="New impersonation certs found across all brand keywords">
+            <div class="value">${brandKwImpersonation}</div>
+            <div class="label">Brand Impersonations</div>
+        </div>
         <div class="summary-card" id="rfSummaryCard" style="display:none;${cardStyle}" onclick="showTab('lookalikes', true)" title="View RF High Risk">
             <div class="value" id="rfHighRiskValue">0</div>
             <div class="label">RF High Risk</div>
@@ -360,6 +435,71 @@ async function renderReport(results) {
 
     // S3 Brand Squatting tab
     renderS3BrandSquatting(results.domains);
+
+    // RF Watchlist tab (brand-keyword domains + brand-keyword impersonation)
+    renderRFWatchlist(results);
+}
+
+// Render the Recorded Future watchlist tab — all brand-keyword domains with RF
+// scores, plus any new impersonation certs found across the brand keywords.
+function renderRFWatchlist(results) {
+    const container = document.getElementById('rfwatchlist');
+    if (!container) return;
+
+    const wl = (results.rf_watchlist && results.rf_watchlist.domains) || [];
+    const kwHits = (results.brand_keyword_impersonation && results.brand_keyword_impersonation.new_domains) || [];
+    const keywords = (results.brand_keyword_impersonation && results.brand_keyword_impersonation.keywords_searched) || [];
+
+    if (!wl.length && !kwHits.length) {
+        container.innerHTML = `<div class="no-data" style="padding:30px;text-align:center;">
+            <div style="font-size:2em;">🛰️</div>
+            <div>No Recorded Future watchlist data in this report.</div>
+            <div style="margin-top:8px;font-size:0.9em;color:#888;">Onboard the RF export via <strong>⚙️ Manage Monitoring</strong>, then it populates on the next daily run.</div>
+        </div>`;
+        return;
+    }
+
+    const riskColor = (s) => s == null ? '#94a3b8' : (s >= 90 ? '#dc2626' : s >= 65 ? '#f59e0b' : s >= 25 ? '#eab308' : '#22c55e');
+
+    let html = `<div style="margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <span style="font-weight:700;">🛰️ Recorded Future Watchlist</span>
+        <span style="background:rgba(0,70,173,.1);color:#0046AD;padding:3px 10px;border-radius:20px;font-size:0.85em;font-weight:600;">${wl.length} domains</span>`;
+    keywords.forEach(k => {
+        html += `<span style="background:rgba(99,102,241,.12);color:#4f46e5;padding:3px 10px;border-radius:20px;font-size:0.8em;font-weight:600;">${k}</span>`;
+    });
+    html += `</div>`;
+
+    if (kwHits.length) {
+        html += `<div style="background:rgba(220,38,38,.07);border:1px solid rgba(220,38,38,.25);border-radius:12px;padding:14px;margin-bottom:16px;">
+            <div style="font-weight:700;color:#b91c1c;margin-bottom:8px;">⚠️ ${kwHits.length} new impersonation certificate(s) across brand keywords</div>
+            <table style="width:100%;border-collapse:collapse;font-size:0.9em;"><thead><tr style="text-align:left;border-bottom:1px solid rgba(0,0,0,.1);">
+            <th style="padding:6px;">Domain</th><th style="padding:6px;">Brand</th><th style="padding:6px;">Issuer</th><th style="padding:6px;">Actions</th></tr></thead><tbody>`;
+        kwHits.forEach(d => {
+            html += `<tr style="border-bottom:1px solid rgba(0,0,0,.05);">
+                <td style="padding:6px;font-family:monospace;">${d.domain || ''}</td>
+                <td style="padding:6px;">${d.brand_keyword || ''}</td>
+                <td style="padding:6px;">${d.issuer || ''}</td>
+                <td style="padding:6px;">${renderActionsCell({domain: d.domain})}</td></tr>`;
+        });
+        html += `</tbody></table></div>`;
+    }
+
+    html += `<table style="width:100%;border-collapse:collapse;font-size:0.9em;"><thead><tr style="text-align:left;border-bottom:2px solid rgba(0,0,0,.12);">
+        <th style="padding:8px;">Domain</th><th style="padding:8px;">RF Risk</th><th style="padding:8px;">RF Rules</th><th style="padding:8px;">Reputation</th><th style="padding:8px;">Actions</th></tr></thead><tbody>`;
+    wl.forEach(d => {
+        const s = d.rf_risk_score;
+        const badge = `<span style="background:${riskColor(s)};color:#fff;padding:2px 9px;border-radius:20px;font-size:0.85em;font-weight:700;">${s == null ? 'n/a' : s}</span> <span style="color:#64748b;font-size:0.85em;">${d.rf_risk_level || ''}</span>`;
+        const rep = d.reputation_malicious ? `<span style="background:#dc2626;color:#fff;padding:2px 8px;border-radius:6px;font-size:0.75em;">MALICIOUS</span>` : '';
+        const rules = (d.rf_rules || []).slice(0, 3).join(', ');
+        html += `<tr style="border-bottom:1px solid rgba(0,0,0,.05);">
+            <td style="padding:8px;font-family:monospace;">${d.domain || ''}</td>
+            <td style="padding:8px;">${badge}</td>
+            <td style="padding:8px;color:#475569;font-size:0.85em;">${rules}</td>
+            <td style="padding:8px;">${rep}</td>
+            <td style="padding:8px;">${renderActionsCell({domain: d.domain})}</td></tr>`;
+    });
+    html += `</tbody></table>`;
+    container.innerHTML = html;
 }
 
 // Priority Summary - Aggregate critical findings with recommended actions
@@ -382,8 +522,8 @@ function renderPrioritySummary(results) {
                 ip: d.dns_a?.join(', ') || 'Unknown',
                 details: d.is_parked === false ? 'Hosting active content' : 'Recently activated',
                 actions: [
-                    { label: 'Block Domain', icon: '🚫', action: `copyToClipboard('${d.domain}')`, title: 'Copy domain to add to blocklist' },
-                    { label: 'Submit Takedown', icon: '📝', action: `openTakedown('${d.domain}', '${d.registrar || ''}')`, title: 'Open takedown request template' },
+                    { label: 'Block via XSOAR', icon: '🛑', action: `blockDomain('${d.domain}')`, title: 'Fire the CIRT URL-block playbook — contain users now' },
+                    { label: 'Submit Takedown', icon: '🚫', action: `submitTakedown('${d.domain}')`, title: 'Create a PhishFort takedown + notify the team' },
                     { label: 'VirusTotal', icon: '🔍', action: `window.open('https://www.virustotal.com/gui/domain/${d.domain}', '_blank')`, title: 'Check on VirusTotal' }
                 ]
             });
@@ -653,25 +793,6 @@ function showToast(message) {
     setTimeout(() => toast.remove(), 3000);
 }
 
-function openTakedown(domain, registrar) {
-    const subject = encodeURIComponent(`Takedown Request: ${domain}`);
-    const body = encodeURIComponent(`Domain: ${domain}\nRegistrar: ${registrar || 'Unknown'}\n\nThis domain is being used for malicious purposes (phishing/impersonation).\n\nPlease take action to suspend this domain.`);
-
-    // Try to detect common registrar abuse contacts
-    let abuseEmail = '<redacted-email>';
-    if (registrar) {
-        const r = registrar.toLowerCase();
-        if (r.includes('godaddy')) abuseEmail = '<redacted-email>';
-        else if (r.includes('namecheap')) abuseEmail = '<redacted-email>';
-        else if (r.includes('cloudflare')) abuseEmail = '<redacted-email>';
-        else if (r.includes('google')) abuseEmail = '<redacted-email>';
-        else if (r.includes('tucows') || r.includes('enom')) abuseEmail = '<redacted-email>';
-    }
-
-    window.open(`mailto:${abuseEmail}?subject=${subject}&body=${body}`, '_blank');
-    showToast('Opening email client for takedown request');
-}
-
 function createIncident(type, entity, details) {
     // This can be customized to integrate with ticketing systems
     const incidents = {
@@ -861,6 +982,7 @@ function renderVTCell(domainData) {
 // Render Actions cell with TakeDown button
 function renderActionsCell(domainData) {
     const domain = domainData.domain;
+    const brand = domainData.brand || domainData.brand_keyword || '';
     const isDefensive = domainData.is_defensive === true;
 
     // Don't show takedown for defensive domains
@@ -868,16 +990,316 @@ function renderActionsCell(domainData) {
         return `<span style="background:#22c55e;color:white;padding:2px 6px;border-radius:4px;font-size:0.7em;">✓ Owned</span>`;
     }
 
-    // Show takedown button for non-defensive domains
-    return `<button onclick="submitTakedown('${domain}')" title="Submit takedown request"
-        style="background:#dc2626;color:white;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.8em;">
-        🚫 TakeDown
-    </button>`;
+    const btn = (onclick, title, bg, label) =>
+        `<button onclick="${onclick}" title="${title}"
+            style="background:${bg};color:white;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.8em;margin:1px;">
+            ${label}</button>`;
+    const safeBrand = String(brand).replace(/'/g, "");
+    return `<span class="dm-actions" data-domain="${domain}">`
+        + btn(`assessDomain('${domain}','${safeBrand}')`, 'Assess weaponization — is this a live phishing kit?', '#7c3aed', '🎯 Assess')
+        + btn(`runExposureHunt('${domain}')`, 'Were we touched? Hunt DNS/proxy/EDR for internal contact', '#0a8fd6', '🛰️ Touched?')
+        + `<span class="dm-block-slot" data-domain="${domain}">${blockSlotHtml(domain)}</span>`
+        + btn(`submitTakedown('${domain}')`, 'Submit takedown request', '#dc2626', '🚫 TakeDown')
+        + `<span class="dm-triage-badge" data-domain="${domain}"></span></span>`;
 }
 
-// Placeholder for takedown submission - to be implemented later
-function submitTakedown(domain) {
-    alert('Takedown submission for ' + domain + ' - Coming soon!');
+// Once a domain is blocked we swap its 🛑 Block button for a link to the XSOAR
+// case (ticket #). State is held in `blockedDomains`, hydrated on load from
+// /api/domain-monitoring/blocked so it survives reloads.
+let blockedDomains = {};
+function blockSlotHtml(domain) {
+    const b = blockedDomains[domain];
+    if (b && b.ticket_id) {
+        const label = `🛑 #${b.ticket_id}`;
+        const style = "display:inline-block;background:#7f1d1d;color:#fff;padding:4px 8px;border-radius:4px;font-size:0.8em;margin:1px;text-decoration:none;font-weight:600;";
+        return b.url
+            ? `<a href="${b.url}" target="_blank" rel="noopener" title="Blocked via XSOAR — open the case" style="${style}">${label}</a>`
+            : `<span title="Blocked via XSOAR (ticket ${b.ticket_id})" style="${style}cursor:default;">${label}</span>`;
+    }
+    return `<button onclick="blockDomain('${domain}')" title="Block now via XSOAR — contain users while the takedown is brokered"
+        style="background:#b91c1c;color:white;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.8em;margin:1px;">🛑 Block</button>`;
+}
+function paintBlockSlots() {
+    document.querySelectorAll('.dm-block-slot').forEach(el => {
+        el.innerHTML = blockSlotHtml(el.dataset.domain);
+    });
+}
+function markBlocked(domain, ticketId, url) {
+    blockedDomains[domain] = {ticket_id: ticketId, url: url};
+    paintBlockSlots();
+}
+async function hydrateBlockedDomains() {
+    try {
+        const resp = await fetch('/api/domain-monitoring/blocked');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (data.success && data.blocked) {
+            Object.assign(blockedDomains, data.blocked);
+            paintBlockSlots();
+        }
+    } catch (e) { /* non-fatal — buttons stay as Block */ }
+}
+
+// Reflect a stored weaponization tier as an inline badge next to the domain's actions.
+function tierBadge(tier, active) {
+    if (!tier) return '';
+    const colors = {P1:'#b91c1c', P2:'#ea580c', P3:'#ca8a04', P4:'#16a34a'};
+    const c = colors[tier] || '#64748b';
+    const fire = active ? ' 🔥' : '';
+    return `<span style="background:${c};color:#fff;padding:2px 8px;border-radius:20px;font-size:0.78em;font-weight:700;margin-left:6px;">${tier}${fire}</span>`;
+}
+function paintTierBadges(domain, tier, active) {
+    document.querySelectorAll(`.dm-triage-badge[data-domain="${CSS.escape(domain)}"]`)
+        .forEach(el => { el.innerHTML = tierBadge(tier, active); });
+}
+
+// Submit a takedown: creates a PhishFort incident (prod) + notifies the Domain
+// Monitoring Webex room. Gated server-side on the send.external capability.
+async function submitTakedown(domain) {
+    const reason = prompt(`Request takedown for:\n\n${domain}\n\nOptional note for the team (reason / context):`, '');
+    if (reason === null) return;  // cancelled
+    showToast('Submitting takedown for ' + domain + '…');
+    try {
+        const resp = await fetch('/api/domain-monitoring/takedown', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({domain: domain, reason: reason})
+        });
+        if (resp.status === 403) {
+            alert('You do not have permission to submit takedowns (send.external capability required).');
+            return;
+        }
+        const data = await resp.json();
+        const r = data.result || {};
+        const pf = r.phishfort;
+        let pfMsg;
+        if (pf && pf.status === 'created') pfMsg = `PhishFort incident created (id: ${pf.incident_id || 'n/a'})`;
+        else if (pf === 'disabled_in_dev') pfMsg = 'PhishFort submission skipped on the dev instance';
+        else if (pf === 'no_api_key') pfMsg = 'PhishFort not configured — submit manually';
+        else pfMsg = 'PhishFort submission failed — submit manually';
+        const notal = r.notified ? '✅ Team notified in Domain Monitoring Webex room.' : '⚠️ Could not post Webex notification.';
+        alert(`Takedown for ${domain}\n\n${pfMsg}\n${notal}`);
+    } catch (e) {
+        alert(`Failed to submit takedown: ${e.message}`);
+    }
+}
+
+// Block a domain via XSOAR (fires the CIRT URL-block playbook). Containment
+// ahead of takedown. Gated server-side on send.external + prod-only.
+async function blockDomain(domain) {
+    const reason = prompt(
+        `Block via XSOAR (fires the CIRT URL-block playbook):\n\n${domain}\n\n` +
+        `This contains users immediately, ahead of the takedown.\n` +
+        `Optional reason / context for the XSOAR ticket:`, '');
+    if (reason === null) return;  // cancelled
+    showToast('Submitting XSOAR block for ' + domain + '…');
+    try {
+        const resp = await fetch('/api/domain-monitoring/block', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({domain: domain, reason: reason})
+        });
+        if (resp.status === 403) {
+            const d = await resp.json().catch(() => ({}));
+            alert(d.error || 'You do not have permission to block domains (send.external capability required).');
+            return;
+        }
+        const data = await resp.json();
+        const r = data.result || {};
+        if (r.success) {
+            markBlocked(domain, r.ticket_id, r.url);
+            alert(`🛑 Block initiated for ${domain}\n\nXSOAR ticket #${r.ticket_id} created and ` +
+                  `!CIRT_Start_URL_Block executed.\nReview and close the ticket in XSOAR.`);
+        } else {
+            alert(`Failed to block ${domain}:\n\n${r.error || 'Unknown error'}`);
+        }
+    } catch (e) {
+        alert(`Failed to block ${domain}: ${e.message}`);
+    }
+}
+
+// ── Weaponization triage + "were we touched?" exposure hunt ─────────────────
+function showTriageModal(title, bodyHtml) {
+    let m = document.getElementById('triageModal');
+    if (!m) {
+        m = document.createElement('div');
+        m.id = 'triageModal';
+        m.style = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;';
+        m.innerHTML = `<div style="background:#ffffff;color:#1e293b;max-width:640px;width:92%;max-height:84vh;overflow:auto;border-radius:16px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.4);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                <h3 id="triageModalTitle" style="margin:0;"></h3>
+                <button onclick="document.getElementById('triageModal').remove()" style="background:none;border:none;font-size:1.5em;cursor:pointer;color:inherit;">&times;</button>
+            </div>
+            <div id="triageModalBody"></div></div>`;
+        document.body.appendChild(m);
+        m.addEventListener('click', e => { if (e.target === m) m.remove(); });
+    }
+    m.querySelector('#triageModalTitle').textContent = title;
+    m.querySelector('#triageModalBody').innerHTML = bodyHtml;
+}
+
+async function assessDomain(domain, brand) {
+    showToast('🎯 Assessing ' + domain + '… (fetching page + LLM verdict)');
+    try {
+        const resp = await fetch('/api/domain-monitoring/assess', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({domain: domain, brand: brand || null})
+        });
+        const data = await resp.json();
+        const r = (data.result) || {};
+        const v = r.verdict, s = r.signals || {}, p = s.page || {}, dns = s.dns || {};
+        if (!v) {
+            showTriageModal('Assessment — ' + domain,
+                `<p style="color:#b91c1c;">The LLM verdict was unavailable (${r.llm_error || 'error'}), but signals were captured:</p>
+                 <ul><li>Page reachable: ${p.reachable} (HTTP ${p.status_code ?? '-'})</li>
+                 <li>Login/password form: ${p.has_password_input}</li><li>Mail-capable (MX): ${dns.has_mx}</li>
+                 <li>Parked: ${s.parked}</li></ul>`);
+            return;
+        }
+        paintTierBadges(domain, v.risk_tier, v.is_active_phishing);
+        const colors = {P1:'#b91c1c', P2:'#ea580c', P3:'#ca8a04', P4:'#16a34a'};
+        showTriageModal('Weaponization — ' + domain, `
+            <div style="font-size:1.1em;margin-bottom:8px;">
+                <span style="background:${colors[v.risk_tier]||'#64748b'};color:#fff;padding:3px 12px;border-radius:20px;font-weight:700;">${v.risk_tier}</span>
+                ${v.is_active_phishing ? '<span style="margin-left:8px;color:#b91c1c;font-weight:700;">🔥 ACTIVE PHISHING</span>' : ''}
+                <span style="margin-left:8px;color:#64748b;">confidence: ${v.confidence}</span>
+            </div>
+            <p><strong>Rationale:</strong> ${v.rationale || ''}</p>
+            <p><strong>Recommended:</strong> ${v.recommended_action || ''}</p>
+            <div style="background:rgba(0,0,0,.04);border-radius:10px;padding:10px;font-size:0.9em;margin-top:10px;">
+                <strong>Signals</strong><br>
+                Live page: ${p.reachable} (HTTP ${p.status_code ?? '-'}) ${p.redirected_offsite ? '· redirected off-domain' : ''}<br>
+                Login/password form: ${p.has_password_input} · Any form: ${p.has_form}<br>
+                Brand name on page: ${s.brand_in_page} · Title: ${p.title ? `"${p.title}"` : '-'}<br>
+                Mail-capable (MX): ${dns.has_mx} ${(dns.mx_hosts||[]).join(', ')} · SPF: ${dns.has_spf} · DMARC: ${dns.has_dmarc}<br>
+                Parked markers: ${s.parked}
+            </div>
+            <p style="color:#64748b;font-size:0.85em;margin-top:10px;">Saved — this evidence is auto-attached if you raise a takedown.</p>`);
+    } catch (e) {
+        alert('Assessment failed: ' + e.message);
+    }
+}
+
+async function runExposureHunt(domain) {
+    showToast('🛰️ Hunting DNS/proxy/EDR for ' + domain + '… this can take a minute');
+    try {
+        const resp = await fetch('/api/domain-monitoring/exposure-hunt', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({domain: domain})
+        });
+        const data = await resp.json();
+        if (!data.success) { alert('Could not start hunt: ' + (data.error || 'error')); return; }
+        showTriageModal('Were we touched? — ' + domain,
+            '<p>🛰️ Hunting across DNS/proxy (QRadar) + EDR (CrowdStrike)… polling for results.</p>');
+        // Poll the finding until the hunt finishes.
+        const started = Date.now();
+        const poll = setInterval(async () => {
+            if (Date.now() - started > 300000) { clearInterval(poll); return; }  // 5-min safety
+            let f;
+            try {
+                const fr = await fetch('/api/domain-monitoring/finding/' + encodeURIComponent(domain));
+                f = (await fr.json()).finding;
+            } catch (e) { return; }
+            if (!f || f.exposure_status === 'running') return;
+            clearInterval(poll);
+            if (f.exposure_status === 'error') {
+                showTriageModal('Were we touched? — ' + domain, '<p style="color:#b91c1c;">The hunt hit an error. Check the SIEM connectors.</p>');
+                return;
+            }
+            const ex = f.exposure || {};
+            const touched = !!f.exposure_touched;
+            const hosts = ex.hosts || [], users = ex.users || [];
+            showTriageModal('Were we touched? — ' + domain, `
+                <div style="font-size:1.15em;font-weight:700;margin-bottom:10px;color:${touched ? '#b91c1c' : '#16a34a'};">
+                    ${touched ? '⚠️ YES — internal contact detected' : '✅ No internal contact found'}
+                </div>
+                <p>Total hits: <strong>${ex.total_hits ?? f.exposure_hosts ?? 0}</strong> ·
+                   Unique hosts: <strong>${ex.unique_hosts ?? 0}</strong> ·
+                   Unique users: <strong>${ex.unique_users ?? 0}</strong></p>
+                ${hosts.length ? `<p><strong>Hosts:</strong> ${hosts.slice(0,30).join(', ')}</p>` : ''}
+                ${users.length ? `<p><strong>Users:</strong> ${users.slice(0,30).join(', ')}</p>` : ''}
+                ${(ex.access_issues||[]).length ? `<p style="color:#ca8a04;">Note: limited coverage — ${ex.access_issues.join(', ')}</p>` : ''}
+                <p style="color:#64748b;font-size:0.85em;">Searched: ${(ex.tools||['qradar','crowdstrike']).join(', ')}. Saved to this finding.</p>`);
+        }, 4000);
+    } catch (e) {
+        alert('Exposure hunt failed: ' + e.message);
+    }
+}
+
+// Export the currently selected report as a formatted Excel workbook.
+function exportReport() {
+    const sel = document.getElementById('historySelect');
+    const date = sel && sel.value ? sel.value : '';
+    const url = date ? `/api/domain-monitoring/export/${date}` : '/api/domain-monitoring/export';
+    showToast('Building Excel export…');
+    window.location = url;
+}
+
+// ── Manage Monitoring panel ────────────────────────────────────────────────
+function openManagePanel() {
+    document.getElementById('managePanel').classList.add('active');
+    document.getElementById('managePanel').style.display = 'flex';
+    loadManageLists();
+}
+function closeManagePanel() {
+    document.getElementById('managePanel').classList.remove('active');
+    document.getElementById('managePanel').style.display = 'none';
+}
+
+async function loadManageLists() {
+    const host = document.getElementById('manageLists');
+    host.innerHTML = `<div style="text-align:center;color:#888;padding:20px;">Loading…</div>`;
+    try {
+        const resp = await fetch('/api/domain-monitoring/watchlist');
+        const data = await resp.json();
+        if (!data.success) { host.innerHTML = `<div style="color:#dc2626;">${data.error || 'Failed to load'}</div>`; return; }
+        const canEdit = window.CAN_MANAGE_WATCHLIST;
+        let html = '';
+        Object.entries(data.lists).forEach(([key, info]) => {
+            const entries = info.entries || [];
+            html += `<div style="border:1px solid rgba(0,0,0,.1);border-radius:12px;padding:14px;">
+                <div style="font-weight:700;margin-bottom:4px;">${info.label}</div>
+                <div style="font-size:0.8em;color:#64748b;margin-bottom:10px;">${entries.length} ${entries.length === 1 ? 'entry' : 'entries'} · key: <code>${key}</code></div>`;
+            if (canEdit) {
+                html += `<div style="display:flex;gap:8px;margin-bottom:10px;">
+                    <input id="add-${key}" type="text" placeholder="add ${key === 'brand_keywords' ? 'keyword' : 'domain'}…" style="flex:1;padding:7px 10px;border:1px solid rgba(0,0,0,.2);border-radius:8px;font-size:0.9em;">
+                    <button onclick="editList('${key}','add')" style="padding:7px 14px;border:none;border-radius:8px;cursor:pointer;font-weight:600;color:#fff;background:linear-gradient(135deg,#00A651,#0046AD);">Add</button>
+                </div>`;
+            }
+            html += `<div style="display:flex;flex-wrap:wrap;gap:6px;max-height:200px;overflow:auto;">`;
+            if (!entries.length) html += `<span style="color:#94a3b8;font-size:0.85em;">(empty)</span>`;
+            entries.forEach(e => {
+                html += `<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(0,70,173,.07);border:1px solid rgba(0,70,173,.15);padding:3px 8px;border-radius:16px;font-size:0.82em;font-family:monospace;">
+                    ${e}${canEdit ? ` <span onclick="editList('${key}','remove','${e}')" title="Remove" style="cursor:pointer;color:#dc2626;font-weight:700;">×</span>` : ''}</span>`;
+            });
+            html += `</div></div>`;
+        });
+        host.innerHTML = html;
+    } catch (e) {
+        host.innerHTML = `<div style="color:#dc2626;">Failed to load: ${e.message}</div>`;
+    }
+}
+
+async function editList(key, action, value) {
+    if (action === 'add') {
+        const input = document.getElementById('add-' + key);
+        value = (input && input.value || '').trim();
+        if (!value) { showToast('Enter a value first'); return; }
+    }
+    try {
+        const resp = await fetch('/api/domain-monitoring/watchlist', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({key, action, value})
+        });
+        if (resp.status === 403) { alert('You do not have permission to edit the monitoring lists.'); return; }
+        const data = await resp.json();
+        if (!data.ok && !data.success) { alert(data.error || 'Edit failed'); return; }
+        showToast(`${action === 'add' ? 'Added' : 'Removed'} ${value}`);
+        loadManageLists();
+    } catch (e) {
+        alert(`Edit failed: ${e.message}`);
+    }
 }
 
 // Render RF cell for a domain - reads rf_risk_score directly from domain data
@@ -2172,8 +2594,98 @@ function showTab(tabId, scrollToTabs = false) {
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     loadHistory();
+    hydrateBlockedDomains();
     const urlFilename = {% if filename %}'{{ filename }}'{% else %}null{% endif %};
     loadReport(urlFilename);
+});
+</script>
+
+{# ── Ask-about-this-page chat widget (read-only, grounded in the loaded scan) ── #}
+{% include '_chat_widget.html' %}
+<script src="{{ url_for('static', filename='js/vendor/marked.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chat_widget.js') }}"></script>
+<script>
+// Build a compact, grounded text context for the assistant from the report that
+// is already loaded in the page (`currentData`). Returns null while the scan is
+// still loading so the widget shows a "data is still loading" hint.
+function buildDomainMonitoringChatContext() {
+    const r = window.currentData;
+    if (!r) return null;
+    const L = [];
+    L.push('You are assisting a SOC analyst on the Domain Monitoring & Brand Protection dashboard.');
+    L.push('Answer ONLY from the scan data below. If something is not in the data, say so plainly.');
+    L.push('This is a read-only assistant — you cannot submit takedowns or edit the watchlist (the analyst does that with the on-page buttons).');
+    L.push('');
+    L.push('### Scan');
+    if (r.scan_time) L.push('Scan time: ' + r.scan_time);
+    L.push('Alerts sent this run: ' + (r.alerts_sent || 0));
+    L.push('');
+    L.push('### Headline counts');
+    L.push('- New lookalike domains: ' + (r.total_new_lookalikes || 0));
+    L.push('- Became active (high risk): ' + (r.total_became_active || 0));
+    L.push('- RF watchlist domains: ' + (r.total_rf_watchlist || 0) + ' (' + (r.total_rf_watchlist_high_risk || 0) + ' high-risk)');
+    L.push('- Brand-keyword impersonations (CT): ' + (r.total_brand_keyword_impersonation || 0));
+    L.push('- WHOIS changes: ' + (r.total_whois_changes || 0));
+    L.push('- VirusTotal high-risk: ' + (r.total_vt_high_risk || 0));
+    L.push('- Shodan exposures: ' + (r.total_shodan_exposures || 0));
+    L.push('- abuse.ch malicious: ' + (r.total_abusech_malicious || 0) + '; AbuseIPDB malicious: ' + (r.total_abuseipdb_malicious || 0));
+    L.push('- Public leaks: ' + (r.total_dark_web_findings || 0) + '; Dark web (Tor): ' + (r.total_intelx_findings || 0));
+    L.push('- HIBP breached emails: ' + (r.total_hibp_breaches || 0) + '; S3 brand squatting: ' + (r.total_s3_brand_squatting || 0));
+
+    // RF watchlist — highest-risk first, capped so the payload stays small.
+    const wl = (r.rf_watchlist && r.rf_watchlist.domains) || [];
+    if (wl.length) {
+        const sorted = wl.slice().sort((a, b) => (b.rf_risk_score || 0) - (a.rf_risk_score || 0));
+        L.push('');
+        L.push('### RF watchlist domains (top ' + Math.min(40, sorted.length) + ' of ' + wl.length + ', by risk)');
+        sorted.slice(0, 40).forEach(d => {
+            const parts = [d.domain];
+            if (d.rf_risk_score != null) parts.push('risk=' + d.rf_risk_score);
+            if (d.brand) parts.push('brand=' + d.brand);
+            if (d.malicious) parts.push('MALICIOUS');
+            L.push('- ' + parts.join(' | '));
+        });
+    }
+
+    // Brand-keyword impersonation hits from crt.sh.
+    const kw = (r.brand_keyword_impersonation && r.brand_keyword_impersonation.new_domains) || [];
+    if (kw.length) {
+        L.push('');
+        L.push('### Brand-keyword impersonation hits (top ' + Math.min(30, kw.length) + ' of ' + kw.length + ')');
+        kw.slice(0, 30).forEach(d => {
+            const parts = [d.domain];
+            if (d.brand_keyword) parts.push('keyword=' + d.brand_keyword);
+            if (d.issuer) parts.push('issuer=' + String(d.issuer).slice(0, 40));
+            L.push('- ' + parts.join(' | '));
+        });
+    }
+
+    // New lookalikes per monitored brand.
+    const domains = r.domains || {};
+    const lookalikeLines = [];
+    Object.entries(domains).forEach(([brand, data]) => {
+        const news = (data.lookalikes && data.lookalikes.new_domains) || [];
+        news.slice(0, 8).forEach(d => lookalikeLines.push('- ' + (d.domain || d) + ' (vs ' + brand + ')'));
+    });
+    if (lookalikeLines.length) {
+        L.push('');
+        L.push('### New lookalike domains (sample)');
+        L.push.apply(L, lookalikeLines.slice(0, 40));
+    }
+
+    return L.join('\n');
+}
+
+if (window.initChatWidget) initChatWidget({
+    title: 'Ask about these domains',
+    greeting: 'Hi! Ask me about today’s domain monitoring — which lookalikes are highest-risk, whether a domain showed up before, which brands are most impersonated, or what to escalate.',
+    chips: [
+        { label: '🔥 Highest-risk findings', q: 'Which of today’s findings are the highest risk and why?' },
+        { label: '🏷️ Most-impersonated brands', q: 'Which brands are most impersonated in this scan?' },
+        { label: '🚨 What should we take down?', q: 'Which domains look like the clearest takedown candidates, and what’s the reasoning?' },
+        { label: '📝 Leadership summary', q: 'Write a short leadership summary of this scan’s brand-protection posture.' }
+    ],
+    getContext: buildDomainMonitoringChatContext
 });
 </script>
 {% endblock %}

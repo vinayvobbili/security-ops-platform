@@ -3,9 +3,34 @@
 {% set page_title_left_icon = '⚖️' %}
 {% set page_title_right_icon = '🛡️' %}
 
+{% block body_classes %}ram-themed{% endblock %}
+
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/regulatory_acceleration_matrix.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/chat_widget.css') }}">
+<style>
+  /* ===== Regulatory Acceleration theme — Royal Indigo / Gold (compliance gravitas) ===== */
+  body.ram-themed { background:
+      radial-gradient(1100px 520px at 4% -8%, #dcd9ff 0%, transparent 55%),
+      radial-gradient(1000px 560px at 98% 0%, #e7e0ff 0%, transparent 52%),
+      radial-gradient(1200px 720px at 50% 122%, #fff0cf 0%, transparent 55%),
+      linear-gradient(160deg, #f0eeff 0%, #f4efff 48%, #fffaef 100%) !important;
+      background-attachment: fixed !important; min-height: 100vh; }
+  body.ram-themed.dark-mode { background:
+      linear-gradient(135deg, #0a0820 0%, #14112e 50%, #1a1404 100%) !important; color: #e6e2f0; }
+  html { scrollbar-gutter: stable; }
+  ::-webkit-scrollbar { width: 16px; height: 16px; }
+  ::-webkit-scrollbar-track { border-radius: 10px;
+      background: linear-gradient(180deg, rgba(0,0,0,.04), rgba(0,0,0,.06) 50%, rgba(0,0,0,.04)); }
+  ::-webkit-scrollbar-thumb { border-radius: 10px; border: 2px solid transparent; background-clip: padding-box;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
+      background: linear-gradient(180deg, #4f46e5 0%, #6366f1 22%, #8f94fb 46%, #ca8a04 70%, #eab308 100%); }
+  ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, #eab308 0%, #ca8a04 30%, #8f94fb 54%, #6366f1 78%, #4f46e5 100%); }
+  ::-webkit-scrollbar-corner { background: transparent; }
+  body.dark-mode ::-webkit-scrollbar-track {
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.10) 50%, rgba(255,255,255,.06)); }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -18,11 +43,11 @@
     </div>
 
     <div class="ram-intro">
-        v1 prototype for AI Intake #7 (the stakeholder). Crosswalks <strong>GDPR / CCPA / HIPAA</strong>
-        against <strong>NIST CSF 2.0</strong> control families. A few cells pull live evidence
-        from CrowdStrike and ServiceNow; everything else is seeded placeholder data so the
-        shape is reactable. Answer the <strong>Questions for v2</strong> at the bottom to drive
-        the next iteration.
+        v1.5 prototype for AI Intake #7 (Patrick Lane). <strong>Start with the global map</strong>:
+        click any highlighted country to see the regulations in scope and how our existing control
+        coverage maps to them. The crosswalk below the map is the full GDPR / CCPA / HIPAA × NIST
+        CSF 2.0 deep-dive. A few cells pull live evidence from CrowdStrike and ServiceNow;
+        everything else is seeded so the shape is reactable.
     </div>
 
     <div class="ram-synthetic-banner">
@@ -40,7 +65,28 @@
         <div class="ram-kpi ram-kpi-total"><div class="ram-kpi-val" id="kpiTotal">…</div><div class="ram-kpi-lbl">Total cells</div></div>
     </div>
 
-    <h2 class="ram-section-title">📋 Crosswalk</h2>
+    <h2 class="ram-section-title">Global Regulatory Map <span class="ram-section-tag">primary view</span></h2>
+    <div class="ram-map-wrap">
+        <div class="ram-map-legend">
+            <span class="ram-map-legend-lbl">Regulations in scope</span>
+            <span class="ram-map-legend-swatch ram-map-swatch-0"></span><span class="ram-map-legend-lbl-tier">0</span>
+            <span class="ram-map-legend-swatch ram-map-swatch-1"></span><span class="ram-map-legend-lbl-tier">1</span>
+            <span class="ram-map-legend-swatch ram-map-swatch-2"></span><span class="ram-map-legend-lbl-tier">2</span>
+            <span class="ram-map-legend-swatch ram-map-swatch-3"></span><span class="ram-map-legend-lbl-tier">3</span>
+            <span class="ram-map-legend-swatch ram-map-swatch-4"></span><span class="ram-map-legend-lbl-tier">4+</span>
+            <span class="ram-map-legend-spacer"></span>
+            <span class="ram-map-legend-lbl">Pulsing nodes — countries crosswalked in v1</span>
+        </div>
+        <div class="ram-map-stage">
+            <svg id="ramMap" viewBox="0 0 960 500" preserveAspectRatio="xMidYMid meet"></svg>
+            <div class="ram-map-tooltip" id="ramMapTooltip"></div>
+            <div class="ram-map-loading" id="ramMapLoading">Initialising globe…</div>
+        </div>
+        <div class="ram-map-hint">Click any highlighted country — or use the picker below — to drill into its regulations.</div>
+        <div class="ram-map-picker" id="ramMapPicker"></div>
+    </div>
+
+    <h2 class="ram-section-title">Control Crosswalk <span class="ram-section-tag">all regs × all controls</span></h2>
     <div class="ram-matrix-wrap">
         <table class="ram-matrix" id="ramMatrix">
             <thead>
@@ -52,10 +98,10 @@
         </table>
     </div>
 
-    <h2 class="ram-section-title">📡 Regulatory Pulse <span class="ram-section-tag">demo feed</span></h2>
+    <h2 class="ram-section-title">Regulatory Pulse <span class="ram-section-tag">live feed (demo)</span></h2>
     <div class="ram-pulse" id="ramPulse">Loading…</div>
 
-    <h2 class="ram-section-title">❓ Questions for v2 <span class="ram-section-tag">for stakeholders</span></h2>
+    <h2 class="ram-section-title">Questions for v2 <span class="ram-section-tag">for Patrick</span></h2>
     <div class="ram-v2-intro">
         These are the scoping questions that drive v2. Answer inline or in our follow-up — each
         answer either narrows scope or unblocks a real integration.
@@ -130,7 +176,7 @@
                 <div class="ram-info-icon">🗺️</div>
                 <div>
                     <h4>5. v1 → v2 path</h4>
-                    <p>v1 (today): crosswalk shape, two real integrations, AI impact-diff loop, scoping questions surfaced on-page. v2 (after stakeholders answer the questions): the company internal control catalog, real regulatory-update feed, live Varonis/PAM/DLP evidence cells, gap → ServiceNow workflow, posture-portal overlap resolved.</p>
+                    <p>v1 (today): crosswalk shape, two real integrations, AI impact-diff loop, scoping questions surfaced on-page. v2 (after Patrick answers the questions): the company internal control catalog, real regulatory-update feed, live Varonis/PAM/DLP evidence cells, gap → ServiceNow workflow, Walter Auger overlap resolved.</p>
                 </div>
             </div>
 
@@ -140,6 +186,8 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
 <script>
 (function() {
     var COV_ORDER = ['covered', 'partial', 'gap', 'unknown'];
@@ -405,6 +453,281 @@
     }
 
     loadMatrixData(false);
+
+    // ----------------------------------------------------------------------
+    // World-map view (v1.5 primary)
+    // ----------------------------------------------------------------------
+    var WORLD_TOPO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
+    var geoByIsoNum = {};
+    var geoList = [];
+
+    function pickSwatch(count) {
+        if (!count) return 'ram-map-swatch-0';
+        if (count === 1) return 'ram-map-swatch-1';
+        if (count === 2) return 'ram-map-swatch-2';
+        if (count === 3) return 'ram-map-swatch-3';
+        return 'ram-map-swatch-4';
+    }
+
+    function renderMapPicker() {
+        var wrap = document.getElementById('ramMapPicker');
+        if (!wrap) return;
+        wrap.innerHTML = '';
+        var byRegion = {};
+        geoList.forEach(function(g) {
+            (byRegion[g.region] = byRegion[g.region] || []).push(g);
+        });
+        Object.keys(byRegion).sort().forEach(function(region) {
+            var group = document.createElement('div');
+            group.className = 'ram-map-picker-group';
+            group.appendChild(el('div', 'ram-map-picker-region', region));
+            byRegion[region]
+                .sort(function(a, b) { return a.name.localeCompare(b.name); })
+                .forEach(function(g) {
+                    var chip = el('button', 'ram-map-picker-chip', null);
+                    chip.type = 'button';
+                    var mappedPill = g.mapped_count
+                        ? ' <span class="ram-map-picker-mapped-pill">' + g.mapped_count + ' MAPPED</span>'
+                        : '';
+                    chip.innerHTML = '<span class="ram-map-picker-flag">' + (g.flag || '🌐') + '</span>'
+                        + '<span class="ram-map-picker-name">' + g.name + '</span>'
+                        + '<span class="ram-map-picker-meta">' + g.total_regulations + '</span>'
+                        + mappedPill;
+                    chip.addEventListener('click', function() { openCountryPanel(g.id); });
+                    group.appendChild(chip);
+                });
+            wrap.appendChild(group);
+        });
+    }
+
+    function loadGeo() {
+        var p1 = fetch('/api/regulatory-acceleration-matrix/geo').then(function(r){ return r.json(); });
+        var p2 = fetch(WORLD_TOPO_URL).then(function(r){ return r.json(); });
+        Promise.all([p1, p2])
+            .then(function(results) {
+                var geoData = results[0];
+                var worldTopo = results[1];
+                geoList = geoData.geographies || [];
+                geoByIsoNum = {};
+                geoList.forEach(function(g) { geoByIsoNum[g.iso_num] = g; });
+                window._ramGeoList = geoList;
+                renderMapPicker();
+                renderWorldMap(worldTopo);
+                var loading = document.getElementById('ramMapLoading');
+                if (loading) loading.style.display = 'none';
+            })
+            .catch(function(e) {
+                var loading = document.getElementById('ramMapLoading');
+                if (loading) loading.textContent = 'World map failed to load: ' + e + ' — use the country picker below.';
+                // Render picker anyway from cached geo data if it loaded
+                if (geoList.length) renderMapPicker();
+            });
+    }
+
+    function renderWorldMap(worldTopo) {
+        if (!window.d3 || !window.topojson) {
+            console.warn('d3/topojson not loaded — map will not render');
+            return;
+        }
+        var svg = d3.select('#ramMap');
+        svg.selectAll('*').remove();
+        var width = 960, height = 500;
+
+        var countries = topojson.feature(worldTopo, worldTopo.objects.countries);
+        var projection = d3.geoNaturalEarth1().fitSize([width, height], countries);
+        var path = d3.geoPath(projection);
+
+        // --- defs: glow filters ---
+        var defs = svg.append('defs');
+        var soft = defs.append('filter').attr('id', 'ramGlow').attr('x', '-50%').attr('y', '-50%').attr('width', '200%').attr('height', '200%');
+        soft.append('feGaussianBlur').attr('stdDeviation', '2.2').attr('result', 'blur');
+        var softMerge = soft.append('feMerge');
+        softMerge.append('feMergeNode').attr('in', 'blur');
+        softMerge.append('feMergeNode').attr('in', 'SourceGraphic');
+        var strong = defs.append('filter').attr('id', 'ramGlowStrong').attr('x', '-50%').attr('y', '-50%').attr('width', '200%').attr('height', '200%');
+        strong.append('feGaussianBlur').attr('stdDeviation', '4').attr('result', 'blur');
+        var strongMerge = strong.append('feMerge');
+        strongMerge.append('feMergeNode').attr('in', 'blur');
+        strongMerge.append('feMergeNode').attr('in', 'SourceGraphic');
+
+        // --- sphere + graticule (lat/long grid behind countries) ---
+        var graticule = d3.geoGraticule().step([15, 15]);
+        svg.append('path').attr('class', 'ram-map-sphere').attr('d', path({type: 'Sphere'}));
+        svg.append('path').attr('class', 'ram-map-graticule').attr('d', path(graticule()));
+
+        var tooltip = document.getElementById('ramMapTooltip');
+
+        function tipShow(geo, x, y, name, fallback) {
+            if (geo) {
+                var mapped = geo.mapped_count ? '<span class="ram-tip-pill ram-tip-pill-live">' + geo.mapped_count + ' MAPPED</span>' : '';
+                tooltip.innerHTML = '<div class="ram-tip-name"><span class="ram-tip-flag">' + (geo.flag || '🌐') + '</span>' + geo.name + '</div>'
+                    + '<div class="ram-tip-meta">' + mapped + geo.total_regulations + ' regulations · ' + geo.region + '</div>'
+                    + '<div class="ram-tip-hint">Click to drill in →</div>';
+            } else {
+                tooltip.innerHTML = '<div class="ram-tip-name">' + name + '</div>'
+                    + '<div class="ram-tip-meta">' + (fallback || 'No regulatory mapping in v1.5') + '</div>';
+            }
+            tooltip.style.display = 'block';
+            tooltip.style.left = (x + 14) + 'px';
+            tooltip.style.top  = (y + 14) + 'px';
+        }
+        function tipHide() { tooltip.style.display = 'none'; }
+
+        // --- countries ---
+        svg.append('g')
+            .selectAll('path')
+            .data(countries.features)
+            .enter()
+            .append('path')
+                .attr('d', path)
+                .attr('class', function(f) {
+                    var geo = geoByIsoNum[String(f.id).padStart(3, '0')] || geoByIsoNum[String(f.id)];
+                    var base = 'ram-map-country ' + pickSwatch(geo ? geo.total_regulations : 0);
+                    if (geo && geo.mapped_count > 0) base += ' ram-map-mapped';
+                    if (geo) base += ' ram-map-clickable';
+                    return base;
+                })
+                .on('mousemove', function(event, f) {
+                    var idStr = String(f.id).padStart(3, '0');
+                    var geo = geoByIsoNum[idStr] || geoByIsoNum[String(f.id)];
+                    var name = (f.properties && f.properties.name) || idStr;
+                    var stage = document.querySelector('.ram-map-stage').getBoundingClientRect();
+                    tipShow(geo, event.clientX - stage.left, event.clientY - stage.top, name);
+                })
+                .on('mouseleave', tipHide)
+                .on('click', function(event, f) {
+                    var idStr = String(f.id).padStart(3, '0');
+                    var geo = geoByIsoNum[idStr] || geoByIsoNum[String(f.id)];
+                    if (geo) openCountryPanel(geo.id);
+                });
+
+        // --- pulse dots at centroids of mapped countries ---
+        var pulseLayer = svg.append('g').attr('class', 'ram-map-pulse-layer').attr('pointer-events', 'none');
+        countries.features.forEach(function(f, idx) {
+            var idStr = String(f.id).padStart(3, '0');
+            var geo = geoByIsoNum[idStr] || geoByIsoNum[String(f.id)];
+            if (!geo || !geo.mapped_count) return;
+            var centroid = path.centroid(f);
+            if (!isFinite(centroid[0]) || !isFinite(centroid[1])) return;
+            // Expanding ring (animated via CSS)
+            var ring = pulseLayer.append('circle')
+                .attr('class', 'ram-map-pulse')
+                .attr('cx', centroid[0])
+                .attr('cy', centroid[1])
+                .attr('r', 4);
+            // Stagger the animation per country so they don't all pulse in unison
+            ring.node().style.animationDelay = ((idx * 0.18) % 2.6) + 's';
+            // Solid core dot
+            pulseLayer.append('circle')
+                .attr('class', 'ram-map-pulse-core')
+                .attr('cx', centroid[0])
+                .attr('cy', centroid[1])
+                .attr('r', 1.4);
+        });
+    }
+
+    function openCountryPanel(geoId) {
+        var panel = document.getElementById('ramSideBackdrop');
+        var title = document.getElementById('ramSideTitle');
+        var body  = document.getElementById('ramSideBody');
+        title.textContent = 'Loading country detail…';
+        body.innerHTML = '';
+        panel.style.display = 'flex';
+        fetch('/api/regulatory-acceleration-matrix/geo/' + encodeURIComponent(geoId))
+            .then(function(r) { return r.json(); })
+            .then(function(g) {
+                if (!g || g.error) {
+                    title.textContent = 'Country detail';
+                    body.innerHTML = '<div class="ram-muted">' + ((g && g.error) || 'Failed to load.') + '</div>';
+                    return;
+                }
+                renderCountryPanel(g);
+            })
+            .catch(function(e) {
+                title.textContent = 'Country detail';
+                body.innerHTML = '<div class="ram-muted">Failed to load: ' + e + '</div>';
+            });
+    }
+
+    function renderCountryPanel(g) {
+        var title = document.getElementById('ramSideTitle');
+        var body  = document.getElementById('ramSideBody');
+        title.innerHTML = '<span class="ram-side-head-flag">' + (g.flag || '🗺️') + '</span>' + g.name;
+        body.innerHTML = '';
+
+        body.appendChild(el('div', 'ram-side-region', g.region));
+        if (g.notes) body.appendChild(el('div', 'ram-side-notes', g.notes));
+
+        // Coverage summary chips (only meaningful when in-scope mapped regs exist)
+        if (g.mapped_count > 0) {
+            var cs = g.coverage_summary || {};
+            var chipRow = el('div', 'ram-side-chips');
+            ['covered', 'partial', 'gap', 'unknown'].forEach(function(k) {
+                var c = el('span', 'ram-side-chip ram-side-chip-' + k);
+                c.innerHTML = '<span class="ram-side-chip-n">' + (cs[k] || 0) + '</span> <span class="ram-side-chip-l">' + k + '</span>';
+                chipRow.appendChild(c);
+            });
+            body.appendChild(chipRow);
+        }
+
+        body.appendChild(el('h4', 'ram-side-h', 'Regulations mapped in v1 crosswalk'));
+        if (!(g.regulations || []).length) {
+            body.appendChild(el('div', 'ram-muted', '— none yet (v2 will extend the crosswalk to this geography) —'));
+        } else {
+            var ul = el('ul', 'ram-side-list');
+            g.regulations.forEach(function(r) {
+                var li = el('li');
+                li.innerHTML = '<span class="ram-pill ram-pill-live">MAPPED</span> <strong>' + r.name + '</strong> <span class="ram-side-scope">— ' + r.scope + '</span>';
+                ul.appendChild(li);
+            });
+            body.appendChild(ul);
+        }
+
+        body.appendChild(el('h4', 'ram-side-h', 'Additional regulations in scope (not yet crosswalked)'));
+        if (!(g.additional_regulations || []).length) {
+            body.appendChild(el('div', 'ram-muted', '— none recorded —'));
+        } else {
+            var ul2 = el('ul', 'ram-side-list');
+            g.additional_regulations.forEach(function(r) {
+                var li = el('li');
+                li.innerHTML = '<span class="ram-pill ram-pill-seed">TO MAP</span> <strong>' + r.name + '</strong> <span class="ram-side-scope">— ' + (r.scope || '') + '</span>';
+                ul2.appendChild(li);
+            });
+            body.appendChild(ul2);
+        }
+
+        // Per-control-family coverage (only when we actually have mapped regs)
+        if ((g.rows || []).length && g.mapped_count > 0) {
+            body.appendChild(el('h4', 'ram-side-h', 'Control coverage for this geography'));
+            var tbl = el('table', 'ram-side-cov-tbl');
+            var thead = el('thead');
+            var thr = el('tr');
+            thr.appendChild(el('th', null, 'Control family'));
+            g.regulations.forEach(function(r) { thr.appendChild(el('th', null, r.id)); });
+            thead.appendChild(thr);
+            tbl.appendChild(thead);
+            var tbody = el('tbody');
+            g.rows.forEach(function(row) {
+                var tr = el('tr');
+                var fam = el('td');
+                fam.innerHTML = '<div class="ram-side-cov-fid">' + row.family.id + '</div><div class="ram-side-cov-fname">' + row.family.name + '</div>';
+                tr.appendChild(fam);
+                g.regulations.forEach(function(r) {
+                    var cell = row.cells[r.id] || {coverage: 'unknown'};
+                    var td = el('td', 'ram-cov-' + cell.coverage);
+                    td.textContent = cell.coverage;
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+            tbl.appendChild(tbody);
+            body.appendChild(tbl);
+        }
+    }
+
+    window.openCountryPanel = openCountryPanel;
+
+    loadGeo();
 })();
 </script>
 
@@ -424,7 +747,9 @@ document.addEventListener('DOMContentLoaded', function() {
             {label: 'Which rows are gaps?', q: 'Which control families × regulation cells are currently in "gap" status?'},
             {label: 'HIPAA coverage', q: 'Summarize our HIPAA coverage across all control families.'},
             {label: 'Breach-notification posture', q: 'Which controls back our breach-notification posture, and what evidence supports them?'},
-            {label: 'Top 3 v2 priorities', q: 'Based on the gaps and the v2 questions, what would you prioritize first?'}
+            {label: 'Top 3 v2 priorities', q: 'Based on the gaps and the v2 questions, what would you prioritize first?'},
+            {label: 'Countries mapped', q: 'Which countries are currently mapped in v1, and which regions are still gaps in the geographic view?'},
+            {label: 'EU coverage', q: 'For our EU operations, what regulations are in scope and what does our coverage look like?'}
         ],
         getContext: function() {
             var d = window._ramData;
@@ -456,7 +781,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 lines.push('- ' + p.regulation + ': ' + p.title + ' (effective ' + p.effective_date + ') — likely affects ' + (p.likely_affects||[]).join(', '));
             });
             lines.push('');
-            lines.push('## v2 questions for stakeholders');
+            var geoList = window._ramGeoList || [];
+            if (geoList.length) {
+                lines.push('');
+                lines.push('## Geographic view — countries × regulations');
+                lines.push('');
+                lines.push('| Country | Region | Mapped in v1 | Additional regs (not yet crosswalked) | Notes |');
+                lines.push('| --- | --- | --- | --- | --- |');
+                geoList.forEach(function(g) {
+                    var mapped = (g.in_scope_mapped || []).join(', ') || '—';
+                    var extra = (g.additional_regulations || []).map(function(r){ return r.name; }).join('; ') || '—';
+                    lines.push('| ' + g.name + ' | ' + g.region + ' | ' + mapped + ' | ' + extra + ' | ' + (g.notes || '') + ' |');
+                });
+            }
+            lines.push('');
+            lines.push('## v2 questions for Patrick');
             d.v2_questions.forEach(function(q, i) {
                 lines.push((i+1) + '. ' + q.question + ' — ' + q.context);
             });

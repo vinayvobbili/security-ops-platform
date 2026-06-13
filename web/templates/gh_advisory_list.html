@@ -1,0 +1,289 @@
+{% extends 'base_layout.html' %}
+
+{% block page_title_plain %}Cyber Security Advisories{% endblock %}
+
+{% set page_title_text = 'Cyber Security Advisories' %}
+{% set page_title_left_icon = '🚨' %}
+
+{% macro src_family(source) %}{% if source == 'github_malware' %}malware{% elif source.startswith('github') %}github{% elif source.startswith('osv') %}osv{% elif source.startswith('cisa') %}kev{% else %}rss{% endif %}{% endmacro %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/gh_advisory.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/chat_widget.css') }}">
+<style>
+  .gha-src{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;
+    letter-spacing:.03em;padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle;
+    background:#eef1f5;color:#4b5563;}
+  .src-fam-github{background:#ddf4ff;color:#0969da;}
+  .src-fam-malware{background:#ffebe9;color:#cf222e;}
+  .src-fam-osv{background:#fff1e5;color:#bc4c00;}
+  .src-fam-kev{background:#f3e8ff;color:#8250df;}
+  .src-fam-rss{background:#dafbe1;color:#1a7f37;}
+  .gha-pkgline{font-size:12.5px;color:#57606a;margin-top:3px;word-break:break-word;}
+  .gha-srcfilter{margin:10px 0 4px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+  .gha-srcfilter .lbl{font-size:12px;color:#8b949e;text-transform:uppercase;letter-spacing:.04em;margin-right:2px;}
+  /* Sources modal */
+  .src-row{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid #eef0f3;}
+  .src-row .name{font-weight:600;flex:0 0 auto;}
+  .src-row .tag{font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;padding:1px 7px;border-radius:9px;background:#eef1f5;color:#57606a;}
+  .src-row .cnt{font-size:12px;color:#8b949e;}
+  .src-row .spacer{flex:1;}
+  .src-row .rm{border:none;background:transparent;color:#cf222e;cursor:pointer;font-size:13px;}
+  .src-add{margin-top:14px;padding-top:12px;border-top:1px solid #eef0f3;}
+  .src-add h4{margin:10px 0 6px;font-size:13px;color:#24292e;}
+  .src-add input,.src-add select,.src-add textarea{width:100%;padding:7px 9px;border:1px solid #d0d7de;border-radius:7px;font-size:13px;margin-bottom:6px;box-sizing:border-box;}
+  .src-add .row2{display:flex;gap:8px;}
+  .src-add button{background:#0969da;color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:13px;cursor:pointer;}
+  .src-add button.secondary{background:#6e7781;}
+  .switch{position:relative;display:inline-block;width:38px;height:22px;flex:0 0 auto;}
+  .switch input{opacity:0;width:0;height:0;}
+  .switch .sl{position:absolute;cursor:pointer;inset:0;background:#cbd5e1;border-radius:22px;transition:.2s;}
+  .switch .sl:before{content:"";position:absolute;height:16px;width:16px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s;}
+  .switch input:checked + .sl{background:#1a7f37;}
+  .switch input:checked + .sl:before{transform:translateX(16px);}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="gha-container">
+    <div class="gha-header-strip" style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="gha-info-btn" onclick="document.getElementById('ghaInfoModal').style.display='flex'" title="How does this work?">
+            <span class="gha-info-btn-icon">✦</span> How does this work?
+        </button>
+        <button class="gha-info-btn" onclick="document.getElementById('ghaSourcesModal').style.display='flex'" title="Manage sources">
+            <span class="gha-info-btn-icon">⚙</span> Sources
+        </button>
+    </div>
+
+    <div class="gha-hero">
+        <h2>🚨 Cyber Security Advisories</h2>
+        <p>Critical security advisories affecting our stack — pulled hourly by the Detection Engineering poller from <b>GitHub</b> (reviewed + malware), <b>OSV</b> (malicious packages), <b>CISA KEV</b>, and any feeds you add under <b>Sources</b>. Review each one, record your assessment, then either close it as not worth reporting or escalate it to the Package Compromise Assessment Teams channel — duplicate-safe.</p>
+    </div>
+
+    <div class="gha-counts">
+        <a class="gha-chip active" href="#" data-filter="all">All <b>{{ advisories|length }}</b></a>
+        <a class="gha-chip" href="#" data-filter="new">New <b>{{ counts.get('new', 0) }}</b></a>
+        <a class="gha-chip" href="#" data-filter="under_review">Under review <b>{{ counts.get('under_review', 0) }}</b></a>
+        <a class="gha-chip" href="#" data-filter="reported">Reported <b>{{ counts.get('reported', 0) }}</b></a>
+        <a class="gha-chip" href="#" data-filter="closed_not_reported">Closed <b>{{ counts.get('closed_not_reported', 0) }}</b></a>
+    </div>
+
+    {% if source_labels %}
+    <div class="gha-srcfilter">
+        <span class="lbl">Source</span>
+        <a class="gha-chip gha-srcchip active" href="#" data-source="all">All</a>
+        {% for src, label in source_labels.items() %}
+            <a class="gha-chip gha-srcchip" href="#" data-source="{{ src }}">{{ label }} <b>{{ source_counts.get(src, 0) }}</b></a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if advisories %}
+        {% for a in advisories %}
+        <a class="gha-row s-{{ a.status }}" data-status="{{ a.status }}" data-source="{{ a.source }}" href="/cs-advisories/{{ a.source_id }}">
+            <span class="gha-badge b-{{ a.status }}">{{ a.status.replace('_', ' ') }}</span>
+            <span class="gha-src src-fam-{{ src_family(a.source)|trim }}">{{ a.source_label }}</span>
+            <div class="gha-id">{{ a.source_id }} <span class="gha-cve">{{ a.cve_id or 'no CVE' }}</span></div>
+            <div class="gha-summary">{{ a.summary or '(no summary)' }}</div>
+            {% if a.packages %}<div class="gha-pkgline">📦 {{ a.packages|join(', ') }}</div>{% endif %}
+            <div class="gha-meta">Published {{ (a.published_at or '')[:10] or 'unknown' }}
+                {% if a.reviewed_by %} · reviewed by {{ a.reviewed_by }}{% endif %}
+                {% if a.reported_at %} · reported {{ a.reported_at[:10] }}{% endif %}
+            </div>
+        </a>
+        {% endfor %}
+        <div class="gha-empty" id="gha-no-match" style="display:none;">No advisories in this view.</div>
+    {% else %}
+        <div class="gha-empty">No advisories recorded yet. The hourly Detection Engineering poller will populate this queue.</div>
+    {% endif %}
+</div>
+
+<!-- How Does This Work? Modal -->
+<div class="gha-info-backdrop" id="ghaInfoModal" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+    <div class="gha-info-modal" onclick="event.stopPropagation()">
+        <div class="gha-info-header">
+            <h3>How Do Cyber Security Advisories Work?</h3>
+            <button class="gha-info-close" onclick="document.getElementById('ghaInfoModal').style.display='none'">&times;</button>
+        </div>
+        <div class="gha-info-body">
+            <div class="gha-info-section">
+                <div class="gha-info-icon">🎯</div>
+                <div>
+                    <h4>What it's for</h4>
+                    <p>Several feeds publish <strong>security advisories</strong> for open-source packages and exploited vulnerabilities. This queue surfaces the <strong>critical</strong> ones relevant to us so a human decides whether each warrants escalation — instead of them scrolling past in a feed.</p>
+                </div>
+            </div>
+            <div class="gha-info-section">
+                <div class="gha-info-icon">📡</div>
+                <div>
+                    <h4>1. Hourly poll, many sources</h4>
+                    <p>A Detection Engineering job pulls new advisories every hour from <strong>GitHub</strong> (reviewed-critical + malware), <strong>OSV</strong> (malicious npm/PyPI packages), <strong>CISA KEV</strong> (known-exploited CVEs), and any <strong>RSS feeds or extra OSV ecosystems</strong> added under Sources. Each lands as <strong>New</strong>. The same finding reported by more than one feed is de-duplicated. A feed's pre-existing backlog is baselined silently and kept hidden, so the page only ever shows genuinely new work.</p>
+                </div>
+            </div>
+            <div class="gha-info-section">
+                <div class="gha-info-icon">📝</div>
+                <div>
+                    <h4>2. Review &amp; record</h4>
+                    <p>Open an advisory to see severity, CVSS, CWEs, affected packages, and the full description. Capture your assessment in the <strong>triage notes</strong> — what it affects, our exposure, and the rationale for the call. The chat bubble can answer questions about anything on the page.</p>
+                </div>
+            </div>
+            <div class="gha-info-section">
+                <div class="gha-info-icon">🚦</div>
+                <div>
+                    <h4>3. Decide</h4>
+                    <p>Either <strong>Close — not worth reporting</strong> (with your reasoning preserved), or <strong>Notify</strong> the Package Compromise Assessment Teams channel. Escalation is <strong>duplicate-safe</strong>: an advisory already reported won't fire a second message.</p>
+                </div>
+            </div>
+            <div class="gha-info-section">
+                <div class="gha-info-icon">⚙️</div>
+                <div>
+                    <h4>Sources</h4>
+                    <p>Use <strong>Sources</strong> to switch feeds on/off, add an <strong>RSS/blog feed</strong> (each post is screened by AI for package-compromise relevance) or an <strong>extra OSV ecosystem</strong> (Go, Maven, …). Need a source that isn't a feed? Request it and the team gets pinged to wire it up.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sources Modal -->
+<div class="gha-info-backdrop" id="ghaSourcesModal" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+    <div class="gha-info-modal" onclick="event.stopPropagation()">
+        <div class="gha-info-header">
+            <h3>⚙ Sources</h3>
+            <button class="gha-info-close" onclick="document.getElementById('ghaSourcesModal').style.display='none'">&times;</button>
+        </div>
+        <div class="gha-info-body">
+            <div id="src-list">
+                {% for s in sources_state %}
+                <div class="src-row" data-key="{{ s.key }}">
+                    <label class="switch"><input type="checkbox" class="src-toggle" data-key="{{ s.key }}" {% if s.enabled %}checked{% endif %}><span class="sl"></span></label>
+                    <span class="name">{{ s.label }}</span>
+                    <span class="tag">{{ s.type }}</span>
+                    <span class="cnt">{{ s.count }} shown</span>
+                    <span class="spacer"></span>
+                    {% if not s.builtin %}<button class="rm" data-key="{{ s.key }}" title="Remove source">Remove</button>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="src-add">
+                <h4>➕ Add an OSV ecosystem</h4>
+                <div class="row2">
+                    <select id="add-osv-eco">
+                        {% for e in addable_ecosystems %}<option value="{{ e }}">{{ e }}</option>{% endfor %}
+                    </select>
+                    <button id="add-osv-btn">Add</button>
+                </div>
+
+                <h4>➕ Add an RSS / blog feed</h4>
+                <input id="add-rss-label" placeholder="Label (e.g. Microsoft Security Blog)">
+                <div class="row2">
+                    <input id="add-rss-url" placeholder="https://… feed URL (RSS or Atom)">
+                    <button id="add-rss-btn">Add</button>
+                </div>
+                <p style="font-size:12px;color:#8b949e;margin:2px 0 0;">Each new post is screened by AI for package-compromise / critical-vuln relevance before it lands in the queue.</p>
+
+                <h4>✉️ Request another source</h4>
+                <textarea id="req-src" rows="2" placeholder="Describe a source that isn't an RSS feed or OSV ecosystem (e.g. a vendor API). The team gets pinged to wire it up."></textarea>
+                <button id="req-src-btn" class="secondary">Send request</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include '_chat_widget.html' %}
+<div id="gha-toast" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#24292e;color:#fff;padding:10px 16px;border-radius:8px;font-size:13px;opacity:0;transition:.25s;pointer-events:none;z-index:100020;"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/vendor/marked.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chat_widget.js') }}"></script>
+<script>
+const CHAT_CTX = {{ chat_context|tojson }};
+(function () {
+    // ---- status + source filtering ----
+    const statusChips = document.querySelectorAll('.gha-chip:not(.gha-srcchip)');
+    const sourceChips = document.querySelectorAll('.gha-srcchip');
+    const rows = document.querySelectorAll('.gha-row');
+    const empty = document.getElementById('gha-no-match');
+    let curStatus = 'all', curSource = 'all';
+    function apply() {
+        let shown = 0;
+        rows.forEach(r => {
+            const match = (curStatus === 'all' || r.dataset.status === curStatus)
+                       && (curSource === 'all' || r.dataset.source === curSource);
+            r.style.display = match ? '' : 'none';
+            if (match) shown++;
+        });
+        if (empty) empty.style.display = shown ? 'none' : 'block';
+    }
+    statusChips.forEach(c => c.addEventListener('click', e => {
+        e.preventDefault(); statusChips.forEach(x => x.classList.remove('active'));
+        c.classList.add('active'); curStatus = c.dataset.filter; apply();
+    }));
+    sourceChips.forEach(c => c.addEventListener('click', e => {
+        e.preventDefault(); sourceChips.forEach(x => x.classList.remove('active'));
+        c.classList.add('active'); curSource = c.dataset.source; apply();
+    }));
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') ['ghaInfoModal','ghaSourcesModal'].forEach(id => {
+            const m = document.getElementById(id); if (m) m.style.display = 'none';
+        });
+    });
+
+    // ---- sources modal ----
+    const toast = document.getElementById('gha-toast');
+    let tt;
+    function showToast(msg, err) {
+        toast.textContent = msg; toast.style.background = err ? '#cf222e' : '#24292e';
+        toast.style.opacity = '1'; clearTimeout(tt);
+        tt = setTimeout(() => toast.style.opacity = '0', 3200);
+    }
+    async function postJSON(url, body) {
+        const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'},
+            credentials:'same-origin', body: JSON.stringify(body || {})});
+        if (r.status === 401) { showToast('Please sign in to manage sources — redirecting…', true);
+            setTimeout(() => location.href = '/login?next=' + encodeURIComponent(location.pathname), 1100); return null; }
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || d.ok === false) { showToast(d.error || ('Failed: ' + r.status), true); return null; }
+        return d;
+    }
+    document.querySelectorAll('.src-toggle').forEach(cb => cb.addEventListener('change', async () => {
+        const d = await postJSON('/api/cs-advisories/sources/' + encodeURIComponent(cb.dataset.key), {enabled: cb.checked});
+        if (!d) { cb.checked = !cb.checked; return; }
+        showToast(cb.dataset.key + (cb.checked ? ' enabled' : ' disabled') + '. Takes effect next poll.');
+    }));
+    document.querySelectorAll('.src-row .rm').forEach(b => b.addEventListener('click', async () => {
+        if (!confirm('Remove this source? Its advisories stay in the DB but it stops polling.')) return;
+        const d = await postJSON('/api/cs-advisories/sources/remove', {key: b.dataset.key});
+        if (d) { showToast('Source removed.'); setTimeout(() => location.reload(), 700); }
+    }));
+    document.getElementById('add-osv-btn').addEventListener('click', async () => {
+        const d = await postJSON('/api/cs-advisories/sources/add', {type:'osv', ecosystem: document.getElementById('add-osv-eco').value});
+        if (d) { showToast('OSV ecosystem added — baselines on next poll.'); setTimeout(() => location.reload(), 800); }
+    });
+    document.getElementById('add-rss-btn').addEventListener('click', async () => {
+        const d = await postJSON('/api/cs-advisories/sources/add', {type:'rss',
+            url: document.getElementById('add-rss-url').value, label: document.getElementById('add-rss-label').value});
+        if (d) { showToast('Feed added — baselines on next poll.'); setTimeout(() => location.reload(), 800); }
+    });
+    document.getElementById('req-src-btn').addEventListener('click', async () => {
+        const t = document.getElementById('req-src');
+        const d = await postJSON('/api/cs-advisories/sources/request', {description: t.value});
+        if (d) { showToast('Request sent — the team has been pinged on Webex. ✅'); t.value = ''; }
+    });
+
+    // ---- chat widget ----
+    if (window.initChatWidget) initChatWidget({
+        title: 'Ask about these advisories',
+        greeting: 'Hi! Ask me about the advisories in this queue — severity, affected packages, what to escalate, etc.',
+        chips: [
+            {label: 'Top priorities', q: 'Which of these advisories should we prioritise and why?'},
+            {label: 'Malicious packages', q: 'List the malicious-package advisories and the packages involved.'},
+            {label: 'What to escalate', q: 'Which of these look worth escalating to Package Compromise Assessment?'}
+        ],
+        getContext: function () { return CHAT_CTX; }
+    });
+})();
+</script>
+{% endblock %}

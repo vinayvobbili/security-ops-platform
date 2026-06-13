@@ -17,6 +17,8 @@ from flask import Blueprint, abort, jsonify, render_template, request, send_file
 from src.components.web import recap_handler
 from src.components.web.recap_job_manager import get_manager
 from src.utils.logging_utils import get_client_ip, log_web_activity
+from web.auth.helpers import login_required
+from web.auth.rbac import require_capability, DATA_DESTRUCTIVE
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +51,7 @@ def recap_page(recap_id: int | None = None):
 
 
 @recap_bp.route("/api/recap/upload", methods=["POST"])
+@login_required
 @log_web_activity
 def api_recap_upload():
     upload = request.files.get("file")
@@ -66,6 +69,9 @@ def api_recap_upload():
         return jsonify({"error": f"meeting_type must be one of {sorted(VALID_MEETING_TYPES)}"}), 400
 
     meeting_date = request.form.get("meeting_date", "").strip() or None
+    meeting_start_time = request.form.get("meeting_start_time", "").strip() or None
+    if meeting_start_time and not re.fullmatch(r"\d{2}:\d{2}", meeting_start_time):
+        return jsonify({"error": "meeting_start_time must be 24-hour HH:MM"}), 400
     attendees = request.form.get("attendees", "").strip() or None
 
     language = (request.form.get("language") or "").strip().lower() or recap_handler.DEFAULT_LANGUAGE
@@ -98,6 +104,7 @@ def api_recap_upload():
         audio_path=str(audio_path),
         meeting_type=meeting_type,
         meeting_date=meeting_date,
+        meeting_start_time=meeting_start_time,
         attendees=attendees,
         language=language,
         generate_video=generate_video,
@@ -149,6 +156,7 @@ def api_recap_list():
 
 
 @recap_bp.route("/api/recap/<int:recap_id>/speakers", methods=["POST"])
+@login_required
 @log_web_activity
 def api_recap_rename_speakers(recap_id):
     data = request.get_json(silent=True) or {}
@@ -161,6 +169,7 @@ def api_recap_rename_speakers(recap_id):
 
 
 @recap_bp.route("/api/recap/<int:recap_id>", methods=["DELETE"])
+@require_capability(DATA_DESTRUCTIVE)
 @log_web_activity
 def api_recap_delete(recap_id):
     if not recap_handler.delete_recap(recap_id):
@@ -177,6 +186,7 @@ def api_recap_languages():
 
 
 @recap_bp.route("/api/recap/<int:recap_id>/translate", methods=["POST"])
+@login_required
 @log_web_activity
 def api_recap_translate(recap_id):
     data = request.get_json(silent=True) or {}

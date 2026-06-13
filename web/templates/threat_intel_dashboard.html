@@ -9,6 +9,24 @@
 {% block extra_css %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/threat_intel_dashboard.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/chat_widget.css') }}">
+<style>
+  /* House rainbow scrollbar (consistency with the rest of GDnR) — inner class-scoped scrollbars are preserved by specificity */
+  html { scrollbar-gutter: stable; }
+  ::-webkit-scrollbar { width: 16px; height: 16px; }
+  ::-webkit-scrollbar-track { border-radius: 10px;
+      background: linear-gradient(180deg, rgba(202,138,4,0.08), rgba(0,70,173,0.10) 50%, rgba(124,58,237,0.08)); }
+  ::-webkit-scrollbar-thumb { border-radius: 10px; border: 2px solid transparent; background-clip: padding-box;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35);
+      background: linear-gradient(180deg, #ca8a04 0%, #d97706 20%, #00a651 40%, #0d9488 60%, #0046ad 80%, #7c3aed 100%); }
+  ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, #7c3aed 0%, #0046ad 20%, #0d9488 40%, #00a651 60%, #d97706 80%, #ca8a04 100%); }
+  ::-webkit-scrollbar-corner { background: transparent; }
+  body.dark-mode ::-webkit-scrollbar-track {
+      background: linear-gradient(180deg, rgba(252,211,77,0.08), rgba(125,211,252,0.10) 50%, rgba(196,181,253,0.08)); }
+  body.dark-mode ::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, #fcd34d 0%, #fdba74 20%, #6ee7b7 40%, #5eead4 60%, #7dd3fc 80%, #c4b5fd 100%);
+      background-clip: padding-box; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18); }
+</style>
 {% endblock %}
 {% block content %}
     <div class="tid-container">
@@ -321,12 +339,12 @@
                         </div>
                         <table class="tid-table">
                             <colgroup>
-                                <col style="width: 7%;"><col style="width: 43%;"><col style="width: 25%;"><col style="width: 25%;">
+                                <col style="width: 7%;"><col style="width: 33%;"><col style="width: 20%;"><col style="width: 20%;"><col style="width: 20%;">
                             </colgroup>
                             <thead><tr>
-                                <th class="center-cell">Rank</th><th>Technique</th><th class="center-cell">Tipper Occurrences</th><th class="center-cell">Detection Rules</th>
+                                <th class="center-cell">Rank</th><th>Technique</th><th class="center-cell">Tipper Occurrences</th><th class="center-cell">Detection Rules</th><th class="center-cell" title="Did a live AttackIQ simulation actually trip our detections?">BAS Validation</th>
                             </tr></thead>
-                            <tbody id="topTtpsBody"><tr><td colspan="4" class="tid-empty-cell">Loading...</td></tr></tbody>
+                            <tbody id="topTtpsBody"><tr><td colspan="5" class="tid-empty-cell">Loading...</td></tr></tbody>
                         </table>
                         <div class="tid-table-footer">
                             <button class="tid-download-btn" onclick="downloadTableExcel('ttps')">Download Excel</button>
@@ -1715,11 +1733,11 @@ function renderActorsTab(actors) {
 async function renderTtpsTab(techniques) {
     const tbody = document.getElementById('topTtpsBody');
     if (!techniques.length) {
-        tbody.innerHTML = '<tr><td colspan="4" class="tid-empty-cell">No MITRE techniques detected</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="tid-empty-cell">No MITRE techniques detected</td></tr>';
         return;
     }
 
-    const ruleCounts = await fetchDetectionRuleCounts();
+    const [ruleCounts] = await Promise.all([fetchDetectionRuleCounts(), fetchBasValidation()]);
     tbody.innerHTML = techniques.map((t, i) => {
         const rc = ruleCounts[t.technique_id] || 0;
         const coverageClass = getTechCoverageClass(t.technique_id, ruleCounts);
@@ -1728,6 +1746,7 @@ async function renderTtpsTab(techniques) {
             <td><a href="#" class="tid-tech-id" onclick="openDrilldown('TTP','${escapeAttr(t.technique_id)}');return false;">${escapeHtml(t.technique_id)}</a></td>
             <td class="center-cell"><a href="#" class="tid-occurrence-pill" onclick="openDrilldown('TTP','${escapeAttr(t.technique_id)}');return false;">${t.count}</a></td>
             <td class="center-cell"><a href="#" class="tid-coverage-pill ${coverageClass}" onclick="openCoverageModal('${escapeAttr(t.technique_id)}');return false;">${rc}</a></td>
+            <td class="center-cell">${basValidationPill(t.technique_id)}</td>
         </tr>`;
     }).join('');
 }
@@ -1766,7 +1785,7 @@ const tabConfig = {
     cves:     { tbody: 'recentCvesBody',  countEl: 'searchCvesCount',     searchEl: 'searchCves',     colSpan: 5, type: 'cve' },
     malware:  { tbody: 'topMalwareBody',  countEl: 'searchMalwareCount',  searchEl: 'searchMalware',  colSpan: 3, type: 'malware' },
     actors:   { tbody: 'topActorsBody',   countEl: 'searchActorsCount',   searchEl: 'searchActors',   colSpan: 4, type: 'actor' },
-    ttps:     { tbody: 'topTtpsBody',     countEl: 'searchTtpsCount',     searchEl: 'searchTtps',     colSpan: 4, type: 'ttp' },
+    ttps:     { tbody: 'topTtpsBody',     countEl: 'searchTtpsCount',     searchEl: 'searchTtps',     colSpan: 5, type: 'ttp' },
     redteam:  { tbody: 'topRedteamBody', countEl: 'searchRedteamCount', searchEl: 'searchRedteam', colSpan: 5, type: 'redteam' },
 };
 
@@ -1911,10 +1930,10 @@ function renderActorsFromData(actors) {
 async function renderTtpsFromData(techniques) {
     const tbody = document.getElementById('topTtpsBody');
     if (!techniques.length) {
-        tbody.innerHTML = '<tr><td colspan="4" class="tid-empty-cell">No matches found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="tid-empty-cell">No matches found</td></tr>';
         return;
     }
-    const ruleCounts = await fetchDetectionRuleCounts();
+    const [ruleCounts] = await Promise.all([fetchDetectionRuleCounts(), fetchBasValidation()]);
     tbody.innerHTML = techniques.map((t, i) => {
         const rc = ruleCounts[t.technique_id] || 0;
         const coverageClass = getTechCoverageClass(t.technique_id, ruleCounts);
@@ -1923,6 +1942,7 @@ async function renderTtpsFromData(techniques) {
             <td><a href="#" class="tid-tech-id" onclick="openDrilldown('TTP','${escapeAttr(t.technique_id)}');return false;">${escapeHtml(t.technique_id)}</a></td>
             <td class="center-cell"><a href="#" class="tid-occurrence-pill" onclick="openDrilldown('TTP','${escapeAttr(t.technique_id)}');return false;">${t.count}</a></td>
             <td class="center-cell"><a href="#" class="tid-coverage-pill ${coverageClass}" onclick="openCoverageModal('${escapeAttr(t.technique_id)}');return false;">${rc}</a></td>
+            <td class="center-cell">${basValidationPill(t.technique_id)}</td>
         </tr>`;
     }).join('');
 }
@@ -1952,6 +1972,45 @@ let viMermaidRenderCounter = 0;
 let viDetectionRuleCounts = null;  // {techId: ruleCount} — fetched once
 let viDetectionRulesByTech = null; // {techId: [{name, platform, severity, rule_type}, ...]}
 let viLoadedTabs = { actorTtpMap: false, intelPriorityFlow: false, malwareEcosystem: false };
+
+// The data calls behind these diagrams can blip — most often when the app is
+// warming up right after a deploy. A single failure used to leave the diagram
+// dead with a cryptic "Failed to fetch" and no way back short of a full reload.
+// Retry a few times with backoff, then hand the caller a friendly, retryable
+// error instead of a dead end.
+async function viFetchJSON(url, tries = 3, backoffMs = 900) {
+    let lastErr;
+    for (let attempt = 1; attempt <= tries; attempt++) {
+        try {
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            return await resp.json();
+        } catch (err) {
+            lastErr = err;
+            if (attempt < tries) await new Promise(r => setTimeout(r, backoffMs * attempt));
+        }
+    }
+    throw lastErr;
+}
+
+// Render a friendly, retryable error into a diagram placeholder.
+function viShowError(placeholderId, controlsId, retryFn) {
+    const placeholder = document.getElementById(placeholderId);
+    if (controlsId) { const c = document.getElementById(controlsId); if (c) c.style.display = 'none'; }
+    placeholder.innerHTML = '';
+    const wrap = document.createElement('div');
+    wrap.style.textAlign = 'center';
+    wrap.innerHTML = '<div style="font-size:30px;opacity:.55;">📡</div>' +
+        '<p style="margin:8px 0 14px;max-width:380px;">Couldn’t load this diagram — the data service didn’t respond. ' +
+        'This usually clears up on its own (e.g. just after a deploy).</p>';
+    const btn = document.createElement('button');
+    btn.textContent = '↻ Retry';
+    btn.style.cssText = 'padding:8px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#0046AD,#00A651);color:#fff;font-weight:600;font-size:13px;cursor:pointer;';
+    btn.onclick = retryFn;
+    wrap.appendChild(btn);
+    placeholder.appendChild(wrap);
+    placeholder.style.display = 'flex';
+}
 
 function initViMermaid() {
     const theme = isDark() ? 'dark' : 'default';
@@ -2014,8 +2073,7 @@ async function viRenderDiagram(diagramElId, definition, placeholderId, controlsI
 async function fetchDetectionRuleCounts() {
     if (viDetectionRuleCounts) return viDetectionRuleCounts;
     try {
-        const resp = await fetch('/api/detection-rules');
-        const result = await resp.json();
+        const result = await viFetchJSON('/api/detection-rules');
         const counts = {};
         const rulesByTech = {};
         if (result.success && result.data && result.data.platforms) {
@@ -2052,6 +2110,40 @@ function getTechCoverageClass(techId, ruleCounts) {
     return 'weak';
 }
 
+// --- AttackIQ BAS validation overlay ---
+// viBasValidation: {techId: {status:'detected'|'gap', detected, prevented, total, last_tested}}
+let viBasValidation = null;
+let viBasMeta = { configured: false, run_enabled: false, run_platforms: [] };
+
+async function fetchBasValidation() {
+    if (viBasValidation) return viBasValidation;
+    try {
+        const result = await viFetchJSON('/api/threat-intel/attackiq/validation');
+        viBasValidation = (result && result.validation) || {};
+        viBasMeta = {
+            configured: !!(result && result.configured),
+            run_enabled: !!(result && result.run_enabled),
+            run_platforms: (result && result.run_platforms) || [],
+        };
+    } catch (err) {
+        console.warn('Could not fetch AttackIQ validation:', err);
+        viBasValidation = {};
+    }
+    return viBasValidation;
+}
+
+// A compact pill for the TTP table. 'detected' = green (a live sim tripped our
+// detections), 'gap' = red (it RAN and nothing fired — covered on paper only),
+// untested = neutral.
+function basValidationPill(techId) {
+    const v = (viBasValidation || {})[techId];
+    if (!v) return '<span class="tid-bas-pill bas-untested" title="No AttackIQ simulation results">Untested</span>';
+    if (v.status === 'detected') {
+        return `<span class="tid-bas-pill bas-detected" title="Detected on ${v.detected}/${v.total} run(s); last ${(v.last_tested||'').substring(0,10)}">&#10003; Detected</span>`;
+    }
+    return `<span class="tid-bas-pill bas-gap" title="Ran ${v.total} time(s), detection never fired; last ${(v.last_tested||'').substring(0,10)}">&#10007; Not detected</span>`;
+}
+
 // --- Tab 1: Actor → TTP Map ---
 
 async function loadActorTtpMap() {
@@ -2064,8 +2156,9 @@ async function loadActorTtpMap() {
     try {
         const qs = getDateQueryString();
         const [mapResp, ruleCounts] = await Promise.all([
-            fetch('/api/threat-intel/actor-technique-map' + qs).then(r => r.json()),
-            fetchDetectionRuleCounts()
+            viFetchJSON('/api/threat-intel/actor-technique-map' + qs),
+            fetchDetectionRuleCounts(),
+            fetchBasValidation()
         ]);
 
         if (!mapResp.success || !mapResp.data || mapResp.data.length === 0) {
@@ -2079,6 +2172,9 @@ async function loadActorTtpMap() {
         lines.push(viClassDefs());
 
         const seenTechs = new Set();
+        // Per-node border overrides encode the BAS axis (does the rule actually
+        // FIRE) on top of the rule-coverage fill (does a rule EXIST).
+        const styleLines = [];
         for (const actor of actors) {
             const actorId = viNodeId('A', actor.actor_name);
             const region = actor.region || 'Unknown';
@@ -2090,18 +2186,46 @@ async function loadActorTtpMap() {
                 if (!seenTechs.has(tech.technique_id)) {
                     seenTechs.add(tech.technique_id);
                     const ruleCount = ruleCounts[tech.technique_id] || 0;
-                    lines.push(`    ${techId}["${viSanitize(tech.technique_id)}<br/><small>${ruleCount} rule${ruleCount !== 1 ? 's' : ''}</small>"]:::${coverageClass}`);
+                    const bas = (viBasValidation || {})[tech.technique_id];
+                    let basLine = '';
+                    if (bas && bas.status === 'detected') {
+                        basLine = '<br/><b>&#10003; BAS fired</b>';
+                        styleLines.push(`    style ${techId} stroke:#16a34a,stroke-width:4px`);
+                    } else if (bas && bas.status === 'gap') {
+                        basLine = '<br/><b>&#10007; BAS gap</b>';
+                        styleLines.push(`    style ${techId} stroke:#dc2626,stroke-width:4px,stroke-dasharray:5 3`);
+                    }
+                    lines.push(`    ${techId}["${viSanitize(tech.technique_id)}<br/><small>${ruleCount} rule${ruleCount !== 1 ? 's' : ''}</small>${basLine}"]:::${coverageClass}`);
                 }
                 lines.push(`    ${actorId} --> ${techId}`);
             }
         }
+
+        // Detection coverage funnel — the three-axis rollup: techniques we've
+        // SEEN → those a rule EXISTS for → those a live sim actually TRIPPED.
+        const techArr = Array.from(seenTechs);
+        const seenN = techArr.length;
+        const ruleN = techArr.filter(t => (ruleCounts[t] || 0) >= 1).length;
+        const basTested = techArr.filter(t => (viBasValidation || {})[t]).length;
+        const basFiredN = techArr.filter(t => ((viBasValidation || {})[t] || {}).status === 'detected').length;
+        const basGapN = techArr.filter(t => ((viBasValidation || {})[t] || {}).status === 'gap').length;
+        lines.push('    subgraph viFunnel["Detection Coverage Funnel"]');
+        lines.push('      direction LR');
+        lines.push(`      F1["Seen in matrix<br/><b>${seenN}</b> technique${seenN !== 1 ? 's' : ''}"]:::priority`);
+        lines.push(`      F2["Detection rule exists<br/><b>${ruleN}</b> of ${seenN}"]:::moderate`);
+        lines.push(`      F3["BAS-validated firing<br/><b>${basFiredN}</b> fired &middot; ${basGapN} gap<br/><small>${basTested} sim-tested</small>"]:::strong`);
+        lines.push('      F1 --> F2 --> F3');
+        lines.push('    end');
+        lines.push(...styleLines);
 
         const definition = lines.join('\n');
         await viRenderDiagram('actorTtpMapDiagram', definition, 'actorTtpMapPlaceholder', 'actorTtpMapControls');
         viLoadedTabs.actorTtpMap = true;
     } catch (err) {
         console.error('Error loading actor TTP map:', err);
-        placeholder.textContent = 'Error loading diagram: ' + err.message;
+        viShowError('actorTtpMapPlaceholder', 'actorTtpMapControls', () => {
+            viLoadedTabs.actorTtpMap = false; loadActorTtpMap();
+        });
     }
 }
 
@@ -2181,7 +2305,9 @@ async function loadIntelPriorityFlow() {
         viLoadedTabs.intelPriorityFlow = true;
     } catch (err) {
         console.error('Error loading intel priority flow:', err);
-        placeholder.textContent = 'Error loading diagram: ' + err.message;
+        viShowError('intelPriorityFlowPlaceholder', 'intelPriorityFlowControls', () => {
+            viLoadedTabs.intelPriorityFlow = false; loadIntelPriorityFlow();
+        });
     }
 }
 
@@ -2196,8 +2322,7 @@ async function loadMalwareEcosystem() {
 
     try {
         const qs = getDateQueryString();
-        const resp = await fetch('/api/threat-intel/malware-actor-map' + qs);
-        const result = await resp.json();
+        const result = await viFetchJSON('/api/threat-intel/malware-actor-map' + qs);
 
         if (!result.success || !result.data || result.data.length === 0) {
             placeholder.textContent = 'No malware-actor relationships found for the selected date range.';
@@ -2239,7 +2364,9 @@ async function loadMalwareEcosystem() {
         viLoadedTabs.malwareEcosystem = true;
     } catch (err) {
         console.error('Error loading malware ecosystem:', err);
-        placeholder.textContent = 'Error loading diagram: ' + err.message;
+        viShowError('malwareEcosystemPlaceholder', 'malwareEcosystemControls', () => {
+            viLoadedTabs.malwareEcosystem = false; loadMalwareEcosystem();
+        });
     }
 }
 
@@ -2304,9 +2431,11 @@ function saveViPng(diagramElId, filename) {
     // Legend items per diagram type
     const legends = {
         actorTtpMap: [
-            { color: '#16a34a', label: 'Green = 5+ detection rules (strong coverage)' },
-            { color: '#ca8a04', label: 'Yellow = 1-4 rules (moderate coverage)' },
-            { color: '#ef4444', label: 'Red = 0 rules (detection gap)' },
+            { color: '#16a34a', label: 'Green fill = 5+ detection rules (strong coverage)' },
+            { color: '#ca8a04', label: 'Yellow fill = 1-4 rules (moderate coverage)' },
+            { color: '#ef4444', label: 'Red fill = 0 rules (detection gap)' },
+            { color: '#16a34a', label: 'Thick green border = BAS sim fired our detection' },
+            { color: '#dc2626', label: 'Dashed red border = BAS ran, nothing fired' },
         ],
         intelPriorityFlow: [
             { color: '#7c3aed', label: 'Priority levels (Critical \u2192 Info)' },
@@ -2518,6 +2647,7 @@ window.addEventListener('themechange', () => {
     viLoadedTabs = { actorTtpMap: false, intelPriorityFlow: false, malwareEcosystem: false };
     viDetectionRuleCounts = null;  // Force re-fetch for fresh colors
     viDetectionRulesByTech = null;
+    viBasValidation = null;  // Force re-fetch of BAS validation verdicts
 
     const activeBtn = document.querySelector('.tid-vi-tab-btn.active');
     if (activeBtn) {
@@ -2603,7 +2733,38 @@ async function openCoverageModal(techId) {
 
     let html = '';
 
-    await fetchDetectionRuleCounts();  // ensure cache is populated
+    await Promise.all([fetchDetectionRuleCounts(), fetchBasValidation()]);  // ensure caches populated
+
+    // --- BAS validation section (lead with "do our rules actually fire?") ---
+    const v = (viBasValidation || {})[techId];
+    let basStatusHtml;
+    if (!v) {
+        basStatusHtml = '<span class="tid-bas-pill bas-untested">Untested</span> &nbsp;<span class="tid-bas-note" style="display:inline">No AttackIQ simulation has exercised this technique.</span>';
+    } else if (v.status === 'detected') {
+        basStatusHtml = `<span class="tid-bas-pill bas-detected">&#10003; Detected</span> &nbsp;<span class="tid-bas-note" style="display:inline">Our SIEM/EDR alerted on ${v.detected} of ${v.total} run(s) · prevented ${v.prevented} · last ${(v.last_tested||'').substring(0,10)}.</span>`;
+    } else {
+        basStatusHtml = `<span class="tid-bas-pill bas-gap">&#10007; Not detected</span> &nbsp;<span class="tid-bas-note" style="display:inline"><strong>Ran ${v.total} time(s), detection never fired</strong> — covered on paper, silent in practice. Prevented ${v.prevented}. Last ${(v.last_tested||'').substring(0,10)}.</span>`;
+    }
+    const platforms = viBasMeta.run_platforms || [];
+    let runBtns;
+    if (platforms.length) {
+        const labels = { windows: 'Windows', linux: 'Linux' };
+        runBtns = platforms.map(p =>
+            `<button class="tid-bas-btn run" onclick="basRunScenario('${escapeAttr(techId)}', '${p}')">Run on ${labels[p] || p} test asset</button>`
+        ).join('');
+    } else {
+        runBtns = `<button class="tid-bas-btn run" disabled title="Requires the run.bas capability, production, and a designated 1-asset test group">Run (disabled)</button>`;
+    }
+    html += `<div class="tid-bas-section">
+        <h4>Breach &amp; Attack Validation</h4>
+        <div>${basStatusHtml}</div>
+        <div class="tid-bas-actions">
+            <button class="tid-bas-btn build" onclick="basBuildAssessment('${escapeAttr(techId)}')">Build assessment in AttackIQ</button>
+            ${runBtns}
+        </div>
+        <div class="tid-bas-note">Build only creates a ready-to-run assessment — it never fires. A live run launches one real TTP at the single designated test asset for that platform and raises a SOC ticket; coordinate with the SOC first.</div>
+    </div>`;
+
     const rules = (viDetectionRulesByTech && viDetectionRulesByTech[techId]) || [];
     if (rules.length > 0) {
         // Sort by platform then severity
@@ -2635,6 +2796,74 @@ async function openCoverageModal(techId) {
 
 function closeCoverageModal() {
     document.getElementById('tidCoverageModal').style.display = 'none';
+}
+
+// Build a ready-to-run assessment (safe — never fires).
+async function basBuildAssessment(techId) {
+    const btn = event && event.target;
+    if (btn) { btn.disabled = true; btn.textContent = 'Building…'; }
+    try {
+        const resp = await fetch(`/api/threat-intel/attackiq/build-technique/${encodeURIComponent(techId)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: '{}',
+        });
+        const result = await resp.json();
+        if (result.success) {
+            const r = result.result || {};
+            const url = r.assessment_url;
+            const msg = `Assessment built for ${techId}: ${r.scenarios_matched || 0} scenario(s).` +
+                (url ? '\n\nOpen it in AttackIQ to review and run with the SOC?' : '');
+            if (url && confirm(msg)) window.open(url, '_blank', 'noopener');
+            else if (!url) alert(msg);
+        } else {
+            alert('Build failed: ' + (result.error || 'unknown error'));
+        }
+    } catch (e) {
+        alert('Build failed: ' + e);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Build assessment in AttackIQ'; }
+    }
+}
+
+// Fire ONE scenario at the single designated test asset. Hard-gated server-side
+// (run.bas capability + production + 1-asset group); this is the human confirm.
+async function basRunScenario(techId, platform) {
+    platform = (platform || 'windows').toLowerCase();
+    const platLabel = platform.charAt(0).toUpperCase() + platform.slice(1);
+    const btn = event && event.target;
+    const origLabel = btn ? btn.textContent : '';
+    const typed = prompt(
+        `⚠ This launches a REAL adversary scenario for ${techId} against the single designated ${platLabel} AttackIQ test asset, ` +
+        `and WILL generate a SOC ticket. Coordinate with the SOC first.\n\n` +
+        `Type the technique ID (${techId}) to confirm, or Cancel.`);
+    if (typed === null) return;
+    if ((typed || '').trim().toUpperCase() !== techId.toUpperCase()) {
+        alert('Confirmation did not match — nothing fired.');
+        return;
+    }
+    if (btn) { btn.disabled = true; btn.textContent = 'Launching…'; }
+    try {
+        const resp = await fetch('/api/threat-intel/attackiq/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ technique_id: techId, platform: platform }),
+        });
+        const result = await resp.json();
+        if (result.success) {
+            const url = (result.result || {}).assessment_url;
+            const msg = `Launched 1 scenario for ${techId} on the designated ${platLabel} test asset.` +
+                (url ? '\n\nOpen the run in AttackIQ?' : '');
+            if (url && confirm(msg)) window.open(url, '_blank', 'noopener');
+            else if (!url) alert(msg);
+        } else {
+            alert('Run refused: ' + (result.error || 'unknown error'));
+        }
+    } catch (e) {
+        alert('Run failed: ' + e);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = origLabel; }
+    }
 }
 
 document.addEventListener('keydown', (e) => {

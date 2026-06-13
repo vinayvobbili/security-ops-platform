@@ -1,0 +1,288 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'SOC-in-a-Box Timeline' %}
+{% set page_title_left_icon = '🛰️' %}
+{% set page_title_right_icon = '🛡️' %}
+
+{% block extra_css %}
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   SOC-in-a-Box Timeline — tactical command-center theme
+   ============================================================ */
+:root {
+  --soc-bg-0:#05080f; --soc-bg-1:#0a1020;
+  --soc-panel:rgba(17,27,49,0.55); --soc-panel-2:rgba(9,15,28,0.85);
+  --soc-line:rgba(120,160,255,0.14); --soc-line-2:rgba(120,160,255,0.30);
+  --soc-text:#e8eefb; --soc-dim:#9db0d3; --soc-faint:#6478a0;
+  --soc-cyan:#34e3f0; --soc-emerald:#37e0a0; --soc-blue:#5b8dff;
+  --soc-amber:#ffc14d; --soc-red:#ff6b7d; --soc-violet:#b08bff;
+  --soc-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --soc-disp:'Chakra Petch',system-ui,sans-serif;
+  --soc-body:'IBM Plex Sans',system-ui,sans-serif;
+}
+body {
+  background:
+    radial-gradient(1100px 540px at 12% -8%, rgba(52,227,240,0.10), transparent 60%),
+    radial-gradient(960px 520px at 92% 0%, rgba(55,224,160,0.09), transparent 58%),
+    linear-gradient(180deg, var(--soc-bg-1) 0%, var(--soc-bg-0) 100%);
+  background-attachment: fixed;
+}
+body::before {
+  content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+  background-image:
+    linear-gradient(rgba(120,160,255,0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120,160,255,0.045) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, #000 40%, transparent 100%);
+}
+
+.st-container { position:relative; z-index:1; flex:1 1 auto; min-width:0; max-width:1480px;
+  margin:24px auto 90px; padding:0 22px; color:var(--soc-text); font-family:var(--soc-body); }
+
+/* shared glass surface */
+.st-stat, .st-filters, .st-table-wrap {
+  background:var(--soc-panel); backdrop-filter:blur(14px) saturate(125%);
+  -webkit-backdrop-filter:blur(14px) saturate(125%);
+  border:1px solid var(--soc-line);
+  box-shadow:0 1px 0 rgba(255,255,255,0.04) inset, 0 18px 44px rgba(0,0,0,0.42);
+}
+
+/* Hero */
+.st-hero { position:relative; overflow:hidden; border-radius:20px; padding:30px 34px; margin-bottom:20px;
+  color:#fff;
+  background:
+    radial-gradient(900px 300px at 0% 0%, rgba(52,227,240,0.28), transparent 55%),
+    linear-gradient(125deg, #06223f 0%, #0a2d63 42%, #06402f 100%);
+  border:1px solid rgba(120,180,255,0.22);
+  box-shadow:0 22px 60px rgba(2,12,30,0.6), 0 0 0 1px rgba(120,180,255,0.08) inset; }
+.st-hero::after { content:''; position:absolute; right:-70px; top:-80px; width:300px; height:300px;
+  border-radius:50%; background:radial-gradient(circle, rgba(55,224,160,0.30), transparent 68%);
+  filter:blur(6px); pointer-events:none; }
+.st-hero h1 { margin:0 0 8px; position:relative; z-index:1; font-family:var(--soc-disp);
+  font-size:1.85rem; font-weight:700; letter-spacing:0.01em; text-shadow:0 2px 20px rgba(0,0,0,0.5); }
+.st-hero p { margin:0; position:relative; z-index:1; font-size:0.98rem; line-height:1.6;
+  max-width:800px; color:rgba(232,240,255,0.9); }
+.st-hero code { font-family:var(--soc-mono); }
+
+/* Stats strip */
+.st-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(165px,1fr)); gap:14px; margin-bottom:16px; }
+.st-stat { border-radius:14px; padding:13px 17px; position:relative; overflow:hidden;
+  transition:transform .16s ease, border-color .16s ease, box-shadow .16s ease; }
+.st-stat::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
+  background:linear-gradient(180deg,var(--soc-cyan),var(--soc-emerald)); opacity:.85; }
+.st-stat:hover { transform:translateY(-3px); border-color:var(--soc-line-2); box-shadow:0 22px 50px rgba(0,0,0,0.5); }
+.st-stat-label { font-family:var(--soc-mono); font-size:0.7rem; text-transform:uppercase;
+  letter-spacing:0.12em; color:var(--soc-dim); margin-bottom:5px; }
+.st-stat-value { font-family:var(--soc-disp); font-size:1.55rem; font-weight:700; color:#fff;
+  text-shadow:0 0 20px rgba(91,141,255,0.32); }
+
+/* Filters */
+.st-filters { border-radius:14px; padding:14px 18px; margin-bottom:16px;
+  display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+.st-filters label { font-family:var(--soc-mono); font-size:0.74rem; text-transform:uppercase;
+  letter-spacing:0.08em; color:var(--soc-dim); margin-right:4px; }
+.st-filters select, .st-filters input { padding:7px 11px; border-radius:9px; border:1px solid var(--soc-line-2);
+  background:var(--soc-panel-2); color:var(--soc-text); font-size:0.88rem; font-family:var(--soc-body); }
+.st-filters select:focus, .st-filters input:focus { outline:none; border-color:var(--soc-cyan);
+  box-shadow:0 0 0 3px rgba(52,227,240,0.16); }
+.st-filters select option { background:#0a1020; color:var(--soc-text); }
+.st-filters button { background:linear-gradient(135deg,var(--soc-blue),#2f6dff); color:#fff; border:none;
+  padding:8px 17px; border-radius:9px; font-family:var(--soc-disp); font-weight:600; cursor:pointer;
+  font-size:0.88rem; box-shadow:0 8px 20px rgba(91,141,255,0.32); transition:transform .12s ease, box-shadow .12s ease; }
+.st-filters button:hover { transform:translateY(-2px); box-shadow:0 12px 28px rgba(91,141,255,0.5); }
+.st-filters .clear-link { color:var(--soc-dim); font-size:0.82rem; text-decoration:none; border-bottom:1px dashed var(--soc-line-2); }
+.st-filters .clear-link:hover { color:var(--soc-cyan); }
+
+/* Table */
+.st-table-wrap { border-radius:16px; overflow:hidden; }
+.st-table { width:100%; border-collapse:collapse; font-size:0.88rem; }
+.st-table thead { background:rgba(120,160,255,0.07); }
+.st-table th { text-align:left; padding:11px 15px; font-family:var(--soc-mono); font-weight:600;
+  color:var(--soc-dim); font-size:0.68rem; text-transform:uppercase; letter-spacing:0.1em;
+  border-bottom:1px solid rgba(120,160,255,0.14); }
+.st-table td { padding:11px 15px; border-bottom:1px solid rgba(120,160,255,0.07);
+  vertical-align:top; color:var(--soc-text); }
+.st-table tr:hover td { background:rgba(120,160,255,0.05); }
+.st-time { font-family:var(--soc-mono); font-size:0.8rem; color:var(--soc-faint); white-space:nowrap; }
+.st-ticket { font-family:var(--soc-mono); font-weight:600; color:var(--soc-cyan); }
+.st-host { font-family:var(--soc-mono); font-size:0.78rem; color:var(--soc-dim); }
+.st-type { font-family:var(--soc-mono); font-size:0.72rem; color:var(--soc-faint); margin-top:2px; }
+.st-summary { color:var(--soc-dim); max-width:480px; line-height:1.5; }
+.st-by { font-family:var(--soc-mono); font-size:0.76rem; color:var(--soc-faint); }
+
+/* Verdict badges */
+.st-badge { display:inline-block; padding:3px 10px; border-radius:999px; font-family:var(--soc-mono);
+  font-size:0.7rem; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; white-space:nowrap;
+  border:1px solid transparent; }
+.verdict-malicious { background:rgba(255,107,125,0.14); color:var(--soc-red); border-color:rgba(255,107,125,0.4); }
+.verdict-contained { background:rgba(255,160,90,0.14); color:#ffb37a; border-color:rgba(255,160,90,0.36); }
+.verdict-benign-tp { background:rgba(255,193,77,0.14); color:var(--soc-amber); border-color:rgba(255,193,77,0.34); }
+.verdict-fp { background:rgba(55,224,160,0.14); color:var(--soc-emerald); border-color:rgba(55,224,160,0.36); }
+.verdict-close { background:rgba(120,160,255,0.10); color:var(--soc-dim); border-color:var(--soc-line-2); }
+.verdict-unknown { background:rgba(120,160,255,0.08); color:var(--soc-faint); border-color:var(--soc-line); }
+
+.priority-pill { display:inline-block; padding:2px 9px; border-radius:999px; font-family:var(--soc-disp);
+  font-size:0.78rem; font-weight:700; min-width:24px; text-align:center; border:1px solid transparent; }
+.priority-low { background:rgba(120,160,255,0.10); color:var(--soc-dim); border-color:var(--soc-line-2); }
+.priority-med { background:rgba(255,193,77,0.14); color:var(--soc-amber); border-color:rgba(255,193,77,0.34); }
+.priority-high { background:rgba(255,107,125,0.16); color:var(--soc-red); border-color:rgba(255,107,125,0.42);
+  box-shadow:0 0 14px rgba(255,107,125,0.3); }
+
+.st-empty { padding:64px 20px; text-align:center; color:var(--soc-dim); font-size:0.95rem; }
+.st-empty strong { color:#fff; }
+.st-empty code { font-family:var(--soc-mono); background:rgba(120,160,255,0.12); color:var(--soc-cyan);
+  padding:1px 6px; border-radius:4px; }
+.st-error { background:rgba(255,107,125,0.10); border:1px solid rgba(255,107,125,0.4); border-left-width:3px;
+  color:#ffb3bd; border-radius:12px; padding:14px 18px; margin-bottom:16px; }
+
+/* watch banner (sandbox run) */
+.st-watch { background:linear-gradient(135deg, rgba(255,193,77,0.10), rgba(52,227,240,0.06));
+  border:1px solid rgba(255,193,77,0.36); border-radius:12px; padding:13px 17px; margin-bottom:14px;
+  color:var(--soc-amber); font-size:0.9rem; }
+.st-watch strong { color:#fff; }
+.st-watch a { color:var(--soc-cyan); text-decoration:none; border-bottom:1px dashed var(--soc-line-2); }
+.st-watch .live-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--soc-emerald);
+  margin-right:7px; box-shadow:0 0 0 0 rgba(55,224,160,0.6); animation:soc-pulse 1.6s ease-out infinite; vertical-align:middle; }
+@keyframes soc-pulse { 0%{box-shadow:0 0 0 0 rgba(55,224,160,0.55);} 70%{box-shadow:0 0 0 9px rgba(55,224,160,0);} 100%{box-shadow:0 0 0 0 rgba(55,224,160,0);} }
+
+@keyframes soc-rise { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+.st-hero, .st-stats, .st-filters, .st-table-wrap { animation:soc-rise .5s cubic-bezier(.2,.7,.2,1) both; }
+.st-stats { animation-delay:.08s; } .st-filters { animation-delay:.12s; } .st-table-wrap { animation-delay:.16s; }
+@media (prefers-reduced-motion: reduce) {
+  .st-hero, .st-stats, .st-filters, .st-table-wrap, .st-watch .live-dot { animation:none; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="st-container">
+
+  <div class="st-hero">
+    <h1>SOC-in-a-Box Timeline</h1>
+    <p>Live feed of triage events from the agent bus. Sentinel publishes every triage verdict to <code style="background:rgba(255,255,255,0.18); padding:1px 6px; border-radius:4px;">soc.triage</code>; downstream roles (Tier 2 / IR Lead / Detection Eng / Threat Intel / SOC Manager) subscribe here.</p>
+  </div>
+
+  {% if error %}
+  <div class="st-error">⚠️ {{ error }}</div>
+  {% endif %}
+
+  <!-- Stats -->
+  <div class="st-stats">
+    <div class="st-stat">
+      <div class="st-stat-label">Total in window</div>
+      <div class="st-stat-value">{{ total_events }}</div>
+    </div>
+    {% for vid, count in verdict_counts.most_common() %}
+    <div class="st-stat">
+      <div class="st-stat-label">{{ verdict_display.get(vid, vid) }}</div>
+      <div class="st-stat-value">{{ count }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if ticket_filter %}
+  <div class="st-watch">
+    <span class="live-dot"></span>🧪 Watching sandbox run <strong>#{{ ticket_filter }}</strong> — agents triage and cascade over ~30–90s.
+    This view auto-refreshes every 8s. <a href="/soc-timeline">show all events</a>
+  </div>
+  <script>setTimeout(function(){ location.reload(); }, 8000);</script>
+  {% endif %}
+
+  <!-- Filters -->
+  <form class="st-filters" method="get" action="/soc-timeline">
+    {% if ticket_filter %}<input type="hidden" name="ticket" value="{{ ticket_filter }}">{% endif %}
+    <label>Event type
+      <select name="type">
+        <option value="">(any)</option>
+        {% for tid, count in type_counts.most_common() %}
+        <option value="{{ tid }}" {% if event_type_filter == tid %}selected{% endif %}>{{ tid }} ({{ count }})</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Verdict
+      <select name="verdict">
+        <option value="">(any)</option>
+        {% for vid, count in verdict_counts.most_common() %}
+        <option value="{{ vid }}" {% if verdict_filter == vid %}selected{% endif %}>{{ verdict_display.get(vid, vid) }} ({{ count }})</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Limit
+      <input type="number" name="limit" min="1" max="2000" value="{{ limit }}" style="width: 90px;">
+    </label>
+    <button type="submit">Apply</button>
+    {% if event_type_filter or verdict_filter or ticket_filter %}
+    <a href="/soc-timeline" class="clear-link">clear filters</a>
+    {% endif %}
+    <span style="margin-left: auto; font-size: 0.82rem; color: #64748b;">
+      Showing {{ filtered_count }} of {{ total_events }} • <a href="" onclick="location.reload(); return false;" class="clear-link">refresh</a>
+    </span>
+  </form>
+
+  <!-- Timeline -->
+  <div class="st-table-wrap">
+    {% if events %}
+    <table class="st-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Ticket</th>
+          <th>Verdict</th>
+          <th>Priority</th>
+          <th>Host / User</th>
+          <th>Summary</th>
+          <th>Action</th>
+          <th>Produced by</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in events %}
+        <tr>
+          <td class="st-time">{{ e.timestamp[:19].replace('T', ' ') }}</td>
+          <td>
+            <span class="st-ticket">{{ e.ticket_id or '—' }}</span>
+            <div class="st-type">{{ e.event_type }}</div>
+          </td>
+          <td>
+            {% if e._verdict_display %}
+            <span class="st-badge {{ e._verdict_class }}">{{ e._verdict_display }}</span>
+            {% if e.confidence is defined and e.confidence is not none %}
+            <div style="font-size: 0.72rem; color: #64748b; margin-top: 3px;">conf {{ '%.0f'|format((e.confidence or 0) * 100) }}%</div>
+            {% endif %}
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            {% if e.priority_score %}
+            {% set p = e.priority_score %}
+            <span class="priority-pill {% if p >= 7 %}priority-high{% elif p >= 4 %}priority-med{% else %}priority-low{% endif %}">{{ p }}</span>
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            {% if e.hostname %}<div class="st-host">{{ e.hostname }}</div>{% endif %}
+            {% if e.username %}<div class="st-host" style="color:#94a3b8;">{{ e.username }}</div>{% endif %}
+            {% if not e.hostname and not e.username %}—{% endif %}
+          </td>
+          <td class="st-summary">{{ e._summary_short or '—' }}</td>
+          <td class="st-summary">{{ e._action_short or '—' }}</td>
+          <td class="st-by">{{ e.produced_by }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="st-empty">
+      {% if error %}
+        Couldn't read the bus. See the error above.
+      {% elif total_events == 0 %}
+        <strong>No events yet.</strong><br>
+        The bus is reachable but empty — Sentinel hasn't published a triage verdict since the hook landed.<br>
+        Once <code>ir-scheduler</code> picks up the new code, every triaged CrowdStrike ticket will appear here.
+      {% else %}
+        No events match the current filters.
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

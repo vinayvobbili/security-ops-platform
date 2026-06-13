@@ -6,11 +6,12 @@ from typing import Any, Dict
 from services.xsoar import ListHandler
 from services.ticket_cannon_utils import (
     SILENCER_FIELDS,
-    EXPIRY_OPTIONS,
     CATEGORIES,
     get_entries,
     create_entry,
     toggle_entry,
+    format_expires_at_et,
+    get_field_options,
 )
 
 logger = logging.getLogger(__name__)
@@ -22,19 +23,28 @@ def get_silencers_for_display(list_handler: ListHandler, team_name: str) -> Dict
     Returns:
         {
             "categories": {key: {"label": ..., "active": [...], "inactive": [...]}, ...},
-            "fields": {api_name: label, ...},
-            "expiry_options": [...],
+            "fields": {api_name: label, ...},          # static fallback label map
+            "field_options": {"common": [...], "all": [...], "source": ...},
         }
     """
+    field_options = get_field_options(list_handler)
+
+    # Build a key→label map from the live fields so stored entries display with
+    # the real XSOAR label (falling back to the static map, then the raw key).
+    label_map = dict(SILENCER_FIELDS)
+    for opt in field_options.get("all", []):
+        label_map.setdefault(opt["key"], opt["label"])
+
     categories = {}
     for cat_key, cat_info in CATEGORIES.items():
         entries = get_entries(list_handler, team_name, cat_key)
 
-        # Attach human-readable field labels for display
+        # Attach human-readable field labels and ET-formatted expiry for display
         for e in entries:
             e["field_labels"] = {
-                SILENCER_FIELDS.get(k, k): v for k, v in e.get("fields", {}).items()
+                label_map.get(k, k): v for k, v in e.get("fields", {}).items()
             }
+            e["expires_display"] = format_expires_at_et(e)
 
         categories[cat_key] = {
             "label": cat_info["label"],
@@ -45,7 +55,7 @@ def get_silencers_for_display(list_handler: ListHandler, team_name: str) -> Dict
     return {
         "categories": categories,
         "fields": SILENCER_FIELDS,
-        "expiry_options": EXPIRY_OPTIONS,
+        "field_options": field_options,
     }
 
 
@@ -66,17 +76,14 @@ def handle_create_silencer(
     category = form_data.get("category", "").strip()
     description = form_data.get("description", "").strip()
     fields = form_data.get("fields", {})
-    expiry_days = form_data.get("expiry_days", 1)
+    expiry_date = (form_data.get("expiry_date") or "").strip()
 
     if not isinstance(fields, dict) or not fields:
         raise ValueError("At least one filter field is required.")
     if not description:
         raise ValueError("Description is required.")
-
-    try:
-        expiry_days = int(expiry_days)
-    except (TypeError, ValueError):
-        expiry_days = 1
+    if not expiry_date:
+        raise ValueError("Expiry date is required.")
 
     return create_entry(
         list_handler=list_handler,
@@ -84,7 +91,7 @@ def handle_create_silencer(
         category=category,
         description=description,
         fields=fields,
-        expiry_days=expiry_days,
+        expiry_date=expiry_date,
         created_by=submitter_email,
     )
 

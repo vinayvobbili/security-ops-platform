@@ -1,0 +1,209 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'HITL — Approve Containment Plan' %}
+{% set page_title_left_icon = '🤝' %}
+{% set page_title_right_icon = '🛡️' %}
+
+{% block extra_css %}
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --soc-bg-0:#05080f; --soc-bg-1:#0a1020;
+  --soc-panel:rgba(17,27,49,0.55); --soc-panel-2:rgba(9,15,28,0.85);
+  --soc-line:rgba(120,160,255,0.14); --soc-line-2:rgba(120,160,255,0.30);
+  --soc-text:#e8eefb; --soc-dim:#9db0d3; --soc-faint:#6478a0;
+  --soc-cyan:#34e3f0; --soc-emerald:#37e0a0; --soc-blue:#5b8dff;
+  --soc-amber:#ffc14d; --soc-red:#ff6b7d;
+  --soc-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --soc-disp:'Chakra Petch',system-ui,sans-serif;
+  --soc-body:'IBM Plex Sans',system-ui,sans-serif;
+  --hitl-accent: {% if decision == 'approve' %}var(--soc-emerald){% else %}var(--soc-red){% endif %};
+  --hitl-accent-soft: {% if decision == 'approve' %}rgba(55,224,160,0.16){% else %}rgba(255,107,125,0.16){% endif %};
+}
+body {
+  background:
+    radial-gradient(1000px 500px at 15% -10%, {% if decision == 'approve' %}rgba(55,224,160,0.10){% else %}rgba(255,107,125,0.10){% endif %}, transparent 60%),
+    linear-gradient(180deg, var(--soc-bg-1) 0%, var(--soc-bg-0) 100%);
+  background-attachment: fixed;
+}
+body::before { content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+  background-image:
+    linear-gradient(rgba(120,160,255,0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120,160,255,0.045) 1px, transparent 1px);
+  background-size:44px 44px; mask-image:radial-gradient(ellipse 90% 70% at 50% 0%, #000 40%, transparent 100%); }
+
+.hitl-container { position:relative; z-index:1; flex:1 1 auto; max-width:920px;
+  margin:24px auto 90px; padding:0 22px; color:var(--soc-text); font-family:var(--soc-body); }
+
+.hitl-hero { position:relative; overflow:hidden; border-radius:20px; padding:30px 34px; margin-bottom:20px;
+  color:#fff;
+  background: {% if decision == 'approve' %}linear-gradient(125deg,#04130c 0%, #0a3d28 55%, #04130c 100%){% else %}linear-gradient(125deg,#160406 0%, #4a0d18 55%, #160406 100%){% endif %};
+  border:1px solid var(--hitl-accent-soft);
+  box-shadow:0 22px 60px rgba(2,12,30,0.6), 0 0 0 1px var(--hitl-accent-soft) inset; }
+.hitl-hero::after { content:''; position:absolute; right:-70px; top:-80px; width:300px; height:300px;
+  border-radius:50%; background:radial-gradient(circle, var(--hitl-accent-soft), transparent 68%); filter:blur(4px); }
+.hitl-hero > * { position:relative; z-index:1; }
+.hitl-hero h1 { margin:0 0 8px; font-family:var(--soc-disp); font-size:1.8rem; font-weight:700;
+  text-shadow:0 2px 20px rgba(0,0,0,0.5); }
+.hitl-hero p { margin:0; font-size:1rem; line-height:1.55; max-width:740px; color:rgba(255,255,255,0.92); }
+.hitl-hero .ticket { display:inline-block; background:rgba(255,255,255,0.16); padding:4px 13px;
+  border-radius:999px; font-family:var(--soc-mono); font-weight:600; margin-top:12px; font-size:0.85rem; }
+
+.hitl-card { position:relative; border-radius:16px; padding:22px 26px; margin-bottom:18px;
+  background:var(--soc-panel); backdrop-filter:blur(14px) saturate(125%);
+  -webkit-backdrop-filter:blur(14px) saturate(125%);
+  border:1px solid var(--soc-line);
+  box-shadow:0 1px 0 rgba(255,255,255,0.04) inset, 0 18px 44px rgba(0,0,0,0.42); }
+.hitl-card h2 { margin:0 0 12px; font-family:var(--soc-disp); font-size:1.1rem; font-weight:600; color:#fff; }
+.hitl-card .label { font-family:var(--soc-mono); font-size:0.7rem; text-transform:uppercase;
+  letter-spacing:0.1em; color:var(--soc-dim); margin-bottom:5px; }
+.hitl-card .value { font-size:1rem; color:var(--soc-text); }
+.hitl-card .value code, .hitl-card code { font-family:var(--soc-mono); background:rgba(120,160,255,0.10);
+  color:var(--soc-cyan); padding:1px 6px; border-radius:4px; }
+
+.hitl-meta { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; }
+
+.hitl-actions { padding-left:0; list-style:none; margin:8px 0 0; }
+.hitl-actions li { padding:10px 14px; margin:7px 0; background:var(--soc-panel-2);
+  border-left:3px solid var(--hitl-accent); border-radius:9px; font-size:0.95rem; color:var(--soc-text); }
+
+.hitl-already { background:rgba(255,193,77,0.10); border:1px solid rgba(255,193,77,0.4); border-left-width:3px;
+  padding:14px 18px; border-radius:11px; margin-bottom:18px; color:var(--soc-amber); }
+.hitl-already strong { color:#fff; }
+
+.hitl-form { margin-top:18px; }
+.hitl-form label { color:var(--soc-dim) !important; font-family:var(--soc-mono); }
+.hitl-form textarea { width:100%; min-height:84px; padding:11px 13px; border-radius:10px;
+  border:1px solid var(--soc-line-2); background:var(--soc-panel-2); color:var(--soc-text);
+  font-family:var(--soc-mono); font-size:0.92rem; resize:vertical; caret-color:var(--soc-cyan); }
+.hitl-form textarea::placeholder { color:var(--soc-faint); }
+.hitl-form textarea:focus { outline:none; border-color:var(--hitl-accent);
+  box-shadow:0 0 0 3px var(--hitl-accent-soft); }
+.hitl-form .btn-row { display:flex; gap:12px; margin-top:14px; align-items:center; }
+.btn-primary { background: {% if decision == 'approve' %}linear-gradient(135deg,var(--soc-emerald),#1fb37a){% else %}linear-gradient(135deg,var(--soc-red),#d63950){% endif %};
+  color: {% if decision == 'approve' %}#04130c{% else %}#fff{% endif %}; border:none; padding:11px 24px;
+  border-radius:11px; font-family:var(--soc-disp); font-weight:700; cursor:pointer; font-size:0.95rem;
+  box-shadow:0 10px 26px var(--hitl-accent-soft); transition:transform .12s ease, box-shadow .12s ease; }
+.btn-primary:hover { transform:translateY(-2px); box-shadow:0 16px 36px var(--hitl-accent-soft); }
+.btn-secondary { background:rgba(120,160,255,0.08); color:var(--soc-dim); border:1px solid var(--soc-line-2);
+  padding:11px 24px; border-radius:11px; font-weight:600; text-decoration:none; font-size:0.95rem;
+  transition:background .12s ease; }
+.btn-secondary:hover { background:rgba(120,160,255,0.16); color:#fff; }
+
+.dummy-banner { background:rgba(255,193,77,0.08); border:1px dashed rgba(255,193,77,0.45); padding:12px 18px;
+  border-radius:11px; color:var(--soc-amber); font-size:0.88rem; margin-bottom:18px; }
+.dummy-banner strong { color:#fff; }
+
+@keyframes soc-rise { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+.hitl-hero, .hitl-card, .hitl-already, .dummy-banner, .hitl-form { animation:soc-rise .5s cubic-bezier(.2,.7,.2,1) both; }
+.dummy-banner { animation-delay:.06s; } .hitl-card { animation-delay:.1s; }
+@media (prefers-reduced-motion: reduce) { .hitl-hero, .hitl-card, .hitl-already, .dummy-banner, .hitl-form { animation:none; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="hitl-container">
+    <div class="hitl-hero">
+        <h1>{% if decision == 'approve' %}✅ Approve Containment Plan{% else %}🛑 Reject Containment Plan{% endif %}</h1>
+        <p>{% if decision == 'approve' %}AI-recommended containment actions will be marked APPROVED for ticket
+           <span class="ticket">#{{ action.ticket_id }}</span>.{% else %}You're about to REJECT the AI's recommended containment plan for ticket
+           <span class="ticket">#{{ action.ticket_id }}</span>.{% endif %}</p>
+    </div>
+
+    {% if action.approver_role or action.approver_name %}
+    <div class="hitl-card" style="border-left: 4px solid #1d4ed8;">
+        <h2>🎯 Intended approver</h2>
+        <div class="value" style="font-size: 1.05rem;">
+            {% if action.approver_name %}<strong>{{ action.approver_name }}</strong>{% endif %}
+            {% if action.approver_name and action.approver_role %}<span style="color: #64748b;">  •  </span>{% endif %}
+            {% if action.approver_role %}<em style="color: #475569;">{{ action.approver_role }}</em>{% endif %}
+        </div>
+        <div class="value" style="font-size: 0.85rem; color: #64748b; margin-top: 6px;">
+            Signed in as <strong>{{ request.user.email or request.user.username or 'demo' }}</strong>.
+            {% if action.approver_name and request.user.email and action.approver_name|lower != (request.user.email|lower).split('@')[0] %}
+            <span style="color: #b91c1c;">⚠️ You are not the intended approver — proceed only if you are covering.</span>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="dummy-banner">
+        <strong>DEMO MODE (v1):</strong> Approving does <em>not</em> execute real containment.
+        The decision is logged + published to the agent bus for audit. The real executor
+        agent that calls CrowdStrike RTR / the corporate proxy / Tanium is on the SOC-in-a-Box roadmap.
+    </div>
+
+    {% if already_decided %}
+    <div class="hitl-already">
+        ⚠️ <strong>This action was already decided</strong> at
+        {{ action.latest_decided_at }} by {{ action.latest_decided_by }}
+        (<em>{{ action.latest_decision }}</em>). Submitting again will record a
+        duplicate entry in the audit log.
+    </div>
+    {% endif %}
+
+    <div class="hitl-card">
+        <h2>Plan summary</h2>
+        <div class="value">{{ action.description }}</div>
+    </div>
+
+    <div class="hitl-card">
+        <h2>Metadata</h2>
+        <div class="hitl-meta">
+            <div>
+                <div class="label">Proposed by</div>
+                <div class="value">{{ action.proposed_by }}</div>
+            </div>
+            <div>
+                <div class="label">Kind</div>
+                <div class="value">{{ action.kind }}</div>
+            </div>
+            <div>
+                <div class="label">Severity</div>
+                <div class="value">{{ action.target.severity or '—' }}</div>
+            </div>
+            <div>
+                <div class="label">Host</div>
+                <div class="value">{{ action.target.hostname or '—' }}</div>
+            </div>
+            <div>
+                <div class="label">User</div>
+                <div class="value">{{ action.target.username or '—' }}</div>
+            </div>
+            <div>
+                <div class="label">Proposed at</div>
+                <div class="value">{{ action.proposed_at }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="hitl-card">
+        <h2>{% if decision == 'approve' %}Actions to be approved{% else %}Actions you are rejecting{% endif %}</h2>
+        <ul class="hitl-actions">
+            {% for a in action.actions_summary %}
+            <li>{{ a }}</li>
+            {% else %}
+            <li><em>(no actions in this proposal)</em></li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <form method="POST" action="{{ url_for('soc_hitl.hitl_decide') }}" class="hitl-form">
+        <input type="hidden" name="action_id" value="{{ action.action_id }}">
+        <input type="hidden" name="decision" value="{{ decision }}">
+
+        {% if decision == 'reject' %}
+        <label for="reason" style="font-size: 0.88rem; color: #475569; font-weight: 600;">
+            Reason (optional)
+        </label>
+        <textarea name="reason" id="reason" placeholder="e.g. user is a legit admin running scheduled job"></textarea>
+        {% endif %}
+
+        <div class="btn-row">
+            <button type="submit" class="btn-primary">
+                {% if decision == 'approve' %}✅ Confirm Approval{% else %}🛑 Confirm Rejection{% endif %}
+            </button>
+            <a href="{{ url_for('soc_hitl.hitl_audit') }}" class="btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

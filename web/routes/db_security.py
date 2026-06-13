@@ -5,7 +5,7 @@ Two modes:
 1. **Sidecar mode** — when the ir-dbsec container (port 8027) is healthy, `/db-security`
    renders an iframe to the reverse-proxied sidecar UI at `/db-sec-app/ui`, and the
    vendor deploy portal at `/db-security/deploy` handles zip uploads, activation, and
-   rollback (same pattern as the AISPM portal).
+   rollback (same pattern as the AIDRT portal).
 
 2. **Fallback/demo mode** — when the sidecar is not reachable (e.g. before the first
    vendor zip has been activated), the page falls back to the in-repo Flask demo
@@ -13,7 +13,6 @@ Two modes:
 """
 
 import hashlib
-import hmac
 import json
 import logging
 import os
@@ -26,10 +25,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
-from flask import Blueprint, abort, jsonify, render_template, request, Response
+from flask import Blueprint, jsonify, render_template, request, Response
 
 from my_config import get_config
 from src.utils.logging_utils import log_web_activity
+from web.routes._vendor_logs import register_vendor_logs
+from web.auth.helpers import login_required
+from web.auth.rbac import require_capability, DEPLOY_SIDECAR
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +62,8 @@ SERVICE_NAME = "ir-dbsec"
 DOCKER_IMAGE = "ir-dbsec"
 DOCKER_TAG_CURRENT = "current"
 VERSION_ID_RE = re.compile(r"^v\d{8}_\d{6}_[a-f0-9]{6}$")
+
+register_vendor_logs(db_security_bp, "db-security", SERVICE_NAME, "DB Security")
 
 # Cache sidecar-up detection for 10s so the page route doesn't probe on every hit.
 _SIDECAR_CACHE = {"healthy": False, "checked_at": 0.0}
@@ -159,7 +163,7 @@ def _compute_kpis(databases):
 
 
 # ---------------------------------------------------------------------------
-# Deploy portal helpers (mirrors ai_spm.py)
+# Deploy portal helpers (mirrors ai_drt.py)
 # ---------------------------------------------------------------------------
 
 def _now_utc_iso():
@@ -169,19 +173,6 @@ def _now_utc_iso():
 def _new_version_id(digest_hex: str) -> str:
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     return f"v{ts}_{digest_hex[:6]}"
-
-
-def _require_token():
-    expected = get_config().data_security_upload_token
-    if not expected:
-        abort(500, description="Upload token not configured on server")
-    provided = (
-        request.headers.get("X-Upload-Token")
-        or request.form.get("token")
-        or (request.get_json(silent=True) or {}).get("token", "")
-    )
-    if not provided or not hmac.compare_digest(str(provided), str(expected)):
-        abort(401, description="Invalid or missing upload token")
 
 
 def _audit(action: str, version_id: str | None, extra: dict | None = None):
@@ -339,7 +330,7 @@ def _safe_extract_zip(zip_path: Path, dest: Path):
 def _find_package_root(extract_dir: Path) -> Path:
     """Accept either a flat package at root or one nested in a single top-level folder.
 
-    Same shape as the AISPM deploy portal: main.py + frontend/index.html at root.
+    Same shape as the AIDRT deploy portal: main.py + frontend/index.html at root.
     """
     if (extract_dir / "main.py").is_file() and (extract_dir / "frontend" / "index.html").is_file():
         return extract_dir
@@ -433,6 +424,7 @@ def api_overview():
 
 @db_security_bp.route(f"{PROXY_PREFIX}/", defaults={"path": ""}, methods=["GET", "POST"])
 @db_security_bp.route(f"{PROXY_PREFIX}/<path:path>", methods=["GET", "POST"])
+@login_required
 def db_security_proxy(path):
     upstream_url = f"{DBSEC_BASE}/{path}"
     headers = {k: v for k, v in request.headers.items() if k.lower() != "host"}
@@ -450,7 +442,7 @@ def db_security_proxy(path):
     body = upstream.content
     content_type = upstream.headers.get("Content-Type", "")
     if "text/html" in content_type.lower():
-        # AISPM-style hook (for vendor packages that expose a configurable API const).
+        # AIDRT-style hook (for vendor packages that expose a configurable API const).
         body = body.replace(b"const API = ''", f"const API = '{PROXY_PREFIX}'".encode())
         # Vendor's dbsec frontend hardcodes fetch('/api/...') instead of using a
         # configurable API base. Rewrite those so they hit the proxied sidecar
@@ -468,8 +460,8 @@ def db_security_proxy(path):
 # ---------------------------------------------------------------------------
 
 @db_security_bp.route("/api/db-security/versions", methods=["GET"])
+@login_required
 def db_security_versions():
-    _require_token()
     active_info = _dir_info(ACTIVE_DIR)
     staged = sorted(
         (d for d in STAGING_DIR.iterdir() if d.is_dir()),
@@ -489,8 +481,8 @@ def db_security_versions():
 
 
 @db_security_bp.route("/api/db-security/upload", methods=["POST"])
+@require_capability(DEPLOY_SIDECAR, sidecar='db_security')
 def db_security_upload():
-    _require_token()
     f = request.files.get("zip")
     if not f or not f.filename:
         return jsonify({"ok": False, "error": "No 'zip' file in request"}), 400
@@ -549,8 +541,8 @@ def db_security_upload():
 
 
 @db_security_bp.route("/api/db-security/activate", methods=["POST"])
+@require_capability(DEPLOY_SIDECAR, sidecar='db_security')
 def db_security_activate():
-    _require_token()
     data = request.get_json(silent=True) or request.form
     version_id = (data.get("version_id") or "").strip()
     if not VERSION_ID_RE.match(version_id):
@@ -607,8 +599,8 @@ def db_security_activate():
 
 
 @db_security_bp.route("/api/db-security/rollback", methods=["POST"])
+@require_capability(DEPLOY_SIDECAR, sidecar='db_security')
 def db_security_rollback():
-    _require_token()
     data = request.get_json(silent=True) or request.form
     backup_id = (data.get("backup_id") or "").strip()
     if not VERSION_ID_RE.match(backup_id):
@@ -649,8 +641,8 @@ def db_security_rollback():
 
 
 @db_security_bp.route("/api/db-security/staged/<version_id>", methods=["DELETE"])
+@require_capability(DEPLOY_SIDECAR, sidecar='db_security')
 def db_security_delete_staged(version_id):
-    _require_token()
     if not VERSION_ID_RE.match(version_id):
         return jsonify({"ok": False, "error": "Invalid version_id"}), 400
     target = STAGING_DIR / version_id

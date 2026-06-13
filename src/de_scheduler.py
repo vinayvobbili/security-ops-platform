@@ -10,7 +10,7 @@ enrichment, tipper analysis, and domain/asset monitoring:
 - Threat intel IOC enrichment (daily)
 - Hourly tipper analysis (business hours)
 - Domain monitoring + watchlist poller (daily + every 15 min)
-- Salesforce guest-access scan (daily)
+- Salesforce guest-access scan (daily) — DISABLED
 
 Isolated from ir_scheduler so detection engineering workflows have
 their own process lifecycle.
@@ -271,6 +271,56 @@ def main() -> None:
     schedule_daily('02:20', _lazy_component('services.threat_intel_db', 'enrich_top_iocs', vt_limit=50, rf_limit=200),
                    name="threat_intel_enrichment")
 
+    # AttackIQ BAS auto-fire — runs the tipper assessments that 02:15 sync just
+    # BUILT (status='created') at the small SOC-approved test asset group,
+    # throttled to a per-night scenario budget so a tipper spike drains over
+    # several nights instead of firing in one window. Closes the loop: the
+    # 02:55 results poll then picks up the detection outcomes for the matrix.
+    # Blast radius is re-verified per fire (small curated group only).
+    logger.info("Scheduling daily AttackIQ BAS auto-fire (02:25 ET, 25 scenarios/night)...")
+    schedule.every().day.at('02:25', eastern).do(
+        lambda: safe_run(
+            _lazy_component('services.threat_intel_db', 'auto_fire_pending_assessments', max_scenarios=25),
+            name="attackiq_auto_fire", timeout=1800)
+    )
+
+    # GitHub critical Security Advisory monitor — hourly poll of reviewed+critical
+    # advisories; Webex digest (Toodles) + AppSec email on new, dedup'd advisories.
+    logger.info("Scheduling GitHub critical advisory monitor (hourly at :00)...")
+    schedule.every().hour.at(':00').do(
+        lambda: safe_run(
+            _lazy_component('services.github_advisories', 'poll_critical_advisories',
+                            room_id=config.webex_room_id_dev_test_space),
+            name="github_critical_advisories", timeout=900)
+    )
+
+    # Veracode SCA exposure index — daily rebuild (24h TTL). The portfolio
+    # findings report is ~240k rows / ~6 min, so it's built here as a background
+    # job; advisory + tipper CVE lookups only ever read the warm SQLite cache.
+    logger.info("Scheduling daily Veracode SCA index refresh (02:40 ET)...")
+    schedule.every().day.at('02:40', eastern).do(
+        lambda: safe_run(
+            _lazy_component('services.veracode', 'refresh_index'),
+            name="veracode_sca_index_refresh", timeout=1800)
+    )
+
+    # AttackIQ BAS validation overlay — nightly, read-only. The index maps the
+    # matrix's MITRE techniques to AttackIQ scenarios (tag lookups, rate-limited
+    # ~3s/req), then the poll pulls recent run results and records per-technique
+    # detection_outcome so the ATT&CK matrix can show "did our detection fire?".
+    logger.info("Scheduling nightly AttackIQ technique-scenario index (02:45 ET)...")
+    schedule.every().day.at('02:45', eastern).do(
+        lambda: safe_run(
+            _lazy_component('services.threat_intel_db', 'refresh_technique_scenario_index'),
+            name="attackiq_technique_index", timeout=1800)
+    )
+    logger.info("Scheduling nightly AttackIQ results poll (02:55 ET)...")
+    schedule.every().day.at('02:55', eastern).do(
+        lambda: safe_run(
+            _lazy_component('services.threat_intel_db', 'refresh_attackiq_results'),
+            name="attackiq_results_poll", timeout=600)
+    )
+
     # Hourly tipper analysis - analyzes new tippers and sends to Webex
     tipper_analysis_room = config.webex_room_id_threat_tipper_analysis
     if tipper_analysis_room:
@@ -316,12 +366,50 @@ def main() -> None:
     else:
         logger.warning("Hourly tipper analysis DISABLED (no TIPPER_ANALYSIS_ROOM_ID configured)")
 
-    # Domain lookalike, dark web, and brand impersonation monitoring
-    # Includes CT log search for semantic attacks (acme-loan.com) via crt.sh
-    logger.info("Scheduling domain monitoring (08:00 ET)...")
-    schedule_daily('08:00',
-                   _lazy_component('src.components.domain_monitoring', 'run_daily_monitoring'),
-                   name="domain_monitoring")
+    # Domain lookalike, dark web, and brand impersonation monitoring.
+    # The full per-brand pipeline (dnstwist + WHOIS/VT/Shodan/HIBP/abuse checks)
+    # is minutes per brand and a single run has a hard 30-minute timeout, so the
+    # scan is STAGGERED across the morning: each slot scans a disjoint partition
+    # of the monitored brands and merges into the shared day report; slot 0 also
+    # runs the once-per-day global sweeps (RF watchlist + brand-keyword CT). A
+    # final job posts one consolidated summary. Brands are partitioned at run
+    # time, so adding a brand via the management UI needs no scheduler restart.
+    _DOMAIN_MON_SLOTS = ['08:00', '08:30', '09:00', '09:30',
+                         '10:00', '10:30', '11:00', '11:30']
+    _total_slots = len(_DOMAIN_MON_SLOTS)
+    logger.info(f"Scheduling staggered domain monitoring ({_total_slots} slots, 08:00–11:30 ET)...")
+    for _idx, _slot_time in enumerate(_DOMAIN_MON_SLOTS):
+        schedule_daily(_slot_time,
+                       _lazy_component('src.components.domain_monitoring', 'run_brand_slot',
+                                       slot_index=_idx, total_slots=_total_slots),
+                       name=f"domain_monitoring_slot_{_idx}")
+    # Consolidated daily summary after the last slot completes.
+    logger.info("Scheduling consolidated domain monitoring summary (12:00 ET)...")
+    schedule_daily('12:00',
+                   _lazy_component('src.components.domain_monitoring', 'send_daily_summary_now'),
+                   name="domain_monitoring_summary")
+
+    # PhishFort takedown-status sync — reconciles incident statuses into the
+    # findings ledger so the leadership report's SLA tiles (time-to-takedown,
+    # % contained) reflect live progress. Twice daily is plenty (takedowns
+    # resolve over days, not minutes).
+    logger.info("Scheduling PhishFort takedown-status sync (12:15 + 17:15 ET)...")
+    for _sync_time in ('12:15', '17:15'):
+        schedule_daily(_sync_time,
+                       _lazy_component('services.phish_fort', 'sync_phishfort_statuses'),
+                       name="phishfort_status_sync")
+
+    # Monthly Brand-Protection report — generated + posted on the 1st (the
+    # `schedule` library has no native monthly trigger, so a daily job guards on
+    # the day-of-month).
+    def _post_monthly_brand_report_if_first() -> None:
+        if datetime.now(eastern).day != 1:
+            return
+        from src.components.domain_monitoring.monthly_report import post_monthly_report
+        post_monthly_report()
+    logger.info("Scheduling monthly Brand-Protection report (1st of month, 13:00 ET)...")
+    schedule_daily('13:00', _post_monthly_brand_report_if_first,
+                   name="domain_monitoring_monthly_report")
 
     # Tanium installed-software inventory sync — feeds the CVE exposure correlator
     logger.info("Scheduling Tanium software inventory sync (04:30 ET)...")
@@ -346,52 +434,52 @@ def main() -> None:
                          name="watchlist_heartbeat", timeout=30)
     )
 
-    # Daily Salesforce guest-access scan — checks all SF targets for exposed Aura/GraphQL objects
-    logger.info("Scheduling daily Salesforce scan (08:30 ET)...")
-    def _run_sf_daily_scan():
-        from services.salesforce_scanner import scan_sites, load_targets
-        from services.sf_scanner_db import save_scan
-
-        targets = load_targets()
-        results = []
-        report_data = {}
-        for event_type, data in scan_sites(targets):
-            if event_type == "result":
-                results.append(data)
-            elif event_type == "complete":
-                report_data = data
-
-        # Persist to DB
-        try:
-            save_scan(report_data)
-        except Exception as e:
-            logger.error(f"SF scan: failed to save results: {e}")
-
-        # Alert on findings
-        fails = [r for r in results if r.get("status") == "FAIL"]
-        if not fails:
-            logger.info(f"SF daily scan: all clear ({len(results)} checks passed)")
-            return
-
-        webex = _get_webex_api()
-        room_id = config.webex_room_id_domain_monitoring
-        if not webex or not room_id:
-            logger.warning("SF scan: findings detected but Webex/room not configured")
-            return
-
-        lines = [f"🚨 **Salesforce Guest Access — {len(fails)} Finding(s)**\n"]
-        for f in fails:
-            pii = f""
-            if f.get("pii_fields"):
-                pii = f"  ⚠️ PII: {', '.join(f['pii_fields'])}"
-            lines.append(f"- **{f['check']}** on `{f['base_url']}`  \n  {f['detail']}{pii}")
-        lines.append(f"\n_Scanned {len(results)} checks across {len(targets)} site(s)_")
-        try:
-            webex.messages.create(roomId=room_id, markdown="\n".join(lines))
-        except Exception as e:
-            logger.error(f"SF scan: failed to send Webex alert: {e}")
-
-    schedule_daily('08:30', _run_sf_daily_scan, name="salesforce_daily_scan")
+    # Daily Salesforce guest-access scan — DISABLED 2026-05-03 (per user request)
+    # logger.info("Scheduling daily Salesforce scan (08:30 ET)...")
+    # def _run_sf_daily_scan():
+    #     from services.salesforce_scanner import scan_sites, load_targets
+    #     from services.sf_scanner_db import save_scan
+    #
+    #     targets = load_targets()
+    #     results = []
+    #     report_data = {}
+    #     for event_type, data in scan_sites(targets):
+    #         if event_type == "result":
+    #             results.append(data)
+    #         elif event_type == "complete":
+    #             report_data = data
+    #
+    #     # Persist to DB
+    #     try:
+    #         save_scan(report_data)
+    #     except Exception as e:
+    #         logger.error(f"SF scan: failed to save results: {e}")
+    #
+    #     # Alert on findings
+    #     fails = [r for r in results if r.get("status") == "FAIL"]
+    #     if not fails:
+    #         logger.info(f"SF daily scan: all clear ({len(results)} checks passed)")
+    #         return
+    #
+    #     webex = _get_webex_api()
+    #     room_id = config.webex_room_id_domain_monitoring
+    #     if not webex or not room_id:
+    #         logger.warning("SF scan: findings detected but Webex/room not configured")
+    #         return
+    #
+    #     lines = [f"🚨 **Salesforce Guest Access — {len(fails)} Finding(s)**\n"]
+    #     for f in fails:
+    #         pii = f""
+    #         if f.get("pii_fields"):
+    #             pii = f"  ⚠️ PII: {', '.join(f['pii_fields'])}"
+    #         lines.append(f"- **{f['check']}** on `{f['base_url']}`  \n  {f['detail']}{pii}")
+    #     lines.append(f"\n_Scanned {len(results)} checks across {len(targets)} site(s)_")
+    #     try:
+    #         webex.messages.create(roomId=room_id, markdown="\n".join(lines))
+    #     except Exception as e:
+    #         logger.error(f"SF scan: failed to send Webex alert: {e}")
+    #
+    # schedule_daily('08:30', _run_sf_daily_scan, name="salesforce_daily_scan")
 
     total_jobs = len(schedule.get_jobs())
     logger.info(f"All jobs scheduled successfully! Total jobs: {total_jobs}")

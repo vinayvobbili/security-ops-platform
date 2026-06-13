@@ -2,10 +2,34 @@
 {% set page_title_text = 'Docs Library' %}
 {% set page_title_left_icon = '📚' %}
 {% set page_title_right_icon = '🔍' %}
+{% block body_classes %}dl-themed{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/docs_library.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/chat_widget.css') }}">
+<style>
+  /* ===== Docs Library theme — Amber / Honey ===== */
+  body.dl-themed { background:
+      radial-gradient(1100px 520px at 4% -8%, #fff0cf 0%, transparent 55%),
+      radial-gradient(1000px 560px at 98% 0%, #ffe7c2 0%, transparent 52%),
+      radial-gradient(1200px 720px at 50% 122%, #fdf3d6 0%, transparent 55%),
+      linear-gradient(160deg, #fff8e8 0%, #fff4dd 48%, #fffae6 100%) !important;
+      background-attachment: fixed !important; min-height: 100vh; }
+  body.dl-themed.dark-mode { background:
+      linear-gradient(135deg, #1a1305 0%, #241a06 50%, #150f04 100%) !important; color: #f0e6cf; }
+  html { scrollbar-gutter: stable; }
+  ::-webkit-scrollbar { width: 16px; height: 16px; }
+  ::-webkit-scrollbar-track { border-radius: 10px;
+      background: linear-gradient(180deg, rgba(0,0,0,.04), rgba(0,0,0,.06) 50%, rgba(0,0,0,.04)); }
+  ::-webkit-scrollbar-thumb { border-radius: 10px; border: 2px solid transparent; background-clip: padding-box;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
+      background: linear-gradient(180deg, #f59e0b 0%, #fbbf24 22%, #f97316 46%, #fb923c 70%, #eab308 100%); }
+  ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, #eab308 0%, #fb923c 30%, #f97316 54%, #fbbf24 78%, #f59e0b 100%); }
+  ::-webkit-scrollbar-corner { background: transparent; }
+  body.dark-mode ::-webkit-scrollbar-track {
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.10) 50%, rgba(255,255,255,.06)); }
+</style>
 {% endblock %}
 
 {% block content %}

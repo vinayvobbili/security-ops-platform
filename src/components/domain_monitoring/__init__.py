@@ -64,11 +64,13 @@ Domains are configured in:
 """
 
 from .config import ALERT_ROOM_ID_PROD, ALERT_ROOM_ID_TEST
-from .orchestrator import run_daily_monitoring
+from .orchestrator import run_daily_monitoring, run_brand_slot, send_daily_summary_now
 from .watchlist_poller import poll_watchlist, send_heartbeat as send_watchlist_heartbeat
 
 __all__ = [
     "run_daily_monitoring",
+    "run_brand_slot",
+    "send_daily_summary_now",
     "poll_watchlist",
     "send_watchlist_heartbeat",
     "ALERT_ROOM_ID_PROD",

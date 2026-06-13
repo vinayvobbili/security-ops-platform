@@ -7,6 +7,7 @@
 .tc-toolbar-left { display: flex; align-items: center; gap: 12px; }
 .tc-toolbar-right { display: flex; align-items: center; gap: 10px; }
 .tc-count { color: #64748b; font-size: 0.95rem; }
+.tc-muted { color: #94a3b8; }
 
 /* Buttons */
 .tc-btn {
@@ -133,6 +134,8 @@
 .tc-form-group input:focus, .tc-form-group select:focus {
     outline: none; border-color: #e65100; box-shadow: 0 0 0 2px rgba(230,81,0,0.15);
 }
+.tc-form-hint { font-size: 0.75rem; color: #64748b; }
+body.dark-mode .tc-form-hint { color: #94a3b8; }
 .tc-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 
 /* Field builder */
@@ -180,7 +183,6 @@
 }
 
 /* ── Dark Mode ── */
-body.dark-mode { background: #0f172a; }
 body.dark-mode .tc-container { color: #e2e8f0; }
 body.dark-mode .tc-count { color: #94a3b8; }
 body.dark-mode .tc-tabs { border-bottom-color: #1e293b; }

@@ -11,7 +11,7 @@ from typing import Optional
 from langchain_core.language_models import BaseChatModel
 from langchain_core.embeddings import Embeddings
 
-from my_bot.utils.llm_factory import create_llm, create_router_llm, create_embeddings
+from my_bot.utils.llm_factory import create_llm, create_llm, create_router_llm, create_embeddings
 from my_bot.utils.enhanced_config import ModelConfig
 
 logger = logging.getLogger(__name__)
@@ -48,13 +48,24 @@ def ensure_llm_initialized() -> None:
 
 
 def get_llm() -> Optional[BaseChatModel]:
-    """Get the LLM instance."""
+    """Get the tool-calling LLM instance (m1 GLM).
+
+    Stays on m1 (NOT the LLM gateway) because the XSOAR triage pipeline binds tools on this
+    instance (``get_llm().bind_tools(...)``) and GPT-4.1 via the gateway
+    can't tool-call. Non-tool callers should use ``get_llm_with_temperature`` (or
+    ``create_llm`` directly), which route to GPT-4.1.
+    """
     ensure_llm_initialized()
     return _llm
 
 
 def get_llm_with_temperature(temperature: float) -> BaseChatModel:
-    """Get LLM with custom temperature."""
+    """Get the non-tool analysis LLM (GPT-4.1, m1 GLM fallback).
+
+    Used for tipper novelty analysis and behavioral-hunt generation — neither
+    binds tools, so both run on GPT-4.1 (json parsed from prose / a filled-in
+    template, not response_format). ``temperature`` applies to the m1 fallback.
+    """
     ensure_llm_initialized()
     return create_llm(_get_config(), temperature=temperature)
 

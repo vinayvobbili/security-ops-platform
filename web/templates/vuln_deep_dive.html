@@ -1,0 +1,1745 @@
+{% extends 'base_layout.html' %}
+
+{% block page_title_plain %}Vulnerability Deep Dive{% endblock %}
+
+{% set page_title_text = 'Vulnerability Deep Dive' %}
+{% set page_title_left_icon = '🔬' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/chat_widget.css') }}">
+<style>
+  .vdd {
+      max-width: 1280px;
+      margin: calc(var(--nav-height) + 16px) auto 56px;
+      padding: 0 22px;
+      color: #1e293b;
+      font-family: 'Outfit', -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  body.dark-mode .vdd { color: #e2e8f0; }
+
+  /* Hero */
+  .vdd-hero {
+      background: linear-gradient(135deg, #eff6ff 0%, #ecfdf5 100%);
+      border-left: 5px solid #0046AD;
+      border-image: linear-gradient(180deg, #0046AD, #00A651) 1;
+      border-radius: 14px;
+      padding: 18px 24px; margin-bottom: 22px;
+      box-shadow: 0 8px 28px rgba(0,70,173,0.08);
+  }
+  .vdd-hero h2 { margin: 0 0 6px; font-size: 18px; font-weight: 700; color: #003875; }
+  .vdd-hero p { margin: 0; font-size: 13.5px; color: #475569; line-height: 1.55; }
+  body.dark-mode .vdd-hero { background: linear-gradient(135deg, rgba(30,41,59,0.75), rgba(20,46,36,0.75)); }
+  body.dark-mode .vdd-hero h2 { color: #93c5fd; }
+  body.dark-mode .vdd-hero p { color: #cbd5e1; }
+  .vdd-livenote { display:inline-block; margin-top:10px; font-size:12px; font-weight:600;
+      color:#0369a1; background:#e0f2fe; border:1px solid #bae6fd; padding:3px 11px; border-radius:999px; }
+  body.dark-mode .vdd-livenote { color:#7dd3fc; background:rgba(3,105,161,0.18); border-color:rgba(125,211,252,0.3); }
+
+  /* Stat cards */
+  .vdd-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px; margin-bottom:30px; }
+  .vdd-card {
+      background:#fff; border:1px solid #e2e8f0; border-radius:14px;
+      padding:16px 18px; box-shadow:0 4px 18px rgba(15,23,42,0.05);
+  }
+  body.dark-mode .vdd-card { background:#1e293b; border-color:#334155; }
+  .vdd-card .num { font-size:30px; font-weight:800; line-height:1; color:#003875; }
+  body.dark-mode .vdd-card .num { color:#93c5fd; }
+  .vdd-card .lbl { font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.04em;
+      color:#64748b; margin-top:8px; }
+  body.dark-mode .vdd-card .lbl { color:#94a3b8; }
+  .vdd-card .sub { font-size:12px; color:#475569; margin-top:6px; }
+  body.dark-mode .vdd-card .sub { color:#cbd5e1; }
+  .vdd-card.accent-amber .num { color:#b45309; }
+  .vdd-card.accent-green .num { color:#047857; }
+  /* split bar */
+  .vdd-split { display:flex; height:10px; border-radius:999px; overflow:hidden; margin-top:10px; background:#e2e8f0; }
+  .vdd-split .app { background:#7c3aed; }
+  .vdd-split .base { background:#0891b2; }
+  .vdd-split-key { display:flex; gap:14px; margin-top:8px; font-size:11.5px; color:#475569; }
+  body.dark-mode .vdd-split-key { color:#cbd5e1; }
+  .vdd-split-key .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; vertical-align:middle; }
+  .vdd-split-key .dot.app { background:#7c3aed; } .vdd-split-key .dot.base { background:#0891b2; }
+
+  /* Section headings */
+  .vdd-section { margin:34px 0 12px; }
+  .vdd-section h3 { margin:0 0 3px; font-size:16px; font-weight:700; color:#003875; }
+  body.dark-mode .vdd-section h3 { color:#93c5fd; }
+  .vdd-section .cap { font-size:12.5px; color:#64748b; line-height:1.5; }
+  body.dark-mode .vdd-section .cap { color:#94a3b8; }
+
+  /* Tables */
+  .vdd-tablewrap { background:#fff; border:1px solid #e2e8f0; border-radius:14px; overflow:hidden;
+      box-shadow:0 4px 18px rgba(15,23,42,0.05); }
+  body.dark-mode .vdd-tablewrap { background:#1e293b; border-color:#334155; }
+  table.vdd-table { width:100%; border-collapse:collapse; font-size:13px; }
+  table.vdd-table th, table.vdd-table td { padding:10px 12px; text-align:left; border-bottom:1px solid #eef0f3; vertical-align:top; }
+  body.dark-mode table.vdd-table th, body.dark-mode table.vdd-table td { border-color:#334155; }
+  table.vdd-table thead th {
+      background:#f8fafc; font-size:11.5px; text-transform:uppercase; letter-spacing:.04em;
+      color:#475569; font-weight:700; cursor:pointer; user-select:none; white-space:nowrap; position:sticky; top:0; z-index:1;
+  }
+  body.dark-mode table.vdd-table thead th { background:#0f172a; color:#94a3b8; }
+  table.vdd-table thead th.nosort { cursor:default; }
+  table.vdd-table thead th[data-dir="asc"]::after { content:" ▲"; opacity:.6; }
+  table.vdd-table thead th[data-dir="desc"]::after { content:" ▼"; opacity:.6; }
+  table.vdd-table tbody tr:hover { background:#f8fafc; }
+  body.dark-mode table.vdd-table tbody tr:hover { background:#243044; }
+  table.vdd-table tbody tr.detail-row td { background:#fbfdff; font-size:12.5px; color:#475569; padding:8px 14px 12px; }
+  body.dark-mode table.vdd-table tbody tr.detail-row td { background:#15203a; color:#cbd5e1; }
+  .vdd-num { font-variant-numeric:tabular-nums; font-weight:700; }
+  .vdd-cve a { color:#0046AD; font-weight:600; text-decoration:none; }
+  .vdd-cve a:hover { text-decoration:underline; }
+  body.dark-mode .vdd-cve a { color:#93c5fd; }
+
+  /* Badges */
+  .vdd-badge { display:inline-block; font-size:11px; font-weight:700; padding:2px 9px; border-radius:999px;
+      text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; }
+  .loc-app { background:#f3e8ff; color:#7c3aed; }
+  .loc-base { background:#cffafe; color:#0e7490; }
+  .loc-other { background:#eef1f5; color:#64748b; }
+  .rem-yes { background:#fee2e2; color:#b91c1c; }
+  .rem-no { background:#dcfce7; color:#15803d; }
+  .conf-high { color:#15803d; font-weight:700; }
+  .conf-medium { color:#b45309; font-weight:600; }
+  .conf-low { color:#94a3b8; }
+
+  /* ---- Faceted filter panel (mirrors /meaningful-metrics) ---- */
+  .vdd-filters {
+      background:#fff; border:1px solid #e2e8f0; border-radius:14px;
+      padding:18px 20px; margin:6px 0 16px;
+      box-shadow:0 4px 18px rgba(15,23,42,0.05);
+  }
+  body.dark-mode .vdd-filters { background:#1e293b; border-color:#334155; }
+  .vdd-filters-header {
+      display:flex; align-items:center; gap:8px; font-size:15px; font-weight:700;
+      color:#003875; margin-bottom:14px;
+  }
+  body.dark-mode .vdd-filters-header { color:#93c5fd; }
+  .vdd-filters-grid {
+      display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px;
+      align-items:start;
+  }
+  .vdd-filter-group { display:flex; flex-direction:column; gap:7px; }
+  .vdd-filter-group.vdd-search-group { grid-column:1 / -1; }
+  .vdd-filter-label {
+      font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
+      color:#475569;
+  }
+  body.dark-mode .vdd-filter-label { color:#94a3b8; }
+  .vdd-chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .vdd-chip {
+      display:inline-flex; align-items:center; gap:5px; cursor:pointer; user-select:none;
+      font-size:12px; font-weight:600; padding:5px 11px; border-radius:999px;
+      background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; transition:all .12s;
+  }
+  .vdd-chip:hover { border-color:#bfdbfe; background:#eff6ff; }
+  .vdd-chip.active {
+      background:#0046AD; color:#fff; border-color:#0046AD;
+      box-shadow:0 2px 8px rgba(0,70,173,0.22);
+  }
+  .vdd-chip.active.vdd-chip-kev { background:#dc2626; border-color:#dc2626; box-shadow:0 2px 8px rgba(220,38,38,0.25); }
+  body.dark-mode .vdd-chip { background:#0f172a; color:#cbd5e1; border-color:#334155; }
+  body.dark-mode .vdd-chip:hover { border-color:#3b82f6; background:#243044; }
+  body.dark-mode .vdd-chip.active { background:#0046AD; color:#fff; border-color:#0046AD; }
+  .vdd-filters input.vdd-search {
+      width:100%; padding:9px 13px; border:1px solid #d0d7de; border-radius:9px;
+      font-size:13px; font-family:inherit; box-sizing:border-box;
+  }
+  body.dark-mode .vdd-filters input.vdd-search { background:#0f172a; border-color:#334155; color:#e2e8f0; }
+  .vdd-filter-summary {
+      display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;
+      margin-top:14px; padding:11px 14px; border-radius:10px;
+      background:rgba(0,70,173,0.07); border:1px solid rgba(0,166,81,0.28); font-size:12.5px;
+  }
+  body.dark-mode .vdd-filter-summary { background:rgba(0,70,173,0.16); border-color:rgba(0,166,81,0.3); }
+  .vdd-filter-summary .vdd-fs-label { font-weight:700; color:#0046AD; margin-right:6px; }
+  body.dark-mode .vdd-filter-summary .vdd-fs-label { color:#93c5fd; }
+  .vdd-active-tags { display:inline-flex; flex-wrap:wrap; gap:6px; }
+  .vdd-active-tag {
+      background:rgba(0,70,173,0.18); border:1px solid rgba(0,70,173,0.38); border-radius:999px;
+      padding:3px 10px; font-size:11.5px; color:#0046AD; font-weight:600;
+  }
+  body.dark-mode .vdd-active-tag { background:rgba(59,130,246,0.22); border-color:rgba(59,130,246,0.4); color:#bfdbfe; }
+  .vdd-fs-right { display:flex; align-items:center; gap:12px; }
+  .vdd-fs-count { font-size:12px; color:#64748b; white-space:nowrap; }
+  body.dark-mode .vdd-fs-count { color:#94a3b8; }
+  .vdd-reset-btn {
+      background:#dc3545; color:#fff; border:none; border-radius:999px; padding:6px 14px;
+      font-size:12px; font-weight:700; font-family:inherit; cursor:pointer; transition:all .15s; white-space:nowrap;
+  }
+  .vdd-reset-btn:hover { background:#c82333; transform:translateY(-1px); }
+
+  /* ---- Pagination bar ---- */
+  .vdd-pagination {
+      display:flex; align-items:center; justify-content:center; gap:14px; flex-wrap:wrap;
+      margin:14px 0 4px; font-size:13px; color:#475569;
+  }
+  body.dark-mode .vdd-pagination { color:#cbd5e1; }
+  .vdd-page-btn {
+      background:#fff; color:#0046AD; border:1px solid #bfdbfe; border-radius:9px;
+      padding:7px 16px; font-size:13px; font-weight:700; font-family:inherit; cursor:pointer; transition:all .15s;
+  }
+  .vdd-page-btn:hover:not(:disabled) { background:#eff6ff; box-shadow:0 2px 10px rgba(0,70,173,0.1); }
+  .vdd-page-btn:disabled { opacity:.45; cursor:default; }
+  body.dark-mode .vdd-page-btn { background:#1e293b; color:#93c5fd; border-color:#334155; }
+  body.dark-mode .vdd-page-btn:hover:not(:disabled) { background:#243044; }
+  .vdd-page-info { font-weight:700; color:#003875; min-width:120px; text-align:center; }
+  body.dark-mode .vdd-page-info { color:#93c5fd; }
+  .vdd-page-size { display:flex; align-items:center; gap:7px; font-size:12.5px; color:#64748b; }
+  body.dark-mode .vdd-page-size { color:#94a3b8; }
+  .vdd-page-size select {
+      padding:6px 9px; border:1px solid #d0d7de; border-radius:8px; font-size:12.5px;
+      font-family:inherit; background:#fff; color:#1e293b; cursor:pointer;
+  }
+  body.dark-mode .vdd-page-size select { background:#0f172a; border-color:#334155; color:#e2e8f0; }
+
+  .vdd-expander { cursor:pointer; color:#0046AD; font-weight:600; font-size:12px; }
+  body.dark-mode .vdd-expander { color:#93c5fd; }
+  .vdd-empty { padding:40px 20px; text-align:center; color:#64748b; font-size:14px; }
+
+  .vdd-notready { background:#fff7ed; border:1px solid #fed7aa; border-radius:14px; padding:28px 24px;
+      text-align:center; color:#9a3412; }
+  body.dark-mode .vdd-notready { background:rgba(154,52,18,0.12); border-color:rgba(251,146,60,0.3); color:#fdba74; }
+
+  /* Priority strip */
+  .vdd-prio { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px; margin-bottom:30px; }
+  .vdd-prio-card {
+      background:#fff; border:1px solid #e2e8f0; border-radius:14px;
+      padding:14px 16px; box-shadow:0 4px 18px rgba(15,23,42,0.05);
+      border-top:4px solid #94a3b8;
+  }
+  body.dark-mode .vdd-prio-card { background:#1e293b; border-color:#334155; }
+  .vdd-prio-card .ptier { font-size:15px; font-weight:800; letter-spacing:.02em; display:flex; align-items:baseline; gap:7px; }
+  .vdd-prio-card .ptier .psla { font-size:11px; font-weight:700; color:#64748b; text-transform:none; letter-spacing:0; }
+  body.dark-mode .vdd-prio-card .ptier .psla { color:#94a3b8; }
+  .vdd-prio-card .pnum { font-size:28px; font-weight:800; line-height:1.1; margin-top:6px; color:#0f172a; }
+  body.dark-mode .vdd-prio-card .pnum { color:#e2e8f0; }
+  .vdd-prio-card .pnum small { font-size:12px; font-weight:600; color:#64748b; }
+  body.dark-mode .vdd-prio-card .pnum small { color:#94a3b8; }
+  .vdd-prio-card .pmeta { font-size:11.5px; color:#475569; margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; }
+  body.dark-mode .vdd-prio-card .pmeta { color:#cbd5e1; }
+  .vdd-prio-card .pchip { background:#eef1f5; color:#475569; border-radius:999px; padding:2px 8px; font-weight:700; }
+  body.dark-mode .vdd-prio-card .pchip { background:#0f172a; color:#cbd5e1; }
+  .vdd-prio-card .pchip.kev { background:#fee2e2; color:#b91c1c; }
+  .vdd-prio-card .pchip.pre { background:#fef3c7; color:#92400e; }
+  .vdd-prio-card.t-p1 { border-top-color:#dc2626; } .vdd-prio-card.t-p1 .ptier { color:#dc2626; }
+  .vdd-prio-card.t-p2 { border-top-color:#ea580c; } .vdd-prio-card.t-p2 .ptier { color:#ea580c; }
+  .vdd-prio-card.t-p3 { border-top-color:#d97706; } .vdd-prio-card.t-p3 .ptier { color:#b45309; }
+  .vdd-prio-card.t-p4 { border-top-color:#94a3b8; } .vdd-prio-card.t-p4 .ptier { color:#475569; }
+  body.dark-mode .vdd-prio-card.t-p4 .ptier { color:#94a3b8; }
+  .vdd-prio-card.t-unscored { border-top-color:#cbd5e1; opacity:.78; } .vdd-prio-card.t-unscored .ptier { color:#94a3b8; }
+  /* clickable priority cards -> jump to filtered Per-CVE Verdicts */
+  .vdd-prio-card[data-prio-nav] { cursor:pointer; transition:transform .12s, box-shadow .12s; }
+  .vdd-prio-card[data-prio-nav]:hover { transform:translateY(-2px); box-shadow:0 10px 24px rgba(0,70,173,0.16); }
+  .vdd-prio-card[data-prio-nav]:focus-visible { outline:2px solid #0046AD; outline-offset:2px; }
+  .vdd-prio-card .pgo { margin-top:10px; font-size:11px; font-weight:700; color:#0046AD; opacity:0; transition:opacity .12s; }
+  .vdd-prio-card[data-prio-nav]:hover .pgo, .vdd-prio-card[data-prio-nav]:focus-visible .pgo { opacity:1; }
+  body.dark-mode .vdd-prio-card .pgo { color:#93c5fd; }
+
+  /* Priority tier badges (table) */
+  .prio-badge { display:inline-block; font-size:11px; font-weight:800; padding:2px 8px; border-radius:6px;
+      letter-spacing:.02em; white-space:nowrap; }
+  .prio-badge.p-p1 { background:#fee2e2; color:#b91c1c; }
+  .prio-badge.p-p2 { background:#ffedd5; color:#c2410c; }
+  .prio-badge.p-p3 { background:#fef3c7; color:#b45309; }
+  .prio-badge.p-p4 { background:#eef1f5; color:#64748b; }
+  .prio-badge.p-none { background:transparent; color:#94a3b8; font-weight:600; }
+  body.dark-mode .prio-badge.p-p1 { background:rgba(220,38,38,0.22); color:#fca5a5; }
+  body.dark-mode .prio-badge.p-p2 { background:rgba(234,88,12,0.22); color:#fdba74; }
+  body.dark-mode .prio-badge.p-p3 { background:rgba(217,119,6,0.22); color:#fcd34d; }
+  body.dark-mode .prio-badge.p-p4 { background:rgba(148,163,184,0.18); color:#cbd5e1; }
+
+  /* KEV / pre-auth signal badges (table) */
+  .sig-badge { display:inline-block; font-size:9.5px; font-weight:800; padding:1px 6px; border-radius:5px;
+      text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; margin-left:5px; vertical-align:middle; }
+  .sig-kev { background:#dc2626; color:#fff; box-shadow:0 0 0 2px rgba(220,38,38,0.18); }
+  .sig-pre { background:#fde68a; color:#92400e; }
+  body.dark-mode .sig-pre { background:#92400e; color:#fde68a; }
+  /* v2 adversarial-debate signals */
+  .sig-review { background:#7c3aed; color:#fff; box-shadow:0 0 0 2px rgba(124,58,237,0.18); cursor:help; }
+  .sig-mustact { background:#0f172a; color:#fff; box-shadow:0 0 0 2px rgba(15,23,42,0.18); cursor:help; }
+  body.dark-mode .sig-review { background:#a78bfa; color:#1e1b4b; }
+  body.dark-mode .sig-mustact { background:#e2e8f0; color:#0f172a; }
+  .vdd-chip.active.vdd-chip-review { background:#7c3aed; border-color:#7c3aed; box-shadow:0 2px 8px rgba(124,58,237,0.25); }
+  .vdd-chip.active.vdd-chip-mustact { background:#0f172a; border-color:#0f172a; box-shadow:0 2px 8px rgba(15,23,42,0.25); }
+  /* debate score line in the rationale detail row */
+  .vdd-debate { margin-top:6px; font-size:12px; }
+  .vdd-debate .dbar { display:inline-block; min-width:36px; text-align:center; font-weight:800; padding:1px 7px;
+      border-radius:5px; margin:0 2px; }
+  .vdd-debate .dbar.att { background:#fee2e2; color:#b91c1c; }
+  .vdd-debate .dbar.skp { background:#dbeafe; color:#1d4ed8; }
+  body.dark-mode .vdd-debate .dbar.att { background:rgba(220,38,38,0.22); color:#fca5a5; }
+  body.dark-mode .vdd-debate .dbar.skp { background:rgba(37,99,235,0.22); color:#93c5fd; }
+  /* debate-outcome banner on the Overview */
+  .vdd-debate-banner { display:flex; align-items:flex-start; gap:10px; margin:14px 0 4px;
+      padding:11px 15px; border-radius:10px; font-size:13px; line-height:1.5;
+      background:linear-gradient(135deg, rgba(124,58,237,0.07), rgba(0,70,173,0.06));
+      border:1px solid rgba(124,58,237,0.22); color:#334155; }
+  body.dark-mode .vdd-debate-banner { background:linear-gradient(135deg, rgba(124,58,237,0.16), rgba(0,70,173,0.14));
+      border-color:rgba(167,139,250,0.3); color:#cbd5e1; }
+  .vdd-debate-banner .vdb-icon { font-size:18px; line-height:1.4; }
+  .vdd-debate-banner .vdb-link { font-weight:700; text-decoration:none; border-bottom:1.5px dotted currentColor; }
+  .vdd-debate-banner .vdb-review { color:#7c3aed; } body.dark-mode .vdd-debate-banner .vdb-review { color:#a78bfa; }
+  .vdd-debate-banner .vdb-mustact { color:#0f172a; } body.dark-mode .vdd-debate-banner .vdb-mustact { color:#e2e8f0; }
+  .vdd-debate-banner .vdb-link:hover { border-bottom-style:solid; }
+
+  .vdd-attacklayer { font-size:11px; color:#475569; background:#f1f5f9; border:1px solid #e2e8f0;
+      border-radius:6px; padding:1px 7px; white-space:nowrap; }
+  body.dark-mode .vdd-attacklayer { color:#cbd5e1; background:#0f172a; border-color:#334155; }
+  .vdd-epss { font-variant-numeric:tabular-nums; font-weight:700; }
+
+  /* Reachability strip (mirrors priority strip) */
+  .vdd-reach { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px; margin-bottom:30px; }
+  .vdd-reach-card {
+      background:#fff; border:1px solid #e2e8f0; border-radius:14px;
+      padding:14px 16px; box-shadow:0 4px 18px rgba(15,23,42,0.05);
+      border-top:4px solid #94a3b8;
+  }
+  body.dark-mode .vdd-reach-card { background:#1e293b; border-color:#334155; }
+  .vdd-reach-card .rtier { font-size:14px; font-weight:800; letter-spacing:.01em; }
+  .vdd-reach-card .rnum { font-size:28px; font-weight:800; line-height:1.1; margin-top:6px; color:#0f172a; }
+  body.dark-mode .vdd-reach-card .rnum { color:#e2e8f0; }
+  .vdd-reach-card .rnum small { font-size:12px; font-weight:600; color:#64748b; }
+  body.dark-mode .vdd-reach-card .rnum small { color:#94a3b8; }
+  .vdd-reach-card .rmeta { font-size:11.5px; color:#475569; margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; }
+  body.dark-mode .vdd-reach-card .rmeta { color:#cbd5e1; }
+  .vdd-reach-card .rchip { background:#eef1f5; color:#475569; border-radius:999px; padding:2px 8px; font-weight:700; }
+  body.dark-mode .vdd-reach-card .rchip { background:#0f172a; color:#cbd5e1; }
+  .vdd-reach-card.r-present-confirmed { border-top-color:#16a34a; } .vdd-reach-card.r-present-confirmed .rtier { color:#15803d; }
+  .vdd-reach-card.r-present-conditional { border-top-color:#0d9488; } .vdd-reach-card.r-present-conditional .rtier { color:#0f766e; }
+  .vdd-reach-card.r-pending-image { border-top-color:#64748b; } .vdd-reach-card.r-pending-image .rtier { color:#475569; }
+  body.dark-mode .vdd-reach-card.r-pending-image .rtier { color:#94a3b8; }
+  .vdd-reach-card.r-unknown { border-top-color:#cbd5e1; opacity:.82; } .vdd-reach-card.r-unknown .rtier { color:#94a3b8; }
+
+  /* Reachability badges (table) */
+  .reach-badge { display:inline-block; font-size:11px; font-weight:800; padding:2px 8px; border-radius:6px;
+      letter-spacing:.02em; white-space:nowrap; }
+  .reach-badge.rb-present-confirmed { background:#dcfce7; color:#15803d; }
+  .reach-badge.rb-present-conditional { background:#ccfbf1; color:#0f766e; }
+  .reach-badge.rb-pending-image { background:#e2e8f0; color:#475569; }
+  .reach-badge.rb-unknown { background:transparent; color:#94a3b8; font-weight:600; }
+  body.dark-mode .reach-badge.rb-present-confirmed { background:rgba(22,163,74,0.22); color:#86efac; }
+  body.dark-mode .reach-badge.rb-present-conditional { background:rgba(13,148,136,0.22); color:#5eead4; }
+  body.dark-mode .reach-badge.rb-pending-image { background:rgba(100,116,139,0.22); color:#cbd5e1; }
+
+  /* "How does this work?" info button — own row, top-right (mirrors /recap) */
+  .vdd-info-row { display:flex; justify-content:flex-end; margin-bottom:10px; }
+  .vdd-info-btn {
+      display:inline-flex; align-items:center; gap:7px; cursor:pointer;
+      background:#fff; color:#0046AD; border:1px solid #bfdbfe; border-radius:999px;
+      padding:7px 16px; font-size:13px; font-weight:600; font-family:inherit;
+      box-shadow:0 2px 10px rgba(0,70,173,0.07); transition:background .15s, box-shadow .15s, transform .05s;
+  }
+  .vdd-info-btn:hover { background:#eff6ff; box-shadow:0 4px 16px rgba(0,70,173,0.12); }
+  .vdd-info-btn:active { transform:translateY(1px); }
+  .vdd-info-btn .vdd-info-btn-icon { color:#00A651; font-size:14px; }
+  body.dark-mode .vdd-info-btn { background:#1e293b; color:#93c5fd; border-color:#334155; }
+  body.dark-mode .vdd-info-btn:hover { background:#243044; }
+
+  /* Info modal */
+  .vdd-info-backdrop {
+      position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:100010;
+      display:none; align-items:center; justify-content:center; padding:24px;
+      -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px);
+  }
+  .vdd-info-modal {
+      background:#fff; color:#1e293b; border-radius:16px; max-width:1060px; width:100%;
+      max-height:88vh; overflow:hidden; display:flex; flex-direction:column;
+      box-shadow:0 24px 64px rgba(15,23,42,0.32); font-family:'Outfit', -apple-system, "Segoe UI", Roboto, sans-serif;
+      animation:vddInfoIn .16s ease-out;
+  }
+  @keyframes vddInfoIn { from { opacity:0; transform:translateY(10px) scale(.985); } to { opacity:1; transform:none; } }
+  body.dark-mode .vdd-info-modal { background:#1e293b; color:#e2e8f0; }
+  .vdd-info-header {
+      display:flex; align-items:center; gap:12px; padding:18px 22px;
+      background:linear-gradient(135deg, #eff6ff 0%, #ecfdf5 100%);
+      border-bottom:1px solid #e2e8f0; flex:0 0 auto;
+  }
+  body.dark-mode .vdd-info-header { background:linear-gradient(135deg, rgba(30,41,59,0.85), rgba(20,46,36,0.85)); border-color:#334155; }
+  .vdd-info-header h3 { margin:0; font-size:17px; font-weight:700; color:#003875; flex:1; }
+  body.dark-mode .vdd-info-header h3 { color:#93c5fd; }
+  .vdd-info-close {
+      border:none; background:transparent; cursor:pointer; font-size:24px; line-height:1;
+      color:#64748b; padding:0 4px; border-radius:8px;
+  }
+  .vdd-info-close:hover { color:#0f172a; }
+  body.dark-mode .vdd-info-close { color:#94a3b8; }
+  body.dark-mode .vdd-info-close:hover { color:#e2e8f0; }
+  .vdd-info-body { padding:20px 24px; overflow-y:auto; }
+  /* Hero: walkthrough video on the left, the elevator pitch on the right. */
+  .vdd-info-hero {
+      display:grid; grid-template-columns:minmax(0,1.35fr) minmax(0,1fr); gap:22px;
+      align-items:center; margin-bottom:22px; padding-bottom:22px;
+      border-bottom:1px solid #e2e8f0;
+  }
+  body.dark-mode .vdd-info-hero { border-color:#334155; }
+  .vdd-info-video {
+      width:100%; border-radius:12px; background:#0f172a; display:block;
+      box-shadow:0 10px 30px rgba(15,23,42,0.22); aspect-ratio:16/9;
+  }
+  .vdd-info-hero-text h4 { margin:0 0 7px; font-size:15px; font-weight:700; color:#003875; }
+  body.dark-mode .vdd-info-hero-text h4 { color:#93c5fd; }
+  .vdd-info-hero-text p { margin:0 0 8px; font-size:13px; color:#475569; line-height:1.55; }
+  body.dark-mode .vdd-info-hero-text p { color:#cbd5e1; }
+  .vdd-info-hero-tag {
+      display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700;
+      letter-spacing:.04em; text-transform:uppercase; color:#00824a; margin-bottom:9px;
+  }
+  /* Steps in two readable columns so the wider modal isn't wasted real estate. */
+  .vdd-info-steps { display:grid; grid-template-columns:1fr 1fr; gap:6px 30px; }
+  .vdd-info-steps .vdd-info-section--full { grid-column:1 / -1; }
+  @media (max-width: 760px) {
+      .vdd-info-hero { grid-template-columns:1fr; gap:16px; }
+      .vdd-info-steps { grid-template-columns:1fr; }
+  }
+  .vdd-info-section { display:flex; gap:13px; margin-bottom:18px; }
+  .vdd-info-section:last-child { margin-bottom:0; }
+  .vdd-info-icon {
+      flex:0 0 auto; font-size:18px; width:34px; height:34px; border-radius:10px;
+      display:flex; align-items:center; justify-content:center;
+      background:#eff6ff; border:1px solid #dbeafe;
+  }
+  body.dark-mode .vdd-info-icon { background:#0f172a; border-color:#334155; }
+  .vdd-info-section h4 { margin:0 0 4px; font-size:13.5px; font-weight:700; color:#003875; }
+  body.dark-mode .vdd-info-section h4 { color:#93c5fd; }
+  .vdd-info-section p { margin:0; font-size:13px; color:#475569; line-height:1.55; }
+  body.dark-mode .vdd-info-section p { color:#cbd5e1; }
+  .vdd-info-section ul { margin:5px 0 0; padding-left:18px; font-size:13px; color:#475569; line-height:1.55; }
+  body.dark-mode .vdd-info-section ul { color:#cbd5e1; }
+  .vdd-info-section li { margin-bottom:3px; }
+  .vdd-info-caveat {
+      margin-top:4px; font-size:12.5px; color:#9a3412; background:#fff7ed; border:1px solid #fed7aa;
+      border-radius:10px; padding:11px 14px; line-height:1.5;
+  }
+  body.dark-mode .vdd-info-caveat { color:#fdba74; background:rgba(154,52,18,0.12); border-color:rgba(251,146,60,0.3); }
+  .vdd-info-footer {
+      display:flex; justify-content:flex-end; padding:14px 22px; border-top:1px solid #e2e8f0; flex:0 0 auto;
+  }
+  body.dark-mode .vdd-info-footer { border-color:#334155; }
+  .vdd-info-gotit {
+      border:none; cursor:pointer; background:#0046AD; color:#fff; border-radius:9px;
+      padding:9px 20px; font-size:13px; font-weight:700; font-family:inherit;
+  }
+  .vdd-info-gotit:hover { background:#003875; }
+
+  /* ---- CGR (container-scan) composite-risk + coverage ---- */
+  /* Composite-tier badge (>=5 red, 2.5–5 amber, <2.5 grey) */
+  .comp-badge { display:inline-block; font-size:12px; font-weight:800; padding:2px 9px; border-radius:7px;
+      font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .comp-badge.ct-hi { background:#fee2e2; color:#b91c1c; }
+  .comp-badge.ct-mid { background:#fef3c7; color:#b45309; }
+  .comp-badge.ct-lo { background:#eef1f5; color:#64748b; }
+  body.dark-mode .comp-badge.ct-hi { background:rgba(220,38,38,0.22); color:#fca5a5; }
+  body.dark-mode .comp-badge.ct-mid { background:rgba(217,119,6,0.22); color:#fcd34d; }
+  body.dark-mode .comp-badge.ct-lo { background:rgba(148,163,184,0.18); color:#cbd5e1; }
+
+  /* Internet-facing Yes/No badge */
+  .if-badge { display:inline-block; font-size:11px; font-weight:700; padding:2px 9px; border-radius:999px;
+      text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; }
+  .if-yes { background:#dcfce7; color:#15803d; }
+  .if-no { background:#eef1f5; color:#64748b; }
+  body.dark-mode .if-yes { background:rgba(22,163,74,0.22); color:#86efac; }
+  body.dark-mode .if-no { background:rgba(148,163,184,0.18); color:#cbd5e1; }
+  .crit-badge { display:inline-block; font-size:10px; font-weight:800; padding:1px 7px; border-radius:5px;
+      background:#fee2e2; color:#b91c1c; text-transform:uppercase; letter-spacing:.03em; margin-left:5px; }
+  body.dark-mode .crit-badge { background:rgba(220,38,38,0.22); color:#fca5a5; }
+
+  /* Scoring formula chip strip */
+  .vdd-formula { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:12px 0 4px; font-size:12.5px; color:#475569; }
+  body.dark-mode .vdd-formula { color:#cbd5e1; }
+  .vdd-formula .fchip { background:#f1f5f9; border:1px solid #e2e8f0; border-radius:999px; padding:3px 11px; font-weight:600; }
+  body.dark-mode .vdd-formula .fchip { background:#0f172a; border-color:#334155; }
+  .vdd-formula .fop { color:#94a3b8; font-weight:700; }
+  .vdd-formula .fchip.fexempt { background:#fff7ed; border-color:#fed7aa; color:#9a3412; }
+  body.dark-mode .vdd-formula .fchip.fexempt { background:rgba(154,52,18,0.12); border-color:rgba(251,146,60,0.3); color:#fdba74; }
+
+  /* coverage emphasis card */
+  .vdd-card.accent-red .num { color:#b91c1c; }
+  body.dark-mode .vdd-card.accent-red .num { color:#fca5a5; }
+  .vdd-card.emph { border-color:#fecaca; box-shadow:0 4px 18px rgba(220,38,38,0.10); }
+  body.dark-mode .vdd-card.emph { border-color:rgba(220,38,38,0.4); }
+
+  /* ---- Tabs (filled-pill style, mirrors /threat-intel-dashboard; the company palette) ---- */
+  .vdd-tabs {
+      display:flex; gap:6px; flex-wrap:wrap; margin:0 0 22px;
+      border-bottom:3px solid #0046AD; padding-bottom:0;
+  }
+  body.dark-mode .vdd-tabs { border-bottom-color:#1d4ed8; }
+  .vdd-tab {
+      position:relative; appearance:none; cursor:pointer; font-family:inherit;
+      background:#eef0f2; border:1px solid #d1d5db; border-bottom:none;
+      margin-bottom:-3px; padding:10px 22px; font-size:13px; font-weight:600;
+      text-transform:uppercase; letter-spacing:.04em;
+      color:#64748b; border-radius:8px 8px 0 0; transition:color .2s, background .2s, border-color .2s;
+      display:inline-flex; align-items:center; gap:8px; white-space:nowrap;
+  }
+  .vdd-tab:hover { color:#1e293b; background:#e2e5e9; }
+  .vdd-tab.active {
+      color:#fff; font-weight:700; background:#0046AD; border-color:#0046AD;
+      box-shadow:0 2px 8px rgba(0,70,173,0.22);
+  }
+  .vdd-tab .vdd-tab-count {
+      font-size:11.5px; font-weight:800; padding:1px 8px; border-radius:999px;
+      background:#dde2e8; color:#475569; font-variant-numeric:tabular-nums;
+  }
+  .vdd-tab.active .vdd-tab-count { background:rgba(255,255,255,0.25); color:#fff; }
+  body.dark-mode .vdd-tab { color:#94a3b8; background:rgba(255,255,255,0.06); border-color:rgba(255,255,255,0.1); }
+  body.dark-mode .vdd-tab:hover { color:#e2e8f0; background:rgba(255,255,255,0.1); }
+  body.dark-mode .vdd-tab.active { color:#fff; background:#1d4ed8; border-color:#1d4ed8; }
+  body.dark-mode .vdd-tab .vdd-tab-count { background:rgba(255,255,255,0.12); color:#cbd5e1; }
+  body.dark-mode .vdd-tab.active .vdd-tab-count { background:rgba(255,255,255,0.25); color:#fff; }
+  .vdd-tabpanel[hidden] { display:none; }
+  /* drop the leading top margin on the first section inside a panel */
+  .vdd-tabpanel > .vdd-section:first-child { margin-top:6px; }
+
+  /* ---- "Less white": branded background + blue-tinted cards (mirrors /cyber-tool-inventory) ----
+     Page-scoped <style>, so the body background override only applies here. */
+  body { background:linear-gradient(135deg, #f0f7ff 0%, #f0fdf4 50%, #eff6ff 100%) fixed; }
+  body.dark-mode { background:linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%) fixed; }
+  /* card/panel containers: blue-tinted borders + blue-tinted shadow, faint gradient fill */
+  .vdd-card, .vdd-prio-card, .vdd-reach-card {
+      background:linear-gradient(180deg, #ffffff 0%, #f6faff 100%);
+      border-color:rgba(0,70,173,0.15); box-shadow:0 4px 14px rgba(0,70,173,0.07);
+  }
+  .vdd-filters { border-color:rgba(0,70,173,0.18); box-shadow:0 4px 14px rgba(0,70,173,0.07); }
+  .vdd-tablewrap {
+      background:linear-gradient(180deg, #ffffff 0%, #f6faff 55%, #f3fbf6 100%);
+      border-color:rgba(0,70,173,0.15); box-shadow:0 8px 28px rgba(0,70,173,0.10);
+  }
+  body.dark-mode .vdd-card, body.dark-mode .vdd-prio-card, body.dark-mode .vdd-reach-card,
+  body.dark-mode .vdd-filters, body.dark-mode .vdd-tablewrap {
+      background:#1e293b; border-color:#334155;
+  }
+  /* table header: the company blue->green gradient (ties to the active tab + hero accent) */
+  table.vdd-table thead th {
+      background:linear-gradient(135deg, #0046AD 0%, #00A651 100%); color:#fff;
+      box-shadow:0 2px 6px rgba(0,70,173,0.18);
+  }
+  body.dark-mode table.vdd-table thead th { background:linear-gradient(135deg, #1d4ed8 0%, #059669 100%); color:#fff; }
+  table.vdd-table thead th[data-dir="asc"]::after,
+  table.vdd-table thead th[data-dir="desc"]::after { opacity:.9; }
+  /* subtle zebra + branded blue->green row hover */
+  table.vdd-table tbody tr:nth-child(even):not(.detail-row) { background:rgba(0,70,173,0.035); }
+  table.vdd-table tbody tr:hover:not(.detail-row) {
+      background:linear-gradient(90deg, rgba(0,70,173,0.10) 0%, rgba(0,166,81,0.08) 100%);
+  }
+  body.dark-mode table.vdd-table tbody tr:nth-child(even):not(.detail-row) { background:rgba(59,130,246,0.06); }
+  body.dark-mode table.vdd-table tbody tr:hover:not(.detail-row) { background:#243044; }
+
+  /* ---- Scrollbar (the company tri-color gradient, matches /powerbi) ----
+     Page-scoped <style>, so these rules only apply on this page. Unscoped (not
+     under .vdd) so the WINDOW/body scrollbar is styled too, not just inner
+     containers — that window bar was the "thin grey dull" one. */
+  ::-webkit-scrollbar { width: 14px; height: 14px; }
+  ::-webkit-scrollbar-track { background: rgba(26,35,126,0.08); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #f6be00, #0046ad, #00a651); border-radius: 10px; border: 3px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #0046ad, #00a651, #f6be00); background-clip: padding-box; }
+  html, body, .vdd .vdd-tablewrap, .vdd .vdd-info-body { scrollbar-width: auto; scrollbar-color: #0046ad rgba(26,35,126,0.08); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="vdd">
+  <div class="vdd-info-row">
+    <button class="vdd-info-btn" onclick="document.getElementById('vddInfoModal').style.display='flex'" title="How does this work?">
+      <span class="vdd-info-btn-icon">✦</span> How does this work?
+    </button>
+  </div>
+  <div class="vdd-hero">
+    <h2>🔬 Vulnerability Deep Dive</h2>
+    <p>Automated first-pass CVE triage across the fleet. Each finding is assessed for real-world exposure —
+       whether it actually requires remediation, where it lives (an application dependency we ship, or a
+       base-image OS package), how many assets carry it, and the recommended action. The component-leverage
+       view shows where to spend effort first: fixing the top components retires the most CVEs.</p>
+    <span class="vdd-livenote">Automated first-pass triage — updates as the batch completes</span>
+  </div>
+
+  {% if not ready %}
+    <div class="vdd-notready">
+      <div style="font-size:34px;margin-bottom:8px;">⏳</div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:4px;">Triage results not available yet</div>
+      <div style="font-size:13px;">The automated CVE-triage batch hasn't produced any results to read.
+        This page will populate as soon as the run begins writing verdicts.</div>
+    </div>
+  {% else %}
+
+    {# ---------- Tab bar ---------- #}
+    <div class="vdd-tabs" role="tablist" aria-label="Vulnerability Deep Dive sections">
+      <button type="button" class="vdd-tab active" data-tab="overview" role="tab" aria-selected="true" aria-controls="tab-overview">Overview</button>
+      <button type="button" class="vdd-tab" data-tab="leverage" role="tab" aria-selected="false" aria-controls="tab-leverage">Leverage</button>
+      <button type="button" class="vdd-tab" data-tab="cves" role="tab" aria-selected="false" aria-controls="tab-cves">
+        Per-CVE Verdicts
+        {% if rows %}<span class="vdd-tab-count">{{ '{:,}'.format(rows|length) }}</span>{% endif %}
+      </button>
+      {% if cgr_data %}
+      <button type="button" class="vdd-tab" data-tab="composite" role="tab" aria-selected="false" aria-controls="tab-composite">
+        Composite Risk
+        {% if cgr_data.scoring_summary and cgr_data.scoring_summary.scored_non_exempt %}<span class="vdd-tab-count">{{ '{:,}'.format(cgr_data.scoring_summary.scored_non_exempt) }}</span>{% endif %}
+      </button>
+      <button type="button" class="vdd-tab" data-tab="clusters" role="tab" aria-selected="false" aria-controls="tab-clusters">
+        Application Clusters
+        {% if cgr_data.cluster_rollup %}<span class="vdd-tab-count">{{ '{:,}'.format(cgr_data.cluster_rollup|length) }}</span>{% endif %}
+      </button>
+      <button type="button" class="vdd-tab" data-tab="coverage" role="tab" aria-selected="false" aria-controls="tab-coverage">
+        Scanner Coverage
+        {% if cgr_data.reconcile and cgr_data.reconcile.cgr_only %}<span class="vdd-tab-count">{{ '{:,}'.format(cgr_data.reconcile.cgr_only) }}</span>{% endif %}
+      </button>
+      {% endif %}
+    </div>
+
+    {# ========== TAB: Overview ========== #}
+    <section class="vdd-tabpanel" id="tab-overview" role="tabpanel" aria-labelledby="tab-overview">
+
+    {# ---------- Headline stat cards ---------- #}
+    {% set total_loc = (summary.app_dep or 0) + (summary.base_img or 0) %}
+    <div class="vdd-cards">
+      <div class="vdd-card">
+        <div class="num">{{ '{:,}'.format(summary.triaged or 0) }}</div>
+        <div class="lbl">CVEs Triaged</div>
+        {% if summary.errors %}<div class="sub">{{ '{:,}'.format(summary.errors) }} could not be assessed</div>{% endif %}
+      </div>
+      <div class="vdd-card accent-amber">
+        <div class="num">{{ '{:,}'.format(summary.rem_required or 0) }}</div>
+        <div class="lbl">Remediation Required</div>
+        {% if summary.triaged %}<div class="sub">{{ ((summary.rem_required or 0) / summary.triaged * 100)|round(0)|int }}% of triaged findings</div>{% endif %}
+      </div>
+      <div class="vdd-card accent-green">
+        <div class="num">{{ '{:,}'.format(summary.components or 0) }}</div>
+        <div class="lbl">Components Touched</div>
+        <div class="sub">distinct vulnerable components</div>
+      </div>
+      <div class="vdd-card">
+        <div class="lbl" style="margin-top:0;">Where they live</div>
+        {% if total_loc %}
+        <div class="vdd-split">
+          <div class="app" style="width:{{ (summary.app_dep or 0) / total_loc * 100 }}%"></div>
+          <div class="base" style="width:{{ (summary.base_img or 0) / total_loc * 100 }}%"></div>
+        </div>
+        {% endif %}
+        <div class="vdd-split-key">
+          <span><span class="dot app"></span>App dependency <b>{{ '{:,}'.format(summary.app_dep or 0) }}</b></span>
+          <span><span class="dot base"></span>Base-image OS <b>{{ '{:,}'.format(summary.base_img or 0) }}</b></span>
+        </div>
+      </div>
+    </div>
+
+    {# ---------- Priority strip (composite-priority enrichment) ---------- #}
+    {% if priority_summary %}
+    {% set sla_map = {'P1': '72h', 'P2': '30d', 'P3': '90d', 'P4': '180d', 'UNSCORED': 'not yet scored'} %}
+    <div class="vdd-section">
+      <h3>Priority</h3>
+      <div class="cap">Composite priority blends exploit likelihood (EPSS), known exploitation (CISA KEV),
+        and pre-auth into a base tier — then <b>reachability caps it</b>: a CVE we can't confirm is
+        reachable can't out-rank its ceiling, even a KEV. The ceiling combines code-path reachability
+        (is the vulnerable code actually exercisable, or a scanner-only base-image package) with internet
+        exposure (EAI internet-facing). Internet-facing + reachable can be P1; a base-image / internal-only
+        finding caps lower. <b>P1</b> = drop everything (72h) · <b>P2</b> = 30 days · <b>P3</b> = 90 days ·
+        <b>P4</b> = 180 days. Updates as the enrichment batch fills in.</div>
+    </div>
+    <div class="vdd-prio">
+      {% for p in priority_summary %}
+      {% set tier = (p.tier or 'UNSCORED')|upper %}
+      <div class="vdd-prio-card t-{{ tier|lower }}"
+           data-prio-nav="{{ 'none' if tier == 'UNSCORED' else tier }}"
+           role="button" tabindex="0"
+           title="{{ tier }} — SLA {{ sla_map.get(tier, '—') }} · click to view these CVEs">
+        <div class="ptier">{{ tier }} <span class="psla">SLA {{ sla_map.get(tier, '—') }}</span></div>
+        <div class="pnum">{{ '{:,}'.format(p.cve_count or 0) }} <small>CVEs</small></div>
+        <div class="pmeta">
+          <span class="pchip">{{ '{:,}'.format(p.total_impact or 0) }} assets</span>
+          {% if (p.kev_count or 0) > 0 %}<span class="pchip kev">{{ '{:,}'.format(p.kev_count) }} KEV</span>{% endif %}
+          {% if (p.pre_auth_count or 0) > 0 %}<span class="pchip pre">{{ '{:,}'.format(p.pre_auth_count) }} pre-auth</span>{% endif %}
+        </div>
+        <div class="pgo">View CVEs →</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {# ---------- Adversarial-debate outcome banner ---------- #}
+    {% if review and review.available and (review.needs_review or review.must_act) %}
+    <div class="vdd-debate-banner">
+      <span class="vdb-icon">⚖️</span>
+      <span class="vdb-text">
+        Every CVE is judged by two adversarial analysts — an <b>attacker</b> (assume reachable, hunt the chain)
+        and a <b>skeptic</b> (assume noise) — now both seeing CISA KEV + EPSS.
+        {% if review.needs_review %}<a href="#" class="vdb-link vdb-review" data-review-nav="needs_review"><b>{{ '{:,}'.format(review.needs_review) }}</b> flagged for manual review</a>{% endif %}
+        {% if review.needs_review and review.must_act %} · {% endif %}
+        {% if review.must_act %}<a href="#" class="vdb-link vdb-mustact" data-review-nav="mustact"><b>{{ '{:,}'.format(review.must_act) }}</b> force-pinned to P1 by MUST-ACT</a>{% endif %}
+        (KEV+internet-facing, KEV+pre-auth, internet-facing+pre-auth+reachable, or CVSS≥9.8+internet-facing).
+      </span>
+    </div>
+    {% endif %}
+
+    {# ---------- Reachability strip (evidence-level presence) ---------- #}
+    {% if reachability_summary %}
+    {% set reach_labels = {
+        'present-confirmed': 'Present (confirmed)',
+        'present-conditional': 'Present (conditional)',
+        'pending-image': 'Pending image',
+        'unknown': 'Unknown'
+    } %}
+    <div class="vdd-section">
+      <h3>Reachability</h3>
+      <div class="cap">This is an <b>evidence-level</b> presence signal — whether the vulnerable component is in our
+        environment — <b>not</b> a proven runtime code-path determination. Proving an exploitable code path needs
+        container introspection, which isn't built yet.
+        <b>Present (confirmed)</b> = Veracode confirms the component is in our app portfolio ·
+        <b>Present (conditional)</b> = confirmed present but the CVE is gated by config/arch/version preconditions ·
+        <b>Pending image</b> = base-image OS package; presence can't be confirmed without pulling the container ·
+        <b>Unknown</b> = no presence signal.</div>
+    </div>
+    <div class="vdd-reach">
+      {% for rs in reachability_summary %}
+      {% set rlabel = (rs.reachability or 'unknown') %}
+      <div class="vdd-reach-card r-{{ rlabel }}"
+           title="{{ reach_labels.get(rlabel, rlabel) }}">
+        <div class="rtier">{{ reach_labels.get(rlabel, rlabel) }}</div>
+        <div class="rnum">{{ '{:,}'.format(rs.cve_count or 0) }} <small>CVEs</small></div>
+        <div class="rmeta">
+          <span class="rchip">{{ '{:,}'.format(rs.total_impact or 0) }} assets</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    </section>{# end tab-overview #}
+
+    {# ========== TAB: Leverage ========== #}
+    <section class="vdd-tabpanel" id="tab-leverage" role="tabpanel" aria-labelledby="tab-leverage" hidden>
+
+    {# ---------- Where the leverage is ---------- #}
+    <div class="vdd-section">
+      <h3>Where the leverage is</h3>
+      <div class="cap">Components that require remediation, ranked by how many CVEs each one retires.
+        Fixing the components at the top clears the most findings at once.
+        <b>Assets (peak)</b> is the largest single-CVE asset spread for the component — we deliberately don't
+        sum across the component's CVEs, which would double-count an asset that carries many CVEs of the same component.</div>
+    </div>
+    <div class="vdd-tablewrap">
+      {% if leverage %}
+      <table class="vdd-table" id="leverageTable">
+        <thead>
+          <tr>
+            <th data-sort="str">Component</th>
+            <th data-sort="num">CVEs</th>
+            <th data-sort="num">Assets (peak)</th>
+            <th data-sort="num">CVSS</th>
+            <th data-sort="str">Location</th>
+            <th data-sort="str">Confidence</th>
+            <th class="nosort">Recommended action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in leverage %}
+          {% set loc = r.location or '' %}
+          <tr>
+            <td><b>{{ r.component }}</b></td>
+            <td class="vdd-num" data-val="{{ r.cve_count or 0 }}">{{ r.cve_count or 0 }}</td>
+            <td class="vdd-num" data-val="{{ r.peak_impact or 0 }}">{{ '{:,}'.format(r.peak_impact or 0) }}</td>
+            <td class="vdd-num" data-val="{{ r.cvss or 0 }}">{{ r.cvss if r.cvss is not none else '—' }}</td>
+            <td data-val="{{ loc }}">
+              {% if loc == 'application_dependency' %}<span class="vdd-badge loc-app">app dependency</span>
+              {% elif loc == 'base_image_os_package' %}<span class="vdd-badge loc-base">base image</span>
+              {% else %}<span class="vdd-badge loc-other">{{ loc or 'unknown' }}</span>{% endif %}
+            </td>
+            <td data-val="{{ r.confidence or '' }}">
+              <span class="conf-{{ (r.confidence or 'low')|lower }}">{{ r.confidence or '—' }}</span>
+            </td>
+            <td>{{ r.recommended_action or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="vdd-empty">No components flagged for remediation yet — the batch is still filling in.</div>
+      {% endif %}
+    </div>
+
+    </section>{# end tab-leverage #}
+
+    {# ========== TAB: Per-CVE Verdicts ========== #}
+    <section class="vdd-tabpanel" id="tab-cves" role="tabpanel" aria-labelledby="tab-cves" hidden>
+
+    {# ---------- Per-CVE verdicts ---------- #}
+    <div class="vdd-section">
+      <h3>Per-CVE verdicts</h3>
+      <div class="cap">Every triaged CVE, highest fleet impact first. Click a CVE ID for the NVD record, or
+        “rationale” to see why the call was made. Sort any column by clicking its header.</div>
+    </div>
+    {% if rows %}
+    <div class="vdd-filters">
+      <div class="vdd-filters-header">🎛️ Filter Controls</div>
+      <div class="vdd-filters-grid">
+        <div class="vdd-filter-group">
+          <span class="vdd-filter-label">🚦 Priority</span>
+          <div class="vdd-chips" data-facet="priority">
+            <span class="vdd-chip" data-value="P1">P1</span>
+            <span class="vdd-chip" data-value="P2">P2</span>
+            <span class="vdd-chip" data-value="P3">P3</span>
+            <span class="vdd-chip" data-value="P4">P4</span>
+            <span class="vdd-chip" data-value="none">(none)</span>
+          </div>
+        </div>
+        <div class="vdd-filter-group">
+          <span class="vdd-filter-label">📍 Reachability</span>
+          <div class="vdd-chips" data-facet="reach">
+            <span class="vdd-chip" data-value="present-confirmed">present·confirmed</span>
+            <span class="vdd-chip" data-value="present-conditional">present·conditional</span>
+            <span class="vdd-chip" data-value="pending-image">pending image</span>
+            <span class="vdd-chip" data-value="unknown">unknown</span>
+          </div>
+        </div>
+        <div class="vdd-filter-group">
+          <span class="vdd-filter-label">🧩 Location</span>
+          <div class="vdd-chips" data-facet="loc">
+            <span class="vdd-chip" data-value="app">app dependency</span>
+            <span class="vdd-chip" data-value="base">base image</span>
+            <span class="vdd-chip" data-value="other">other</span>
+          </div>
+        </div>
+        <div class="vdd-filter-group">
+          <span class="vdd-filter-label">🛠️ Remediate</span>
+          <div class="vdd-chips" data-facet="rem">
+            <span class="vdd-chip" data-value="1">yes</span>
+            <span class="vdd-chip" data-value="0">no</span>
+          </div>
+        </div>
+        <div class="vdd-filter-group">
+          <span class="vdd-filter-label">🔴 KEV</span>
+          <div class="vdd-chips" data-facet="kev">
+            <span class="vdd-chip vdd-chip-kev" data-value="1">KEV only</span>
+          </div>
+        </div>
+        <div class="vdd-filter-group">
+          <span class="vdd-filter-label">⚖️ Verdict</span>
+          <div class="vdd-chips" data-facet="review">
+            <span class="vdd-chip vdd-chip-review" data-value="needs_review">needs review</span>
+            <span class="vdd-chip vdd-chip-mustact" data-value="mustact">must-act</span>
+          </div>
+        </div>
+        <div class="vdd-filter-group vdd-search-group">
+          <span class="vdd-filter-label">🔎 Search</span>
+          <input type="text" id="vddFilter" class="vdd-search" placeholder="Filter by CVE, component, action, location…">
+        </div>
+      </div>
+      <div class="vdd-filter-summary">
+        <div class="vdd-fs-content">
+          <span class="vdd-fs-label">Active Filters:</span>
+          <span class="vdd-active-tags" id="vddActiveTags"><span class="vdd-active-tag">None</span></span>
+        </div>
+        <div class="vdd-fs-right">
+          <span class="vdd-fs-count" id="vddCount"></span>
+          <button type="button" class="vdd-reset-btn" id="vddReset">Reset</button>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+    <div class="vdd-tablewrap">
+      {% if rows %}
+      <table class="vdd-table" id="cveTable">
+        <thead>
+          <tr>
+            <th data-sort="str">CVE</th>
+            <th data-sort="str">Priority</th>
+            <th data-sort="num">Impact</th>
+            <th data-sort="num">EPSS</th>
+            <th data-sort="str">Attack layer</th>
+            <th data-sort="str">Reachability</th>
+            <th data-sort="str">Component</th>
+            <th data-sort="str">Location</th>
+            <th data-sort="str">Remediate?</th>
+            <th data-sort="str">Confidence</th>
+            <th data-sort="num">CVSS</th>
+            <th class="nosort">Recommended action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          {% set loc = r.location or '' %}
+          {% set rem = r.remediation_required %}
+          {% set rid = 'd' ~ loop.index %}
+          {% set prio = (r.priority or '')|upper %}
+          {% set attack_layer = r.attack_layer or '' %}
+          {% set reach = r.reachability or 'unknown' %}
+          {% set vsrc = r.verdict_source or 'auto' %}
+          <tr class="cve-main"
+              data-search="{{ (r.cve_id ~ ' ' ~ (r.component or '') ~ ' ' ~ (r.recommended_action or '') ~ ' ' ~ loc ~ ' ' ~ prio ~ ' ' ~ attack_layer ~ ' ' ~ reach)|lower }}"
+              data-priority="{{ prio if prio else 'none' }}"
+              data-reach="{{ reach }}"
+              data-loc="{{ 'app' if loc=='application_dependency' else ('base' if loc=='base_image_os_package' else 'other') }}"
+              data-rem="{{ '1' if rem else '0' }}"
+              data-kev="{{ '1' if r.kev else '0' }}"
+              data-review="{{ vsrc }}"
+              data-mustact="{{ '1' if r.must_act else '0' }}">
+            <td class="vdd-cve">
+              {% if r.cve_id and r.cve_id.upper().startswith('CVE-') %}
+                <a href="https://nvd.nist.gov/vuln/detail/{{ r.cve_id }}" target="_blank" rel="noopener">{{ r.cve_id }}</a>
+              {% else %}{{ r.cve_id or '—' }}{% endif %}
+              {% if r.kev %}<span class="sig-badge sig-kev" title="On CISA Known Exploited Vulnerabilities list — drop everything">KEV</span>{% endif %}
+              {% if r.pre_auth %}<span class="sig-badge sig-pre" title="Pre-authentication reachable">pre-auth</span>{% endif %}
+              {% if r.must_act %}<span class="sig-badge sig-mustact" title="MUST-ACT: {{ r.must_act }} — force-pinned to P1 regardless of the debate">MUST-ACT</span>{% endif %}
+              {% if vsrc == 'needs_review' %}<span class="sig-badge sig-review" title="Adversarial analysts split (attacker {{ r.score_attacker }} vs skeptic {{ r.score_skeptic }}) — flagged for human review">REVIEW</span>{% endif %}
+            </td>
+            <td data-val="{{ prio if prio else 'zzzz' }}">
+              {% if prio %}<span class="prio-badge p-{{ prio|lower }}">{{ prio }}</span>
+              {% else %}<span class="prio-badge p-none">—</span>{% endif %}
+            </td>
+            <td class="vdd-num" data-val="{{ r.impact_count or 0 }}">{{ '{:,}'.format(r.impact_count or 0) }}</td>
+            <td class="vdd-epss" data-val="{{ r.epss if r.epss is not none else -1 }}">
+              {% if r.epss is not none %}{{ (r.epss * 100)|round(0)|int }}%{% else %}—{% endif %}
+            </td>
+            <td data-val="{{ attack_layer|lower }}">
+              {% if attack_layer %}<span class="vdd-attacklayer">{{ attack_layer }}</span>{% else %}<span style="color:#94a3b8;">—</span>{% endif %}
+            </td>
+            <td data-val="{{ reach }}">
+              {% set reach_table_labels = {
+                  'present-confirmed': 'present · confirmed',
+                  'present-conditional': 'present · conditional',
+                  'pending-image': 'pending image',
+                  'unknown': 'unknown'
+              } %}
+              <span class="reach-badge rb-{{ reach }}"
+                    title="{{ reach_table_labels.get(reach, reach) }}">{{ reach_table_labels.get(reach, reach) }}</span>
+            </td>
+            <td data-val="{{ (r.component or '')|lower }}">{{ r.component or '—' }}</td>
+            <td data-val="{{ loc }}">
+              {% if loc == 'application_dependency' %}<span class="vdd-badge loc-app">app dependency</span>
+              {% elif loc == 'base_image_os_package' %}<span class="vdd-badge loc-base">base image</span>
+              {% else %}<span class="vdd-badge loc-other">{{ loc or 'unknown' }}</span>{% endif %}
+            </td>
+            <td data-val="{{ '1' if rem else '0' }}">
+              {% if rem %}<span class="vdd-badge rem-yes">yes</span>{% else %}<span class="vdd-badge rem-no">no</span>{% endif %}
+            </td>
+            <td data-val="{{ r.confidence or '' }}">
+              <span class="conf-{{ (r.confidence or 'low')|lower }}">{{ r.confidence or '—' }}</span>
+            </td>
+            <td class="vdd-num" data-val="{{ r.cvss or 0 }}">{{ r.cvss if r.cvss is not none else '—' }}</td>
+            <td>{{ r.recommended_action or '—' }}
+              {% if r.rationale or r.preconditions or r.affected_versions or r.veracode_apps %}
+              <span class="vdd-expander" data-target="{{ rid }}">· rationale</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% if r.rationale or r.preconditions or r.affected_versions or r.veracode_apps %}
+          <tr class="detail-row" id="{{ rid }}" style="display:none;">
+            <td colspan="12">
+              {% if r.score_attacker is not none or r.score_skeptic is not none %}
+              <div class="vdd-debate"><b>Adversarial debate:</b>
+                <span class="dbar att" title="Attacker analyst urgency">attacker {{ r.score_attacker if r.score_attacker is not none else '—' }}</span>
+                vs
+                <span class="dbar skp" title="Skeptic analyst urgency">skeptic {{ r.score_skeptic if r.score_skeptic is not none else '—' }}</span>
+                — {{ 'flagged for manual review (analysts split)' if vsrc == 'needs_review' else 'auto-resolved' }}{% if r.must_act %}; <b>MUST-ACT</b>: {{ r.must_act }} → forced P1{% endif %}
+              </div>
+              {% endif %}
+              {% if r.rationale %}<div><b>Rationale:</b> {{ r.rationale }}</div>{% endif %}
+              {% if r.preconditions %}<div style="margin-top:4px;"><b>Preconditions:</b> {{ r.preconditions }}</div>{% endif %}
+              {% if r.affected_versions %}<div style="margin-top:4px;"><b>Affected versions:</b> {{ r.affected_versions }}</div>{% endif %}
+              {% if r.veracode_apps %}<div style="margin-top:4px;"><b>Veracode apps:</b> {{ r.veracode_apps }}</div>{% endif %}
+            </td>
+          </tr>
+          {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="vdd-empty">No per-CVE verdicts recorded yet — the batch is still filling in.</div>
+      {% endif %}
+    </div>
+    {% if rows %}
+    <div class="vdd-pagination">
+      <button type="button" class="vdd-page-btn" id="vddPrev">‹ Prev</button>
+      <span class="vdd-page-info" id="vddPageInfo">Page 1 of 1</span>
+      <button type="button" class="vdd-page-btn" id="vddNext">Next ›</button>
+      <span class="vdd-page-size">
+        Rows per page:
+        <select id="vddPageSize">
+          <option value="25" selected>25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </span>
+    </div>
+    {% endif %}
+
+    </section>{# end tab-cves #}
+
+    {% if cgr_data %}
+    {% set ss = cgr_data.scoring_summary or {} %}
+    {% set rec = cgr_data.reconcile or {} %}
+
+    {# ========== TAB: Composite Risk ========== #}
+    <section class="vdd-tabpanel" id="tab-composite" role="tabpanel" aria-labelledby="tab-composite" hidden>
+      <div class="vdd-section">
+        <h3>Composite container-scan risk</h3>
+        <div class="cap">Container-image findings from the Prisma Cloud export (CGR), re-scored with the war-room
+          composite model and joined to the Enterprise App Inventory so internet-facing exposure is reflected.
+          Highest composite first.</div>
+      </div>
+      <div class="vdd-cards">
+        <div class="vdd-card">
+          <div class="num">{{ '{:,}'.format(ss.scored_non_exempt or 0) }}</div>
+          <div class="lbl">CVEs scored</div>
+          <div class="sub">{{ '{:,}'.format(ss.exempt or 0) }} TLS/CURL-exempt excluded</div>
+        </div>
+        <div class="vdd-card accent-amber">
+          <div class="num">{{ '{:,}'.format(ss.external_facing or 0) }}</div>
+          <div class="lbl">External-facing</div>
+          <div class="sub">on an internet-facing application</div>
+        </div>
+        <div class="vdd-card accent-red">
+          <div class="num">{{ '{:,}'.format(ss.kev or 0) }}</div>
+          <div class="lbl">CISA KEV</div>
+          <div class="sub">known-exploited</div>
+        </div>
+        <div class="vdd-card">
+          <div class="num">{{ '{:,}'.format(ss.pre_auth or 0) }}</div>
+          <div class="lbl">Pre-auth</div>
+          <div class="sub">no credentials required</div>
+        </div>
+        <div class="vdd-card accent-green">
+          <div class="num">{{ ss.composite_max if ss.composite_max is not none else '—' }}</div>
+          <div class="lbl">Max composite</div>
+          <div class="sub">top-10 avg CVSS {{ ss.top10_avg_cvss if ss.top10_avg_cvss is not none else '—' }}</div>
+        </div>
+      </div>
+      <div class="vdd-formula">
+        <span style="font-weight:700;color:#003875;">Composite =</span>
+        <span class="fop">(</span>
+        <span class="fchip">KEV × 5</span><span class="fop">+</span>
+        <span class="fchip">External × 2.5</span><span class="fop">+</span>
+        <span class="fchip">Pre-auth × 1.5</span><span class="fop">+</span>
+        <span class="fchip">(CVSS ÷ 10) × 0.3</span>
+        <span class="fop">)</span><span class="fop">×</span>
+        <span class="fchip" title="code-path reachability from base-image attribution: app-layer 1.0, mixed 0.7, base-image-only 0.4">Reachability</span>
+        <span class="fchip fexempt">TLS / CURL exempt</span>
+      </div>
+      <div class="vdd-tablewrap">
+        {% if cgr_data.top_composite %}
+        <table class="vdd-table" id="cgrCompositeTable">
+          <thead>
+            <tr>
+              <th data-sort="num">Composite</th>
+              <th data-sort="str">CVE</th>
+              <th data-sort="str">Application</th>
+              <th data-sort="str">KEV</th>
+              <th data-sort="str">External</th>
+              <th data-sort="str">Pre-auth</th>
+              <th data-sort="str" title="Code-path reachability from base-image attribution; multiplies the composite">Reach</th>
+              <th data-sort="num">CVSS</th>
+              <th data-sort="num">Deployments</th>
+              <th data-sort="str">In triage?</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in cgr_data.top_composite %}
+            {% set comp = r.composite if r.composite is not none else 0 %}
+            {% set ctier = 'ct-hi' if comp >= 5 else ('ct-mid' if comp >= 2.5 else 'ct-lo') %}
+            <tr>
+              <td data-val="{{ comp }}"><span class="comp-badge {{ ctier }}">{{ comp }}</span></td>
+              <td class="vdd-cve" data-val="{{ (r.cve_id or '')|lower }}">
+                {% if r.cve_id and r.cve_id.upper().startswith('CVE-') %}
+                  <a href="https://nvd.nist.gov/vuln/detail/{{ r.cve_id }}" target="_blank" rel="noopener">{{ r.cve_id }}</a>
+                {% else %}{{ r.cve_id or '—' }}{% endif %}
+              </td>
+              <td data-val="{{ (r.top_eai or '')|lower }}">{{ r.top_eai or '—' }}</td>
+              <td data-val="{{ '1' if r.kev else '0' }}">
+                {% if r.kev %}<span class="sig-badge sig-kev">KEV</span>{% else %}<span style="color:#94a3b8;">—</span>{% endif %}
+              </td>
+              <td data-val="{{ '1' if r.external_facing else '0' }}">
+                {% if r.external_facing %}<span class="if-badge if-yes">Yes</span>{% else %}<span class="if-badge if-no">No</span>{% endif %}
+              </td>
+              <td data-val="{{ '1' if (r.pre_auth_known and r.pre_auth) else ('0' if r.pre_auth_known else '-1') }}">
+                {% if not r.pre_auth_known %}<span style="color:#94a3b8;">—</span>
+                {% elif r.pre_auth %}<span class="sig-badge sig-pre">pre-auth</span>
+                {% else %}<span style="color:#94a3b8;">no</span>{% endif %}
+              </td>
+              {% set rl = r.reach_level or 'unknown' %}
+              {% set rl_lbl = {'present-confirmed':'app-layer','present-conditional':'mixed','pending-image':'base-image','unknown':'unknown'} %}
+              <td data-val="{{ r.reach_factor if r.reach_factor is not none else 1 }}">
+                <span class="reach-badge rb-{{ rl }}" title="reachability multiplier ×{{ r.reach_factor if r.reach_factor is not none else 1 }}">{{ rl_lbl.get(rl, rl) }} ×{{ r.reach_factor if r.reach_factor is not none else 1 }}</span>
+              </td>
+              <td class="vdd-num" data-val="{{ r.cvss or 0 }}">{{ r.cvss if r.cvss is not none else '—' }}</td>
+              <td class="vdd-num" data-val="{{ r.deployments or 0 }}">{{ '{:,}'.format(r.deployments or 0) }}</td>
+              <td data-val="{{ '1' if r.in_triage else '0' }}">
+                {% if r.in_triage %}<span style="color:#15803d;font-weight:700;">✓</span>{% else %}<span style="color:#94a3b8;">—</span>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="vdd-empty">No composite-scored container CVEs yet.</div>
+        {% endif %}
+      </div>
+    </section>{# end tab-composite #}
+
+    {# ========== TAB: Application Clusters ========== #}
+    <section class="vdd-tabpanel" id="tab-clusters" role="tabpanel" aria-labelledby="tab-clusters" hidden>
+      <div class="vdd-section">
+        <h3>Application clusters</h3>
+        <div class="cap">Container findings rolled up per <b>eaiCode</b> (Enterprise App Inventory code). The
+          internet-facing flag and criticality come from the EAI production application inventory. Internet-facing
+          applications are listed first.</div>
+      </div>
+      <div class="vdd-tablewrap">
+        {% if cgr_data.cluster_rollup %}
+        <table class="vdd-table" id="cgrClustersTable">
+          <thead>
+            <tr>
+              <th data-sort="str">Application</th>
+              <th data-sort="str">Internet-facing</th>
+              <th data-sort="str">Critical</th>
+              <th data-sort="str">LOB</th>
+              <th data-sort="num">Total CVEs</th>
+              <th data-sort="num">High / Crit</th>
+              <th data-sort="num">Findings</th>
+              <th data-sort="num">Most-overdue (days)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in cgr_data.cluster_rollup %}
+            {% set ext = (c.internet_facing or '')|lower == 'yes' %}
+            <tr>
+              <td data-val="{{ (c.app_name or c.eai_code or '')|lower }}">
+                <b>{{ c.app_name or '—' }}</b>
+                {% if c.critical_ind|upper == 'Y' %}<span class="crit-badge">crit</span>{% endif %}
+                <div style="font-size:11px;color:#94a3b8;">eaiCode {{ c.eai_code }}</div>
+              </td>
+              <td data-val="{{ '1' if ext else '0' }}">
+                {% if ext %}<span class="if-badge if-yes">Yes</span>
+                {% elif c.internet_facing %}<span class="if-badge if-no">No</span>
+                {% else %}<span style="color:#94a3b8;">—</span>{% endif %}
+              </td>
+              <td data-val="{{ c.critical_ind or '' }}">{{ c.critical_ind or '—' }}</td>
+              <td data-val="{{ (c.lob or '')|lower }}">{{ c.lob or '—' }}</td>
+              <td class="vdd-num" data-val="{{ c.distinct_cve or 0 }}">{{ '{:,}'.format(c.distinct_cve or 0) }}</td>
+              <td class="vdd-num" data-val="{{ c.distinct_high_cve or 0 }}">{{ '{:,}'.format(c.distinct_high_cve or 0) }}</td>
+              <td class="vdd-num" data-val="{{ c.total_findings or 0 }}">{{ '{:,}'.format(c.total_findings or 0) }}</td>
+              <td class="vdd-num" data-val="{{ c.min_grace if c.min_grace is not none else 0 }}">
+                {% if c.min_grace is not none and c.min_grace < 0 %}<span style="color:#b91c1c;font-weight:700;">{{ '{:,}'.format(-c.min_grace) }}</span>
+                {% elif c.min_grace is not none %}{{ '{:,}'.format(c.min_grace) }}{% else %}—{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="vdd-empty">No cluster rollup available.</div>
+        {% endif %}
+      </div>
+    </section>{# end tab-clusters #}
+
+    {# ========== TAB: Scanner Coverage ========== #}
+    <section class="vdd-tabpanel" id="tab-coverage" role="tabpanel" aria-labelledby="tab-coverage" hidden>
+      <div class="vdd-section">
+        <h3>Scanner coverage cross-check</h3>
+        <div class="cap">This page is a <b>vendor-independent cross-check</b> — a backup to Prisma / Qualys / Cortex.
+          The <b>Scanner-only</b> column is CVEs the container scanner flags that our own triage hasn't processed
+          yet (the coverage gap). Risk-ranked by composite below.</div>
+      </div>
+      <div class="vdd-cards">
+        <div class="vdd-card accent-green">
+          <div class="num">{{ '{:,}'.format(rec.overlap or 0) }}</div>
+          <div class="lbl">In both</div>
+          <div class="sub">scanner and our triage agree</div>
+        </div>
+        <div class="vdd-card accent-red emph">
+          <div class="num">{{ '{:,}'.format(rec.cgr_only or 0) }}</div>
+          <div class="lbl">Scanner-only (gap)</div>
+          <div class="sub">flagged by scanner, not yet triaged</div>
+        </div>
+        <div class="vdd-card accent-amber">
+          <div class="num">{{ '{:,}'.format(rec.cgr_only_high or 0) }}</div>
+          <div class="lbl">of which High / Crit</div>
+          <div class="sub">highest-priority gap</div>
+        </div>
+        <div class="vdd-card">
+          <div class="num">{{ '{:,}'.format(rec.triage_only or 0) }}</div>
+          <div class="lbl">Our triage only</div>
+          <div class="sub">not in the container export</div>
+        </div>
+      </div>
+      <div class="vdd-tablewrap">
+        {% if cgr_data.gaps %}
+        <table class="vdd-table" id="cgrGapsTable">
+          <thead>
+            <tr>
+              <th data-sort="num">Composite</th>
+              <th data-sort="str">CVE</th>
+              <th data-sort="str">Application</th>
+              <th data-sort="str">External</th>
+              <th data-sort="str">Severity</th>
+              <th data-sort="num">Deployments</th>
+              <th data-sort="num">Most-overdue (days)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for g in cgr_data.gaps %}
+            {% set comp = g.composite if g.composite is not none else 0 %}
+            {% set ctier = 'ct-hi' if comp >= 5 else ('ct-mid' if comp >= 2.5 else 'ct-lo') %}
+            <tr>
+              <td data-val="{{ comp }}">
+                {% if g.composite is not none %}<span class="comp-badge {{ ctier }}">{{ g.composite }}</span>
+                {% else %}<span style="color:#94a3b8;">—</span>{% endif %}
+              </td>
+              <td class="vdd-cve" data-val="{{ (g.cve_id or '')|lower }}">
+                {% if g.cve_id and g.cve_id.upper().startswith('CVE-') %}
+                  <a href="https://nvd.nist.gov/vuln/detail/{{ g.cve_id }}" target="_blank" rel="noopener">{{ g.cve_id }}</a>
+                {% else %}{{ g.cve_id or '—' }}{% endif %}
+                {% if g.kev %}<span class="sig-badge sig-kev">KEV</span>{% endif %}
+              </td>
+              <td data-val="{{ (g.app_name or '')|lower }}">{{ g.app_name or '—' }}</td>
+              <td data-val="{{ '1' if g.external_facing else '0' }}">
+                {% if g.external_facing %}<span class="if-badge if-yes">Yes</span>{% else %}<span class="if-badge if-no">No</span>{% endif %}
+              </td>
+              <td data-val="{{ (g.severity or '')|lower }}">{{ g.severity or '—' }}</td>
+              <td class="vdd-num" data-val="{{ g.deployments or 0 }}">{{ '{:,}'.format(g.deployments or 0) }}</td>
+              <td class="vdd-num" data-val="{{ g.min_grace if g.min_grace is not none else 0 }}">
+                {% if g.min_grace is not none and g.min_grace < 0 %}<span style="color:#b91c1c;font-weight:700;">{{ '{:,}'.format(-g.min_grace) }}</span>
+                {% elif g.min_grace is not none %}{{ '{:,}'.format(g.min_grace) }}{% else %}—{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="vdd-empty">No coverage gaps to show.</div>
+        {% endif %}
+      </div>
+    </section>{# end tab-coverage #}
+    {% endif %}
+  {% endif %}
+</div>
+
+<!-- How Does This Work? Modal -->
+<div class="vdd-info-backdrop" id="vddInfoModal" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+  <div class="vdd-info-modal" onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="How does Vulnerability Deep Dive work?">
+    <div class="vdd-info-header">
+      <span class="vdd-info-icon">🔬</span>
+      <h3>How does Vulnerability Deep Dive work?</h3>
+      <button class="vdd-info-close" onclick="document.getElementById('vddInfoModal').style.display='none'" aria-label="Close">&times;</button>
+    </div>
+    <div class="vdd-info-body">
+      <div class="vdd-info-hero">
+        <video class="vdd-info-video" controls preload="metadata" playsinline
+               src="{{ url_for('static', filename='video/vuln_deep_dive_demo.mp4') }}"></video>
+        <div class="vdd-info-hero-text">
+          <div class="vdd-info-hero-tag">▶ 3-minute walkthrough · every tab</div>
+          <h4>What it is</h4>
+          <p>An automated first-pass triage of the vulnerability war-room's CVE backlog — <strong>3,000+ CVEs</strong> —
+            replicating, at scale, the manual "look up each CVE and decide if remediation is needed" loop an analyst
+            would otherwise run by hand.</p>
+          <p>Watch the short walkthrough, or read the steps below for how each verdict is reached.</p>
+        </div>
+      </div>
+      <div class="vdd-info-steps">
+      <div class="vdd-info-section">
+        <div class="vdd-info-icon">🧩</div>
+        <div>
+          <h4>Step 1 — gather the facts</h4>
+          <p>It starts from the spreadsheets the war room already shares — the <strong>CVE
+            impact-count list</strong> and the <strong>Prisma container-scan export</strong> — then
+            enriches each CVE with the same things an analyst would look up by hand:</p>
+          <ul>
+            <li><strong>NVD</strong> — primary CVE record (CVSS, affected products).</li>
+            <li><strong>CVE.org</strong> — fallback that catches brand-new CVEs still in NVD's backlog.</li>
+            <li><strong>Veracode SCA</strong> — which of our applications actually carry the affected component.</li>
+            <li><strong>CISA KEV + EPSS</strong> — is it being exploited <em>in the wild right now</em>, and how likely is exploitation.</li>
+            <li><strong>Enterprise App Inventory (EAI)</strong> — which carrying applications are internet-facing, and how business-critical they are.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="vdd-info-section">
+        <div class="vdd-info-icon">🥊</div>
+        <div>
+          <h4>Step 2 — two analysts debate it</h4>
+          <p>Instead of one opinion, the facts go to <strong>two AI analysts who argue opposite sides</strong> — the
+            same adversarial check a good bug-hunting team runs:</p>
+          <ul>
+            <li>🔴 an <strong>attacker</strong> — assumes the flaw <em>is</em> reachable and hunts the realistic exploit path;</li>
+            <li>🔵 a <strong>skeptic</strong> — assumes it's noise until proven exploitable in <em>our</em> fleet, and picks the preconditions apart.</li>
+          </ul>
+          <p>Each scores urgency 0–100. Pitting the two against each other weeds out false positives far better than a
+            single voice — and the disagreements that survive are exactly the ones worth a human's time.</p>
+        </div>
+      </div>
+      <div class="vdd-info-section">
+        <div class="vdd-info-icon">⚖️</div>
+        <div>
+          <h4>Step 3 — reconcile, or flag for review</h4>
+          <p>When the two agree, the call is made automatically. When they <strong>disagree hard on a serious CVE</strong>
+            — one sees a real threat, the other sees noise — it's tagged <span class="sig-badge sig-review">REVIEW</span>
+            <strong>Needs Review</strong> for a human to settle, rather than being silently waved through or thrown away.
+            Everything else auto-resolves toward the cautious read so the queue stays small.</p>
+        </div>
+      </div>
+      <div class="vdd-info-section">
+        <div class="vdd-info-icon">🚦</div>
+        <div>
+          <h4>Priority (P1–P4)</h4>
+          <p>A composite urgency score — deliberately <strong>not</strong> CVSS alone. It blends CVSS with
+            <strong>EPSS</strong> (probability of exploitation), <strong>CISA KEV</strong> (known-exploited), and
+            <strong>pre-auth</strong> (no credentials needed).</p>
+          <ul>
+            <li><strong>P1</strong> — 72h · <strong>P2</strong> — 30d · <strong>P3</strong> — 90d · <strong>P4</strong> — 180d (remediation SLAs).</li>
+          </ul>
+        </div>
+      </div>
+      <div class="vdd-info-section">
+        <div class="vdd-info-icon">🔒</div>
+        <div>
+          <h4>MUST-ACT — the non-negotiables</h4>
+          <p>A short list of factor combinations means <strong>we act, period</strong> — these force <strong>P1</strong>
+            regardless of what the debate concludes or how the reachability cap would otherwise lower it. A
+            <span class="sig-badge sig-mustact">MUST-ACT</span> badge shows which rule fired:</p>
+          <ul>
+            <li>known-exploited (KEV) <strong>+ internet-facing</strong></li>
+            <li>known-exploited (KEV) <strong>+ pre-auth</strong></li>
+            <li>internet-facing <strong>+ pre-auth + confirmed-reachable</strong></li>
+            <li>CVSS&nbsp;≥&nbsp;9.8 <strong>+ internet-facing</strong></li>
+          </ul>
+        </div>
+      </div>
+      <div class="vdd-info-section">
+        <div class="vdd-info-icon">📍</div>
+        <div>
+          <h4>Reachability — and how it caps priority</h4>
+          <p>An honest <strong>evidence-level</strong> presence signal — not yet a proven runtime code-path determination
+            (that needs container introspection, which isn't built yet):</p>
+          <ul>
+            <li><strong>present-confirmed</strong> — Veracode confirms it's in our portfolio.</li>
+            <li><strong>present-conditional</strong> — present, but gated by limiting preconditions.</li>
+            <li><strong>pending-image</strong> — base-image OS package we can't confirm without pulling the container image.</li>
+            <li><strong>unknown</strong> — no presence signal.</li>
+          </ul>
+          <p><strong>Reachability caps the final priority.</strong> The base tier (KEV / EPSS / pre-auth) is then
+            bounded by a ceiling that combines this code-path reachability with internet exposure (the EAI
+            internet-facing flag): internet-facing + reachable can be P1; a base-image or internal-only finding caps
+            lower. So a CVSS 9.8 in a base image with no reachable code path is <em>not</em> a P1 emergency — the
+            tool now says so. The container composite is likewise multiplied by a reachability factor
+            (app-layer ×1.0, mixed ×0.7, base-image-only ×0.4).</p>
+        </div>
+      </div>
+      <div class="vdd-info-section">
+        <div class="vdd-info-icon">⚡</div>
+        <div>
+          <h4>Where the leverage is</h4>
+          <p>CVEs are clustered by component so one decision — e.g. <strong>upgrade Tomcat</strong> — retires many CVEs
+            at once. Start at the top of that list to clear the most findings for the least effort.</p>
+        </div>
+      </div>
+      <div class="vdd-info-section vdd-info-section--full">
+        <div class="vdd-info-icon">⚠️</div>
+        <div>
+          <div class="vdd-info-caveat">This is an automated first pass meant to <strong>accelerate</strong> analyst
+            review, not replace it — the two-analyst debate triages the backlog and surfaces the genuine
+            disagreements, but a human still owns the <em>Needs Review</em> queue and the final call. Reachability is
+            an evidence-level signal (Veracode presence + base-image attribution + EAI exposure), not a proven runtime
+            code-path. Treat verdicts as a sharp starting point, not the last word.</div>
+        </div>
+      </div>
+      </div>
+    </div>
+    <div class="vdd-info-footer">
+      <button class="vdd-info-gotit" onclick="document.getElementById('vddInfoModal').style.display='none'">Got it</button>
+    </div>
+  </div>
+</div>
+
+{% include '_chat_widget.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/vendor/marked.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chat_widget.js') }}"></script>
+<script>
+(function () {
+  // ---- close info modal on Escape ----
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      var m = document.getElementById('vddInfoModal');
+      if (m) m.style.display = 'none';
+    }
+  });
+
+  // ---- expandable rationale rows ----
+  document.querySelectorAll('.vdd-expander').forEach(function (e) {
+    e.addEventListener('click', function () {
+      var row = document.getElementById(e.dataset.target);
+      if (!row) return;
+      row.style.display = (row.style.display === 'none' || !row.style.display) ? 'table-row' : 'none';
+    });
+  });
+
+  // ---- click-to-sort tables (leverage table only — #cveTable handled by pipeline) ----
+  function makeSortable(table) {
+    if (!table) return;
+    var headers = table.querySelectorAll('thead th[data-sort]');
+    headers.forEach(function (th, idx) {
+      th.addEventListener('click', function () {
+        var type = th.dataset.sort;
+        var dir = th.dataset.dir === 'asc' ? 'desc' : 'asc';
+        headers.forEach(function (h) { h.removeAttribute('data-dir'); });
+        th.dataset.dir = dir;
+        var tbody = table.querySelector('tbody');
+        // group main rows with their trailing detail row
+        var groups = [];
+        Array.prototype.slice.call(tbody.children).forEach(function (tr) {
+          if (tr.classList.contains('detail-row')) {
+            if (groups.length) groups[groups.length - 1].push(tr);
+          } else {
+            groups.push([tr]);
+          }
+        });
+        function cellVal(tr) {
+          var cell = tr.children[idx];
+          if (!cell) return type === 'num' ? 0 : '';
+          var v = cell.dataset.val !== undefined ? cell.dataset.val : cell.textContent.trim();
+          return type === 'num' ? parseFloat(v) || 0 : ('' + v).toLowerCase();
+        }
+        groups.sort(function (a, b) {
+          var va = cellVal(a[0]), vb = cellVal(b[0]);
+          if (va < vb) return dir === 'asc' ? -1 : 1;
+          if (va > vb) return dir === 'asc' ? 1 : -1;
+          return 0;
+        });
+        groups.forEach(function (g) { g.forEach(function (tr) { tbody.appendChild(tr); }); });
+      });
+    });
+  }
+  makeSortable(document.getElementById('leverageTable'));
+  makeSortable(document.getElementById('cgrCompositeTable'));
+  makeSortable(document.getElementById('cgrClustersTable'));
+  makeSortable(document.getElementById('cgrGapsTable'));
+
+  // ---- per-CVE table: unified filter + sort + paginate pipeline ----
+  (function () {
+    var table = document.getElementById('cveTable');
+    if (!table) return;
+    var tbody = table.querySelector('tbody');
+
+    // Build the groups model once: { main, detail }
+    var groups = [];
+    Array.prototype.slice.call(tbody.children).forEach(function (tr) {
+      if (tr.classList.contains('detail-row')) {
+        if (groups.length) groups[groups.length - 1].detail = tr;
+      } else if (tr.classList.contains('cve-main')) {
+        groups.push({ main: tr, detail: null });
+      }
+    });
+
+    // Facet definitions: facet key -> the data-* attribute it filters on
+    var FACET_ATTR = { priority: 'priority', reach: 'reach', loc: 'loc', rem: 'rem', kev: 'kev', review: 'review' };
+    // Human labels for active-filter tags
+    var CHIP_LABELS = {};
+    document.querySelectorAll('.vdd-filters .vdd-chips').forEach(function (box) {
+      var facet = box.dataset.facet;
+      CHIP_LABELS[facet] = CHIP_LABELS[facet] || {};
+      box.querySelectorAll('.vdd-chip').forEach(function (chip) {
+        CHIP_LABELS[facet][chip.dataset.value] = chip.textContent.trim();
+      });
+    });
+
+    var state = {
+      facets: { priority: [], reach: [], loc: [], rem: [], kev: [], review: [] },
+      search: '',
+      sortIdx: null, sortType: 'str', sortDir: 'asc',
+      page: 1,
+      size: 25
+    };
+
+    var input = document.getElementById('vddFilter');
+    var countEl = document.getElementById('vddCount');
+    var pageInfo = document.getElementById('vddPageInfo');
+    var prevBtn = document.getElementById('vddPrev');
+    var nextBtn = document.getElementById('vddNext');
+    var sizeSel = document.getElementById('vddPageSize');
+    var activeTags = document.getElementById('vddActiveTags');
+
+    function cellVal(tr, idx, type) {
+      var cell = tr.children[idx];
+      if (!cell) return type === 'num' ? 0 : '';
+      var v = cell.dataset.val !== undefined ? cell.dataset.val : cell.textContent.trim();
+      return type === 'num' ? (parseFloat(v) || 0) : ('' + v).toLowerCase();
+    }
+
+    function applyFilters() {
+      var out = groups.filter(function (g) {
+        var m = g.main;
+        if (state.search && (m.dataset.search || '').indexOf(state.search) === -1) return false;
+        for (var facet in FACET_ATTR) {
+          var sel = state.facets[facet];
+          if (!sel.length) continue;
+          if (facet === 'kev') {
+            if (m.dataset.kev !== '1') return false;
+          } else if (facet === 'review') {
+            // mixed facet: 'needs_review' filters data-review, 'must-act' data-mustact (OR'd)
+            var ok = false;
+            if (sel.indexOf('needs_review') !== -1 && m.dataset.review === 'needs_review') ok = true;
+            if (sel.indexOf('mustact') !== -1 && m.dataset.mustact === '1') ok = true;
+            if (!ok) return false;
+          } else if (sel.indexOf(m.dataset[FACET_ATTR[facet]]) === -1) {
+            return false;
+          }
+        }
+        return true;
+      });
+      if (state.sortIdx !== null) {
+        var idx = state.sortIdx, type = state.sortType, dir = state.sortDir;
+        out.sort(function (a, b) {
+          var va = cellVal(a.main, idx, type), vb = cellVal(b.main, idx, type);
+          if (va < vb) return dir === 'asc' ? -1 : 1;
+          if (va > vb) return dir === 'asc' ? 1 : -1;
+          return 0;
+        });
+      }
+      return out;
+    }
+
+    function renderActiveTags() {
+      var tags = [];
+      for (var facet in FACET_ATTR) {
+        state.facets[facet].forEach(function (v) {
+          var lbl = (CHIP_LABELS[facet] && CHIP_LABELS[facet][v]) || v;
+          tags.push(lbl);
+        });
+      }
+      if (state.search) tags.push('“' + state.search + '”');
+      if (!tags.length) {
+        activeTags.innerHTML = '<span class="vdd-active-tag">None</span>';
+      } else {
+        activeTags.innerHTML = tags.map(function (t) {
+          return '<span class="vdd-active-tag"></span>';
+        }).join('');
+        // set text safely (avoid HTML injection from search)
+        var spans = activeTags.querySelectorAll('.vdd-active-tag');
+        tags.forEach(function (t, i) { spans[i].textContent = t; });
+      }
+    }
+
+    function render() {
+      var filtered = applyFilters();
+      var total = filtered.length;
+      var size = state.size;
+      var pages = Math.max(1, Math.ceil(total / size));
+      if (state.page > pages) state.page = pages;
+      if (state.page < 1) state.page = 1;
+      var start = (state.page - 1) * size;
+      var end = Math.min(start + size, total);
+      var slice = filtered.slice(start, end);
+
+      // hide every row, reset detail rows to hidden
+      groups.forEach(function (g) {
+        g.main.style.display = 'none';
+        if (g.detail) g.detail.style.display = 'none';
+      });
+
+      // re-append the current page slice in order
+      slice.forEach(function (g) {
+        tbody.appendChild(g.main);
+        g.main.style.display = '';
+        if (g.detail) tbody.appendChild(g.detail);
+      });
+
+      if (countEl) {
+        countEl.textContent = total
+          ? ('Showing ' + (start + 1) + '–' + end + ' of ' + total + ' CVEs')
+          : ('Showing 0 of ' + total + ' CVEs');
+      }
+      if (pageInfo) pageInfo.textContent = 'Page ' + state.page + ' of ' + pages;
+      if (prevBtn) prevBtn.disabled = state.page <= 1;
+      if (nextBtn) nextBtn.disabled = state.page >= pages;
+      renderActiveTags();
+    }
+
+    // facet chip toggles
+    document.querySelectorAll('.vdd-filters .vdd-chips').forEach(function (box) {
+      var facet = box.dataset.facet;
+      box.querySelectorAll('.vdd-chip').forEach(function (chip) {
+        chip.addEventListener('click', function () {
+          var val = chip.dataset.value;
+          var sel = state.facets[facet];
+          var i = sel.indexOf(val);
+          if (i === -1) { sel.push(val); chip.classList.add('active'); }
+          else { sel.splice(i, 1); chip.classList.remove('active'); }
+          state.page = 1;
+          render();
+        });
+      });
+    });
+
+    // search
+    if (input) {
+      input.addEventListener('input', function () {
+        state.search = input.value.trim().toLowerCase();
+        state.page = 1;
+        render();
+      });
+    }
+
+    // page size
+    if (sizeSel) {
+      sizeSel.addEventListener('change', function () {
+        state.size = parseInt(sizeSel.value, 10) || 25;
+        state.page = 1;
+        render();
+      });
+    }
+
+    // prev / next
+    if (prevBtn) prevBtn.addEventListener('click', function () { state.page--; render(); });
+    if (nextBtn) nextBtn.addEventListener('click', function () { state.page++; render(); });
+
+    // column header click-to-sort (marks th[data-dir], reorders model)
+    var headers = table.querySelectorAll('thead th[data-sort]');
+    headers.forEach(function (th, idx) {
+      th.addEventListener('click', function () {
+        var type = th.dataset.sort;
+        var dir = (state.sortIdx === idx && state.sortDir === 'asc') ? 'desc' : 'asc';
+        headers.forEach(function (h) { h.removeAttribute('data-dir'); });
+        th.dataset.dir = dir;
+        state.sortIdx = idx; state.sortType = type; state.sortDir = dir;
+        state.page = 1;
+        render();
+      });
+    });
+
+    // reset
+    var resetBtn = document.getElementById('vddReset');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function () {
+        for (var facet in state.facets) state.facets[facet] = [];
+        document.querySelectorAll('.vdd-filters .vdd-chip.active').forEach(function (c) { c.classList.remove('active'); });
+        state.search = '';
+        if (input) input.value = '';
+        state.page = 1;
+        render();
+      });
+    }
+
+    render();
+    // expose for the tab switcher (re-render when the panel becomes visible)
+    window.__vddRenderCves = render;
+    // expose for the Overview priority cards: clear filters, set one priority
+    // facet, re-render. Mirrors the chip active-state so the UI stays in sync.
+    window.__vddApplyPriorityFilter = function (value) {
+      for (var f in state.facets) state.facets[f] = [];
+      document.querySelectorAll('.vdd-filters .vdd-chip.active').forEach(function (c) { c.classList.remove('active'); });
+      if (value) {
+        state.facets.priority = [value];
+        var chip = document.querySelector('.vdd-filters .vdd-chips[data-facet="priority"] .vdd-chip[data-value="' + value + '"]');
+        if (chip) chip.classList.add('active');
+      }
+      state.search = ''; if (input) input.value = '';
+      state.page = 1;
+      render();
+    };
+    // expose for the Overview debate banner: clear filters, set the review facet
+    // ('needs_review' or 'mustact'), sync the chip, re-render.
+    window.__vddApplyReviewFilter = function (value) {
+      for (var f in state.facets) state.facets[f] = [];
+      document.querySelectorAll('.vdd-filters .vdd-chip.active').forEach(function (c) { c.classList.remove('active'); });
+      if (value) {
+        state.facets.review = [value];
+        var chip = document.querySelector('.vdd-filters .vdd-chips[data-facet="review"] .vdd-chip[data-value="' + value + '"]');
+        if (chip) chip.classList.add('active');
+      }
+      state.search = ''; if (input) input.value = '';
+      state.page = 1;
+      render();
+    };
+  })();
+
+  // ---- tab switching ----
+  (function () {
+    var tabs = Array.prototype.slice.call(document.querySelectorAll('.vdd-tab'));
+    if (!tabs.length) return;
+    // Build the panel map from the tab buttons so newly-added tabs (e.g. the
+    // CGR container-scan tabs) are picked up without editing this list.
+    var panels = {};
+    tabs.forEach(function (t) {
+      var key = t.dataset.tab;
+      if (key) panels[key] = document.getElementById('tab-' + key);
+    });
+    function activate(name) {
+      tabs.forEach(function (t) {
+        var on = t.dataset.tab === name;
+        t.classList.toggle('active', on);
+        t.setAttribute('aria-selected', on ? 'true' : 'false');
+      });
+      Object.keys(panels).forEach(function (k) {
+        if (panels[k]) panels[k].hidden = (k !== name);
+      });
+      // the per-CVE table renders with rows hidden while its panel is hidden;
+      // re-run render when it becomes visible so pagination/sizing settle correctly
+      if (name === 'cves' && typeof window.__vddRenderCves === 'function') {
+        window.__vddRenderCves();
+      }
+    }
+    window.__vddActivateTab = activate;
+    tabs.forEach(function (t, i) {
+      t.addEventListener('click', function () { activate(t.dataset.tab); });
+      // keyboard: left/right arrows move between tabs
+      t.addEventListener('keydown', function (e) {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        e.preventDefault();
+        var next = e.key === 'ArrowRight' ? (i + 1) % tabs.length : (i - 1 + tabs.length) % tabs.length;
+        tabs[next].focus();
+        activate(tabs[next].dataset.tab);
+      });
+    });
+  })();
+
+  // ---- Overview priority card -> Per-CVE Verdicts tab, filtered by that tier ----
+  (function () {
+    var cards = document.querySelectorAll('.vdd-prio-card[data-prio-nav]');
+    if (!cards.length) return;
+    cards.forEach(function (card) {
+      function go() {
+        var val = card.getAttribute('data-prio-nav');
+        if (typeof window.__vddActivateTab === 'function') window.__vddActivateTab('cves');
+        if (typeof window.__vddApplyPriorityFilter === 'function') window.__vddApplyPriorityFilter(val);
+        var panel = document.getElementById('tab-cves');
+        if (panel && panel.scrollIntoView) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      card.addEventListener('click', go);
+      card.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+      });
+    });
+  })();
+
+  // ---- Overview debate banner -> Per-CVE Verdicts tab, filtered by verdict ----
+  (function () {
+    var links = document.querySelectorAll('.vdd-debate-banner [data-review-nav]');
+    if (!links.length) return;
+    links.forEach(function (a) {
+      a.addEventListener('click', function (e) {
+        e.preventDefault();
+        var val = a.getAttribute('data-review-nav');
+        if (typeof window.__vddActivateTab === 'function') window.__vddActivateTab('cves');
+        if (typeof window.__vddApplyReviewFilter === 'function') window.__vddApplyReviewFilter(val);
+        var panel = document.getElementById('tab-cves');
+        if (panel && panel.scrollIntoView) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+  })();
+})();
+</script>
+<script>
+const CHAT_CTX = {{ chat_context|tojson }};
+if (window.initChatWidget) initChatWidget({
+  title: 'Ask about these vulnerabilities',
+  greeting: 'Hi! Ask me about this CVE triage — priorities, reachability, which components to fix first, what to escalate.',
+  chips: [
+    {label: 'Top priorities', q: 'Which CVEs should we remediate first and why?'},
+    {label: 'Biggest leverage', q: 'Which single component fix retires the most CVEs?'},
+    {label: 'Reachability', q: 'Which CVEs are confirmed present in our environment versus just pending image checks?'},
+    {label: 'KEV exposure', q: 'List the KEV-listed CVEs and where they live.'}
+  ],
+  getContext: function () { return CHAT_CTX; }
+});
+</script>
+{% endblock %}

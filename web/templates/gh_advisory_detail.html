@@ -1,0 +1,496 @@
+{% extends 'base_layout.html' %}
+
+{% block page_title_plain %}{{ adv.source_id }}{% endblock %}
+
+{% set page_title_text = 'Cyber Security Advisories' %}
+{% set page_title_left_icon = '🚨' %}
+
+{% set src_fam = 'malware' if adv.source == 'github_malware' else ('github' if adv.source.startswith('github') else ('osv' if adv.source.startswith('osv') else ('kev' if adv.source.startswith('cisa') else 'rss'))) %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/gh_advisory.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/chat_widget.css') }}">
+<style>
+  .gha-src{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;
+    letter-spacing:.03em;padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle;
+    background:#eef1f5;color:#4b5563;}
+  .src-fam-github{background:#ddf4ff;color:#0969da;}
+  .src-fam-malware{background:#ffebe9;color:#cf222e;}
+  .src-fam-osv{background:#fff1e5;color:#bc4c00;}
+  .src-fam-kev{background:#f3e8ff;color:#8250df;}
+  .src-fam-rss{background:#dafbe1;color:#1a7f37;}
+  .ai-card .ai-sub{font-size:11px;color:#8b949e;font-weight:500;}
+  .ai-rec-line{display:flex;gap:8px;align-items:center;margin:4px 0 10px;}
+  .ai-rec{font-weight:700;text-transform:uppercase;font-size:12px;padding:2px 10px;border-radius:10px;background:#eef1f5;color:#4b5563;}
+  .ai-rec.escalate{background:#ffebe9;color:#cf222e;}
+  .ai-rec.investigate{background:#fff8c5;color:#9a6700;}
+  .ai-rec.close{background:#eaeef2;color:#57606a;}
+  .ai-field{margin:8px 0;}
+  .ai-field b{font-size:12px;color:#57606a;text-transform:uppercase;letter-spacing:.03em;}
+  .ai-field p{margin:3px 0 0;white-space:pre-wrap;}
+  .ai-meta{font-size:11px;color:#8b949e;margin-top:8px;}
+  .ai-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+  .ai-empty{color:#8b949e;font-size:13px;margin-top:8px;}
+  #btn-ai[disabled]{opacity:.6;cursor:default;}
+  .ai-intel{margin-top:14px;border-top:1px solid #eaecef;padding-top:10px;}
+  .ai-intel-hd{font-size:12px;font-weight:700;color:#57606a;text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px;}
+  .ai-intel-block{margin:12px 0;}
+  .ai-intel-block>b{font-size:12px;color:#57606a;text-transform:uppercase;letter-spacing:.03em;display:block;margin-bottom:5px;}
+  table.ai-tbl{width:100%;border-collapse:collapse;font-size:13px;}
+  table.ai-tbl th{text-align:left;font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:.02em;border-bottom:1px solid #eaecef;padding:4px 8px;font-weight:600;}
+  table.ai-tbl td{padding:5px 8px;border-bottom:1px solid #f1f2f4;vertical-align:top;}
+  table.ai-tbl code{font-size:12px;word-break:break-all;}
+  .ai-ioc-type{display:inline-block;font-size:10px;font-weight:700;text-transform:uppercase;background:#eef1f5;color:#4b5563;padding:1px 6px;border-radius:8px;}
+  .ai-steps{margin:4px 0 0;padding-left:20px;}
+  .ai-steps li{margin:4px 0;}
+  .ai-disclaimer{font-size:11px;color:#8b949e;font-style:italic;margin-top:8px;}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="gha-container gha-detail" data-key="{{ adv.source_id }}">
+    <div class="gha-header-strip">
+        <a class="gha-back" href="/cs-advisories">← All advisories</a>
+    </div>
+
+    <div class="gha-head">
+        <h1>{{ adv.source_id }} <span class="gha-cve">{{ adv.cve_id or 'no CVE' }}</span>
+            <span class="gha-src src-fam-{{ src_fam }}">{{ adv.source_label }}</span></h1>
+        <span class="gha-badge b-{{ adv.status }}" id="status-badge">{{ adv.status.replace('_', ' ') }}</span>
+    </div>
+    <div class="gha-summary">{{ adv.summary or '(no summary)' }}</div>
+
+    <div class="gha-card">
+        <h3>Details</h3>
+        <dl class="gha-kv">
+            <dt>Source</dt><dd>{{ adv.source_label }}</dd>
+            <dt>Severity</dt><dd>{{ adv.severity or 'critical' }}</dd>
+            {% if adv.ecosystem %}<dt>Ecosystem</dt><dd>{{ adv.ecosystem }}</dd>{% endif %}
+            <dt>Published</dt><dd>{{ (adv.published_at or '')[:10] or 'unknown' }}</dd>
+            {% if cvss.score %}<dt>CVSS</dt><dd>{{ cvss.score }}{% if cvss.vector %} <code>{{ cvss.vector }}</code>{% endif %}</dd>
+            {% elif cvss.vector %}<dt>CVSS</dt><dd><code>{{ cvss.vector }}</code></dd>{% endif %}
+            {% if cwes %}<dt>CWEs</dt><dd>{{ cwes | join('; ') }}</dd>{% endif %}
+            {% if adv.aliases %}<dt>Aliases</dt><dd>{{ adv.aliases | join(', ') }}</dd>{% endif %}
+            <dt>Advisory</dt><dd><a href="{{ adv.html_url }}" target="_blank" rel="noopener">{{ adv.html_url }}</a></dd>
+        </dl>
+    </div>
+
+    {% if vulns %}
+    <div class="gha-card">
+        <h3>Affected packages</h3>
+        <table class="gha-pkgs">
+            <thead><tr><th>Package</th><th>Vulnerable range</th><th>First patched</th></tr></thead>
+            <tbody>
+            {% for v in vulns %}
+                <tr><td><code>{{ v.package }}</code></td><td>{{ v.vulnerable_range }}</td><td>{{ v.first_patched }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if adv.description %}
+    <div class="gha-card">
+        <h3>Description</h3>
+        <div class="gha-desc">{{ adv.description }}</div>
+    </div>
+    {% endif %}
+
+    {% if references %}
+    <div class="gha-card">
+        <h3>References</h3>
+        <div class="gha-refs">
+            {% for r in references %}<a href="{{ r }}" target="_blank" rel="noopener">{{ r }}</a>{% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="gha-card ai-card">
+        <h3>✦ AI assessment <span class="ai-sub">m1 → s1</span></h3>
+        {% set ai = adv.ai_assessment %}
+        {% set has_intel = ai and (ai.iocs or ai.ttps or ai.threat_actors or ai.next_steps) %}
+        <div id="ai-body" {% if not ai %}style="display:none;"{% endif %}>
+            <div class="ai-rec-line">
+                <span>Recommendation:</span>
+                <span class="ai-rec" id="ai-rec">{{ ai.recommendation if ai else '' }}</span>
+            </div>
+            <div class="ai-field"><b>Likely exposure</b><p id="ai-exposure">{{ ai.exposure if ai else '' }}</p></div>
+            <div class="ai-field"><b>Rationale</b><p id="ai-rationale">{{ ai.rationale if ai else '' }}</p></div>
+            <div class="ai-field"><b>Suggested note</b><p id="ai-note">{{ ai.suggested_note if ai else '' }}</p></div>
+
+            <div class="ai-intel" id="ai-intel" {% if not has_intel %}style="display:none;"{% endif %}>
+                <div class="ai-intel-hd">Extracted threat intelligence</div>
+
+                <div class="ai-intel-block" id="ai-iocs-block" {% if not (ai and ai.iocs) %}style="display:none;"{% endif %}>
+                    <b>Indicators of compromise</b>
+                    <table class="ai-tbl"><thead><tr><th>Type</th><th>Indicator</th><th>Note</th></tr></thead>
+                    <tbody id="ai-iocs">
+                    {% for x in (ai.iocs if ai else []) %}
+                        <tr><td><span class="ai-ioc-type">{{ x.type or 'ioc' }}</span></td>
+                            <td><code>{{ x.value }}</code></td><td>{{ x.note }}</td></tr>
+                    {% endfor %}
+                    </tbody></table>
+                </div>
+
+                <div class="ai-intel-block" id="ai-ttps-block" {% if not (ai and ai.ttps) %}style="display:none;"{% endif %}>
+                    <b>MITRE ATT&CK TTPs</b>
+                    <table class="ai-tbl"><thead><tr><th>Technique</th><th>Name</th></tr></thead>
+                    <tbody id="ai-ttps">
+                    {% for t in (ai.ttps if ai else []) %}
+                        <tr><td>{% if t.id and t.id[0] in 'Tt' %}<a href="https://attack.mitre.org/techniques/{{ t.id.replace('.','/') }}" target="_blank" rel="noopener"><code>{{ t.id }}</code></a>{% else %}<code>{{ t.id }}</code>{% endif %}</td>
+                            <td>{{ t.name }}</td></tr>
+                    {% endfor %}
+                    </tbody></table>
+                </div>
+
+                <div class="ai-intel-block" id="ai-actors-block" {% if not (ai and ai.threat_actors) %}style="display:none;"{% endif %}>
+                    <b>Threat actors / campaigns</b>
+                    <table class="ai-tbl"><thead><tr><th>Actor</th><th>Note</th></tr></thead>
+                    <tbody id="ai-actors">
+                    {% for a in (ai.threat_actors if ai else []) %}
+                        <tr><td>{{ a.name }}</td><td>{{ a.note }}</td></tr>
+                    {% endfor %}
+                    </tbody></table>
+                </div>
+
+                <div class="ai-intel-block" id="ai-steps-block" {% if not (ai and ai.next_steps) %}style="display:none;"{% endif %}>
+                    <b>Suggested next steps</b>
+                    <ol class="ai-steps" id="ai-steps">
+                    {% for s in (ai.next_steps if ai else []) %}<li>{{ s }}</li>{% endfor %}
+                    </ol>
+                </div>
+
+                <div class="ai-disclaimer">AI-extracted from the advisory text — verify indicators before acting on them.</div>
+            </div>
+
+            <div class="ai-meta" id="ai-meta">{% if ai %}Generated by {{ ai.model }}{% if ai.generated_at %} · {{ ai.generated_at[:16].replace('T',' ') }} UTC{% endif %}{% endif %}</div>
+        </div>
+        <div class="ai-actions">
+            <button class="btn" id="btn-ai">✦ {% if ai %}Regenerate{% else %}Generate AI assessment{% endif %}</button>
+            <button class="btn btn-ai-use" id="btn-ai-use" {% if not ai %}style="display:none;"{% endif %}>Use suggested note ↓</button>
+        </div>
+        <div id="ai-empty" class="ai-empty" {% if ai %}style="display:none;"{% endif %}>Ask the local LLM to assess our likely exposure, extract IOCs/TTPs, and recommend an action.</div>
+    </div>
+
+    {% if veracode_cves or veracode_packages %}
+    <div class="gha-card veracode-card">
+        <h3>🛡️ Veracode SCA exposure</h3>
+        {% set vc = adv.veracode_enrichment %}
+        <div id="vc-body" {% if not vc %}style="display:none;"{% endif %}>
+            <p id="vc-summary">{{ vc.summary_text if vc and vc.summary_text else '' }}</p>
+            <div id="vc-detail">
+            {% if vc and vc.cves %}
+                {% for cve, apps in vc.cves.items() %}
+                <div class="vc-cve-block">
+                    <b>{{ cve }}</b> — {{ apps|length }} affected application{{ '' if apps|length == 1 else 's' }}
+                    <table class="ai-tbl"><thead><tr><th>Application</th><th>Component</th><th>Version</th><th>Severity</th></tr></thead>
+                    <tbody>
+                    {% for a in apps %}
+                        <tr><td>{{ a.application }}</td><td><code>{{ a.component }}</code></td><td>{{ a.version or '—' }}</td><td>{{ a.severity_label }}</td></tr>
+                    {% endfor %}
+                    </tbody></table>
+                </div>
+                {% endfor %}
+            {% endif %}
+            {% if vc and vc.packages %}
+                {% for pkg, apps in vc.packages.items() %}
+                <div class="vc-cve-block">
+                    <b>Package {{ pkg }}</b> — {{ apps|length }} affected application{{ '' if apps|length == 1 else 's' }}
+                    <table class="ai-tbl"><thead><tr><th>Application</th><th>Component</th><th>Version</th><th>Severity</th><th>CVE</th></tr></thead>
+                    <tbody>
+                    {% for a in apps %}
+                        <tr><td>{{ a.application }}</td><td><code>{{ a.component }}</code></td><td>{{ a.version or '—' }}</td><td>{{ a.severity_label }}</td><td><code>{{ a.cve_id or '—' }}</code></td></tr>
+                    {% endfor %}
+                    </tbody></table>
+                </div>
+                {% endfor %}
+            {% endif %}
+            </div>
+            <div class="ai-meta" id="vc-meta">{% if vc and vc.checked_at %}Checked against Veracode SCA findings{% endif %}</div>
+        </div>
+        <div class="ai-actions">
+            <button class="btn" id="btn-veracode">🛡️ {% if vc %}Re-check{% else %}Check Veracode SCA{% endif %}</button>
+        </div>
+        <div id="vc-empty" class="ai-empty" {% if vc %}style="display:none;"{% endif %}>Check whether any of our applications carry an open-source component matching this advisory{% if veracode_cves %} — CVE(s): {{ veracode_cves|join(', ') }}{% endif %}{% if veracode_packages %}{% if veracode_cves %};{% endif %} package(s): {{ veracode_packages|join(', ') }}{% endif %}.</div>
+    </div>
+    {% endif %}
+
+    <div class="gha-card">
+        <h3>Triage</h3>
+        <textarea id="notes" placeholder="Add review notes — what this affects, exposure assessment, decision rationale…">{{ adv.notes or '' }}</textarea>
+        <div class="gha-actions">
+            <button class="btn btn-save"   id="btn-save">Save notes</button>
+            <button class="btn btn-close"  id="btn-close">Close — not worth reporting</button>
+            <button class="btn btn-reopen" id="btn-reopen" style="display:none;">Reopen</button>
+            <button class="btn btn-report" id="btn-report"
+                    {% if config.is_dev %}disabled title="Teams escalation is disabled on the {{ config.environment }} instance — promote to prod to use it"{% endif %}>
+                {% if config.is_dev %}Notify disabled in {{ config.environment }}{% else %}Notify {{ teams_channel }} →{% endif %}
+            </button>
+        </div>
+        <div class="gha-status-line" id="status-line">
+            {% if adv.reported_at %}Reported to Teams by {{ adv.reported_by }} on {{ adv.reported_at[:16].replace('T', ' ') }} UTC.
+            {% elif adv.reviewed_by %}Last reviewed by {{ adv.reviewed_by }}{% if adv.reviewed_at %} on {{ adv.reviewed_at[:16].replace('T', ' ') }} UTC{% endif %}.
+            {% else %}Not yet reviewed.{% endif %}
+        </div>
+    </div>
+</div>
+<div id="gha-toast"></div>
+{% include '_chat_widget.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/vendor/marked.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chat_widget.js') }}"></script>
+<script>
+const CHAT_CTX = {{ chat_context|tojson }};
+(function () {
+    if (window.initChatWidget) initChatWidget({
+        title: 'Ask about this advisory',
+        greeting: 'Hi! Ask me anything about this advisory — exposure, affected packages, whether to escalate, etc.',
+        chips: [
+            {label: 'Are we exposed?', q: 'Based on this advisory, what should we check to know if we are exposed?'},
+            {label: 'Escalate?', q: 'Should this be escalated to Package Compromise Assessment? Why or why not?'},
+            {label: 'Explain simply', q: 'Explain this advisory in plain language.'}
+        ],
+        getContext: function () { return CHAT_CTX; }
+    });
+})();
+</script>
+<script>
+(function () {
+    const ghsa = document.querySelector('.gha-container').dataset.key;
+    const notes = document.getElementById('notes');
+    const badge = document.getElementById('status-badge');
+    const statusLine = document.getElementById('status-line');
+    const btnReport = document.getElementById('btn-report');
+    const btnClose = document.getElementById('btn-close');
+    const btnReopen = document.getElementById('btn-reopen');
+    const btnSave = document.getElementById('btn-save');
+    const toast = document.getElementById('gha-toast');
+    const IS_DEV = {{ 'true' if config.is_dev else 'false' }};
+    let toastTimer;
+
+    function showToast(msg, isErr) {
+        toast.textContent = msg;
+        toast.classList.toggle('err', !!isErr);
+        toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove('show'), 3200);
+    }
+
+    function applyStatus(adv) {
+        if (!adv) return;
+        badge.textContent = adv.status.replace(/_/g, ' ');
+        badge.className = 'gha-badge b-' + adv.status;
+        const reported = adv.status === 'reported';
+        // In dev the escalation button stays disabled regardless of status.
+        btnReport.disabled = IS_DEV || reported;
+        if (!IS_DEV) btnReport.textContent = reported ? 'Already reported ✓' : btnReport.dataset.label;
+        btnClose.style.display = reported ? 'none' : '';
+        btnReopen.style.display = (adv.status === 'closed_not_reported') ? '' : 'none';
+        if (reported && adv.reported_at) {
+            statusLine.textContent = 'Reported to Teams by ' + (adv.reported_by || 'someone')
+                + ' on ' + adv.reported_at.slice(0, 16).replace('T', ' ') + ' UTC.';
+        } else if (adv.reviewed_by) {
+            statusLine.textContent = 'Last reviewed by ' + adv.reviewed_by
+                + (adv.reviewed_at ? ' on ' + adv.reviewed_at.slice(0, 16).replace('T', ' ') + ' UTC' : '') + '.';
+        }
+    }
+    btnReport.dataset.label = btnReport.textContent;
+
+    async function post(path, label) {
+        try {
+            const resp = await fetch('/api/cs-advisories/' + ghsa + path, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ notes: notes.value }),
+            });
+            if (resp.status === 401) {
+                showToast('Please sign in to act on advisories — redirecting…', true);
+                setTimeout(() => { location.href = '/login?next=' + encodeURIComponent(location.pathname); }, 1200);
+                return null;
+            }
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || data.ok === false) {
+                showToast(data.error === 'already_reported'
+                    ? 'Already reported — no duplicate sent.'
+                    : (label + ' failed: ' + (data.error || resp.status)), true);
+                if (data.advisory) applyStatus(data.advisory);
+                return null;
+            }
+            applyStatus(data.advisory);
+            return data;
+        } catch (e) {
+            showToast(label + ' failed: ' + e, true);
+            return null;
+        }
+    }
+
+    btnSave.addEventListener('click', async () => {
+        const d = await post('/notes', 'Save'); if (d) showToast('Notes saved.');
+    });
+    btnClose.addEventListener('click', async () => {
+        const d = await post('/close', 'Close'); if (d) showToast('Closed — not reported.');
+    });
+    btnReopen.addEventListener('click', async () => {
+        const d = await post('/reopen', 'Reopen'); if (d) showToast('Reopened.');
+    });
+    btnReport.addEventListener('click', async () => {
+        if (IS_DEV) return;  // belt-and-suspenders; the button is also disabled in dev
+        if (!confirm('Escalate to the {{ teams_channel }} Teams channel? This notifies the wider team.')) return;
+        btnReport.disabled = true;
+        const d = await post('/report', 'Report');
+        if (d && d.teams_sent) showToast('Escalated to {{ teams_channel }}. ✅');
+        else if (d && d.warning) showToast(d.warning, true);
+        else btnReport.disabled = false;
+    });
+
+    // ---- AI assessment ----
+    const btnAi = document.getElementById('btn-ai');
+    const btnAiUse = document.getElementById('btn-ai-use');
+    const aiBody = document.getElementById('ai-body');
+    const aiEmpty = document.getElementById('ai-empty');
+    function esc(s){ const d = document.createElement('div'); d.textContent = (s == null ? '' : s); return d.innerHTML; }
+    function fillTbl(bodyId, blockId, rows, rowHtml) {
+        const tb = document.getElementById(bodyId), bl = document.getElementById(blockId);
+        tb.innerHTML = '';
+        if (!Array.isArray(rows) || !rows.length) { bl.style.display = 'none'; return false; }
+        bl.style.display = '';
+        rows.forEach(r => { const tr = document.createElement('tr'); tr.innerHTML = rowHtml(r); tb.appendChild(tr); });
+        return true;
+    }
+    function ttpCell(t) {
+        const id = t.id || '';
+        const link = /^[Tt]\d+/.test(id)
+            ? '<a href="https://attack.mitre.org/techniques/' + esc(id.replace(/\./g, '/')) + '" target="_blank" rel="noopener"><code>' + esc(id) + '</code></a>'
+            : '<code>' + esc(id) + '</code>';
+        return '<td>' + link + '</td><td>' + esc(t.name) + '</td>';
+    }
+    function renderAi(a) {
+        if (!a) return;
+        const rec = (a.recommendation || '').toLowerCase();
+        const recEl = document.getElementById('ai-rec');
+        recEl.textContent = rec; recEl.className = 'ai-rec ' + rec;
+        document.getElementById('ai-exposure').textContent = a.exposure || '';
+        document.getElementById('ai-rationale').textContent = a.rationale || '';
+        document.getElementById('ai-note').textContent = a.suggested_note || '';
+
+        let any = false;
+        any = fillTbl('ai-iocs', 'ai-iocs-block', a.iocs, r =>
+            '<td><span class="ai-ioc-type">' + esc(r.type || 'ioc') + '</span></td>'
+            + '<td><code>' + esc(r.value) + '</code></td><td>' + esc(r.note) + '</td>') || any;
+        any = fillTbl('ai-ttps', 'ai-ttps-block', a.ttps, ttpCell) || any;
+        any = fillTbl('ai-actors', 'ai-actors-block', a.threat_actors, r =>
+            '<td>' + esc(r.name) + '</td><td>' + esc(r.note) + '</td>') || any;
+        const stepsEl = document.getElementById('ai-steps');
+        const stepsBlock = document.getElementById('ai-steps-block');
+        stepsEl.innerHTML = '';
+        if (Array.isArray(a.next_steps) && a.next_steps.length) {
+            a.next_steps.forEach(s => { const li = document.createElement('li'); li.textContent = s; stepsEl.appendChild(li); });
+            stepsBlock.style.display = ''; any = true;
+        } else { stepsBlock.style.display = 'none'; }
+        document.getElementById('ai-intel').style.display = any ? '' : 'none';
+
+        document.getElementById('ai-meta').textContent =
+            'Generated by ' + (a.model || 'LLM') + (a.generated_at ? ' · ' + a.generated_at.slice(0,16).replace('T',' ') + ' UTC' : '');
+        aiBody.style.display = ''; aiEmpty.style.display = 'none';
+        btnAiUse.style.display = ''; btnAi.textContent = '✦ Regenerate';
+    }
+    btnAi.addEventListener('click', async () => {
+        btnAi.disabled = true; btnAi.textContent = '✦ Thinking…';
+        try {
+            const resp = await fetch('/api/cs-advisories/' + ghsa + '/ai-triage', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin', body: '{}',
+            });
+            if (resp.status === 401) {
+                showToast('Please sign in to use AI triage — redirecting…', true);
+                setTimeout(() => { location.href = '/login?next=' + encodeURIComponent(location.pathname); }, 1200);
+                return;
+            }
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || data.ok === false) { showToast('AI triage failed: ' + (data.error || resp.status), true); return; }
+            renderAi(data.assessment);
+            showToast('AI assessment ready.');
+        } catch (e) {
+            showToast('AI triage failed: ' + e, true);
+        } finally {
+            btnAi.disabled = false;
+            if (btnAi.textContent === '✦ Thinking…') btnAi.textContent = '✦ Generate AI assessment';
+        }
+    });
+    btnAiUse.addEventListener('click', () => {
+        const n = document.getElementById('ai-note').textContent.trim();
+        if (!n) return;
+        notes.value = notes.value.trim() ? (notes.value.trim() + '\n\n' + n) : n;
+        notes.focus();
+        showToast('Suggested note added — review, then Save.');
+    });
+
+    const btnVc = document.getElementById('btn-veracode');
+    function renderVeracode(vc) {
+        if (!vc) return;
+        document.getElementById('vc-body').style.display = '';
+        document.getElementById('vc-empty').style.display = 'none';
+        document.getElementById('vc-summary').textContent = vc.summary_text || '';
+        const detail = document.getElementById('vc-detail');
+        detail.innerHTML = '';
+        const cves = vc.cves || {};
+        Object.keys(cves).forEach(cve => {
+            const apps = cves[cve] || [];
+            const rows = apps.map(a =>
+                '<tr><td>' + esc(a.application) + '</td><td><code>' + esc(a.component) +
+                '</code></td><td>' + esc(a.version || '—') + '</td><td>' + esc(a.severity_label) + '</td></tr>').join('');
+            const block = document.createElement('div');
+            block.className = 'vc-cve-block';
+            block.innerHTML = '<b>' + esc(cve) + '</b> — ' + apps.length + ' affected application' +
+                (apps.length === 1 ? '' : 's') +
+                '<table class="ai-tbl"><thead><tr><th>Application</th><th>Component</th><th>Version</th><th>Severity</th></tr></thead><tbody>' +
+                rows + '</tbody></table>';
+            detail.appendChild(block);
+        });
+        const packages = vc.packages || {};
+        Object.keys(packages).forEach(pkg => {
+            const apps = packages[pkg] || [];
+            const rows = apps.map(a =>
+                '<tr><td>' + esc(a.application) + '</td><td><code>' + esc(a.component) +
+                '</code></td><td>' + esc(a.version || '—') + '</td><td>' + esc(a.severity_label) +
+                '</td><td><code>' + esc(a.cve_id || '—') + '</code></td></tr>').join('');
+            const block = document.createElement('div');
+            block.className = 'vc-cve-block';
+            block.innerHTML = '<b>Package ' + esc(pkg) + '</b> — ' + apps.length + ' affected application' +
+                (apps.length === 1 ? '' : 's') +
+                '<table class="ai-tbl"><thead><tr><th>Application</th><th>Component</th><th>Version</th><th>Severity</th><th>CVE</th></tr></thead><tbody>' +
+                rows + '</tbody></table>';
+            detail.appendChild(block);
+        });
+        document.getElementById('vc-meta').textContent = vc.checked_at ? 'Checked against Veracode SCA findings' : '';
+        btnVc.textContent = '🛡️ Re-check';
+    }
+    if (btnVc) btnVc.addEventListener('click', async () => {
+        btnVc.disabled = true; btnVc.textContent = '🛡️ Checking…';
+        try {
+            const resp = await fetch('/api/cs-advisories/' + ghsa + '/veracode-check', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin', body: '{}',
+            });
+            if (resp.status === 401) {
+                showToast('Please sign in to run a Veracode check — redirecting…', true);
+                setTimeout(() => { location.href = '/login?next=' + encodeURIComponent(location.pathname); }, 1200);
+                return;
+            }
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || data.ok === false) { showToast('Veracode check failed: ' + (data.error || resp.status), true); return; }
+            renderVeracode(data.veracode);
+            showToast(data.veracode && data.veracode.exposed ? 'Exposure found — see affected apps.' : 'No matching exposure found.');
+        } catch (e) {
+            showToast('Veracode check failed: ' + e, true);
+        } finally {
+            btnVc.disabled = false;
+            if (btnVc.textContent === '🛡️ Checking…') btnVc.textContent = '🛡️ Check Veracode SCA';
+        }
+    });
+})();
+</script>
+{% endblock %}

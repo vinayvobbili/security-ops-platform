@@ -16,7 +16,7 @@ def get_approved_testing_entries(list_handler: ListHandler, team_name: str) -> D
 
     Args:
         list_handler: XSOAR list handler instance
-        team_name: Name of the team (e.g., 'SecOps')
+        team_name: Name of the team (e.g., 'DnR')
 
     Returns:
         Dictionary with ENDPOINTS, USERNAMES, IP_ADDRESSES, CIDR_BLOCKS lists
@@ -29,7 +29,7 @@ def submit_red_team_testing_form(
     form_data: Dict[str, Any],
     list_handler: ListHandler,
     team_name: str,
-    company_email_domain: str,
+    submitter_email_address: str,
     eastern: pytz.tzinfo.BaseTzInfo,
     submitter_ip: str
 ) -> None:
@@ -38,8 +38,9 @@ def submit_red_team_testing_form(
     Args:
         form_data: Form data from request
         list_handler: XSOAR list handler instance
-        team_name: Name of the team (e.g., 'SecOps')
-        company_email_domain: Email domain (e.g., '@company.com')
+        team_name: Name of the team (e.g., 'DnR')
+        submitter_email_address: Authenticated submitter's email (from the
+            logged-in session, not collected from the form)
         eastern: Pytz timezone object for US/Eastern
         submitter_ip: IP address of submitter
 
@@ -54,7 +55,6 @@ def submit_red_team_testing_form(
     description = form_data.get('description', '').strip()
     notes_scope = form_data.get('notes_scope', '').strip()
     keep_until = form_data.get('keep_until', '')
-    submitter_email_address = form_data.get('email_local', '') + company_email_domain
     submit_date = datetime.now(eastern).strftime("%m/%d/%Y")
 
     approved_testing_list_name = f"{team_name}_Approved_Testing"
@@ -83,12 +83,12 @@ def submit_toodles_approved_testing(
     eastern: pytz.tzinfo.BaseTzInfo,
     submitter_ip: str
 ) -> str:
-    """Handles the notification service approved testing submissions.
+    """Handles Toodles approved testing submissions.
 
     Args:
         form_data: Form data from request
         list_handler: XSOAR list handler instance
-        team_name: Name of the team (e.g., 'SecOps')
+        team_name: Name of the team (e.g., 'DnR')
         eastern: Pytz timezone object for US/Eastern
         submitter_ip: IP address of submitter
 
@@ -98,7 +98,7 @@ def submit_toodles_approved_testing(
     Raises:
         ValueError: If validation fails
     """
-    logger.info("Processing the notification service approved testing submission")
+    logger.info("Processing Toodles approved testing submission")
 
     usernames = form_data.get('usernames', '').strip()
     tester_hosts = form_data.get('tester_hosts', '').strip()

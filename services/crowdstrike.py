@@ -26,6 +26,11 @@ logger = logging.getLogger(__name__)
 DATA_DIR = Path(__file__).parent.parent / "data" / "transient" / "epp_device_tagging"
 CS_FETCH_MAX_WORKERS = 10
 
+# A 401/403 means the credentials themselves are bad — retrying won't help and
+# risks account lockout. Every other failure (429, 5xx, connection/timeout) is
+# treated as transient and is safe to retry with backoff.
+CS_AUTH_PERMANENT_FAILURE_CODES = {401, 403}
+
 # Get robust HTTP session instance
 http_session = get_session()
 
@@ -37,6 +42,15 @@ class CSCredentialProfile(Enum):
     RTR = "rtr"
 
 
+class CrowdStrikeAPIError(Exception):
+    """Raised when a CrowdStrike API call returns a non-200 status.
+
+    Distinct from a successful query that simply matched no device — callers
+    that opt in can tell a transient API/auth failure apart from a host that
+    genuinely isn't in CrowdStrike (both otherwise collapse to a None result).
+    """
+
+
 class CrowdStrikeClient:
     """Client for interacting with the CrowdStrike Falcon API."""
 
@@ -45,6 +59,7 @@ class CrowdStrikeClient:
         self.base_url = "api.us-2.crowdstrike.com"
         self.proxies = self._setup_proxy()
         self.last_error: str | None = None  # Stores last API/auth error for better error reporting
+        self.last_status_code: Optional[int] = None  # HTTP status from the most recent validate_auth() (None on network/timeout)
         if self.proxies:
             logger.info(f"[CrowdStrikeClient] Proxy enabled: {self.proxies}")
         else:
@@ -113,8 +128,9 @@ class CrowdStrikeClient:
         try:
             # Use a minimal query to validate auth - limit=1 for efficiency
             response = self.hosts_client.query_devices_by_filter_scroll(limit=1)
+            self.last_status_code = response.get("status_code")
 
-            if response.get("status_code") == 200:
+            if self.last_status_code == 200:
                 self.last_error = None
                 logger.info("CrowdStrike API authentication validated successfully")
                 return True
@@ -132,9 +148,40 @@ class CrowdStrikeClient:
             return False
 
         except Exception as e:
+            self.last_status_code = None  # network/timeout — no HTTP status; treat as transient
             self.last_error = str(e)
             logger.warning(f"CrowdStrike API authentication failed: {self.last_error}")
             return False
+
+    def validate_auth_with_retry(self, max_attempts: int = 3, backoff_base: float = 2.0) -> bool:
+        """Validate auth, retrying transient failures with exponential backoff.
+
+        A 401/403 is a permanent credential problem and is not retried (it won't
+        recover and repeated attempts risk account lockout). Transient failures
+        (429, 5xx, connection/timeout) are retried up to max_attempts with
+        exponential backoff. Returns True only once auth succeeds.
+        """
+        for attempt in range(1, max_attempts + 1):
+            if self.validate_auth():
+                return True
+
+            if self.last_status_code in CS_AUTH_PERMANENT_FAILURE_CODES:
+                logger.error(
+                    f"CrowdStrike auth failed with permanent error HTTP {self.last_status_code}; "
+                    f"not retrying: {self.last_error}"
+                )
+                return False
+
+            if attempt < max_attempts:
+                backoff = backoff_base ** attempt
+                logger.warning(
+                    f"CrowdStrike auth attempt {attempt}/{max_attempts} failed ({self.last_error}); "
+                    f"retrying in {backoff:.1f}s"
+                )
+                time.sleep(backoff)
+
+        logger.error(f"CrowdStrike auth failed after {max_attempts} attempts: {self.last_error}")
+        return False
 
     def get_device_ids_batch(self, hostnames, batch_size=100):
         """Get device IDs for multiple hostnames in batches"""
@@ -161,8 +208,14 @@ class CrowdStrikeClient:
 
         return results
 
-    def get_device_id(self, hostname: str) -> Optional[str]:
-        """Retrieve the device ID for a given hostname"""
+    def get_device_id(self, hostname: str, raise_on_error: bool = False) -> Optional[str]:
+        """Retrieve the device ID for a given hostname.
+
+        Returns None when the query succeeds but no device matches. When
+        raise_on_error is True, a non-200 response raises CrowdStrikeAPIError
+        instead of returning None, so callers can distinguish a transient
+        API/auth failure from a host that genuinely isn't in CrowdStrike.
+        """
         host_filter = f"hostname:'{hostname}'"
         response = self.hosts_client.query_devices_by_filter(
             filter=host_filter,
@@ -170,9 +223,15 @@ class CrowdStrikeClient:
             limit=1
         )
 
-        if response.get("status_code") == 200:
+        status_code = response.get("status_code")
+        if status_code == 200:
             devices = response["body"].get("resources", [])
             return devices[0] if devices else None
+
+        if raise_on_error:
+            errors = response.get("body", {}).get("errors", [])
+            detail = "; ".join(e.get("message", str(e)) for e in errors) if errors else response.get("body", {})
+            raise CrowdStrikeAPIError(f"query_devices_by_filter returned HTTP {status_code}: {detail}")
 
         return None
 
@@ -195,7 +254,12 @@ class CrowdStrikeClient:
         return device_details.get("status")
 
     def fetch_all_hosts_and_write_to_xlsx(self, xlsx_filename: str = "all_cs_hosts.xlsx") -> None:
-        """Fetch all hosts from CrowdStrike Falcon using multithreading.
+        """Fetch all hosts from CrowdStrike Falcon and stream them directly to xlsx.
+
+        Rows are appended to a write-only openpyxl workbook as each batch finishes,
+        so only the active batch's dicts and the dedup set of device_ids live in
+        memory. An earlier implementation accumulated every host in a list and
+        materialized a single DataFrame at the end, which OOMed on lab-vm2.
 
         Raises:
             ConnectionError: If authentication fails or no hosts could be retrieved,
@@ -203,33 +267,42 @@ class CrowdStrikeClient:
         """
         import logging
         logger = logging.getLogger(__name__)
+        from openpyxl import Workbook
 
         # Validate authentication first
         if not self.validate_auth():
             raise ConnectionError(f"CrowdStrike API authentication failed: {self.last_error}")
 
-        all_host_data = []
-        unique_device_ids = set()
+        HEADERS = ["hostname", "host_id", "current_tags", "last_seen", "status", "cs_host_category", "chassis_type_desc"]
+
+        today_date = datetime.now().strftime('%m-%d-%Y')
+        output_path = DATA_DIR / today_date
+        output_path.mkdir(parents=True, exist_ok=True)
+        excel_file_path = output_path / xlsx_filename
+
+        wb = Workbook(write_only=True)
+        ws = wb.create_sheet("Hosts")
+        ws.append(HEADERS)
+
+        unique_device_ids: set = set()
         offset = None
         limit = 5000
         batch_count = 0
         start_time = time.time()
         api_error = None  # Track API errors during fetch
+        total_written = 0
 
-        def process_host_details(host_ids_batch: List[str]) -> None:
-            """Thread worker to process a batch of host IDs"""
+        def process_host_details(host_ids_batch: List[str]) -> List[Dict[str, Any]]:
+            """Thread worker — return rows for this batch instead of mutating shared state."""
             details_response = self.hosts_client.get_device_details(ids=host_ids_batch)
             if details_response["status_code"] != 200:
-                return
-
-            host_details = details_response["body"].get("resources", [])
-            for host in host_details:
+                return []
+            rows = []
+            for host in details_response["body"].get("resources", []):
                 device_id = host.get("device_id")
-                if not device_id or device_id in unique_device_ids:
+                if not device_id:
                     continue
-
-                unique_device_ids.add(device_id)
-                host_data = {
+                rows.append({
                     "hostname": host.get("hostname"),
                     "host_id": device_id,
                     "current_tags": ", ".join(host.get("tags", [])),
@@ -237,10 +310,10 @@ class CrowdStrikeClient:
                     "status": host.get("status"),
                     "cs_host_category": host.get("product_type_desc"),
                     "chassis_type_desc": host.get("chassis_type_desc"),
-                }
-                all_host_data.append(host_data)
+                })
+            return rows
 
-        logger.info(f"Starting fetch_all_hosts_and_write_to_xlsx with max_workers={self.max_workers}")
+        logger.info(f"Starting fetch_all_hosts_and_write_to_xlsx (streaming) with max_workers={self.max_workers}")
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             while True:
                 # Refresh auth token every 10 batches
@@ -275,16 +348,24 @@ class CrowdStrikeClient:
                 # Log for VM/non-interactive sessions
                 logger.info(f"Processing batch {batch_count + 1}: {len(host_ids)} host IDs in {len(host_id_batches)} sub-batches")
 
-                # Process with rich progress (shows progress bar locally, silent on VM)
+                # Process with rich progress (shows progress bar locally, silent on VM).
+                # Drain futures as they complete and write rows immediately so memory
+                # never grows past one batch worth of host dicts.
                 futures = [
                     executor.submit(process_host_details, id_batch)
                     for id_batch in track(host_id_batches, description=f"Batch {batch_count + 1}", disable=not sys.stdout.isatty())
                 ]
-                concurrent.futures.wait(futures)
+                for future in concurrent.futures.as_completed(futures):
+                    for row in future.result():
+                        dev_id = row["host_id"]
+                        if dev_id in unique_device_ids:
+                            continue
+                        unique_device_ids.add(dev_id)
+                        ws.append([row[h] for h in HEADERS])
+                        total_written += 1
 
                 batch_count += 1
-                # Log completion for VM/non-interactive sessions
-                logger.info(f"Completed batch {batch_count}, total hosts fetched so far: {len(all_host_data)}")
+                logger.info(f"Completed batch {batch_count}, total hosts written so far: {total_written}")
                 offset = response["body"].get("meta", {}).get("pagination", {}).get("offset")
                 if not offset:
                     break
@@ -292,24 +373,15 @@ class CrowdStrikeClient:
                 time.sleep(0.5)
 
         elapsed = time.time() - start_time
-        logger.info(f"Completed fetch_all_hosts_and_write_to_xlsx in {elapsed:.2f} seconds. Total hosts: {len(all_host_data)}")
+        logger.info(f"Completed fetch_all_hosts_and_write_to_xlsx in {elapsed:.2f} seconds. Total hosts: {total_written}")
 
         # If no hosts were retrieved, and we had an API error, raise with details
-        if not all_host_data and api_error:
+        if total_written == 0 and api_error:
             raise ConnectionError(f"No hosts retrieved from CrowdStrike. {api_error}")
 
-        # Write to Excel
-        today_date = datetime.now().strftime('%m-%d-%Y')
-        output_path = DATA_DIR / today_date
-        output_path.mkdir(parents=True, exist_ok=True)
-
-        df = pd.DataFrame(all_host_data)
-        excel_file_path = output_path / xlsx_filename
-        df.to_excel(excel_file_path, index=False, engine='openpyxl')
-
-        # Apply professional formatting
-        from src.utils.excel_formatting import apply_professional_formatting
-        apply_professional_formatting(excel_file_path)
+        wb.save(excel_file_path)
+        # Intermediate file consumed by downstream code — skip apply_professional_formatting
+        # since it would load the entire workbook back into memory and defeat streaming.
 
     def update_device_tags(self, action_name: str, ids: list, tags: list) -> dict:
         """Update device tags (add/remove) for a list of device IDs."""
@@ -1430,30 +1502,75 @@ class CrowdStrikeClient:
 
 
 def process_unique_hosts(df: pd.DataFrame) -> pd.DataFrame:
-    """Process dataframe to get unique hosts with latest last_seen"""
+    """Process dataframe to get unique hosts with latest last_seen.
+
+    Retained for callers that already hold the full DataFrame in memory.
+    For the disk → disk path, prefer update_unique_hosts_from_cs which
+    avoids materializing the all-hosts DataFrame entirely.
+    """
     df["last_seen"] = pd.to_datetime(df["last_seen"], errors='coerce', utc=True).dt.tz_convert(None)  # type: ignore[union-attr]
     return df.loc[df.groupby("hostname")["last_seen"].idxmax()]
 
 
 def update_unique_hosts_from_cs() -> None:
-    """Group hosts by hostname and get the record with the latest last_seen for each"""
+    """Fetch CS hosts and write unique_cs_hosts.xlsx (latest last_seen per hostname).
+
+    Streams all_cs_hosts.xlsx via openpyxl read-only and dedupes hostname → row in
+    a dict; only the unique-hostname dict (bounded by fleet size, not raw row
+    count) stays in memory. Previous implementation pd.read_excel'd the entire
+    sheet, which OOMed on lab-vm2 at fleet scale.
+    """
+    from openpyxl import load_workbook, Workbook
     cs_client = CrowdStrikeClient()
     cs_client.fetch_all_hosts_and_write_to_xlsx()
 
-    # Read and process the file
     today_date = datetime.now().strftime('%m-%d-%Y')
     hosts_file = DATA_DIR / today_date / "all_cs_hosts.xlsx"
-    df = pd.read_excel(hosts_file, engine="openpyxl")
-
-    unique_hosts = process_unique_hosts(df)
-
     unique_hosts_file = DATA_DIR / today_date / "unique_cs_hosts.xlsx"
     unique_hosts_file.parent.mkdir(parents=True, exist_ok=True)
-    unique_hosts.to_excel(unique_hosts_file, index=False, engine="openpyxl")
 
-    # Apply professional formatting
-    from src.utils.excel_formatting import apply_professional_formatting
-    apply_professional_formatting(unique_hosts_file)
+    src_wb = load_workbook(hosts_file, read_only=True)
+    try:
+        src_ws = src_wb.active
+        rows_iter = src_ws.iter_rows(values_only=True)
+        try:
+            headers = list(next(rows_iter))
+        except StopIteration:
+            headers = []
+
+        # last_seen comes from CS as ISO-8601 strings; lexicographic compare is
+        # correct for that format. If a hostname-less or comparable-less row
+        # shows up, keep whichever record was seen first.
+        hostname_idx = headers.index("hostname") if "hostname" in headers else 0
+        last_seen_idx = headers.index("last_seen") if "last_seen" in headers else None
+        latest_by_hostname: Dict[str, tuple] = {}
+        for row in rows_iter:
+            hostname = row[hostname_idx]
+            if not hostname:
+                continue
+            existing = latest_by_hostname.get(hostname)
+            if existing is None:
+                latest_by_hostname[hostname] = row
+                continue
+            if last_seen_idx is None:
+                continue
+            new_ls = row[last_seen_idx]
+            old_ls = existing[last_seen_idx]
+            if new_ls is None:
+                continue
+            if old_ls is None or new_ls > old_ls:
+                latest_by_hostname[hostname] = row
+    finally:
+        src_wb.close()
+
+    out_wb = Workbook(write_only=True)
+    out_ws = out_wb.create_sheet("Hosts")
+    out_ws.append(headers)
+    for row in latest_by_hostname.values():
+        out_ws.append(list(row))
+    out_wb.save(unique_hosts_file)
+    # Intermediate file consumed by downstream code — skip apply_professional_formatting
+    # since it would load the entire workbook back into memory and defeat streaming.
 
 
 def main() -> None:

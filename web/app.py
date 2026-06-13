@@ -28,7 +28,7 @@ if _PROJECT_ROOT not in sys.path:
 load_dotenv(os.path.join(_PROJECT_ROOT, 'data', 'transient', '.env'))
 
 # Third-party imports
-from flask import Flask, abort, jsonify, request, url_for
+from flask import Flask, abort, jsonify, render_template, request, url_for
 
 # Local imports
 from src.utils.logging_utils import is_scanner_request, setup_logging, get_client_ip
@@ -102,14 +102,28 @@ def inject_public_config():
 
 @app.context_processor
 def inject_current_user():
-    """Expose the logged-in browser user to every template so shared chrome
-    (e.g. the Person pill in burger_menu.html) can render conditionally
-    without each route handler forwarding `user=...` explicitly."""
+    """Expose the logged-in browser user — and a capability check — to every
+    template so shared chrome (the Person pill, plus action buttons that
+    should hide when the user can't perform them) can render conditionally
+    without each route handler forwarding it explicitly.
+
+    `can(cap)` returns True/False for the current user; templates use it to
+    hide or disable gated buttons so users aren't shown an action that would
+    only 403. (The server-side @require_capability gate is the real
+    enforcement — this is UX, not security.)"""
     try:
         from web.auth.helpers import current_user as _current_user
-        return {'current_user': _current_user()}
+        from web.auth import rbac
+        user = _current_user()
+        caps = rbac.user_capabilities(user)
+        return {
+            'current_user': user,
+            'user_capabilities': caps,
+            'can': lambda cap: cap in caps,
+        }
     except Exception:
-        return {'current_user': None}
+        return {'current_user': None, 'user_capabilities': frozenset(),
+                'can': lambda cap: False}
 
 
 def _versioned_url_for(endpoint, **values):
@@ -225,13 +239,29 @@ def set_security_headers(response):
             or request.path == '/cyber-simulator' or request.path.startswith('/cyber-simulator-app/')
             or request.path == '/dspm' or request.path.startswith('/dspm-app/')
             or request.path == '/db-config' or request.path.startswith('/db-config-app/')
-            or request.path == '/tipper-automation' or request.path.startswith('/tipper-automation-app/')):
+            or request.path == '/tipper-automation' or request.path.startswith('/tipper-automation-app/')
+            or request.path == '/aj-threat-hunting' or request.path.startswith('/aj-threat-hunting-app/')
+            or request.path == '/zero-hour' or request.path.startswith('/zero-hour-app/')
+            or request.path == '/snr' or request.path.startswith('/snr-app/')):
         response.headers['X-Frame-Options'] = 'SAMEORIGIN'
     else:
         response.headers['X-Frame-Options'] = 'DENY'
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     response.headers['X-XSS-Protection'] = '0'
     return response
+
+
+@app.errorhandler(403)
+def _forbidden(_err):
+    """Friendly 403 for HTML callers (e.g. @admin_required's abort(403));
+    JSON callers still get a compact JSON body. @require_capability renders
+    its own capability-aware page, so this mainly covers the bare aborts."""
+    if request.is_json or request.accept_mimetypes.best == 'application/json':
+        return jsonify({'success': False, 'error': 'forbidden'}), 403
+    try:
+        return render_template('auth/forbidden.html', needed=None, descriptions=None), 403
+    except Exception:
+        return 'Forbidden — your account is not authorized for this action.', 403
 
 
 @app.route('/favicon.ico')

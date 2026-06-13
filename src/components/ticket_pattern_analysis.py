@@ -11,7 +11,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
-import requests
 from webexpythonsdk import WebexAPI
 
 from services.azdo import create_wit
@@ -44,7 +43,6 @@ def get_next_assignee() -> str:
 
 from my_config import get_config as _get_config
 _config = _get_config()
-LLM_URL = f"{_config.m1_analysis_base_url}/chat/completions"
 
 # Risky keywords to flag in ticket names (avoid overly broad terms like "admin")
 RISKY_KEYWORDS = [
@@ -188,16 +186,13 @@ SLA breaches: {stats['sla_breaches']}
 Total tickets: {stats['total_tickets']}
 """
 
+    # Non-tool prose → GPT-4.1 (m1 GLM fallback inside create_llm).
     try:
-        from my_config import get_config
-        model = get_config().llm_model or "default"
-        resp = requests.post(LLM_URL, json={
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 300,
-        }, headers={"api-key": "not-needed"}, timeout=60)
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"].strip()[:500]  # Cap at 500 chars
+        from my_bot.utils.llm_factory import create_llm
+        from langchain_core.messages import HumanMessage
+        resp = create_llm().invoke([HumanMessage(content=prompt)])
+        content = (resp.content or "").strip() if hasattr(resp, "content") else str(resp).strip()
+        return content[:500] if content else "_Unable to generate insight._"
     except Exception as e:
         logger.error(f"LLM insight failed: {e}")
         return "_Unable to generate insight._"
@@ -241,7 +236,7 @@ def generate_story_body(stats: dict) -> str:
     risky_list = "<ul>" + "".join(risky_items) + "</ul>" if risky_items else "<p>None flagged</p>"
 
     return f"""
-<h2>📊 Weekly Ticket Pattern Analysis (the security assistant bot)</h2>
+<h2>📊 Weekly Ticket Pattern Analysis (Pokedex)</h2>
 
 <p><b>Period:</b> {stats['period']} &nbsp;|&nbsp; <b>Total Tickets:</b> {stats['total_tickets']}</p>
 
@@ -312,7 +307,7 @@ def run():
         item_type="User Story",
         description=body,
         project="rea",
-        submitter="the security assistant bot Automation",
+        submitter="Pokedex Automation",
         parent_url=config.azdo_rea_parent_url,
         iteration=config.azdo_rea_iteration,
         assignee=assignee,

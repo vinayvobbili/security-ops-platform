@@ -1,0 +1,29 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'Access denied' %}
+{% from 'auth/_form_styles.html' import auth_styles %}
+
+{% block extra_css %}{{ auth_styles() }}{% endblock %}
+
+{% block content %}
+<div class="auth-shell">
+    <h1>🔒 Not authorized</h1>
+    <div class="auth-err">
+        This action is restricted. You can view this page, but performing it
+        requires a capability your account doesn't have.
+    </div>
+    {% if needed %}
+    <div style="margin-top:16px;">
+        <div style="font-weight:600; margin-bottom:6px;">Needs one of:</div>
+        <ul style="margin:0; padding-left:20px; line-height:1.6;">
+            {% for cap in needed %}
+            <li><code>{{ cap }}</code>{% if descriptions and descriptions.get(cap) %} — {{ descriptions[cap] }}{% endif %}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    <div class="auth-err" style="margin-top:16px; background:transparent; border:none; color:#555;">
+        Ask an admin to grant your account the role that includes this capability.
+    </div>
+    <a class="primary" href="/all-pages" style="display:block; text-align:center; text-decoration:none; margin-top:18px;">Back to all pages</a>
+</div>
+{% endblock %}

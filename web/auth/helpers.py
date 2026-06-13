@@ -35,6 +35,16 @@ PUBLIC_ROLES: list[tuple[str, str]] = [
 ]
 ADMIN_ROLE = 'admin'
 
+# Dropdown sentinel: when the preset roles don't fit, the user picks this and
+# types their own role in the revealed text box. Stored verbatim (capped),
+# never matched against PUBLIC_ROLES.
+CUSTOM_ROLE_KEY = '__other__'
+MAX_CUSTOM_ROLE_LEN = 60
+
+# Mandatory free-text justification collected at signup.
+MIN_ACCESS_REASON_LEN = 20
+MAX_ACCESS_REASON_LEN = 1000
+
 
 def public_role_keys() -> set[str]:
     return {k for k, _ in PUBLIC_ROLES}
@@ -42,6 +52,56 @@ def public_role_keys() -> set[str]:
 
 def is_valid_public_role(role: str) -> bool:
     return role in public_role_keys()
+
+
+def custom_signup_roles() -> list[tuple[str, str]]:
+    """Roles a previous registrant entered via "Other", surfaced on the
+    dropdown so the next person can pick one instead of re-typing it.
+
+    Derived from stored user roles (verified accounts only) minus the
+    presets and the server-only admin role. Custom roles are stored
+    verbatim, so key == label. Deduped case-insensitively to avoid near
+    duplicates like "Threat Intel Lead" / "threat intel lead"."""
+    from . import rbac  # lazy: rbac imports helpers, avoid a circular import at load
+    reserved = public_role_keys() | {ADMIN_ROLE}
+    seen: set[str] = set()
+    out: list[tuple[str, str]] = []
+    for role in db.distinct_assigned_roles():
+        if role in reserved or role.lower() in seen:
+            continue
+        # A capability-bearing role (e.g. "Customer Assurance Analyst") is
+        # admin-assign-only — never advertise it as a self-select signup option,
+        # even though picking it would only set a non-binding requested_role.
+        if rbac.capabilities_for_role(role):
+            continue
+        seen.add(role.lower())
+        out.append((role, role))
+    return out
+
+
+def signup_role_choices() -> list[tuple[str, str]]:
+    """Full (key, label) list for the signup dropdown: the fixed presets
+    followed by any custom roles earlier registrants contributed."""
+    return PUBLIC_ROLES + custom_signup_roles()
+
+
+def resolve_signup_role(role: str, custom_role: str) -> Optional[str]:
+    """Map the submitted (role, custom_role) pair to the value to store, or
+    None if the selection is invalid.
+
+    A preset selection must be one of PUBLIC_ROLES; a previously
+    contributed custom role (now offered in the dropdown) is accepted as
+    well. The CUSTOM_ROLE_KEY sentinel requires a non-empty custom_role,
+    which is stripped, capped, and returned verbatim — and, being stored
+    on the new user, becomes a dropdown option for the next registrant."""
+    role = (role or '').strip()
+    if role == CUSTOM_ROLE_KEY:
+        return (custom_role or '').strip()[:MAX_CUSTOM_ROLE_LEN] or None
+    if is_valid_public_role(role):
+        return role
+    if role and role in {k for k, _ in custom_signup_roles()}:
+        return role
+    return None
 
 
 def admin_emails() -> set[str]:
@@ -54,9 +114,9 @@ def is_admin_email(email: str) -> bool:
 
 
 def current_user():
-    """Return the dict {id, email, role} for the logged-in browser user,
-    or None. `role` may be None for legacy accounts that pre-date the
-    role column."""
+    """Return the dict {id, email, role, exclude_from_traffic_log} for the
+    logged-in browser user, or None. `role` may be None for legacy accounts
+    that pre-date the role column."""
     user_id = session.get('user_id')
     if not user_id:
         return None
@@ -64,7 +124,22 @@ def current_user():
     if not row or row['email_verified_at'] is None:
         session.pop('user_id', None)
         return None
-    return {'id': row['id'], 'email': row['email'], 'role': _row_role(row)}
+    return {
+        'id': row['id'],
+        'email': row['email'],
+        'role': _row_role(row),
+        'extra_capabilities': _row_extra_caps(row),
+        'exclude_from_traffic_log': _row_traffic_exclude(row),
+    }
+
+
+def _row_extra_caps(row) -> Optional[str]:
+    """Per-user capability grants (comma-separated). Absent on DBs that
+    pre-date the migration → None (no extra grants)."""
+    try:
+        return row['extra_capabilities']
+    except (IndexError, KeyError):
+        return None
 
 
 def _row_role(row) -> Optional[str]:
@@ -72,6 +147,15 @@ def _row_role(row) -> Optional[str]:
         return row['role']
     except (IndexError, KeyError):
         return None
+
+
+def _row_traffic_exclude(row) -> bool:
+    """Defensive read — the column is absent on DBs that pre-date the
+    migration, in which case the user is treated as logged (False)."""
+    try:
+        return bool(row['exclude_from_traffic_log'])
+    except (IndexError, KeyError):
+        return False
 
 
 def current_pat_user():

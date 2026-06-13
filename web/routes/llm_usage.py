@@ -1,35 +1,30 @@
-"""LLM Usage dashboard — tracks cost, tokens, and prompts across all bots."""
+"""LLM Usage dashboard — admin-only cost, token, and prompt analytics.
 
-import secrets
+Gated on the signed-in user's role (``admin``) via the session cookie.
+The old hardcoded page password is gone — admins use the same session
+cookie they use for everything else.
+"""
 
 from flask import Blueprint, jsonify, render_template, request
+from web.auth import helpers
 
 llm_usage_bp = Blueprint('llm_usage', __name__)
 
-LLM_USAGE_PASSWORD = "qwerty123"
 
-
-def _check_auth(req) -> bool:
-    data = req.get_json(silent=True) or {}
-    provided = data.get('password', '') or req.args.get('password', '')
-    return secrets.compare_digest(provided, LLM_USAGE_PASSWORD)
+def _check_admin(req) -> bool:
+    """Admin = signed-in user with role=admin (req kept for callsite compat)."""
+    return helpers.is_admin()
 
 
 @llm_usage_bp.route('/llm-usage')
+@helpers.admin_required
 def llm_usage_page():
     return render_template('llm_usage.html')
 
 
-@llm_usage_bp.route('/api/llm-usage/auth', methods=['POST'])
-def api_llm_auth():
-    if not _check_auth(request):
-        return jsonify({'success': False, 'error': 'Invalid password'}), 403
-    return jsonify({'success': True})
-
-
 @llm_usage_bp.route('/api/llm-usage/stats')
 def api_llm_stats():
-    if not _check_auth(request):
+    if not _check_admin(request):
         return jsonify({'success': False, 'error': 'Unauthorized'}), 403
     from src.utils.bot_logs_db import get_llm_usage_stats
     bot_filter = request.args.get('bot', '').strip()
@@ -39,7 +34,7 @@ def api_llm_stats():
 
 @llm_usage_bp.route('/api/llm-usage/logs')
 def api_llm_logs():
-    if not _check_auth(request):
+    if not _check_admin(request):
         return jsonify({'success': False, 'error': 'Unauthorized'}), 403
     from src.utils.bot_logs_db import get_llm_usage
     limit = request.args.get('limit', 100, type=int)

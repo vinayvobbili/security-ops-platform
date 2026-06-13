@@ -9,7 +9,7 @@
     <h1>{{ 'Verified' if ok else 'Verification failed' }}</h1>
     {% if ok %}
     <div class="auth-ok">{{ message }}</div>
-    <a class="primary" href="/account" style="display:block; text-align:center; text-decoration:none; margin-top:18px;">Continue to account</a>
+    <a class="primary" href="/all-pages" style="display:block; text-align:center; text-decoration:none; margin-top:18px;">Continue</a>
     {% else %}
     <div class="auth-err">{{ message }}</div>
     <div class="auth-links" style="margin-top:18px;"><a href="/register">Try again</a><a href="/login">Sign in</a></div>

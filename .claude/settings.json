@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(systemctl --user is-active *)",
+      "Bash(systemctl --user is-enabled *)",
+      "Bash(systemctl --user status *)",
+      "Bash(systemctl --user show *)",
+      "Bash(systemctl --user cat *)",
+      "Bash(systemctl --user list-units *)",
+      "Bash(systemctl --user list-unit-files *)",
+      "Bash(systemctl --user list-timers *)",
+      "Bash(journalctl --user *)",
+      "Bash(gh search *)",
+      "Bash(gh run watch *)",
+      "Bash(journalctl *)",
+      "Bash(ruff check *)"
+    ]
+  }
+}

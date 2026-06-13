@@ -2,9 +2,32 @@
 
 {% block page_title_plain %}APT Other Names Search{% endblock %}
 
-{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/apt_other_names_search.css') }}">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/apt_other_names_search.css') }}">
+<style>
+  /* ===== APT Other Names theme — Deep Violet / Magenta ===== */
+  body.apt-themed { background:
+      radial-gradient(1100px 520px at 4% -8%, #e6d9ff 0%, transparent 55%),
+      radial-gradient(1000px 560px at 98% 0%, #ffd9f6 0%, transparent 52%),
+      radial-gradient(1200px 720px at 50% 122%, #ded9ff 0%, transparent 55%),
+      linear-gradient(160deg, #f3eeff 0%, #ffeefb 48%, #f0eeff 100%) !important;
+      background-attachment: fixed !important; min-height: 100vh; }
+  body.apt-themed.dark-mode { background:
+      linear-gradient(135deg, #0f0620 0%, #22082e 50%, #0c051a 100%) !important; color: #ecdef5; }
+  html { scrollbar-gutter: stable; }
+  ::-webkit-scrollbar { width: 16px; height: 16px; }
+  ::-webkit-scrollbar-track { border-radius: 10px;
+      background: linear-gradient(180deg, rgba(0,0,0,.04), rgba(0,0,0,.06) 50%, rgba(0,0,0,.04)); }
+  ::-webkit-scrollbar-thumb { border-radius: 10px; border: 2px solid transparent; background-clip: padding-box;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
+      background: linear-gradient(180deg, #7c3aed 0%, #a855f7 22%, #d946ef 46%, #ec008c 70%, #8f94fb 100%); }
+  ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, #8f94fb 0%, #ec008c 30%, #d946ef 54%, #a855f7 78%, #7c3aed 100%); }
+  ::-webkit-scrollbar-corner { background: transparent; }
+  body.dark-mode ::-webkit-scrollbar-track {
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.10) 50%, rgba(255,255,255,.06)); }
+</style>{% endblock %}
 
-{% block body_classes %}apt-search-page{% endblock %}
+{% block body_classes %}apt-search-page apt-themed{% endblock %}
 
 {% set page_title_text = 'APT Other Names Search' %}
 {% set page_title_left_icon = '🔍' %}

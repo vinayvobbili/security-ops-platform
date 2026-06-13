@@ -1,0 +1,159 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'HITL Audit Trail' %}
+{% set page_title_left_icon = '🤝' %}
+{% set page_title_right_icon = '📜' %}
+
+{% block extra_css %}
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --soc-bg-0:#05080f; --soc-bg-1:#0a1020;
+  --soc-panel:rgba(17,27,49,0.55); --soc-panel-2:rgba(9,15,28,0.85);
+  --soc-line:rgba(120,160,255,0.14); --soc-line-2:rgba(120,160,255,0.30);
+  --soc-text:#e8eefb; --soc-dim:#9db0d3; --soc-faint:#6478a0;
+  --soc-cyan:#34e3f0; --soc-emerald:#37e0a0; --soc-blue:#5b8dff;
+  --soc-amber:#ffc14d; --soc-red:#ff6b7d; --soc-violet:#b08bff;
+  --soc-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --soc-disp:'Chakra Petch',system-ui,sans-serif;
+  --soc-body:'IBM Plex Sans',system-ui,sans-serif;
+}
+body {
+  background:
+    radial-gradient(1100px 540px at 12% -8%, rgba(52,227,240,0.10), transparent 60%),
+    radial-gradient(960px 520px at 92% 0%, rgba(55,224,160,0.09), transparent 58%),
+    linear-gradient(180deg, var(--soc-bg-1) 0%, var(--soc-bg-0) 100%);
+  background-attachment: fixed;
+}
+body::before { content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+  background-image:
+    linear-gradient(rgba(120,160,255,0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120,160,255,0.045) 1px, transparent 1px);
+  background-size:44px 44px; mask-image:radial-gradient(ellipse 90% 70% at 50% 0%, #000 40%, transparent 100%); }
+
+.audit-container { position:relative; z-index:1; flex:1 1 auto; max-width:1320px;
+  margin:24px auto 90px; padding:0 22px; color:var(--soc-text); font-family:var(--soc-body); }
+
+.audit-hero { position:relative; overflow:hidden; border-radius:20px; padding:28px 34px; margin-bottom:18px;
+  color:#fff;
+  background:
+    radial-gradient(900px 300px at 0% 0%, rgba(52,227,240,0.26), transparent 55%),
+    linear-gradient(125deg, #06223f 0%, #0a2d63 42%, #06402f 100%);
+  border:1px solid rgba(120,180,255,0.22);
+  box-shadow:0 22px 60px rgba(2,12,30,0.6), 0 0 0 1px rgba(120,180,255,0.08) inset; }
+.audit-hero::after { content:''; position:absolute; right:-70px; top:-80px; width:300px; height:300px;
+  border-radius:50%; background:radial-gradient(circle, rgba(55,224,160,0.30), transparent 68%); filter:blur(6px); }
+.audit-hero h1 { margin:0 0 8px; position:relative; z-index:1; font-family:var(--soc-disp);
+  font-size:1.65rem; font-weight:700; text-shadow:0 2px 20px rgba(0,0,0,0.5); }
+.audit-hero p { margin:0; position:relative; z-index:1; font-size:0.95rem; line-height:1.55;
+  max-width:760px; color:rgba(232,240,255,0.9); }
+
+.audit-wrap { border-radius:16px; overflow:hidden;
+  background:var(--soc-panel); backdrop-filter:blur(14px) saturate(125%);
+  -webkit-backdrop-filter:blur(14px) saturate(125%);
+  border:1px solid var(--soc-line);
+  box-shadow:0 1px 0 rgba(255,255,255,0.04) inset, 0 18px 44px rgba(0,0,0,0.42); }
+.audit-table { width:100%; border-collapse:collapse; font-size:0.87rem; }
+.audit-table thead { background:rgba(120,160,255,0.07); }
+.audit-table th, .audit-table td { text-align:left; padding:11px 15px;
+  border-bottom:1px solid rgba(120,160,255,0.08); vertical-align:top; }
+.audit-table th { font-family:var(--soc-mono); font-size:0.68rem; text-transform:uppercase;
+  letter-spacing:0.1em; color:var(--soc-dim); font-weight:600; }
+.audit-table td { color:var(--soc-text); }
+.audit-table tr:hover td { background:rgba(120,160,255,0.05); }
+
+.badge { display:inline-block; padding:3px 10px; border-radius:999px; font-family:var(--soc-mono);
+  font-size:0.68rem; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; border:1px solid transparent; }
+.badge-approved { background:rgba(55,224,160,0.14); color:var(--soc-emerald); border-color:rgba(55,224,160,0.36); }
+.badge-rejected { background:rgba(255,107,125,0.14); color:var(--soc-red); border-color:rgba(255,107,125,0.4); }
+.badge-pending  { background:rgba(255,193,77,0.14); color:var(--soc-amber); border-color:rgba(255,193,77,0.34); }
+.badge-dummy    { background:rgba(176,139,255,0.16); color:var(--soc-violet); border-color:rgba(176,139,255,0.32);
+  margin-left:6px; font-size:0.62rem; }
+
+.empty { padding:44px; text-align:center; color:var(--soc-faint); }
+
+.audit-action-list { margin:0; padding-left:16px; font-size:0.82rem; color:var(--soc-dim); }
+.audit-action-list li { margin:2px 0; }
+.muted { color:var(--soc-faint); }
+.ticket-link { font-family:var(--soc-mono); color:var(--soc-cyan); text-decoration:none; font-weight:600; }
+.ticket-link:hover { text-decoration:underline; }
+
+@keyframes soc-rise { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+.audit-hero, .audit-wrap { animation:soc-rise .5s cubic-bezier(.2,.7,.2,1) both; }
+.audit-wrap { animation-delay:.1s; }
+@media (prefers-reduced-motion: reduce) { .audit-hero, .audit-wrap { animation:none; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="audit-container">
+    <div class="audit-hero">
+        <h1>🤝 SOC-in-a-Box HITL Audit Trail</h1>
+        <p>Every AI-proposed real-system action and the human decision recorded against it.
+           v1 is dummy: approvals are logged but executed by humans via normal IR
+           procedures — the executor agent is future work.</p>
+    </div>
+
+    <div class="audit-wrap">
+        <table class="audit-table">
+            <thead>
+                <tr>
+                    <th>Proposed</th>
+                    <th>Ticket</th>
+                    <th>By</th>
+                    <th>Kind</th>
+                    <th>Description / actions</th>
+                    <th>Addressed to</th>
+                    <th>Decision</th>
+                    <th>Decided by</th>
+                    <th>Decided at</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in rows %}
+                <tr>
+                    <td><span class="muted">{{ r.proposed_at[:19] }}</span></td>
+                    <td><span class="ticket-link">#{{ r.ticket_id }}</span></td>
+                    <td>{{ r.proposed_by }}</td>
+                    <td>{{ r.kind }}</td>
+                    <td>
+                        <div>{{ r.description }}</div>
+                        {% if r.actions_summary %}
+                        <ul class="audit-action-list">
+                            {% for a in r.actions_summary[:5] %}<li>{{ a }}</li>{% endfor %}
+                            {% if r.actions_summary|length > 5 %}
+                            <li class="muted">+ {{ r.actions_summary|length - 5 }} more</li>
+                            {% endif %}
+                        </ul>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if r.approver_name %}<strong>{{ r.approver_name }}</strong><br>{% endif %}
+                        {% if r.approver_role %}<span class="muted">{{ r.approver_role }}</span>{% endif %}
+                        {% if not r.approver_role and not r.approver_name %}<span class="muted">—</span>{% endif %}
+                    </td>
+                    <td>
+                        {% if r.latest_decision == 'approved' %}
+                            <span class="badge badge-approved">approved</span>
+                        {% elif r.latest_decision == 'rejected' %}
+                            <span class="badge badge-rejected">rejected</span>
+                        {% else %}
+                            <span class="badge badge-pending">pending</span>
+                        {% endif %}
+                        {% if r.latest_dummy %}<span class="badge badge-dummy">dummy</span>{% endif %}
+                    </td>
+                    <td>{{ r.latest_decided_by or '—' }}</td>
+                    <td><span class="muted">{{ (r.latest_decided_at or '—')[:19] }}</span></td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="9" class="empty">
+                        No HITL actions yet — the IR Lead will publish one the next
+                        time it escalates a ticket with containment actions.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

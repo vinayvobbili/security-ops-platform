@@ -15,6 +15,7 @@
     {% block head_scripts %}{% endblock %}
 </head>
 <body class="{% block body_classes %}{% endblock %}">
+{% if config.is_dev %}<div title="Non-production instance — {{ config.environment }}" style="position:fixed;top:0;left:50%;transform:translateX(-50%);background:#b45309;color:#fff;padding:3px 16px;border-radius:0 0 9px 9px;font-size:11px;font-weight:700;letter-spacing:.1em;z-index:100000;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.3);">🚧 {{ config.environment|upper }}</div>{% endif %}
 {% set page_title = titles.build_title(page_title_text|default(''), page_title_left_icon|default(''), page_title_right_icon|default('')) %}
 {% include 'top_bar.html' %}
 {% block content %}{% endblock %}

@@ -385,7 +385,7 @@
     function showChartSkeletons() {
         document.getElementById('pbiChartsEmpty').style.display = 'none';
         var content = document.getElementById('pbiChartsContent');
-        content.style.display = 'block';
+        content.style.display = '';
         document.getElementById('pbiKpiRow').innerHTML =
             '<div class="pbi-skeleton-kpi-row">' +
             '<div class="pbi-skeleton-kpi"></div>'.repeat(4) +
@@ -953,11 +953,6 @@
         } catch(e) {}
     }
 
-    function loadChatFromStorage() {
-        try { return JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY)); }
-        catch(e) { return null; }
-    }
-
     function clearChatStorage() {
         localStorage.removeItem(CHAT_STORAGE_KEY);
     }
@@ -1305,38 +1300,6 @@
         }
     });
 
-    // ══════════════════════ RESTORE LAST SESSION ══════════════════════
-    (function restoreSession() {
-        var saved = loadChatFromStorage();
-        if (!saved || !saved.dataset_id) return;
-
-        // Find the sidebar item for this dataset
-        var target = null;
-        datasetItems.forEach(function(el) {
-            if (el.getAttribute('data-id') === saved.dataset_id) target = el;
-        });
-        if (!target) return;
-
-        // Select dataset without confirm dialog (skip selectDataset which prompts)
-        datasetItems.forEach(function(el) { el.classList.remove('active'); });
-        target.classList.add('active');
-        currentDatasetId = saved.dataset_id;
-        currentDatasetName = saved.dataset_name;
-        loadDataset(saved.dataset_id, saved.dataset_name);
-
-        // Restore chat messages if any
-        var msgs = saved.transcript || [];
-        if (msgs.length) {
-            transcript = msgs;
-            document.getElementById('pbiDownloadTranscript').style.display = '';
-            transcript.forEach(function(t) {
-                if (t.role === 'user') {
-                    appendMsg('user', escapeHtml(t.text));
-                } else {
-                    var wrap = appendMsg('assistant', marked.parse(t.text));
-                    collapseDaxBlocks(wrap.querySelector('.pbi-bubble'));
-                }
-            });
-        }
-    })();
+    // Drop any stale chat from a prior session — the user must explicitly pick a dataset.
+    clearChatStorage();
 })();

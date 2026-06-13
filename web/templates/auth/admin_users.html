@@ -5,32 +5,194 @@
 {% block extra_css %}
 {{ auth_styles() }}
 <style>
-.adm-wrap { max-width: 1100px; margin: 32px auto; padding: 0 16px; color: var(--text-primary, #eee); }
-.adm-card { background: var(--bg-secondary, #1e1e1e); border: 1px solid var(--border, #444); border-radius: 10px; padding: 18px 22px; }
-.adm-card h2 { margin: 0 0 12px; font-size: 17px; font-weight: 600; }
-.adm-card p { color: var(--text-secondary, #aaa); font-size: 13px; margin: 0 0 14px; }
+.adm-wrap { position: relative; z-index: 1; max-width: 1100px; margin: 32px auto; padding: 0 16px; color: #0f172a; }
+body.dark-mode .adm-wrap { color: #f1f5f9; }
+
+.adm-card {
+    position: relative;
+    background: #ffffff;
+    border: 1px solid rgba(15,23,42,0.10);
+    border-radius: 14px;
+    padding: 22px 26px;
+    box-shadow: 0 16px 40px rgba(0,70,173,0.14), 0 4px 10px rgba(15,23,42,0.05);
+    overflow: hidden;
+}
+.adm-card::before {
+    content: '';
+    position: absolute; left: 0; right: 0; top: 0;
+    height: 5px;
+    background: linear-gradient(90deg, #0046ad 0%, #2563eb 45%, #00A651 100%);
+}
+body.dark-mode .adm-card {
+    background: #0f172a;
+    border-color: rgba(148,163,184,0.18);
+    box-shadow: 0 16px 40px rgba(0,0,0,0.55), 0 4px 12px rgba(0,0,0,0.35);
+}
+
+.adm-card h2 {
+    margin: 4px 0 10px; font-size: 20px; font-weight: 700;
+    background: linear-gradient(90deg, #0046ad 0%, #00A651 100%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+}
+.adm-card p { color: #475569; font-size: 13px; margin: 0 0 16px; line-height: 1.55; }
+body.dark-mode .adm-card p { color: #94a3b8; }
+.adm-card p a { color: #0046ad; text-decoration: none; font-weight: 600; }
+.adm-card p a:hover { color: #00A651; }
+body.dark-mode .adm-card p a { color: #93c5fd; }
+body.dark-mode .adm-card p a:hover { color: #6ee7b7; }
+
 .adm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.adm-table th { text-align: left; font-weight: 600; color: var(--text-secondary, #aaa); padding: 8px; border-bottom: 1px solid var(--border, #333); }
-.adm-table td { padding: 9px 8px; border-bottom: 1px solid var(--border, #2a2a2a); vertical-align: middle; }
-.adm-pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.3px; }
-.pill-ok    { background: rgba(16,185,129,0.15);  color: #86efac; }
-.pill-warn  { background: rgba(234,179,8,0.15);   color: #fde047; }
-.pill-muted { background: rgba(148,163,184,0.18); color: #cbd5e1; }
-.pill-admin { background: rgba(99,102,241,0.20);  color: #c7d2fe; }
-.adm-count { display:inline-block; min-width: 22px; padding: 1px 7px; border-radius: 999px; font-size: 11px; background: rgba(99,102,241,0.20); color: #c7d2fe; font-weight: 600; }
-.adm-dim { color: var(--text-secondary, #888); font-size: 12px; }
-.adm-snippet { position: relative; background: #0b1220; color: #e2e8f0; border: 1px solid #1f2a44; border-radius: 8px; padding: 14px 16px 14px 16px; font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-all; margin: 6px 0 0; }
+.adm-table th {
+    text-align: left; font-weight: 600; padding: 10px 8px;
+    color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; font-size: 11px;
+    border-bottom: 2px solid rgba(15,23,42,0.10);
+}
+.adm-table td {
+    padding: 11px 8px; vertical-align: middle;
+    border-bottom: 1px solid rgba(15,23,42,0.07);
+}
+.adm-table tr:hover td { background: rgba(0,70,173,0.04); }
+body.dark-mode .adm-table th { color: #94a3b8; border-bottom-color: rgba(148,163,184,0.22); }
+body.dark-mode .adm-table td { border-bottom-color: rgba(148,163,184,0.10); }
+body.dark-mode .adm-table tr:hover td { background: rgba(99,102,241,0.08); }
+
+.adm-pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.3px; }
+.pill-ok    { background: rgba(16,185,129,0.14);  color: #047857; border: 1px solid rgba(16,185,129,0.35); }
+.pill-warn  { background: rgba(234,179,8,0.14);   color: #a16207; border: 1px solid rgba(234,179,8,0.40); }
+.pill-muted { background: rgba(148,163,184,0.18); color: #475569; border: 1px solid rgba(148,163,184,0.30); }
+.pill-admin { background: linear-gradient(135deg, rgba(0,70,173,0.16), rgba(99,102,241,0.16)); color: #1e40af; border: 1px solid rgba(99,102,241,0.40); }
+body.dark-mode .pill-ok    { color: #86efac; }
+body.dark-mode .pill-warn  { color: #fde047; }
+body.dark-mode .pill-muted { color: #cbd5e1; }
+body.dark-mode .pill-admin { color: #c7d2fe; }
+
+.adm-count {
+    display:inline-block; min-width: 24px; padding: 2px 9px; border-radius: 999px; font-size: 11px;
+    background: linear-gradient(135deg, rgba(0,70,173,0.14), rgba(99,102,241,0.16));
+    color: #1e40af; font-weight: 700;
+    border: 1px solid rgba(99,102,241,0.32);
+}
+body.dark-mode .adm-count { color: #c7d2fe; }
+
+.adm-dim { color: #64748b; font-size: 12px; }
+body.dark-mode .adm-dim { color: #94a3b8; }
+
+.adm-reason { max-width: 240px; font-size: 12px; color: #475569; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+body.dark-mode .adm-reason { color: #cbd5e1; }
+
+.adm-snippet { position: relative; background: #0b1220; color: #e2e8f0; border: 1px solid #1f2a44; border-radius: 10px; padding: 14px 16px; font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-all; margin: 6px 0 0; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); }
 .adm-snippet code { background: transparent; color: inherit; padding: 0; font: inherit; }
-.adm-copy { position: absolute; top: 8px; right: 8px; background: rgba(99,102,241,0.18); color: #c7d2fe; border: 1px solid rgba(99,102,241,0.4); border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 600; letter-spacing: 0.3px; cursor: pointer; transition: background 0.15s; }
-.adm-copy:hover { background: rgba(99,102,241,0.35); }
-.adm-copy.copied { background: rgba(16,185,129,0.25); color: #86efac; border-color: rgba(16,185,129,0.5); }
-.adm-snippet-label { color: var(--text-secondary, #94a3b8); font-size: 11px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase; margin-top: 14px; }
+.adm-copy { position: absolute; top: 8px; right: 8px; background: rgba(99,102,241,0.20); color: #c7d2fe; border: 1px solid rgba(99,102,241,0.45); border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 600; letter-spacing: 0.3px; cursor: pointer; transition: background 0.15s, transform 0.15s; }
+.adm-copy:hover { background: rgba(99,102,241,0.40); transform: translateY(-1px); }
+.adm-copy.copied { background: rgba(16,185,129,0.28); color: #86efac; border-color: rgba(16,185,129,0.55); }
+.adm-snippet-label { color: #64748b; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; margin-top: 16px; }
+body.dark-mode .adm-snippet-label { color: #94a3b8; }
 .adm-snippet-label:first-child { margin-top: 0; }
+
+.adm-role-form { display: flex; align-items: center; gap: 6px; margin: 0; }
+.adm-role-form select {
+    font-size: 12px; padding: 4px 8px; border-radius: 7px;
+    border: 1px solid rgba(15,23,42,0.18); background: #fff; color: #0f172a; max-width: 170px;
+}
+body.dark-mode .adm-role-form select { background: #1e293b; color: #f1f5f9; border-color: rgba(148,163,184,0.30); }
+.adm-role-save {
+    font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 7px; cursor: pointer;
+    border: 1px solid rgba(0,70,173,0.40); color: #1e40af;
+    background: linear-gradient(135deg, rgba(0,70,173,0.10), rgba(99,102,241,0.12));
+}
+.adm-role-save:hover { background: linear-gradient(135deg, rgba(0,70,173,0.20), rgba(99,102,241,0.22)); }
+body.dark-mode .adm-role-save { color: #c7d2fe; }
+.cap-pill { display:inline-block; margin: 2px 3px 0 0; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 600;
+    background: rgba(16,185,129,0.12); color: #047857; border: 1px solid rgba(16,185,129,0.30); }
+body.dark-mode .cap-pill { color: #6ee7b7; }
+.cap-none { font-size: 11px; color: #94a3b8; font-style: italic; }
+.cap-toggle { display: inline-block; margin: 2px 3px 0 0; }
+.cap-chip { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 999px; cursor: pointer; border: 1px solid; }
+.cap-role  { background: rgba(16,185,129,0.12); color: #047857; border-color: rgba(16,185,129,0.30); cursor: default; }
+.cap-extra { background: rgba(99,102,241,0.16); color: #4338ca; border-color: rgba(99,102,241,0.45); }
+.cap-extra:hover { background: rgba(239,68,68,0.16); color: #b91c1c; border-color: rgba(239,68,68,0.45); }
+.cap-off   { background: transparent; color: #94a3b8; border-color: rgba(148,163,184,0.40); border-style: dashed; }
+.cap-off:hover { background: rgba(99,102,241,0.12); color: #4338ca; border-color: rgba(99,102,241,0.45); border-style: solid; }
+body.dark-mode .cap-role  { color: #6ee7b7; }
+body.dark-mode .cap-extra { color: #c7d2fe; }
+body.dark-mode .cap-off   { color: #94a3b8; }
+.req-hint { font-size: 11px; color: #a16207; margin-top: 3px; }
+body.dark-mode .req-hint { color: #fde047; }
+.adm-flash { background: rgba(0,70,173,0.08); border: 1px solid rgba(0,70,173,0.25); color: #1e40af;
+    border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; font-size: 13px; font-weight: 600; }
+body.dark-mode .adm-flash { color: #c7d2fe; background: rgba(99,102,241,0.12); border-color: rgba(99,102,241,0.32); }
+.cap-legend { font-size: 12px; color: #475569; margin-top: 4px; line-height: 1.6; }
+body.dark-mode .cap-legend { color: #94a3b8; }
+.cap-legend code { background: rgba(99,102,241,0.12); padding: 1px 5px; border-radius: 5px; }
+
+/* Pending managed-role approvals */
+.adm-pending {
+    border: 1px solid rgba(234,179,8,0.45);
+    background: linear-gradient(135deg, rgba(234,179,8,0.10), rgba(245,158,11,0.06));
+    border-radius: 14px; padding: 16px 20px; margin-bottom: 18px;
+    box-shadow: 0 10px 26px rgba(234,179,8,0.16);
+}
+body.dark-mode .adm-pending { background: linear-gradient(135deg, rgba(234,179,8,0.12), rgba(120,53,15,0.18)); border-color: rgba(234,179,8,0.38); }
+.adm-pending h3 { margin: 0 0 6px; font-size: 16px; font-weight: 700; color: #a16207; display: flex; align-items: center; gap: 8px; }
+body.dark-mode .adm-pending h3 { color: #fde047; }
+.adm-pending p { margin: 0; font-size: 13px; color: #854d0e; line-height: 1.5; }
+body.dark-mode .adm-pending p { color: #fcd34d; }
+.adm-pending-badge {
+    display: inline-block; min-width: 22px; text-align: center; padding: 2px 9px; border-radius: 999px;
+    font-size: 12px; font-weight: 800; background: #f59e0b; color: #1f2937; border: 1px solid rgba(180,83,9,0.5);
+}
+.adm-pending-actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+.adm-filter-btn {
+    font-size: 12px; font-weight: 600; padding: 6px 14px; border-radius: 8px; cursor: pointer;
+    border: 1px solid rgba(180,83,9,0.45); color: #92400e;
+    background: linear-gradient(135deg, rgba(245,158,11,0.16), rgba(234,179,8,0.18));
+}
+.adm-filter-btn:hover { background: linear-gradient(135deg, rgba(245,158,11,0.28), rgba(234,179,8,0.30)); }
+.adm-filter-btn.active { background: #f59e0b; color: #1f2937; border-color: rgba(180,83,9,0.6); }
+body.dark-mode .adm-filter-btn { color: #fde047; }
+body.dark-mode .adm-filter-btn.active { color: #1f2937; }
+tr.row-pending td { background: rgba(234,179,8,0.08) !important; }
+body.dark-mode tr.row-pending td { background: rgba(234,179,8,0.10) !important; }
+.adm-table tr.row-pending td:first-child { box-shadow: inset 4px 0 0 #f59e0b; }
+.pending-tag {
+    display: inline-block; margin-top: 4px; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px;
+    background: rgba(245,158,11,0.18); color: #92400e; border: 1px solid rgba(180,83,9,0.40);
+}
+body.dark-mode .pending-tag { color: #fde047; background: rgba(234,179,8,0.14); }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="adm-wrap">
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        {% for m in messages %}<div class="adm-flash">{{ m }}</div>{% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% if pending_count %}
+    <div class="adm-pending" id="pending-banner">
+        <h3>⏳ Pending role approvals <span class="adm-pending-badge">{{ pending_count }}</span></h3>
+        <p>{{ pending_count }} signup{{ 's' if pending_count != 1 else '' }} requested a <strong>managed</strong> (capability-bearing) role and {{ 'are' if pending_count != 1 else 'is' }} parked at the open default until you approve. Review the highlighted row{{ 's' if pending_count != 1 else '' }} below — set the role to promote, or leave them on the open role.</p>
+        <div class="adm-pending-actions">
+            <button type="button" class="adm-filter-btn" id="filter-pending" data-active="0">Show only pending</button>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="adm-card" style="margin-bottom: 18px;">
+        <h2>🔐 Roles &amp; capabilities</h2>
+        <p>Sensitive actions are gated by capability. Reading any page is open to every verified user — only the high-blast-radius <em>actions</em> below require the matching capability. Capabilities come from a user's role, or you can grant one to an individual on request via the capability chips in each row (a dashed <span class="cap-chip cap-off">+ cap</span> grants it; a solid <span class="cap-chip cap-extra">cap ✓</span> revokes it; <span class="cap-chip cap-role">cap · role</span> comes from the role). <strong>data.destructive is admin-only by default</strong> — no standard role confers it; grant it per-user when asked. The role a user picked at signup shows only as a non-binding <em>requested</em> hint.</p>
+        <div class="cap-legend">
+            {% for cap, desc in capability_descriptions.items() %}
+            <div><code>{{ cap }}</code> — {{ desc }}</div>
+            {% endfor %}
+            <div style="margin-top:8px;">Role grants:
+            {% for role, caps in role_capabilities.items() %}<span class="adm-pill pill-muted" style="margin:2px 4px 0 0;">{{ role }}: {{ caps|join(', ') if caps else 'view only' }}</span>{% endfor %}<span class="adm-pill pill-admin" style="margin:2px 4px 0 0;">admin: all</span></div>
+        </div>
+    </div>
+
     <div class="adm-card" style="margin-bottom: 18px;">
         <h2>Onboarding snippets</h2>
         <p>Copy-paste these to onboard a new user to the public MCP endpoint. One PAT (minted at <a href="/account">/account</a>) works for both the local-LLM CCR shim and the public MCP endpoint. The first three variants reuse the <code>ANTHROPIC_AUTH_TOKEN</code> the user has already exported for Claude Code, so they don't have to paste the token a second time — pick the one that matches their shell. Fall back to the literal-PAT variant if they haven't set up Claude Code yet.</p>
@@ -57,6 +219,8 @@
                 <tr>
                     <th>Email</th>
                     <th>Role</th>
+                    <th>Access reason</th>
+                    <th>Traffic log</th>
                     <th>Verified</th>
                     <th>Registered</th>
                     <th>Has PAT</th>
@@ -67,11 +231,66 @@
             </thead>
             <tbody>
                 {% for u in users %}
-                <tr>
-                    <td>{{ u.email }}</td>
+                <tr {% if u.pending_managed %}class="row-pending" data-pending="1"{% endif %}>
                     <td>
-                        {% if u.is_admin %}<span class="adm-pill pill-admin">{{ u.role_label }}</span>
-                        {% else %}{{ u.role_label }}{% endif %}
+                        {{ u.email }}
+                        {% if u.pending_managed %}<div class="pending-tag" title="Requested a managed role — promote to grant it">⏳ wants {{ u.requested_role_label }}</div>{% endif %}
+                    </td>
+                    <td>
+                        {% if u.env_admin %}
+                        <span class="adm-pill pill-admin">{{ u.role_label }}</span>
+                        <div class="req-hint" style="color:#64748b;">🔒 locked (AUTH_ADMIN_EMAILS)</div>
+                        {% else %}
+                        <form class="adm-role-form" method="post" action="/admin-users/{{ u.id }}/role">
+                            <select name="role">
+                                {% for key, label in assignable_roles %}
+                                <option value="{{ key }}" {% if key == u.role %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit" class="adm-role-save">Save</button>
+                        </form>
+                        {% if u.role_differs %}<div class="req-hint">requested: {{ u.requested_role_label }}</div>{% endif %}
+                        {% endif %}
+                        <div style="margin-top:6px;">
+                            {% if u.env_admin %}
+                            <span class="cap-chip cap-role">all capabilities</span>
+                            {% else %}
+                            {% for cap in all_capabilities %}
+                                {% if cap in u.role_caps %}
+                                <span class="cap-chip cap-role" title="granted by role — change the role to remove">{{ cap }} · role</span>
+                                {% elif cap in u.extra_caps %}
+                                <form class="cap-toggle" method="post" action="/admin-users/{{ u.id }}/capability">
+                                    <input type="hidden" name="capability" value="{{ cap }}">
+                                    <input type="hidden" name="action" value="revoke">
+                                    <button type="submit" class="cap-chip cap-extra" title="granted to this user — click to revoke">{{ cap }} ✓</button>
+                                </form>
+                                {% else %}
+                                <form class="cap-toggle" method="post" action="/admin-users/{{ u.id }}/capability">
+                                    <input type="hidden" name="capability" value="{{ cap }}">
+                                    <input type="hidden" name="action" value="grant">
+                                    <button type="submit" class="cap-chip cap-off" title="grant this capability to this user">+ {{ cap }}</button>
+                                </form>
+                                {% endif %}
+                            {% endfor %}
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        {% if u.access_reason %}<div class="adm-reason">{{ u.access_reason }}</div>
+                        {% else %}<span class="adm-dim">—</span>{% endif %}
+                    </td>
+                    <td>
+                        <form method="post" action="/admin-users/{{ u.id }}/traffic-log" style="margin:0;">
+                            {% if u.exclude_from_traffic_log %}
+                            <input type="hidden" name="exclude" value="0">
+                            <button type="submit" class="adm-pill pill-warn" style="border:none;cursor:pointer;"
+                                    title="Excluded from the activity log — click to start logging this user">Excluded</button>
+                            {% else %}
+                            <input type="hidden" name="exclude" value="1">
+                            <button type="submit" class="adm-pill pill-muted" style="border:none;cursor:pointer;"
+                                    title="Logged in the activity log — click to exclude this user">Logged</button>
+                            {% endif %}
+                        </form>
                     </td>
                     <td>
                         {% if u.email_verified %}<span class="adm-pill pill-ok">Yes</span>
@@ -113,5 +332,19 @@ document.querySelectorAll('.adm-copy').forEach(btn => {
         }
     });
 });
+
+// Toggle: show only rows pending a managed-role approval.
+const filterBtn = document.getElementById('filter-pending');
+if (filterBtn) {
+    filterBtn.addEventListener('click', () => {
+        const on = filterBtn.dataset.active === '1';
+        filterBtn.dataset.active = on ? '0' : '1';
+        filterBtn.classList.toggle('active', !on);
+        filterBtn.textContent = on ? 'Show only pending' : 'Show all users';
+        document.querySelectorAll('.adm-table tbody tr').forEach(tr => {
+            tr.style.display = (!on && tr.dataset.pending !== '1') ? 'none' : '';
+        });
+    });
+}
 </script>
 {% endblock %}

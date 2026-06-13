@@ -1,0 +1,180 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'SOC-in-a-Box — Analyze' %}
+{% set page_title_left_icon = '🧪' %}
+{% set page_title_right_icon = '🛰️' %}
+
+{% block extra_css %}
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --soc-bg-0:#05080f; --soc-bg-1:#0a1020;
+  --soc-panel:rgba(17,27,49,0.55); --soc-panel-2:rgba(9,15,28,0.85);
+  --soc-line:rgba(120,160,255,0.14); --soc-line-2:rgba(120,160,255,0.30);
+  --soc-text:#e8eefb; --soc-dim:#9db0d3; --soc-faint:#6478a0;
+  --soc-cyan:#34e3f0; --soc-emerald:#37e0a0; --soc-blue:#5b8dff;
+  --soc-red:#ff6b7d;
+  --soc-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --soc-disp:'Chakra Petch',system-ui,sans-serif;
+  --soc-body:'IBM Plex Sans',system-ui,sans-serif;
+}
+body {
+  background:
+    radial-gradient(1000px 500px at 15% -10%, rgba(52,227,240,0.10), transparent 60%),
+    radial-gradient(880px 480px at 90% 0%, rgba(55,224,160,0.08), transparent 58%),
+    linear-gradient(180deg, var(--soc-bg-1) 0%, var(--soc-bg-0) 100%);
+  background-attachment: fixed;
+}
+body::before {
+  content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+  background-image:
+    linear-gradient(rgba(120,160,255,0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120,160,255,0.045) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, #000 40%, transparent 100%);
+}
+
+.sa-container { position:relative; z-index:1; flex:1 1 auto; min-width:0; max-width:1000px;
+  margin:24px auto 90px; padding:0 22px; color:var(--soc-text); font-family:var(--soc-body); }
+
+.sa-back { display:inline-flex; align-items:center; gap:6px; margin-bottom:16px;
+  font-family:var(--soc-mono); font-size:0.8rem; color:var(--soc-dim); text-decoration:none;
+  transition:color .12s ease; }
+.sa-back:hover { color:var(--soc-cyan); }
+
+/* hero */
+.sa-hero { position:relative; overflow:hidden; border-radius:20px; padding:30px 34px; margin-bottom:22px;
+  color:#fff;
+  background:
+    radial-gradient(820px 280px at 0% 0%, rgba(52,227,240,0.26), transparent 55%),
+    linear-gradient(125deg, #06223f 0%, #0a2d63 44%, #06402f 100%);
+  border:1px solid rgba(120,180,255,0.22);
+  box-shadow:0 22px 60px rgba(2,12,30,0.6), 0 0 0 1px rgba(120,180,255,0.08) inset; }
+.sa-hero::after { content:''; position:absolute; right:-80px; top:-90px; width:300px; height:300px;
+  border-radius:50%; background:radial-gradient(circle, rgba(55,224,160,0.30), transparent 68%); filter:blur(6px); }
+.sa-hero > * { position:relative; z-index:1; }
+.sa-hero h1 { margin:0 0 8px; font-family:var(--soc-disp); font-size:1.7rem; font-weight:700;
+  text-shadow:0 2px 20px rgba(0,0,0,0.5); }
+.sa-hero p { margin:0; font-size:0.98rem; line-height:1.6; max-width:780px; color:rgba(232,240,255,0.9); }
+
+/* card */
+.sa-card { position:relative; border-radius:18px; padding:24px 26px;
+  background:var(--soc-panel); backdrop-filter:blur(14px) saturate(125%);
+  -webkit-backdrop-filter:blur(14px) saturate(125%);
+  border:1px solid var(--soc-line);
+  box-shadow:0 1px 0 rgba(255,255,255,0.04) inset, 0 22px 50px rgba(0,0,0,0.5); }
+.sa-card::before { content:''; position:absolute; left:24px; right:24px; top:0; height:2px;
+  background:linear-gradient(90deg, transparent, var(--soc-cyan), var(--soc-emerald), transparent); opacity:.7; }
+
+.sa-row { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
+.sa-field { flex:1 1 200px; }
+.sa-field label { display:block; font-family:var(--soc-mono); font-size:0.72rem; font-weight:500;
+  text-transform:uppercase; letter-spacing:0.1em; color:var(--soc-dim); margin-bottom:7px; }
+.sa-field label span { color:var(--soc-faint); }
+.sa-field input, .sa-field select, .sa-field textarea {
+  width:100%; box-sizing:border-box; border:1px solid var(--soc-line-2); border-radius:10px;
+  padding:10px 12px; font-size:0.92rem; font-family:var(--soc-body); color:var(--soc-text);
+  background:var(--soc-panel-2); transition:border-color .14s ease, box-shadow .14s ease; }
+.sa-field input::placeholder, .sa-field textarea::placeholder { color:var(--soc-faint); }
+.sa-field input:focus, .sa-field select:focus, .sa-field textarea:focus {
+  outline:none; border-color:var(--soc-cyan); box-shadow:0 0 0 3px rgba(52,227,240,0.16); }
+.sa-field select option { background:#0a1020; color:var(--soc-text); }
+
+/* terminal textarea */
+.sa-field textarea { min-height:250px; resize:vertical; line-height:1.55;
+  font-family:var(--soc-mono); font-size:0.84rem; caret-color:var(--soc-cyan);
+  background:
+    linear-gradient(var(--soc-panel-2), var(--soc-panel-2)) padding-box,
+    radial-gradient(600px 120px at 0% 0%, rgba(52,227,240,0.06), transparent 70%) border-box; }
+
+/* sample chips */
+.sa-samples { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:16px; }
+.sa-samples button { border:1px solid var(--soc-line-2); background:rgba(120,160,255,0.07);
+  color:var(--soc-dim); border-radius:999px; padding:7px 15px; font-family:var(--soc-mono);
+  font-size:0.78rem; cursor:pointer; transition:all .14s ease; }
+.sa-samples button:hover { background:rgba(52,227,240,0.14); border-color:var(--soc-cyan); color:#fff;
+  box-shadow:0 6px 16px rgba(52,227,240,0.22); }
+
+/* submit */
+.sa-submit { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+.sa-submit button { background:linear-gradient(135deg, var(--soc-cyan), var(--soc-emerald)); color:#04130c;
+  border:none; border-radius:12px; padding:12px 24px; font-family:var(--soc-disp); font-size:0.96rem;
+  font-weight:700; letter-spacing:0.01em; cursor:pointer; box-shadow:0 10px 26px rgba(52,227,240,0.3);
+  transition:transform .12s ease, box-shadow .12s ease; }
+.sa-submit button:hover { transform:translateY(-2px); box-shadow:0 16px 36px rgba(52,227,240,0.5); }
+.sa-note { font-family:var(--soc-mono); font-size:0.78rem; color:var(--soc-faint); }
+.sa-note.inline { align-self:center; }
+
+.sa-error { background:rgba(255,107,125,0.10); border:1px solid rgba(255,107,125,0.4); border-left-width:3px;
+  color:#ffb3bd; border-radius:11px; padding:12px 16px; margin-bottom:18px; font-size:0.9rem; }
+
+@keyframes soc-rise { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+.sa-hero { animation:soc-rise .5s cubic-bezier(.2,.7,.2,1) both; }
+.sa-card { animation:soc-rise .5s cubic-bezier(.2,.7,.2,1) both; animation-delay:.1s; }
+@media (prefers-reduced-motion: reduce) { .sa-hero, .sa-card { animation:none; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="sa-container">
+  <a class="sa-back" href="/soc-in-a-box">← SOC-in-a-Box dashboard</a>
+
+  <div class="sa-hero">
+    <h1>🧪 Give the SOC something to analyze</h1>
+    <p>Paste a suspicious email or a raw log/alert. It runs through the real Tier-1 triage
+       LLM — IOCs in the text get live VirusTotal / AbuseIPDB lookups — and the verdict
+       cascades through Tier 2 → IR Lead → Threat Intel, exactly like a production alert.
+       This is a sandbox: nothing touches a real ticket, and you can wipe it afterward.</p>
+  </div>
+
+  {% if error %}<div class="sa-error">⚠️ {{ error }}</div>{% endif %}
+
+  <form class="sa-card" method="post" action="/soc-in-a-box/analyze">
+    <div class="sa-samples">
+      <span class="sa-note inline">Load a sample:</span>
+      <button type="button" onclick="loadSample('phishing')">📧 Phishing email</button>
+      <button type="button" onclick="loadSample('endpoint')">💻 Endpoint detection</button>
+    </div>
+
+    <div class="sa-field" style="margin-bottom:16px;">
+      <label for="text">Email or log to analyze</label>
+      <textarea id="text" name="text" placeholder="Paste the raw email (headers + body) or a log / alert here…">{{ request.form.get('text', '') }}</textarea>
+    </div>
+
+    <div class="sa-row">
+      <div class="sa-field">
+        <label for="kind">Input type</label>
+        <select id="kind" name="kind">
+          <option value="auto">Auto-detect</option>
+          <option value="phishing">Phishing email</option>
+          <option value="malware">Malware</option>
+          <option value="suspicious">Suspicious activity</option>
+          <option value="other">Other / generic alert</option>
+        </select>
+      </div>
+      <div class="sa-field">
+        <label for="hostname">Hostname <span>(optional)</span></label>
+        <input id="hostname" name="hostname" placeholder="e.g. FIN-WKS-2291">
+      </div>
+      <div class="sa-field">
+        <label for="username">Username <span>(optional)</span></label>
+        <input id="username" name="username" placeholder="e.g. m.alvarez">
+      </div>
+    </div>
+
+    <div class="sa-submit">
+      <button type="submit">🚀 Analyze &amp; watch the SOC</button>
+      <span class="sa-note">Triage takes ~30–90s. You'll be taken to the live timeline for this run.</span>
+    </div>
+  </form>
+</div>
+
+<script>
+  const SAMPLES = {{ samples | tojson }};
+  const SAMPLE_KIND = { phishing: 'phishing', endpoint: 'suspicious' };
+  function loadSample(key) {
+    document.getElementById('text').value = SAMPLES[key] || '';
+    const kind = SAMPLE_KIND[key];
+    if (kind) document.getElementById('kind').value = kind;
+  }
+</script>
+{% endblock %}

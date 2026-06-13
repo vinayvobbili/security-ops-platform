@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """Periodic keepalive ping for the active vllm-mlx analysis LLM on studio1.
 
-Pings whichever of port 8002 (GLM) or 8003 (Coder) is currently serving an
-analysis model. Sends a 1-token chat completion every 30s to keep the Apple
-Silicon GPU clocks + Metal kernel cache + VM page-activity hot, so the first
-real request after an idle gap doesn't pay the cold-start tax (~1 tok/s vs
-warm ~35 tok/s).
+Pings port 8003 (Coder, the only active analysis model right now) and 8005 (small router model).
+Sends a 1-token chat completion every 30s to keep the Apple Silicon GPU clocks + Metal kernel cache + VM page-activity hot,
+so the first real request after an idle gap doesn't pay the cold-start tax (~1 tok/s vs warm ~35 tok/s).
 
-The rule: only one of the two analysis services should be running at a time
-(per the studio1 one-analysis-model rule). This script just pings whatever it
-finds and is quiet about the rest.
+HTTP_TIMEOUT_S must be larger than the cold-start latency of the biggest model being warmed,
+including the WORST case: a deeply-idle overnight model whose 30 GB has been swapped out and Metal state torn down.
+A daytime warm-ish cold ping is ~30-40s, but a fully deep-cold overnight first forward pass can exceed 90s.
+If the timeout fires before that completes, the client disconnects and the server's disconnect_guard cancels the in-flight prefill,
+so the model is never actually warmed — the next ping hits an equally-cold model and the loop never recovers (observed all night 2026-05-30).
+180s clears even the deep-cold case with headroom; once one warm-up completes the 30s cadence keeps it hot and pings drop to <1s.
 
 Install on studio1:
   cp deployment/vllm_keepalive.py /Users/labuser/vllm_keepalive.py
@@ -29,9 +30,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger("keepalive")
 
 API_KEY = "703ccba9163393f769228e0c3d1b809b6897fa9b4a50972d"
-ANALYSIS_PORTS = [8002, 8003]  # 8002=GLM, 8003=Coder
+ANALYSIS_PORTS = [8003, 8005]  # 8003=Coder (30B, real analysis), 8005=Router (Qwen3-4B, tiny tool-routing model). 8002 GLM stood down 2026-05-07.
 INTERVAL_S = 30
-HTTP_TIMEOUT_S = 10
+HTTP_TIMEOUT_S = 180  # Must clear a fully deep-cold overnight first forward pass (>90s observed), or disconnect_guard cancels the warm-up and the model never recovers. See module docstring.
 
 
 def http_json(url, body=None, method="GET"):

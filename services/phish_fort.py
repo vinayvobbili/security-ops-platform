@@ -156,6 +156,59 @@ def contact_phishfort_api(status: str) -> Optional[Dict]:
         return None
 
 
+def sync_phishfort_statuses() -> Dict:
+    """Pull current PhishFort incident statuses and reconcile them into the
+    domain-monitoring findings ledger, so the leadership report shows where each
+    takedown actually stands (and can compute time-to-takedown).
+
+    Matches incidents to ledger rows by the stored PhishFort incident id. Queries
+    the known active statuses plus the candidate 'done' statuses; any status the
+    API actually returns is logged so the done-set can be tuned to reality.
+
+    Returns a summary dict: {ok, checked, updated, completed, statuses_seen}.
+    """
+    from src.components.domain_monitoring.findings_ledger import (
+        findings_with_incident, set_takedown_status, TAKEDOWN_DONE_STATUSES,
+    )
+
+    if not PHISHFORT_API_KEY:
+        logger.warning("sync_phishfort_statuses: no API key configured, skipping")
+        return {"ok": False, "error": "no_api_key"}
+
+    tracked = findings_with_incident()
+    if not tracked:
+        return {"ok": True, "checked": 0, "updated": 0, "completed": 0, "statuses_seen": {}}
+
+    # id -> live status, gathered across every status bucket we know to ask for.
+    id_to_status: Dict[str, str] = {}
+    statuses_seen: Dict[str, int] = {}
+    sync_statuses = list(dict.fromkeys(INCIDENT_STATUSES + sorted(TAKEDOWN_DONE_STATUSES)))
+    for status in sync_statuses:
+        result = contact_phishfort_api(status)
+        for inc in ((result or {}).get("data") or []):
+            inc_id = str(inc.get("id") or "").strip()
+            live = (inc.get("status") or status or "").strip()
+            if inc_id:
+                id_to_status[inc_id] = live
+                statuses_seen[live] = statuses_seen.get(live, 0) + 1
+
+    updated = completed = 0
+    for f in tracked:
+        inc_id = str(f.get("phishfort_incident_id") or "").strip()
+        live = id_to_status.get(inc_id)
+        if not live:
+            continue
+        set_takedown_status(f["domain"], live)
+        updated += 1
+        if live.lower() in TAKEDOWN_DONE_STATUSES and not f.get("takedown_completed_at"):
+            completed += 1
+
+    logger.info(f"PhishFort status sync: {len(tracked)} tracked, {updated} updated, "
+                f"{completed} newly completed; statuses seen: {statuses_seen}")
+    return {"ok": True, "checked": len(tracked), "updated": updated,
+            "completed": completed, "statuses_seen": statuses_seen}
+
+
 def send_webex_notification_in_batches(message: str, batch_size: int = WEBEX_MESSAGE_BATCH_SIZE, room_id=CONFIG.webex_room_id_dev_test_space) -> None:
     """
     Send a large Webex message in batches if it exceeds the size limit.
@@ -504,6 +557,145 @@ def fetch_and_report_incidents(room_id: str = None) -> None:
             )
         except Exception as e_notify:
             logger.critical(f"Error during error notification: {e_notify}", exc_info=True)
+
+
+def _notify_domain_monitoring_room(message: str) -> bool:
+    """Post a takedown notification to the Domain Monitoring Webex room.
+
+    Uses the Toodles bot (the same bot that posts the daily domain-monitoring
+    summary, so it is already a member of that room). Off-prod the notification
+    is routed to the dev test space so the dev twin can be exercised without
+    putting test traffic in the real Domain Monitoring room.
+    """
+    if CONFIG.is_production:
+        room_id = CONFIG.webex_room_id_domain_monitoring
+    else:
+        room_id = CONFIG.webex_room_id_dev_test_space or CONFIG.webex_room_id_domain_monitoring
+    if not room_id:
+        logger.warning("No Webex room configured; skipping takedown notification")
+        return False
+    try:
+        notify_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_toodles)
+        notify_api.messages.create(roomId=room_id, markdown=message)
+        logger.info("Posted takedown notification to Domain Monitoring room")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to post takedown notification to Domain Monitoring room: {e}")
+        return False
+
+
+def submit_takedown(
+    domain: str,
+    url: Optional[str] = None,
+    reason: Optional[str] = None,
+    submitted_by: Optional[str] = None,
+    rf_risk_score: Optional[int] = None,
+    evidence: Optional[str] = None,
+) -> Dict:
+    """Request a takedown for a malicious domain.
+
+    Two effects:
+      1. Notifies the Domain Monitoring Webex room so the team has a record and
+         can track the request (always attempted).
+      2. Creates a PhishFort incident via the CAPI so the takedown is actioned
+         by our managed vendor. The external write is **disabled on non-prod**
+         (mirrors every other outbound action on the dev twin) — in dev we only
+         post the Webex notification.
+
+    Args:
+        domain: The malicious domain.
+        url: Optional full malicious URL (defaults to https://<domain>).
+        reason: Optional analyst-supplied justification.
+        submitted_by: Email/name of the requesting analyst (for the audit trail).
+        rf_risk_score: Optional Recorded Future risk score, for the notification.
+
+    Returns:
+        Dict with ``ok``, ``phishfort`` (incident id / status), and ``notified``.
+    """
+    domain = (domain or "").strip().lower()
+    if not domain:
+        return {"ok": False, "error": "domain is required"}
+
+    target_url = (url or f"https://{domain}").strip()
+    requester = submitted_by or "unknown analyst"
+    result: Dict = {"ok": False, "domain": domain, "notified": False, "phishfort": None}
+
+    # 1) PhishFort incident — external write, hard-disabled off prod.
+    if not CONFIG.is_production:
+        result["phishfort"] = "disabled_in_dev"
+        logger.info(f"PhishFort incident creation skipped for {domain} (non-prod instance)")
+    elif not PHISHFORT_API_KEY:
+        result["phishfort"] = "no_api_key"
+        logger.warning("PhishFort API key not configured; cannot create takedown incident")
+    else:
+        # Build the customer-side reference/notes from the analyst reason + the
+        # weaponization evidence so the takedown vendor gets our justification.
+        note_parts = [p for p in (reason, evidence) if p]
+        reference = "\n\n".join(note_parts).strip() or None
+        headers = {
+            "accept": "application/json",
+            "content-type": "application/json",
+            "x-api-key": PHISHFORT_API_KEY,
+        }
+        minimal_payload = {"url": target_url, "incidentType": "phishing"}
+        # `reference` is a free-text customer field; if the CAPI rejects the
+        # enriched payload (unknown field / validation), fall back to the minimal
+        # one so the takedown still goes through with evidence at least in Webex.
+        payload = dict(minimal_payload, reference=reference) if reference else dict(minimal_payload)
+        try:
+            try:
+                resp = requests.post(PHISHFORT_API_URL, json=payload, headers=headers, timeout=30)
+                resp.raise_for_status()
+            except HTTPError as e:
+                code = getattr(e.response, "status_code", None)
+                if reference and code in (400, 422):
+                    logger.warning(f"PhishFort rejected enriched takedown for {domain} "
+                                   f"(HTTP {code}); retrying with minimal payload")
+                    resp = requests.post(PHISHFORT_API_URL, json=minimal_payload, headers=headers, timeout=30)
+                    resp.raise_for_status()
+                    result["evidence_in_incident"] = False
+                else:
+                    raise
+            else:
+                result["evidence_in_incident"] = bool(reference)
+            body = resp.json() if resp.content else {}
+            incident_id = (body.get("data") or body).get("id") if isinstance(body, dict) else None
+            result["phishfort"] = {"status": "created", "incident_id": incident_id}
+            logger.info(f"PhishFort takedown incident created for {domain} (id={incident_id})")
+        except HTTPError as e:
+            logger.error(f"PhishFort takedown HTTP error for {domain}: {e} — {getattr(e.response, 'text', '')}")
+            result["phishfort"] = {"status": "error", "detail": str(e)}
+        except (RequestException, ValueError) as e:
+            logger.error(f"PhishFort takedown request failed for {domain}: {e}")
+            result["phishfort"] = {"status": "error", "detail": str(e)}
+
+    # 2) Webex notification — always attempted so the team has visibility.
+    pf = result["phishfort"]
+    if isinstance(pf, dict) and pf.get("status") == "created":
+        pf_line = f"🟢 PhishFort incident created (id: `{pf.get('incident_id') or 'n/a'}`)"
+    elif pf == "disabled_in_dev":
+        pf_line = "🧪 PhishFort submission skipped (dev instance — no external write)"
+    elif pf == "no_api_key":
+        pf_line = "⚠️ PhishFort not configured — please submit manually"
+    else:
+        pf_line = "🔴 PhishFort submission failed — please submit manually"
+
+    score_line = f"\n- **RF Risk Score:** {rf_risk_score}" if rf_risk_score is not None else ""
+    reason_line = f"\n- **Reason:** {reason}" if reason else ""
+    evidence_block = f"\n\n**Evidence:**\n{evidence}" if evidence else ""
+    message = (
+        f"🚫 **Takedown Requested** 🚫\n\n"
+        f"- **Domain:** `{domain}`\n"
+        f"- **URL:** {target_url}\n"
+        f"- **Requested by:** {requester}{score_line}{reason_line}\n"
+        f"- {pf_line}"
+        f"{evidence_block}\n\n"
+        f"_Submitted from the Domain Monitoring dashboard._"
+    )
+    result["notified"] = _notify_domain_monitoring_room(message)
+
+    result["ok"] = result["notified"] or (isinstance(pf, dict) and pf.get("status") == "created")
+    return result
 
 
 def main():

@@ -47,6 +47,7 @@ BENIGN_DOMAINS = {
     'mcafee.com', 'trellix.com',
     'fireeye.com',
     'elastic.co', 'elastic.github.io',
+    'proxy.com',
     'proofpoint.com',
     'checkpoint.com', 'research.checkpoint.com',
     'recordedfuture.com',
@@ -140,6 +141,7 @@ class ExtractedEntities:
     threat_actors_enriched: List[ThreatActorInfo] = field(default_factory=list)  # With alias info
     malware_families: List[str] = field(default_factory=list)  # Malware tools/families
     mitre_techniques: List[str] = field(default_factory=list)  # MITRE ATT&CK technique IDs
+    packages: List[str] = field(default_factory=list)  # OSS package refs (purl / name@version)
 
     def is_empty(self) -> bool:
         """Check if no entities were extracted."""
@@ -155,7 +157,8 @@ class ExtractedEntities:
             not self.emails and
             not self.threat_actors and
             not self.malware_families and
-            not self.mitre_techniques
+            not self.mitre_techniques and
+            not self.packages
         )
 
     def to_dict(self) -> dict:
@@ -180,6 +183,7 @@ class ExtractedEntities:
             ],
             'malware_families': self.malware_families,
             'mitre_techniques': self.mitre_techniques,
+            'packages': self.packages,
         }
 
     def summary(self) -> str:
@@ -206,6 +210,8 @@ class ExtractedEntities:
             parts.append(f"{len(self.malware_families)} malware families")
         if self.mitre_techniques:
             parts.append(f"{len(self.mitre_techniques)} MITRE techniques")
+        if self.packages:
+            parts.append(f"{len(self.packages)} packages")
         return ", ".join(parts) if parts else "No entities found"
 
 
@@ -800,6 +806,44 @@ def load_apt_alias_index() -> dict:
         return {}
 
 
+# Open-source package references for Veracode SCA package-name lookups.
+# A purl (pkg:npm/left-pad@1.3.0) or a "name@version" token. The version must
+# begin with a digit, which keeps emails (user@domain) and social handles
+# (@someone) out without an allow/deny list.
+_PURL_RE = re.compile(r'\bpkg:[a-z][a-z0-9]*/[A-Za-z0-9._@%/+-]+', re.IGNORECASE)
+_PKG_AT_VERSION_RE = re.compile(
+    r'(?<![\w@./:-])(@?[a-z0-9][a-z0-9._-]*(?:/[a-z0-9._-]+)?)@(\d[\w.\-]*)',
+    re.IGNORECASE,
+)
+
+
+def extract_packages(text: str) -> List[str]:
+    """Extract open-source package references (purls + ``name@version`` tokens).
+
+    Conservative by design: a bare word is never treated as a package — only
+    purls and explicit ``name@version`` references are captured (the digit-led
+    version requirement also excludes emails/handles). Returns the matched tokens
+    as written (deduped, order-preserving); normalization happens in the Veracode
+    lookup so the original token can be shown back in results.
+    """
+    if not text:
+        return []
+    out: List[str] = []
+    seen = set()
+
+    def _add(tok: str) -> None:
+        tok = tok.strip().rstrip('.,;:)')
+        if tok and tok.lower() not in seen:
+            out.append(tok)
+            seen.add(tok.lower())
+
+    for tok in _PURL_RE.findall(text):
+        _add(tok)
+    for name, ver in _PKG_AT_VERSION_RE.findall(text):
+        _add(f"{name}@{ver}")
+    return out
+
+
 def extract_entities(text: str, include_apt_database: bool = True) -> ExtractedEntities:
     """
     Extract all entity types from text.
@@ -880,6 +924,7 @@ def extract_entities(text: str, include_apt_database: bool = True) -> ExtractedE
         threat_actors_enriched=threat_actors_enriched,
         malware_families=extract_malware_families(clean_text),
         mitre_techniques=extract_mitre_techniques(clean_text),
+        packages=extract_packages(clean_text),
     )
 
     if not entities.is_empty():

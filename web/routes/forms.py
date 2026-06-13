@@ -7,6 +7,8 @@ from datetime import date, datetime, timedelta
 from flask import Blueprint, abort, jsonify, render_template, request, send_file
 
 from src.utils.logging_utils import log_web_activity, get_client_ip
+from web.auth.helpers import login_required, current_user
+from web.auth.rbac import require_capability, MANAGE_SILENCER
 from src.components.web import (
     msoc_form_handler,
     speak_up_handler,
@@ -98,6 +100,7 @@ def get_approved_testing_entries():
 
 
 @forms_bp.route("/red-team-testing-form")
+@login_required
 @log_web_activity
 def display_red_team_testing_form():
     """Displays the Red Team Testing form."""
@@ -106,6 +109,7 @@ def display_red_team_testing_form():
 
 
 @forms_bp.route("/submit-red-team-testing-form", methods=['POST'])
+@login_required
 @log_web_activity
 def handle_red_team_testing_form_submission():
     """Handles the Red Team Testing form submissions and processes the data."""
@@ -114,7 +118,7 @@ def handle_red_team_testing_form_submission():
             request.form,
             prod_list_handler,
             CONFIG.team_name,
-            COMPANY_EMAIL_DOMAIN,
+            current_user()['email'],
             EASTERN,
             get_client_ip()
         )
@@ -215,6 +219,7 @@ def display_ai_intake_form():
 
 
 @forms_bp.route("/submit-ai-intake", methods=['POST'])
+@login_required
 @log_web_activity
 def handle_ai_intake_submission():
     """Handles AI Project Intake form submissions."""
@@ -242,6 +247,7 @@ def view_ai_intake_submission(submission_id):
 
 
 @forms_bp.route("/ai-intake-submissions/<int:submission_id>/comments", methods=["POST"])
+@login_required
 @log_web_activity
 def add_ai_intake_comment(submission_id):
     """Append a comment to an AI Intake submission and fire a Webex notification."""
@@ -271,6 +277,7 @@ def edit_ai_intake_submission_form(submission_id):
 
 
 @forms_bp.route("/ai-intake-submissions/<int:submission_id>/edit", methods=["POST"])
+@login_required
 @log_web_activity
 def update_ai_intake_submission(submission_id):
     """Updates an existing AI Intake submission and appends any new uploaded documents."""
@@ -293,6 +300,7 @@ def download_ai_intake_document(submission_id, filename):
 
 
 @forms_bp.route("/ai-intake-submissions/<int:submission_id>", methods=["DELETE"])
+@login_required
 @log_web_activity
 def delete_ai_intake_submission(submission_id):
     """Deletes an AI Project Intake submission (password-protected)."""
@@ -322,6 +330,7 @@ def get_ruai_form_config():
 
 
 @forms_bp.route("/api/ruai/upload-screening", methods=['POST'])
+@login_required
 @log_web_activity
 def handle_ruai_upload_submission():
     """Creates an RUAI case from uploaded intake documents (XLSX survey + supporting docs)."""
@@ -332,6 +341,7 @@ def handle_ruai_upload_submission():
 
 
 @forms_bp.route("/submit-ruai-screening", methods=['POST'])
+@login_required
 @log_web_activity
 def handle_ruai_screening_submission():
     """Handles RUAI screening form submissions."""
@@ -357,6 +367,7 @@ def ruai_submitter_view(submission_id):
 
 
 @forms_bp.route("/api/ruai/<int:submission_id>/update", methods=['POST'])
+@login_required
 @log_web_activity
 def ruai_update_submission(submission_id):
     """Submitter updates their answers after seeing AI feedback."""
@@ -372,6 +383,7 @@ def ruai_update_submission(submission_id):
 
 
 @forms_bp.route("/api/ruai/<int:submission_id>/send-for-review", methods=['POST'])
+@login_required
 @log_web_activity
 def ruai_send_for_review(submission_id):
     """Submitter confirms they're done — promote to reviewer queue."""
@@ -401,6 +413,7 @@ def ruai_review_detail(submission_id):
 
 
 @forms_bp.route("/api/ruai/<int:submission_id>/action", methods=['POST'])
+@login_required
 @log_web_activity
 def ruai_reviewer_action(submission_id):
     """Handles reviewer actions (approve, reject, request changes, comment)."""
@@ -439,6 +452,7 @@ def ruai_submission_status(submission_id):
 
 
 @forms_bp.route("/api/ruai/<int:submission_id>/rerun-review", methods=['POST'])
+@login_required
 @log_web_activity
 def ruai_rerun_review(submission_id):
     """Re-triggers the AI review for a submission."""
@@ -459,6 +473,7 @@ def ruai_get_checklist(submission_id):
 
 
 @forms_bp.route("/api/ruai/<int:submission_id>/checklist", methods=['POST'])
+@login_required
 @log_web_activity
 def ruai_save_checklist(submission_id):
     """Saves the reviewer checklist for a submission."""
@@ -498,6 +513,7 @@ def ruai_all_reviews(submission_id):
 
 
 @forms_bp.route("/api/ruai/<int:submission_id>/assign", methods=['POST'])
+@login_required
 @log_web_activity
 def ruai_assign_reviewer(submission_id):
     """Assigns a reviewer to a submission."""
@@ -512,6 +528,7 @@ def ruai_assign_reviewer(submission_id):
 
 
 @forms_bp.route("/api/ruai/<int:submission_id>/unassign", methods=['POST'])
+@login_required
 @log_web_activity
 def ruai_unassign_reviewer(submission_id):
     """Removes a reviewer assignment from a submission."""
@@ -536,6 +553,7 @@ def ruai_docs():
 
 
 @forms_bp.route("/api/ruai-docs/upload", methods=['POST'])
+@login_required
 @log_web_activity
 def ruai_docs_upload():
     """Upload a document to the RUAI reference library."""
@@ -553,6 +571,7 @@ def ruai_docs_upload():
 
 
 @forms_bp.route("/api/ruai-docs/delete", methods=['POST'])
+@login_required
 @log_web_activity
 def ruai_docs_delete():
     """Delete a document from the RUAI reference library."""
@@ -566,6 +585,7 @@ def ruai_docs_delete():
 
 
 @forms_bp.route("/api/ruai-docs/rebuild", methods=['POST'])
+@login_required
 @log_web_activity
 def ruai_docs_rebuild():
     """Rebuild the RUAI docs vector store from all uploaded documents."""
@@ -601,6 +621,7 @@ def ruai_prompts_page():
 
 
 @forms_bp.route("/api/ruai-prompts/<key>/versions", methods=['POST'])
+@login_required
 @log_web_activity
 def ruai_prompts_create_version(key):
     """Append a new version of a prompt. Optionally sets it active."""
@@ -618,6 +639,7 @@ def ruai_prompts_create_version(key):
 
 
 @forms_bp.route("/api/ruai-prompts/<key>/active", methods=['POST'])
+@login_required
 @log_web_activity
 def ruai_prompts_set_active(key):
     """Point the prompt at a specific existing version."""
@@ -632,6 +654,7 @@ def ruai_prompts_set_active(key):
 
 
 @forms_bp.route("/api/ruai-prompts/<key>/versions/<int:version>", methods=['DELETE'])
+@login_required
 @log_web_activity
 def ruai_prompts_delete_version(key, version):
     """Delete a non-active version of a prompt."""
@@ -651,23 +674,22 @@ def display_ticket_cannon():
         'ticket_cannon.html',
         categories=data["categories"],
         fields=data["fields"],
-        expiry_options=data["expiry_options"],
+        field_options=data["field_options"],
     )
 
 
 @forms_bp.route("/api/ticket-cannon/create", methods=['POST'])
+@require_capability(MANAGE_SILENCER)
 @log_web_activity
 def handle_create_silencer():
     """Creates a new silencer or suppressor entry."""
     data = request.get_json(silent=True) or {}
-    if data.get('password') != CONFIG.ticket_cannon_password:
-        return jsonify({'status': 'error', 'message': 'Invalid password'}), 403
     try:
         entry = ticket_cannon_handler.handle_create_silencer(
             data,
             prod_list_handler,
             CONFIG.team_name,
-            submitter_email=get_client_ip(),
+            submitter_email=current_user()["email"],
         )
         return jsonify({'status': 'success', 'silencer': entry})
     except ValueError as val_err:
@@ -676,12 +698,11 @@ def handle_create_silencer():
 
 
 @forms_bp.route("/api/ticket-cannon/<silencer_id>/toggle", methods=['PUT'])
+@require_capability(MANAGE_SILENCER)
 @log_web_activity
 def handle_toggle_silencer(silencer_id):
     """Activates or deactivates an entry."""
     data = request.get_json(silent=True) or {}
-    if data.get('password') != CONFIG.ticket_cannon_password:
-        return jsonify({'status': 'error', 'message': 'Invalid password'}), 403
     active = data.get('active', False)
     category = data.get('category', '')
     result = ticket_cannon_handler.handle_toggle_silencer(
@@ -690,7 +711,7 @@ def handle_toggle_silencer(silencer_id):
         category,
         prod_list_handler,
         CONFIG.team_name,
-        toggled_by=get_client_ip(),
+        toggled_by=current_user()["email"],
     )
     if result is None:
         return jsonify({'status': 'error', 'message': 'Entry not found'}), 404

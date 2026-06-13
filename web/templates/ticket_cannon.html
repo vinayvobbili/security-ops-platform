@@ -2,9 +2,33 @@
 {% set page_title_text = 'Silencers and Suppressors' %}
 {% set page_title_left_icon = '🔇' %}
 {% set page_title_right_icon = '💥' %}
+{% block body_classes %}tc-themed{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/ticket_cannon.css') }}">
+<style>
+  /* ===== Ticket Cannon Silencer theme — Electric Indigo / Cyan ===== */
+  body.tc-themed { background:
+      radial-gradient(1100px 520px at 4% -8%, #dbe0ff 0%, transparent 55%),
+      radial-gradient(1000px 560px at 98% 0%, #d4f1ff 0%, transparent 52%),
+      radial-gradient(1200px 720px at 50% 122%, #e0e7ff 0%, transparent 55%),
+      linear-gradient(160deg, #eef0ff 0%, #ecf9ff 48%, #eef2ff 100%) !important;
+      background-attachment: fixed !important; min-height: 100vh; }
+  body.tc-themed.dark-mode { background:
+      linear-gradient(135deg, #080a1f 0%, #0c1430 50%, #06081a 100%) !important; color: #dde2f5; }
+  html { scrollbar-gutter: stable; }
+  ::-webkit-scrollbar { width: 16px; height: 16px; }
+  ::-webkit-scrollbar-track { border-radius: 10px;
+      background: linear-gradient(180deg, rgba(0,0,0,.04), rgba(0,0,0,.06) 50%, rgba(0,0,0,.04)); }
+  ::-webkit-scrollbar-thumb { border-radius: 10px; border: 2px solid transparent; background-clip: padding-box;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
+      background: linear-gradient(180deg, #4f46e5 0%, #6366f1 22%, #0ea5e9 46%, #22d3ee 70%, #818cf8 100%); }
+  ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, #818cf8 0%, #22d3ee 30%, #0ea5e9 54%, #6366f1 78%, #4f46e5 100%); }
+  ::-webkit-scrollbar-corner { background: transparent; }
+  body.dark-mode ::-webkit-scrollbar-track {
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.10) 50%, rgba(255,255,255,.06)); }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -16,7 +40,9 @@
             <span class="tc-count" id="activeCount"></span>
         </div>
         <div class="tc-toolbar-right">
+            {% if can('manage.silencer') %}
             <button class="tc-btn tc-btn-new" onclick="openNewModal()">+ New Entry</button>
+            {% endif %}
         </div>
     </div>
 
@@ -42,7 +68,7 @@
                             <th>Description</th>
                             <th>Filter Fields</th>
                             <th>Created By</th>
-                            <th>Expiry</th>
+                            <th>Expires (5 PM ET)</th>
                             <th class="tc-th-center">Matches</th>
                             <th class="tc-th-center">Actions</th>
                         </tr>
@@ -57,12 +83,16 @@
                                 {% endfor %}
                             </td>
                             <td>{{ s.created_by }}</td>
-                            <td>{{ s.expiry_date }}</td>
+                            <td>{{ s.expires_display }}</td>
                             <td class="tc-th-center">
                                 <span class="tc-match-count">{{ s.match_count }}</span>
                             </td>
                             <td class="tc-th-center">
+                                {% if can('manage.silencer') %}
                                 <button class="tc-btn tc-btn-deactivate" onclick="toggleEntry('{{ s.id }}', false, '{{ cat_key }}')">Deactivate</button>
+                                {% else %}
+                                <span class="tc-muted">—</span>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}
@@ -90,7 +120,7 @@
                                 <th>Description</th>
                                 <th>Filter Fields</th>
                                 <th>Created By</th>
-                                <th>Expiry</th>
+                                <th>Expires (5 PM ET)</th>
                                 <th class="tc-th-center">Matches</th>
                                 <th class="tc-th-center">Actions</th>
                             </tr>
@@ -105,12 +135,16 @@
                                     {% endfor %}
                                 </td>
                                 <td>{{ s.created_by }}</td>
-                                <td>{{ s.expiry_date }}</td>
+                                <td>{{ s.expires_display }}</td>
                                 <td class="tc-th-center">
                                     <span class="tc-match-count">{{ s.match_count }}</span>
                                 </td>
                                 <td class="tc-th-center">
+                                    {% if current_user %}
                                     <button class="tc-btn tc-btn-activate" onclick="toggleEntry('{{ s.id }}', true, '{{ cat_key }}')">Activate</button>
+                                    {% else %}
+                                    <span class="tc-muted">—</span>
+                                    {% endif %}
                                 </td>
                             </tr>
                             {% endfor %}
@@ -148,29 +182,39 @@
 
                 <!-- Expiry -->
                 <div class="tc-form-group">
-                    <label>Expiry <span class="tc-required">*</span></label>
-                    <select id="silencerExpiry" required>
-                        {% for opt in expiry_options %}
-                        <option value="{{ opt.days }}" {% if opt.days == 1 %}selected{% endif %}>{{ opt.label }}</option>
-                        {% endfor %}
-                    </select>
+                    <label>Expires (5 PM ET) <span class="tc-required">*</span></label>
+                    <input type="date" id="silencerExpiry" required>
+                    <div class="tc-form-hint">Silencer dies at 5 PM ET on the selected date.</div>
                 </div>
 
                 <!-- Field Builder -->
                 <div class="tc-form-group">
                     <label>Filter Fields <span class="tc-required">*</span></label>
+                    <div class="tc-form-hint">Pick a field and paste the exact value from the ticket. All added fields must match (AND) for a ticket to be silenced.</div>
                     <div class="tc-field-builder">
                         <select id="fieldKey" onchange="onFieldKeyChange()">
                             <option value="">-- Select field --</option>
-                            {% for key, label in fields.items() %}
-                            <option value="{{ key }}">{{ label }}</option>
-                            {% endfor %}
-                            <option value="__custom__">Custom field...</option>
+                            {% if field_options.common %}
+                            <optgroup label="Common">
+                                {% for o in field_options.common %}
+                                <option value="{{ o.key }}" data-example="{{ o.example }}">{{ o.label }}</option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endif %}
+                            {% if field_options.all %}
+                            <optgroup label="All XSOAR fields">
+                                {% for o in field_options.all %}
+                                <option value="{{ o.key }}">{{ o.label }} ({{ o.key }})</option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endif %}
+                            <option value="__custom__">Custom field…</option>
                         </select>
-                        <input type="text" id="customFieldKey" placeholder="Custom field name (e.g. ioc_value)" style="display:none;">
+                        <input type="text" id="customFieldKey" placeholder="XSOAR API key (lowercase, e.g. parentcmdline — not 'Parent CMD line')" style="display:none;">
                         <input type="text" id="fieldValue" placeholder="Exact value (copy-paste from ticket)">
                         <button type="button" class="tc-btn tc-btn-add-field" onclick="addField()">Add Field</button>
                     </div>
+                    <div class="tc-form-hint tc-field-example" id="fieldExampleHint" style="display:none;"></div>
                 </div>
 
                 <!-- Added Fields List -->
@@ -185,30 +229,11 @@
     </div>
 </div>
 
-<!-- Password Modal -->
-<div class="tc-modal-overlay" id="pwModal" style="display:none;" onclick="cancelPassword(event)">
-    <div class="tc-modal" onclick="event.stopPropagation()" style="max-width:360px;">
-        <div class="tc-modal-header">
-            <h3 id="pwTitle">Enter Password</h3>
-            <button class="tc-modal-close" onclick="cancelPassword()">&times;</button>
-        </div>
-        <div class="tc-modal-body">
-            <div class="tc-form-group">
-                <input type="password" id="pwInput" placeholder="Password" onkeydown="if(event.key==='Enter')confirmPassword()">
-            </div>
-        </div>
-        <div class="tc-modal-footer">
-            <button type="button" class="tc-btn tc-btn-cancel" onclick="cancelPassword()">Cancel</button>
-            <button type="button" class="tc-btn tc-btn-new" onclick="confirmPassword()">OK</button>
-        </div>
-    </div>
-</div>
-
 <!-- Toast -->
 <div class="tc-toast" id="tcToast"></div>
 
-<!-- Pass field definitions to JS -->
-<script id="silencer-fields-data" type="application/json">{{ fields | tojson }}</script>
+<!-- Pass field picker options (live from XSOAR, static fallback) to JS -->
+<script id="silencer-field-options" type="application/json">{{ field_options | tojson }}</script>
 
 {% endblock %}
 

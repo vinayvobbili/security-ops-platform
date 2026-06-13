@@ -6,8 +6,26 @@
     {% if page_title %}
         <h1 class="{{ page_title_class if page_title_class else 'dashboard-title' }}" aria-label="{{ page_title_aria if page_title_aria else (page_title|striptags) }}">{{ page_title|safe }}</h1>
     {% endif %}
-    {# Theme picker moved to /account (Appearance card). initTheme() still
-       applies the saved theme on every page via localStorage. #}
+    {# Theme picker lives in the top nav for everyone (logged-in and anon).
+       initTheme() applies the saved theme on every page via localStorage. #}
+    <div class="nav-theme-dropdown" id="themeDropdown">
+        <button type="button" class="theme-dd-trigger" id="themeDdTrigger"
+                aria-haspopup="listbox" aria-expanded="false" aria-label="Change theme">
+            <span class="theme-dd-icon" id="themeDdIcon" aria-hidden="true">🖥️</span>
+            <span class="theme-dd-chevron" aria-hidden="true">▾</span>
+        </button>
+        <div class="theme-dd-menu" id="themeDdMenu" role="listbox" hidden>
+            <button type="button" class="theme-dd-opt" data-theme="light"  role="option">
+                <span class="theme-dd-opt-icon" aria-hidden="true">☀️</span><span>Light</span>
+            </button>
+            <button type="button" class="theme-dd-opt" data-theme="dark"   role="option">
+                <span class="theme-dd-opt-icon" aria-hidden="true">🌙</span><span>Dark</span>
+            </button>
+            <button type="button" class="theme-dd-opt" data-theme="system" role="option">
+                <span class="theme-dd-opt-icon" aria-hidden="true">🖥️</span><span>System</span>
+            </button>
+        </div>
+    </div>
     {% set audio_controls_classes = 'audio-controls--enhanced audio-controls--in-nav' %}
     {% include 'audio_controls.html' %}
     <div class="nav-person-dropdown" id="personDropdown">
@@ -36,11 +54,8 @@
         <a href="/" target="_blank">🏠 Home</a>
         <a href="/meaningful-metrics" target="_blank">📊 Meaningful Metrics</a>
         <a href="/threat-intel-dashboard" target="_blank">🕵️ Threat Intel Dashboard</a>
-        <a href="/detection-rules" target="_blank">🛡️ Detection Rules Catalog</a>
-        <a href="/ruai-dashboard" target="_blank">🧭 RUAI Dashboard</a>
-        <a href="/oncall" target="_blank">📞 On-Call Schedule</a>
-        <a href="/roster" target="_blank">👥 Daily Roster</a>
         <a href="/ai-intake" target="_blank">🤖 AI Project Intake</a>
+        <a href="/app-logs" target="_blank">📜 App Logs</a>
         <a href="/all-pages" target="_blank" class="burger-all-pages">📂 All Pages</a>
     </div>
 </div>

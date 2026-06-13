@@ -7,6 +7,8 @@ from datetime import date, timedelta
 from flask import Blueprint, jsonify, render_template, request
 
 from src.utils.logging_utils import log_web_activity, get_client_ip
+from web.auth.helpers import login_required
+from web.auth.rbac import require_capability, DATA_DESTRUCTIVE
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +138,7 @@ def api_get_oncall():
 
 
 @oncall_bp.route("/api/oncall/analysts", methods=["POST"])
+@login_required
 @log_web_activity
 def api_add_analyst():
     try:
@@ -160,6 +163,7 @@ def api_add_analyst():
 
 
 @oncall_bp.route("/api/oncall/analysts", methods=["PUT"])
+@login_required
 @log_web_activity
 def api_update_analyst():
     try:
@@ -185,6 +189,7 @@ def api_update_analyst():
 
 
 @oncall_bp.route("/api/oncall/analysts", methods=["DELETE"])
+@require_capability(DATA_DESTRUCTIVE)
 @log_web_activity
 def api_delete_analyst():
     try:
@@ -206,6 +211,7 @@ def api_delete_analyst():
 
 
 @oncall_bp.route("/api/oncall/rotation", methods=["PUT"])
+@login_required
 @log_web_activity
 def api_update_rotation():
     try:
@@ -229,6 +235,7 @@ def api_update_rotation():
 
 
 @oncall_bp.route("/api/oncall/swap", methods=["POST"])
+@login_required
 @log_web_activity
 def api_swap_weeks():
     try:

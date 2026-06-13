@@ -19,15 +19,30 @@ from .formatters import (
     format_hunt_results_for_azdo,
     format_exposure_for_azdo,
     format_exposure_for_webex,
+    format_veracode_exposure_for_azdo,
+    format_veracode_exposure_for_webex,
+    format_jfrog_exposure_for_azdo,
+    format_jfrog_exposure_for_webex,
+    format_behavioral_hunt_for_azdo,
+    format_behavioral_hunt_for_webex,
 )
-from .hunting import hunt_iocs
-from .models import NoveltyAnalysis, NoveltyLLMResponse, IOCHuntResult, DEFAULT_QRADAR_HUNT_HOURS, DEFAULT_CROWDSTRIKE_HUNT_HOURS
+from .hunting import hunt_iocs, run_behavioral_hunt
+from .models import (
+    NoveltyAnalysis, NoveltyLLMResponse, IOCHuntResult, BehavioralHuntResult,
+    DEFAULT_QRADAR_HUNT_HOURS, DEFAULT_CROWDSTRIKE_HUNT_HOURS, DEFAULT_THREAT_HUNT_HOURS,
+)
 
 logger = logging.getLogger(__name__)
 
 # Maximum time (seconds) to wait for an LLM response before giving up.
 # Prevents the bot from hanging for hours if the Mac/Ollama tunnel is down.
 LLM_TIMEOUT_SECONDS = 300
+
+# Per-attempt deadline for the novelty pass. The compact template output stops
+# cleanly in ~20-40s; a longer wait means the model is wedged/truncating, so cut
+# it and retry rather than burn the whole run's budget on one attempt.
+NOVELTY_LLM_ATTEMPT_TIMEOUT = 90
+NOVELTY_LLM_MAX_ATTEMPTS = 3
 
 
 class TipperAnalyzer:
@@ -374,7 +389,8 @@ class TipperAnalyzer:
             self,
             new_tipper: Dict,
             similar_tippers: List[Dict],
-            rf_enrichment: Dict[str, Any] = None
+            rf_enrichment: Dict[str, Any] = None,
+            veracode_exposure: Dict[str, Any] = None
     ) -> str:
         """Build a structured prompt for the LLM to analyze novelty."""
         fields = new_tipper.get('fields', {})
@@ -505,6 +521,40 @@ class TipperAnalyzer:
                     if rules:
                         prompt += f"  - Evidence: {', '.join(rules)}\n"
 
+        # Internal application exposure from Veracode SCA — which of OUR own
+        # applications carry an open-source component affected by a CVE in this
+        # tipper. This is confirmed first-party exposure, so it should weigh
+        # heavily on severity and the recommended response.
+        if veracode_exposure and veracode_exposure.get('exposed'):
+            cves = veracode_exposure.get('cves') or {}
+            packages = veracode_exposure.get('packages') or {}
+            n = veracode_exposure.get('affected_app_count', 0)
+            prompt += "\n---\n\n## INTERNAL APPLICATION EXPOSURE (Veracode SCA)\n"
+            prompt += (
+                f"\n{n} of our own application(s) carry an open-source component "
+                "matching this tipper, per Veracode Software Composition Analysis.\n"
+            )
+            if cves:
+                prompt += "\nAffected by CVE(s) in this tipper:\n"
+                for cve_id in sorted(cves.keys()):
+                    names = sorted({a.get('application') or '?' for a in cves[cve_id]})
+                    shown = ", ".join(names[:25])
+                    if len(names) > 25:
+                        shown += f", +{len(names) - 25} more"
+                    prompt += f"- **{cve_id}** → {shown}\n"
+            if packages:
+                prompt += "\nCarrying a named package from this tipper (open SCA finding):\n"
+                for pkg in sorted(packages.keys()):
+                    names = sorted({a.get('application') or '?' for a in packages[pkg]})
+                    shown = ", ".join(names[:25])
+                    if len(names) > 25:
+                        shown += f", +{len(names) - 25} more"
+                    prompt += f"- **{pkg}** → {shown}\n"
+            prompt += (
+                "\nTreat this as **confirmed internal exposure** (not hypothetical) "
+                "when judging novelty, severity, and recommended actions.\n"
+            )
+
         prompt += """
 ---
 
@@ -572,6 +622,67 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
     # -------------------------------------------------------------------------
     # Build analysis from structured LLM response
     # -------------------------------------------------------------------------
+    def _generate_novelty_response(self, prompt: str):
+        """Primary novelty generator: plain invoke + concise JSON template + fence strip.
+
+        We deliberately do NOT use ``with_structured_output(method="json_mode")``
+        here. langchain's json_mode injects the verbose JSON Schema, and
+        GLM-4.7-Flash responds by echoing the schema back instead of an instance —
+        slow (it generates to the token cap) and reliably unparseable (returns
+        None). A concise *filled-in template* elicits a valid object in one shot.
+
+        ``self.llm`` is the the chat model (GPT-4.1 primary, m1 GLM
+        fallback): a plain invoke falls over to m1 on a the LLM gateway failure, while a
+        parse failure just retries the primary. The concise-template approach
+        works on either backend. Returns a NoveltyLLMResponse, or None if every
+        attempt fails (caller then posts a degraded card).
+        """
+        from my_bot.utils.llm_factory import strip_json_fence
+
+        schema_prompt = (
+            prompt
+            + "\n\n## OUTPUT FORMAT (CRITICAL)\n"
+            "Return ONLY a JSON object (no markdown fences, no commentary) with "
+            "EXACTLY these keys:\n"
+            "{\n"
+            '  "novelty_score": <integer 1-10>,\n'
+            '  "novelty_label": <one of "Seen Before","Familiar","Mostly New","Net New">,\n'
+            '  "summary": "<2-3 sentence executive summary>",\n'
+            '  "recommendation": "<one of \'PRIORITIZE - ...\', \'STANDARD - ...\', \'EXPEDITE - ...\'>",\n'
+            '  "whats_new_reasons": ["<reason>"],\n'
+            '  "whats_familiar_reasons": ["<reason>"],\n'
+            '  "vulnerable_products": [{"product": "<name>", "vendor": "<name or null>", "version_constraint": "<range or null>"}]\n'
+            "}\n"
+            "For vulnerable_products use the empty list [] unless the tipper names a "
+            "product as vulnerable with NO CVE assigned (see instructions above); each "
+            "entry MUST be an object with those keys, never a bare string.\n"
+            "Start with `{` and end with `}`."
+        )
+        for attempt in range(NOVELTY_LLM_MAX_ATTEMPTS):
+            # Fresh executor per attempt with shutdown(wait=False): if an invoke
+            # wedges, future.result() times out and we move on without blocking
+            # on the orphaned thread (the http client kills it at its own timeout).
+            executor = ThreadPoolExecutor(max_workers=1)
+            try:
+                future = executor.submit(self.llm.invoke, schema_prompt)
+                raw = future.result(timeout=NOVELTY_LLM_ATTEMPT_TIMEOUT)
+                content = getattr(raw, "content", None) or str(raw)
+                cleaned = strip_json_fence(content)
+                return NoveltyLLMResponse.model_validate_json(cleaned)
+            except FuturesTimeoutError:
+                logger.warning(
+                    f"Novelty LLM attempt {attempt + 1}/{NOVELTY_LLM_MAX_ATTEMPTS} "
+                    f"timed out after {NOVELTY_LLM_ATTEMPT_TIMEOUT}s"
+                )
+            except Exception as gen_err:
+                logger.warning(
+                    f"Novelty LLM attempt {attempt + 1}/{NOVELTY_LLM_MAX_ATTEMPTS} "
+                    f"failed: {type(gen_err).__name__}: {str(gen_err)[:160]}"
+                )
+            finally:
+                executor.shutdown(wait=False)
+        return None
+
     def _build_analysis_from_response(
             self,
             llm_response: NoveltyLLMResponse,
@@ -645,7 +756,7 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
         what_is_familiar = []
 
         # Add LLM-generated reasons for what's familiar
-        if llm_response.whats_familiar_reasons:
+        if llm_response is not None and llm_response.whats_familiar_reasons:
             what_is_familiar.extend(llm_response.whats_familiar_reasons)
 
         if ioc_history and entities:
@@ -714,7 +825,7 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
         what_is_new = []
 
         # Add LLM-generated reasons for what's new
-        if llm_response.whats_new_reasons:
+        if llm_response is not None and llm_response.whats_new_reasons:
             what_is_new.extend(llm_response.whats_new_reasons)
 
         if entities:
@@ -793,6 +904,31 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
                     actor_display = ', '.join(f"`{a}`" for a in sorted(new_actors)[:5])
                     more = f" (+{len(new_actors) - 5} more)" if len(new_actors) > 5 else ""
                     what_is_new.append(f"First-time actors: {actor_display}{more}")
+
+        # Degraded path: novelty LLM produced no parseable output on either Mac.
+        # Post a card from the deterministic signals (IOC/TTP/actor overlap +
+        # vector similarity) rather than dropping it entirely.
+        if llm_response is None:
+            return NoveltyAnalysis(
+                tipper_id=tipper_id,
+                tipper_title=tipper_title,
+                created_date=created_date,
+                novelty_score=0,
+                novelty_label="Analysis Unavailable",
+                summary=(
+                    "⚠️ Automated novelty analysis was unavailable for this tipper — "
+                    "the LLM produced no parseable response on both the primary (m1) "
+                    "and secondary (studio1) models. The signals below are computed "
+                    "deterministically from IOC/TTP/actor overlap and vector similarity; "
+                    "review manually."
+                ),
+                what_is_new=what_is_new,
+                what_is_familiar=what_is_familiar,
+                related_tickets=related_tickets,
+                recommendation="STANDARD - Review manually; LLM summary unavailable",
+                raw_llm_response="",
+                vulnerable_products=[],
+            )
 
         # Log raw LLM response at debug level
         logger.debug(f"Raw LLM response: {llm_response.model_dump_json()}")
@@ -953,6 +1089,45 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
         except Exception as e:
             logger.warning(f"Entity extraction/enrichment failed (continuing without): {e}")
 
+        # Veracode SCA exposure — do any of OUR applications carry an open-source
+        # component affected by a CVE in this tipper? Computed here (before the
+        # prompt) so the LLM can reason about confirmed first-party exposure. The
+        # CVE->apps index is cached (6h TTL), so this is a dict lookup after the
+        # first build. Best-effort; never blocks analysis.
+        veracode_exposure = None
+        try:
+            cve_ids = list(entities.cves) if entities else []
+            packages = list(getattr(entities, "packages", []) or []) if entities else []
+            if cve_ids or packages:
+                from services.veracode import exposure as veracode_exposure_lookup
+                veracode_exposure = veracode_exposure_lookup(cve_ids=cve_ids, packages=packages)
+                if veracode_exposure.get('exposed'):
+                    logger.info(
+                        f"Veracode SCA: {veracode_exposure.get('affected_app_count')} app(s) exposed "
+                        f"across {len(veracode_exposure.get('cves') or {})} CVE(s) + "
+                        f"{len(veracode_exposure.get('packages') or {})} named package(s)"
+                    )
+        except Exception as e:
+            logger.warning(f"Veracode SCA exposure check failed (continuing without): {e}")
+
+        # JFrog Xray exposure — sibling to Veracode, but for build/registry
+        # artifacts: do any of our JFrog artifacts ship a component affected by a
+        # CVE in this tipper? Answered on demand via the Xray Reports API (inert
+        # until the token carries the Manage-Reports permission). Best-effort;
+        # never blocks analysis.
+        jfrog_exposure = None
+        try:
+            if cve_ids:
+                from services.jfrog import exposure as jfrog_exposure_lookup
+                jfrog_exposure = jfrog_exposure_lookup(cve_ids=cve_ids)
+                if jfrog_exposure.get('exposed'):
+                    logger.info(
+                        f"JFrog Xray: {jfrog_exposure.get('affected_artifact_count')} artifact(s) "
+                        f"exposed across {len(jfrog_exposure.get('cves') or {})} CVE(s)"
+                    )
+        except Exception as e:
+            logger.warning(f"JFrog Xray exposure check failed (continuing without): {e}")
+
         # Find similar tippers with multi-signal scoring
         # Pass entities so find_similar_tippers can compute IOC/TTP/actor overlap
         logger.info("Searching for similar historical tippers...")
@@ -1072,7 +1247,7 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
             t for t in similar_tippers
             if t.get('similarity_score', 0) >= MIN_RELATED_SIMILARITY
         ][:MAX_RELATED_TICKETS]
-        prompt = self._build_analysis_prompt(tipper, tippers_for_llm, rf_enrichment)
+        prompt = self._build_analysis_prompt(tipper, tippers_for_llm, rf_enrichment, veracode_exposure)
         logger.debug(f"Analysis prompt ({len(prompt)} chars): {prompt[:500]}...")
 
         logger.info("Generating novelty analysis with LLM...")
@@ -1081,30 +1256,23 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
 
         start_time = time.time()
 
-        # Use json_mode (no FSM-constrained decoding — see llm_factory.structured_output)
-        from my_bot.utils.llm_factory import structured_output
-        structured_llm = structured_output(self.llm, NoveltyLLMResponse)
-        logger.info(f"Sending request to LLM (timeout={LLM_TIMEOUT_SECONDS}s)...")
-
-        # Python-level timeout: ChatOllama's client_kwargs timeout may not be
-        # honored through the with_structured_output() wrapper, so we enforce
-        # our own deadline via a thread + Future to prevent multi-hour hangs
-        # when the Mac/Ollama SSH tunnel is down.
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(structured_llm.invoke, prompt)
-            try:
-                llm_response = future.result(timeout=LLM_TIMEOUT_SECONDS)
-            except FuturesTimeoutError:
-                future.cancel()
-                generation_time = time.time() - start_time
-                logger.error(f"LLM call timed out after {generation_time:.1f}s")
-                raise RuntimeError(
-                    f"LLM did not respond within {LLM_TIMEOUT_SECONDS}s. "
-                    "The Ollama server or SSH tunnel may be down."
-                )
-
+        # Generate the structured novelty response via a concise template + fence
+        # strip (NOT json_mode — see _generate_novelty_response for why GLM can't
+        # handle langchain's schema injection). self.llm fails over to studio1
+        # Qwen only on a connection error.
+        llm_response = self._generate_novelty_response(prompt)
         generation_time = time.time() - start_time
-        logger.info(f"LLM response received in {generation_time:.1f}s")
+
+        if llm_response is None:
+            # No parseable JSON after retries (+ Qwen failover if GLM was down).
+            # Don't drop the ticket — _build_analysis_from_response posts a
+            # degraded card from the deterministic (Python-computed) signals.
+            logger.error(
+                f"Novelty LLM produced no parseable JSON after {generation_time:.1f}s "
+                "(retries + studio1 failover) — building card from deterministic signals only"
+            )
+        else:
+            logger.info(f"LLM response received in {generation_time:.1f}s")
 
         # Convert structured response to NoveltyAnalysis (Python computes overlaps)
         analysis = self._build_analysis_from_response(
@@ -1114,6 +1282,8 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
         )
         analysis.generation_time = generation_time
         analysis.rf_enrichment = rf_enrichment  # Attach RF enrichment to analysis
+        analysis.veracode_exposure = veracode_exposure  # Reused by post_exposure_to_tipper (avoids re-lookup)
+        analysis.jfrog_exposure = jfrog_exposure  # Reused by post_exposure_to_tipper (avoids re-lookup)
         analysis.ioc_history = ioc_history  # Attach IOC history for novelty display
         analysis.malware_history = malware_history  # Attach malware history for novelty display
         analysis.history_dates = history_dates  # Attach tipper dates for recency display
@@ -1314,6 +1484,18 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
         ioc_section = self._extract_ioc_section(description)
         entities = extract_entities(ioc_section, include_apt_database=False)
 
+        # Register this tipper's hashes for daily replay so hosts offline at
+        # hunt time still get swept on subsequent days. Best-effort: a failure
+        # here must not block the hourly hunt + Webex notification path.
+        try:
+            from src.components.tipper_replay import enqueue as enqueue_replay
+            replay_iocs = [(h, "hash") for kind in ("sha256", "sha1", "md5")
+                           for h in (entities.hashes.get(kind) or [])]
+            if replay_iocs and tipper_id != "text-input":
+                enqueue_replay(str(tipper_id), title, replay_iocs)
+        except Exception as exc:
+            logger.warning(f"tipper-replay enqueue skipped for #{tipper_id}: {exc}")
+
         return hunt_iocs(
             entities=entities,
             tipper_id=tipper_id,
@@ -1348,9 +1530,73 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
             logger.error(f"Failed to post hunt results to tipper #{result.tipper_id}")
             return False
 
+    # -------------------------------------------------------------------------
+    # Behavioral Threat Hunting (LLM-authored TTP queries; distinct from IOC sweep)
+    # -------------------------------------------------------------------------
+    def run_threat_hunt(
+            self,
+            tipper_id: str = None,
+            tipper_text: str = None,
+            hours: int = DEFAULT_THREAT_HUNT_HOURS,
+            platforms: list = None,
+    ) -> BehavioralHuntResult:
+        """Author + validate + execute behavioral (TTP) hunts for a tipper.
+
+        Unlike hunt_iocs (which sweeps known indicators), this reasons over the
+        full tipper narrative to write behavioral hunt queries, repairs them via
+        the LLM on validation/compile errors, and runs the valid ones. By default
+        it auto-runs across BOTH SIEMs — CrowdStrike LogScale (CQL) and Cortex
+        XSIAM (XQL) — tagging each hunt with its dialect.
+        """
+        from datetime import datetime
+
+        if tipper_id:
+            tipper = self.fetch_tipper_by_id(tipper_id)
+            if not tipper:
+                return BehavioralHuntResult(
+                    tipper_id=str(tipper_id), tipper_title="Unknown",
+                    hunt_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    search_hours=hours, errors=[f"Could not fetch tipper #{tipper_id}"],
+                )
+            title = tipper.get('fields', {}).get('System.Title', 'Unknown')
+            narrative = tipper.get('fields', {}).get('System.Description', '')
+        else:
+            tipper_id = 'text-input'
+            title = 'Text Input'
+            narrative = tipper_text or ''
+
+        # Behavioral hunts reason over the FULL narrative (not just the IOC block),
+        # and reuse the analyzer's in-house FailoverChatModel. Auto-run on every
+        # configured SIEM dialect.
+        return run_behavioral_hunt(
+            tipper_id=tipper_id,
+            tipper_title=title,
+            narrative=narrative,
+            hours=hours,
+            llm=self.llm,
+            platforms=platforms,
+        )
+
+    def post_threat_hunt_to_tipper(self, result: BehavioralHuntResult) -> bool:
+        """Post behavioral threat-hunt results as a (separate, clearly-labelled) AZDO comment."""
+        if result.tipper_id == 'text-input':
+            logger.warning("Cannot post threat-hunt results - input was text, not a real tipper")
+            return False
+        from services.azdo import add_comment_to_work_item
+        html_comment = format_behavioral_hunt_for_azdo(result)
+        logger.info(f"Posting behavioral threat-hunt results to tipper #{result.tipper_id}...")
+        posted = add_comment_to_work_item(int(result.tipper_id), html_comment)
+        if posted:
+            logger.info(f"Successfully posted threat-hunt results to tipper #{result.tipper_id}")
+        else:
+            logger.error(f"Failed to post threat-hunt results to tipper #{result.tipper_id}")
+        return bool(posted)
+
     def post_exposure_to_tipper(self, tipper_id: str, cve_ids: list,
                                  parent_id: str = None,
-                                 vulnerable_products: list = None) -> bool:
+                                 vulnerable_products: list = None,
+                                 veracode_exposure: dict = None,
+                                 jfrog_exposure: dict = None) -> bool:
         """Correlate CVEs against Tanium installed software and comment on the tipper.
 
         Always posts an AZDO comment — including the "nothing to check" stub
@@ -1394,6 +1640,42 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
             records = result.records
 
             html_comment = format_exposure_for_azdo(cve_ids, result)
+
+            # Veracode SCA exposure — sibling to the Tanium endpoint check: which
+            # of our *applications* carry an open-source component affected by
+            # these CVE(s). Reuse the value computed during analysis (passed in)
+            # when available; otherwise compute now. Either way the CVE->apps
+            # index is cached (6h TTL), so this never blocks the Tanium comment.
+            if veracode_exposure is None and cve_ids:
+                try:
+                    from services.veracode import cve_exposure as veracode_cve_exposure
+                    veracode_exposure = veracode_cve_exposure(cve_ids)
+                except Exception as vc_err:
+                    logger.warning(f"[exposure] Veracode SCA check failed for #{tipper_id}: {vc_err}")
+            if veracode_exposure:
+                try:
+                    vc_html = format_veracode_exposure_for_azdo(veracode_exposure)
+                    if vc_html:
+                        html_comment = html_comment + "\n" + vc_html
+                except Exception as vc_err:
+                    logger.warning(f"[exposure] Veracode AZDO formatting failed for #{tipper_id}: {vc_err}")
+
+            # JFrog Xray exposure — registry/build-artifact sibling to Veracode.
+            # Reuse the value computed during analysis; otherwise compute now.
+            if jfrog_exposure is None and cve_ids:
+                try:
+                    from services.jfrog import cve_exposure as jfrog_cve_exposure
+                    jfrog_exposure = jfrog_cve_exposure(cve_ids)
+                except Exception as jf_err:
+                    logger.warning(f"[exposure] JFrog Xray check failed for #{tipper_id}: {jf_err}")
+            if jfrog_exposure:
+                try:
+                    jf_html = format_jfrog_exposure_for_azdo(jfrog_exposure)
+                    if jf_html:
+                        html_comment = html_comment + "\n" + jf_html
+                except Exception as jf_err:
+                    logger.warning(f"[exposure] JFrog AZDO formatting failed for #{tipper_id}: {jf_err}")
+
             posted = add_comment_to_work_item(int(tipper_id), html_comment)
             confirmed = sum(1 for r in records if r.confidence == "confirmed")
             if posted:
@@ -1409,14 +1691,25 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
             # tipper analysis room. Both Detection Engineering / Threat Hunting
             # and Platform / Vulnerability Management teams read this room, so
             # a single send reaches both audiences.
-            if records:
+            veracode_webex = format_veracode_exposure_for_webex(veracode_exposure) if veracode_exposure else ""
+            jfrog_webex = format_jfrog_exposure_for_webex(jfrog_exposure) if jfrog_exposure else ""
+            extra_webex = "\n\n".join(b for b in (veracode_webex, jfrog_webex) if b)
+            if records or extra_webex:
                 try:
                     from webexpythonsdk import WebexAPI
                     azdo_url = (
                         f"https://dev.azure.com/{config.azdo_org}/"
                         f"{config.azdo_de_project}/_workitems/edit/{tipper_id}"
                     )
-                    webex_md = format_exposure_for_webex(cve_ids, records, tipper_id, azdo_url)
+                    webex_md = format_exposure_for_webex(cve_ids, records, tipper_id, azdo_url) if records else ""
+                    if extra_webex:
+                        if webex_md:
+                            webex_md = webex_md + "\n\n" + extra_webex
+                        else:
+                            webex_md = (
+                                f"🛡️ CVE exposure for tipper [#{tipper_id}]({azdo_url})\n\n"
+                                + extra_webex
+                            )
                     if webex_md:
                         tipper_room = getattr(config, "webex_room_id_threat_tipper_analysis", None)
                         if tipper_room:
@@ -1483,14 +1776,22 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
             tipper_room = getattr(_cfg, "webex_room_id_threat_tipper_analysis", None)
             if tipper_room:
                 from webexpythonsdk import WebexAPI
+                from .webex_retry import send_with_retry
                 webex_md = linkify_work_items_markdown(display_output)
-                msg = WebexAPI(access_token=_cfg.webex_bot_access_token_pokedex).messages.create(
-                    roomId=tipper_room, markdown=webex_md
-                )
+                webex = WebexAPI(access_token=_cfg.webex_bot_access_token_pokedex)
+                msg = send_with_retry(webex, tipper_room, webex_md)
                 parent_msg_id = getattr(msg, "id", None)
                 logger.info(f"Sent analysis to tipper analysis room (msg_id={parent_msg_id})")
         except Exception as wx_err:
+            # In-process retries exhausted (e.g. a longer Webex egress outage).
+            # Park this card so the next scheduled run re-sends it instead of
+            # silently dropping it from the room.
             logger.warning(f"Failed to send analysis to tipper room: {wx_err}")
+            try:
+                from .webex_retry import enqueue_failed
+                enqueue_failed(tipper_id)
+            except Exception as q_err:  # noqa: BLE001
+                logger.warning(f"Failed to enqueue tipper #{tipper_id} for retry: {q_err}")
 
         # Launch IOC hunt in background thread
         # Posts one combined comment after all tools complete
@@ -1529,17 +1830,55 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
         hunt_thread = threading.Thread(target=_run_ioc_hunt, daemon=True, name=f"ioc-hunt-{tipper_id}")
         hunt_thread.start()
 
+        # Behavioral threat hunt — LLM-authored TTP queries, distinct from the IOC
+        # sweep above. Runs in its own thread and posts a separate, clearly-labelled
+        # AZDO comment + Webex summary.
+        def _run_threat_hunt():
+            try:
+                logger.info(f"[bg] Running behavioral threat hunt for tipper #{tipper_id}...")
+                th_result = self.run_threat_hunt(tipper_id=tipper_id)
+
+                if th_result.total_hits > 0:
+                    logger.warning(f"[bg] BEHAVIORAL HUNT HITS for tipper #{tipper_id}: {th_result.total_hits} event(s)")
+
+                # Only comment when there's something to say (hunts authored or errors)
+                if th_result.hunts or th_result.errors:
+                    self.post_threat_hunt_to_tipper(th_result)
+
+                if room_id and th_result.hunts:
+                    try:
+                        from webexpythonsdk import WebexAPI
+                        from my_config import get_config
+                        config = get_config()
+                        azdo_url = f"https://dev.azure.com/{config.azdo_org}/{config.azdo_de_project}/_workitems/edit/{tipper_id}"
+                        msg = format_behavioral_hunt_for_webex(th_result, tipper_id, azdo_url)
+                        WebexAPI(access_token=config.webex_bot_access_token_pokedex).messages.create(
+                            roomId=room_id, markdown=msg)
+                        logger.info(f"[bg] Sent threat-hunt summary to Webex for #{tipper_id}")
+                    except Exception as wx_err:
+                        logger.warning(f"[bg] Failed to send threat-hunt Webex notification: {wx_err}")
+            except Exception as th_err:
+                logger.error(f"[bg] Behavioral threat hunt failed for tipper #{tipper_id}: {th_err}")
+
+        threat_hunt_thread = threading.Thread(target=_run_threat_hunt, daemon=True, name=f"threat-hunt-{tipper_id}")
+        threat_hunt_thread.start()
+
         # CVE exposure correlation — independent of IOC hunt, runs in parallel.
         # Always posts an AZDO comment (stub when there's nothing to check) so
         # the story has a visible audit trail either way.
         cve_ids = list(analysis.entities.cves) if analysis.entities else []
         vp = list(getattr(analysis, "vulnerable_products", []) or [])
 
+        veracode_exposure = getattr(analysis, "veracode_exposure", None)
+        jfrog_exposure = getattr(analysis, "jfrog_exposure", None)
+
         def _run_exposure():
             try:
                 self.post_exposure_to_tipper(
                     tipper_id, cve_ids, parent_id=parent_msg_id,
                     vulnerable_products=vp,
+                    veracode_exposure=veracode_exposure,
+                    jfrog_exposure=jfrog_exposure,
                 )
             except Exception as exp_err:
                 logger.error(f"[bg] CVE exposure failed for #{tipper_id}: {exp_err}")

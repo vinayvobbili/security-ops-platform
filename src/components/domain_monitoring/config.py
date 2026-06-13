@@ -133,6 +133,91 @@ def load_known_good_buckets(domain: str) -> list[str]:
     return []
 
 
+def load_full_config() -> dict:
+    """Load the entire monitoring config (for the management UI)."""
+    if CONFIG_FILE.exists():
+        try:
+            with open(CONFIG_FILE, "r") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            logger.error(f"Error loading full config: {e}")
+    return {}
+
+
+# Lists an analyst may edit from the management UI. Maps the editable key to a
+# human label; anything not in here is read-only (or structured/nested).
+EDITABLE_LISTS = {
+    "monitored_domains": "Monitored Domains (full dnstwist + threat-intel pipeline)",
+    "rf_watchlist": "Recorded Future Watchlist (brand-keyword domains)",
+    "brand_keywords": "Brand Keywords (widen the CT impersonation sweep)",
+}
+
+_DOMAIN_RE = __import__("re").compile(r"^(?!-)[a-z0-9-]{1,63}(?<!-)(\.[a-z0-9-]{1,63})*\.[a-z]{2,}$")
+
+
+def _normalize_entry(key: str, value: str) -> str:
+    """Normalize and validate a single list entry; raises ValueError if invalid."""
+    v = (value or "").strip().lower()
+    if not v:
+        raise ValueError("empty value")
+    if key == "brand_keywords":
+        if not v.isascii() or " " in v or "." in v:
+            raise ValueError(f"'{value}' is not a valid brand keyword")
+        return v
+    # domain-shaped lists
+    if v.startswith("idn:"):
+        v = v[4:]
+    if not _DOMAIN_RE.match(v):
+        raise ValueError(f"'{value}' is not a valid domain")
+    return v
+
+
+def edit_config_list(key: str, action: str, value: str) -> dict:
+    """Add or remove a single entry on an editable config list.
+
+    Args:
+        key: one of EDITABLE_LISTS.
+        action: 'add' or 'remove'.
+        value: the domain / keyword.
+
+    Returns:
+        {'ok': bool, 'key', 'count', 'entries'} or {'ok': False, 'error'}.
+    """
+    if key not in EDITABLE_LISTS:
+        return {"ok": False, "error": f"'{key}' is not an editable list"}
+    if action not in ("add", "remove"):
+        return {"ok": False, "error": "action must be 'add' or 'remove'"}
+
+    config = load_full_config()
+    current = list(config.get(key, []))
+
+    try:
+        entry = _normalize_entry(key, value)
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+
+    if action == "add":
+        if entry not in current:
+            current.append(entry)
+            current.sort()
+    else:  # remove
+        if entry not in current:
+            return {"ok": False, "error": f"'{entry}' is not on the {key} list"}
+        current.remove(entry)
+
+    config[key] = current
+    try:
+        CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(config, f, indent=2)
+    except IOError as e:
+        logger.error(f"Failed to save config after edit: {e}")
+        return {"ok": False, "error": "could not save config"}
+
+    logger.info(f"Config edit: {action} '{entry}' on {key} (now {len(current)} entries)")
+    return {"ok": True, "key": key, "count": len(current), "entries": current}
+
+
 def get_webex_api() -> WebexTeamsAPI:
     """Get configured Webex API instance with connection pooling."""
     return configure_webex_api_session(

@@ -3,9 +3,32 @@
 {% set page_title_left_icon = '🔌' %}
 {% set page_title_right_icon = '🔗' %}
 
-{% block body_classes %}connectors-page{% endblock %}
+{% block body_classes %}connectors-page conx-themed{% endblock %}
 {% block extra_css %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/connectors.css') }}">
+<style>
+  /* ===== Connectors theme — Fuchsia / Purple ===== */
+  body.conx-themed { background:
+      radial-gradient(1100px 520px at 4% -8%, #f3d9ff 0%, transparent 55%),
+      radial-gradient(1000px 560px at 98% 0%, #ffd9f3 0%, transparent 52%),
+      radial-gradient(1200px 720px at 50% 122%, #e9d9ff 0%, transparent 55%),
+      linear-gradient(160deg, #faeeff 0%, #ffeef9 48%, #f5eeff 100%) !important;
+      background-attachment: fixed !important; min-height: 100vh; }
+  body.conx-themed.dark-mode { background:
+      linear-gradient(135deg, #15071c 0%, #26092a 50%, #13061a 100%) !important; color: #f0deef; }
+  html { scrollbar-gutter: stable; }
+  ::-webkit-scrollbar { width: 16px; height: 16px; }
+  ::-webkit-scrollbar-track { border-radius: 10px;
+      background: linear-gradient(180deg, rgba(0,0,0,.04), rgba(0,0,0,.06) 50%, rgba(0,0,0,.04)); }
+  ::-webkit-scrollbar-thumb { border-radius: 10px; border: 2px solid transparent; background-clip: padding-box;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
+      background: linear-gradient(180deg, #d946ef 0%, #e879f9 22%, #a855f7 46%, #ec4899 70%, #8f94fb 100%); }
+  ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, #8f94fb 0%, #ec4899 30%, #a855f7 54%, #e879f9 78%, #d946ef 100%); }
+  ::-webkit-scrollbar-corner { background: transparent; }
+  body.dark-mode ::-webkit-scrollbar-track {
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.10) 50%, rgba(255,255,255,.06)); }
+</style>
 {% endblock %}
 
 {% block content %}

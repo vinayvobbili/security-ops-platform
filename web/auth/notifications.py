@@ -49,33 +49,6 @@ def _send_webex_blocking(markdown: str, room_id: str) -> None:
         log.exception('PAT-sharing Webex alert failed')
 
 
-def notify_pat_new_ip(user_email: str, pat_name: str, client_ip: str,
-                      source: str = 'CCR', ts: Optional[int] = None) -> None:
-    """Fire a Webex alert. Best-effort — never raises, runs in a thread
-    so the calling request path stays fast.
-
-    `source` labels which front door was hit ('CCR' shim or 'MCP' server)
-    so operators can tell which Claude Code client surface produced the
-    new-IP sighting.
-    """
-    room_id = _admin_room_id()
-    if not room_id:
-        log.warning('PAT-sharing alert dropped: no target room configured')
-        return
-    when = _fmt_when(ts)
-    markdown = (
-        f'**{source} PAT used from a new IP**\n\n'
-        f'- User: `{user_email}`\n'
-        f'- PAT name: `{pat_name}`\n'
-        f'- Client IP: `{client_ip}`\n'
-        f'- First seen: {when}\n\n'
-        f'Review at [Traffic Logs → PATs tab](https://gdnr.the-company.com/traffic-logs). '
-        f'If this IP is unexpected, ask the user to revoke the token at '
-        f'`/account`.'
-    )
-    threading.Thread(target=_send_webex_blocking, args=(markdown, room_id), daemon=True).start()
-
-
 def notify_pat_created(user_email: str, pat_name: str, client_ip: str,
                        ts: Optional[int] = None) -> None:
     """Fire a Webex alert when a user clicks the Generate PAT button on
@@ -98,7 +71,9 @@ def notify_pat_created(user_email: str, pat_name: str, client_ip: str,
 
 
 def notify_new_signup(user_email: str, role_label: str, client_ip: str,
-                      is_admin: bool = False, ts: Optional[int] = None) -> None:
+                      access_reason: str = '', is_admin: bool = False,
+                      ad_status: str = 'skipped',
+                      ts: Optional[int] = None) -> None:
     """Fire a Webex alert when a new account is registered. Sent at the
     /register step (pre-verification), so a flood of registrations from
     one IP is visible even if none of them complete email verification.
@@ -111,12 +86,63 @@ def notify_new_signup(user_email: str, role_label: str, client_ip: str,
         return
     when = _fmt_when(ts)
     admin_line = '\n- 🛡️ **Granted admin role** (matched AUTH_ADMIN_EMAILS)' if is_admin else ''
+    reason_line = f'\n- Access reason: {access_reason}' if access_reason else ''
+    # Only worth surfacing when AD couldn't confirm the address (fail-open path).
+    # "found" is the happy default and needs no line; "skipped" means the check
+    # didn't run (shouldn't normally happen on this path).
+    if ad_status == 'unknown':
+        ad_line = '\n- ⚠️ **AD: directory check unavailable** — address NOT verified against AD (allowed via fail-open)'
+    elif ad_status == 'skipped':
+        ad_line = '\n- ⚠️ AD: directory check did not run'
+    else:
+        ad_line = ''
     markdown = (
         f'**New IR signup**\n\n'
         f'- Email: `{user_email}`\n'
-        f'- Role: {role_label}\n'
+        f'- Role: {role_label}{reason_line}\n'
         f'- Client IP: `{client_ip}`\n'
-        f'- When: {when}{admin_line}\n\n'
+        f'- When: {when}{admin_line}{ad_line}\n\n'
         f'They still need to verify the email link before they can sign in.'
+    )
+    threading.Thread(target=_send_webex_blocking, args=(markdown, room_id), daemon=True).start()
+
+
+# Where the operator goes to promote a pending managed-role request. Override
+# with ADMIN_USERS_URL; defaults to the production admin page.
+_ADMIN_USERS_URL = os.environ.get('ADMIN_USERS_URL', 'https://gdnr.the-company.com/admin-users')
+
+
+def notify_managed_role_request(user_email: str, requested_role: str,
+                                client_ip: str, access_reason: str = '',
+                                ad_status: str = 'skipped',
+                                ts: Optional[int] = None) -> None:
+    """Fire a Webex approval alert when a signup requests a **managed**
+    (capability-bearing) role. The account is created at the open default
+    (`viewer`); this pings the operator to review and promote it on
+    /admin-users. Best-effort: threaded, never raises out of the request path.
+    """
+    room_id = _admin_room_id()
+    if not room_id:
+        log.warning('Managed-role request alert dropped: no target room configured')
+        return
+    when = _fmt_when(ts)
+    reason_line = f'\n- 📝 Reason: {access_reason}' if access_reason else ''
+    if ad_status == 'unknown':
+        ad_line = '\n- ⚠️ **AD: directory check unavailable** — address NOT verified against AD (allowed via fail-open)'
+    elif ad_status == 'skipped':
+        ad_line = '\n- ⚠️ AD: directory check did not run'
+    else:
+        ad_line = ''
+    markdown = (
+        f'🔐 **Managed-role request — approval needed**\n\n'
+        f'- 👤 Email: `{user_email}`\n'
+        f'- 🎟️ Requested role: **{requested_role}** (capability-bearing)\n'
+        f'- 🪪 Granted for now: `viewer` (open) — no capabilities until you promote'
+        f'{reason_line}\n'
+        f'- 🌐 Client IP: `{client_ip}`\n'
+        f'- 🕒 When: {when}{ad_line}\n\n'
+        f'➡️ **[Review & promote on the admin page]({_ADMIN_USERS_URL})** — '
+        f'set their role to **{requested_role}**, or leave them as the open role. '
+        f'They must verify their email link before they can sign in either way.'
     )
     threading.Thread(target=_send_webex_blocking, args=(markdown, room_id), daemon=True).start()

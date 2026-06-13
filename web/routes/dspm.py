@@ -17,7 +17,6 @@ Expected vendor package shape (enforced by `_validate_package`):
 """
 
 import hashlib
-import hmac
 import json
 import logging
 import os
@@ -28,18 +27,22 @@ import time
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import quote
 
 import requests
-from flask import Blueprint, abort, jsonify, render_template, request, Response
+from flask import Blueprint, jsonify, redirect, render_template, request, Response
 
 from my_config import get_config
 from src.utils.logging_utils import log_web_activity
+from web.routes._vendor_logs import register_vendor_logs
+from web.auth.helpers import current_user, login_required
+from web.auth.rbac import require_capability, DEPLOY_SIDECAR
 
 logger = logging.getLogger(__name__)
 
 dspm_bp = Blueprint("dspm", __name__)
 
-DSPM_BASE = "http://127.0.0.1:8033"
+DSPM_BASE = "http://127.0.0.1:8035"
 PROXY_PREFIX = "/dspm-app"
 
 HOP_BY_HOP = {
@@ -54,6 +57,12 @@ STAGING_DIR = _EXTERNAL / "dspm_staging"
 BACKUPS_DIR = _EXTERNAL / "dspm_backups"
 AUDIT_LOG = _EXTERNAL / "dspm_audit.jsonl"
 
+# Repo-bundled Dockerfile/.dockerignore. The vendor zip ships only main.py +
+# frontend/ + requirements.txt, so the platform owns the Dockerfile. On a
+# first-ever deploy there's no prior active version to copy it from, so fall
+# back to these canonical assets.
+CANONICAL_ASSETS_DIR = Path(__file__).resolve().parents[2] / "deployment" / "dspm"
+
 MAX_BACKUPS = 5
 MAX_UNCOMPRESSED_BYTES = 200 * 1024 * 1024
 SERVICE_NAME = "ir-dspm"
@@ -63,6 +72,9 @@ VERSION_ID_RE = re.compile(r"^v\d{8}_\d{6}_[a-f0-9]{6}$")
 
 _SIDECAR_CACHE = {"healthy": False, "checked_at": 0.0}
 _SIDECAR_TTL = 10.0
+
+# Mount /dspm/logs + /dspm/logs/data (journalctl tail for the sidecar service).
+register_vendor_logs(dspm_bp, "dspm", SERVICE_NAME, "DSPM")
 
 
 # ---------------------------------------------------------------------------
@@ -162,19 +174,6 @@ def _new_version_id(digest_hex: str) -> str:
     return f"v{ts}_{digest_hex[:6]}"
 
 
-def _require_token():
-    expected = get_config().data_security_upload_token
-    if not expected:
-        abort(500, description="Upload token not configured on server")
-    provided = (
-        request.headers.get("X-Upload-Token")
-        or request.form.get("token")
-        or (request.get_json(silent=True) or {}).get("token", "")
-    )
-    if not provided or not hmac.compare_digest(str(provided), str(expected)):
-        abort(401, description="Invalid or missing upload token")
-
-
 def _audit(action: str, version_id: str | None, extra: dict | None = None):
     entry = {
         "ts": _now_utc_iso(),
@@ -216,6 +215,19 @@ def _dir_info(path: Path) -> dict | None:
             .isoformat(timespec="seconds").replace("+00:00", "Z"),
         "size_bytes": sum(f.stat().st_size for f in path.rglob("*") if f.is_file()),
     }
+
+
+def _backup_info(path: Path) -> dict | None:
+    """Like _dir_info, plus whether the backup's docker image still exists.
+
+    Rollback re-tags `ir-dspm:<backup_id>` as :current, so a backup whose image
+    was pruned (only MAX_BACKUPS are kept) can't be rolled back — surface that so
+    the UI doesn't offer a button that's guaranteed to fail.
+    """
+    info = _dir_info(path)
+    if info is not None:
+        info["rollbackable"] = _docker_image_exists(f"{DOCKER_IMAGE}:{path.name}")
+    return info
 
 
 def _service_status() -> dict:
@@ -324,7 +336,7 @@ def _safe_extract_zip(zip_path: Path, dest: Path):
 def _find_package_root(extract_dir: Path) -> Path:
     """Accept either a flat package at root or one nested in a single top-level folder.
 
-    Same shape as the AISPM/DB-Security deploy portals: main.py + frontend/index.html.
+    Same shape as the AIDRT/DB-Security deploy portals: main.py + frontend/index.html.
     """
     if (extract_dir / "main.py").is_file() and (extract_dir / "frontend" / "index.html").is_file():
         return extract_dir
@@ -417,6 +429,13 @@ def api_overview():
 @dspm_bp.route(f"{PROXY_PREFIX}/", defaults={"path": ""}, methods=["GET", "POST"])
 @dspm_bp.route(f"{PROXY_PREFIX}/<path:path>", methods=["GET", "POST"])
 def dspm_proxy(path):
+    # Viewing the dashboard is open to everyone; the only mutating sidecar path
+    # (POST /api/refresh, which rebuilds the dataset) requires a logged-in user.
+    if request.method != "GET" and current_user() is None:
+        if request.is_json or request.accept_mimetypes.best == "application/json":
+            return jsonify({"success": False, "error": "login_required"}), 401
+        return redirect(f"/login?next={quote(request.full_path)}")
+
     upstream_url = f"{DSPM_BASE}/{path}"
     headers = {k: v for k, v in request.headers.items() if k.lower() != "host"}
 
@@ -447,8 +466,8 @@ def dspm_proxy(path):
 # ---------------------------------------------------------------------------
 
 @dspm_bp.route("/api/dspm/versions", methods=["GET"])
+@login_required
 def dspm_versions():
-    _require_token()
     active_info = _dir_info(ACTIVE_DIR)
     staged = sorted(
         (d for d in STAGING_DIR.iterdir() if d.is_dir()),
@@ -461,15 +480,15 @@ def dspm_versions():
     return jsonify({
         "active": active_info,
         "staged": [_dir_info(p) for p in staged],
-        "backups": [_dir_info(p) for p in backups],
+        "backups": [_backup_info(p) for p in backups],
         "service": _service_status(),
         "audit_recent": _read_audit(limit=20),
     })
 
 
 @dspm_bp.route("/api/dspm/upload", methods=["POST"])
+@require_capability(DEPLOY_SIDECAR, sidecar='dspm')
 def dspm_upload():
-    _require_token()
     f = request.files.get("zip")
     if not f or not f.filename:
         return jsonify({"ok": False, "error": "No 'zip' file in request"}), 400
@@ -528,8 +547,8 @@ def dspm_upload():
 
 
 @dspm_bp.route("/api/dspm/activate", methods=["POST"])
+@require_capability(DEPLOY_SIDECAR, sidecar='dspm')
 def dspm_activate():
-    _require_token()
     data = request.get_json(silent=True) or request.form
     version_id = (data.get("version_id") or "").strip()
     if not VERSION_ID_RE.match(version_id):
@@ -538,14 +557,19 @@ def dspm_activate():
     if not staged_src.is_dir():
         return jsonify({"ok": False, "error": f"Staged version {version_id} not found"}), 404
 
-    for support_file in ("Dockerfile", ".dockerignore"):
-        if not (staged_src / support_file).exists() and (ACTIVE_DIR / support_file).exists():
+    for support_file in ("Dockerfile", ".dockerignore", "_wsgi.py"):
+        if (staged_src / support_file).exists():
+            continue
+        if (ACTIVE_DIR / support_file).exists():
             shutil.copy2(ACTIVE_DIR / support_file, staged_src / support_file)
+        elif (CANONICAL_ASSETS_DIR / support_file).exists():
+            shutil.copy2(CANONICAL_ASSETS_DIR / support_file, staged_src / support_file)
 
     build = _docker_build(staged_src, version_id)
     if not build["ok"]:
         _audit("activate_failed", version_id, {"stage": "build", "tail": build.get("tail", "")})
-        return jsonify({"ok": False, "error": "Docker build failed", "build": build}), 500
+        detail = build.get("error") or (build.get("tail") or "").strip() or "see build output"
+        return jsonify({"ok": False, "error": f"Docker build failed: {detail}", "build": build}), 500
 
     BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
     backup_id = _new_version_id(version_id[-6:])
@@ -582,8 +606,8 @@ def dspm_activate():
 
 
 @dspm_bp.route("/api/dspm/rollback", methods=["POST"])
+@require_capability(DEPLOY_SIDECAR, sidecar='dspm')
 def dspm_rollback():
-    _require_token()
     data = request.get_json(silent=True) or request.form
     backup_id = (data.get("backup_id") or "").strip()
     if not VERSION_ID_RE.match(backup_id):
@@ -624,8 +648,8 @@ def dspm_rollback():
 
 
 @dspm_bp.route("/api/dspm/staged/<version_id>", methods=["DELETE"])
+@require_capability(DEPLOY_SIDECAR, sidecar='dspm')
 def dspm_delete_staged(version_id):
-    _require_token()
     if not VERSION_ID_RE.match(version_id):
         return jsonify({"ok": False, "error": "Invalid version_id"}), 400
     target = STAGING_DIR / version_id

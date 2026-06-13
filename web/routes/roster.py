@@ -8,6 +8,8 @@ import pytz
 from flask import Blueprint, jsonify, render_template, request
 
 from src.utils.logging_utils import log_web_activity, get_client_ip
+from web.auth.helpers import login_required
+from web.auth.rbac import require_capability, DATA_DESTRUCTIVE
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +153,7 @@ def api_get_period(period_id):
 
 
 @roster_bp.route("/api/roster/period", methods=["POST"])
+@login_required
 @log_web_activity
 def api_create_period():
     from src.components import roster
@@ -174,6 +177,7 @@ def api_create_period():
 
 
 @roster_bp.route("/api/roster/slot", methods=["PUT"])
+@login_required
 @log_web_activity
 def api_update_slot():
     from src.components import roster
@@ -197,6 +201,7 @@ def api_update_slot():
 
 
 @roster_bp.route("/api/roster/team-members", methods=["POST"])
+@login_required
 @log_web_activity
 def api_add_team_member():
     from src.components import roster
@@ -213,6 +218,7 @@ def api_add_team_member():
 
 
 @roster_bp.route("/api/roster/team-members", methods=["PUT"])
+@login_required
 @log_web_activity
 def api_update_team_member():
     from src.components import roster
@@ -235,6 +241,7 @@ def api_update_team_member():
 
 
 @roster_bp.route("/api/roster/team-members", methods=["DELETE"])
+@require_capability(DATA_DESTRUCTIVE)
 @log_web_activity
 def api_remove_team_member():
     from src.components import roster

@@ -2,16 +2,21 @@
 
 // ── State ──
 var addedFields = {};
-var fieldDefs = {};
+var fieldDefs = {};       // key -> display label
+var fieldExamples = {};   // key -> sample value (common fields only)
 var activeCat = '';
-var _pwResolve = null;
 
 (function() {
     try {
-        var raw = document.getElementById('silencer-fields-data').textContent;
-        fieldDefs = JSON.parse(raw);
+        var raw = document.getElementById('silencer-field-options').textContent;
+        var opts = JSON.parse(raw);
+        (opts.all || []).forEach(function(o) { fieldDefs[o.key] = o.label; });
+        (opts.common || []).forEach(function(o) {
+            fieldDefs[o.key] = o.label;
+            if (o.example) fieldExamples[o.key] = o.example;
+        });
     } catch (e) {
-        console.error('Failed to parse silencer field defs:', e);
+        console.error('Failed to parse silencer field options:', e);
     }
 })();
 
@@ -92,12 +97,29 @@ document.addEventListener('keydown', function(e) {
 function onFieldKeyChange() {
     var keyEl = document.getElementById('fieldKey');
     var customEl = document.getElementById('customFieldKey');
-    if (keyEl.value === '__custom__') {
+    var valEl = document.getElementById('fieldValue');
+    var hintEl = document.getElementById('fieldExampleHint');
+    var key = keyEl.value;
+
+    if (key === '__custom__') {
         customEl.style.display = '';
         customEl.focus();
+        if (hintEl) hintEl.style.display = 'none';
+        valEl.placeholder = 'Exact value (copy-paste from ticket)';
+        return;
+    }
+
+    customEl.style.display = 'none';
+    customEl.value = '';
+
+    var ex = fieldExamples[key];
+    if (ex && hintEl) {
+        hintEl.textContent = '💡 Example ' + (fieldDefs[key] || key) + ': ' + ex;
+        hintEl.style.display = '';
+        valEl.placeholder = 'e.g. ' + ex;
     } else {
-        customEl.style.display = 'none';
-        customEl.value = '';
+        if (hintEl) hintEl.style.display = 'none';
+        valEl.placeholder = 'Exact value (copy-paste from ticket)';
     }
 }
 
@@ -159,15 +181,16 @@ async function submitSilencer(event) {
         return;
     }
 
-    var password = await askPassword('Enter password to create');
-    if (!password) return;
-
+    var expiryDate = document.getElementById('silencerExpiry').value;
+    if (!expiryDate) {
+        showToast('Pick an expiry date', 'error');
+        return;
+    }
     var data = {
         description: document.getElementById('silencerDesc').value.trim(),
         category: document.getElementById('silencerCat').value,
-        expiry_days: parseInt(document.getElementById('silencerExpiry').value, 10),
-        fields: addedFields,
-        password: password
+        expiry_date: expiryDate,
+        fields: addedFields
     };
 
     var btn = document.getElementById('submitBtn');
@@ -175,7 +198,7 @@ async function submitSilencer(event) {
     btn.textContent = 'Creating...';
 
     try {
-        var resp = await fetch('/api/ticket-cannon/create', {
+        var resp = await editFetch('/api/ticket-cannon/create', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(data)
@@ -185,6 +208,8 @@ async function submitSilencer(event) {
             showToast('Entry created — reloading...');
             closeNewModal();
             setTimeout(function() { location.reload(); }, 600);
+        } else if (result.error === 'login_required') {
+            showToast('Please sign in to make changes', 'error');
         } else {
             showToast(result.message || 'Failed to create entry', 'error');
         }
@@ -198,48 +223,24 @@ async function submitSilencer(event) {
 
 // ── Toggle ──
 async function toggleEntry(id, active, category) {
-    var password = await askPassword('Enter password to ' + (active ? 'activate' : 'deactivate'));
-    if (!password) return;
-
     try {
-        var resp = await fetch('/api/ticket-cannon/' + id + '/toggle', {
+        var resp = await editFetch('/api/ticket-cannon/' + id + '/toggle', {
             method: 'PUT',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({active: active, category: category, password: password})
+            body: JSON.stringify({active: active, category: category})
         });
         var result = await resp.json();
         if (result.status === 'success') {
             showToast((active ? 'Activated' : 'Deactivated') + ' — reloading...');
             setTimeout(function() { location.reload(); }, 600);
+        } else if (result.error === 'login_required') {
+            showToast('Please sign in to make changes', 'error');
         } else {
             showToast(result.message || 'Toggle failed', 'error');
         }
     } catch (e) {
         showToast('Network error: ' + e.message, 'error');
     }
-}
-
-// ── Password Modal ──
-function askPassword(title) {
-    return new Promise(function(resolve) {
-        _pwResolve = resolve;
-        document.getElementById('pwTitle').textContent = title || 'Enter Password';
-        document.getElementById('pwInput').value = '';
-        document.getElementById('pwModal').style.display = 'flex';
-        setTimeout(function() { document.getElementById('pwInput').focus(); }, 100);
-    });
-}
-
-function confirmPassword() {
-    var pw = document.getElementById('pwInput').value;
-    document.getElementById('pwModal').style.display = 'none';
-    if (_pwResolve) { _pwResolve(pw); _pwResolve = null; }
-}
-
-function cancelPassword(event) {
-    if (event && event.target !== event.currentTarget) return;
-    document.getElementById('pwModal').style.display = 'none';
-    if (_pwResolve) { _pwResolve(null); _pwResolve = null; }
 }
 
 // ── Utility ──

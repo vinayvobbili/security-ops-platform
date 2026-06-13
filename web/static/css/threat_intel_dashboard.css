@@ -1473,6 +1473,33 @@ body.dark-mode .tid-occurrence-pill {
 .tid-coverage-pill.moderate { background: rgba(234,179,8,0.15); color: #eab308; }
 .tid-coverage-pill.weak    { background: rgba(239,68,68,0.15); color: #ef4444; }
 
+/* AttackIQ BAS validation pills — "did a live simulation trip our detection?" */
+.tid-bas-pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 0.82rem;
+    white-space: nowrap;
+}
+.tid-bas-pill.bas-detected { background: rgba(34,197,94,0.15);  color: #22c55e; }
+.tid-bas-pill.bas-gap      { background: rgba(239,68,68,0.18);  color: #ef4444; }
+.tid-bas-pill.bas-untested { background: rgba(148,163,184,0.15); color: #94a3b8; }
+
+/* BAS action buttons in the coverage modal */
+.tid-bas-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.tid-bas-btn {
+    border: none; border-radius: 8px; padding: 7px 14px; font-weight: 600;
+    font-size: 0.85rem; cursor: pointer; transition: opacity 0.15s ease;
+}
+.tid-bas-btn:hover:not(:disabled) { opacity: 0.85; }
+.tid-bas-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.tid-bas-btn.build { background: linear-gradient(135deg, #0046AD, #00A651); color: #fff; }
+.tid-bas-btn.run   { background: #b91c1c; color: #fff; }
+.tid-bas-section { margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid rgba(148,163,184,0.25); }
+.tid-bas-section h4 { margin: 0 0 6px; font-size: 0.95rem; }
+.tid-bas-note { font-size: 0.78rem; color: #94a3b8; margin-top: 6px; }
+
 /* Platform badge in coverage modal */
 .tid-platform-badge {
     display: inline-block;

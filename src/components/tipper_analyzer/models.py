@@ -3,11 +3,13 @@
 from dataclasses import dataclass, asdict, field
 from typing import List, Dict, Optional, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # Default lookback periods for IOC hunting
 DEFAULT_QRADAR_HUNT_HOURS = 168    # 7 days
 DEFAULT_CROWDSTRIKE_HUNT_HOURS = 720  # 30 days
+DEFAULT_XSIAM_HUNT_HOURS = 720     # 30 days
+DEFAULT_THREAT_HUNT_HOURS = 168    # 7 days (behavioral/TTP hunts — recent-window focus)
 
 
 class VulnerableProductMention(BaseModel):
@@ -68,6 +70,36 @@ class NoveltyLLMResponse(BaseModel):
         )
     )
 
+    @field_validator("vulnerable_products", mode="before")
+    @classmethod
+    def _coerce_vulnerable_products(cls, v):
+        """Tolerate the way GLM (no constrained decoding) renders this field.
+
+        It frequently returns bare product-name strings instead of
+        {product, vendor, version_constraint} objects. Coerce strings to objects
+        and drop anything unusable rather than failing the whole response.
+        """
+        if not isinstance(v, list):
+            return []
+        out = []
+        for item in v:
+            if isinstance(item, str) and item.strip():
+                out.append({"product": item.strip()})
+            elif isinstance(item, dict) and item.get("product"):
+                out.append(item)
+        return out
+
+    @field_validator("novelty_label", mode="before")
+    @classmethod
+    def _normalize_novelty_label(cls, v):
+        """Snap case/spacing variants to the canonical label (e.g. 'mostly new'
+        -> 'Mostly New'); pass anything else through for the Literal to reject."""
+        canon = {"seen before": "Seen Before", "familiar": "Familiar",
+                 "mostly new": "Mostly New", "net new": "Net New"}
+        if isinstance(v, str):
+            return canon.get(" ".join(v.split()).lower(), v)
+        return v
+
 
 @dataclass
 class NoveltyAnalysis:
@@ -84,6 +116,8 @@ class NoveltyAnalysis:
     recommendation: str
     raw_llm_response: str = ""
     rf_enrichment: Dict[str, Any] = field(default_factory=dict)  # Recorded Future intel
+    veracode_exposure: Optional[Dict[str, Any]] = None  # Veracode SCA: which apps carry an affected component
+    jfrog_exposure: Optional[Dict[str, Any]] = None  # JFrog Xray: which artifacts carry an affected component
     ioc_history: Dict[str, List[str]] = field(default_factory=dict)  # IOC -> [tipper_ids] seen before
     malware_history: Dict[str, List[str]] = field(default_factory=dict)  # Malware -> [tipper_ids] seen before
     current_malware: List[str] = field(default_factory=list)  # Malware families in current tipper
@@ -143,9 +177,11 @@ class IOCHuntResult:
     total_hits: int
     search_hours_qradar: int = DEFAULT_QRADAR_HUNT_HOURS
     search_hours_crowdstrike: int = DEFAULT_CROWDSTRIKE_HUNT_HOURS
+    search_hours_xsiam: int = DEFAULT_XSIAM_HUNT_HOURS
     qradar: Optional[ToolHuntResult] = None
     crowdstrike: Optional[ToolHuntResult] = None
     abnormal: Optional[ToolHuntResult] = None
+    xsiam: Optional[ToolHuntResult] = None
     errors: List[str] = field(default_factory=list)
     # Environment exposure summary
     unique_hosts: int = 0
@@ -161,6 +197,45 @@ class IOCHuntResult:
     queries_executed: List[Dict[str, str]] = field(default_factory=list)  # [{tool, query_type, query}]
     # Access issues for Webex notifications
     access_issues: List[str] = field(default_factory=list)  # List of tools/services with access issues
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+# ── Behavioral Threat Hunt (LLM-authored TTP queries) ─────────────────────────
+# Distinct from IOC hunting above: instead of matching known indicators, an LLM
+# authors behavioral/TTP hunt queries from the tipper narrative, which are then
+# validated and executed against the SIEM.
+
+@dataclass
+class BehavioralHunt:
+    """A single LLM-authored behavioral hunt: hypothesis + query + outcome."""
+    title: str
+    hypothesis: str
+    query: str
+    attack_technique: str = ""          # e.g. "T1059.001" (optional)
+    query_type: str = "logscale"        # platform dialect of `query`
+    status: str = "pending"             # executed | no_hits | skipped_validation | error
+    hit_count: int = 0
+    hostnames: List[str] = field(default_factory=list)
+    detail: str = ""                    # validation reason / error / notes
+    attempts: int = 0                   # how many CQL generations were tried (incl. LLM repairs)
+
+
+@dataclass
+class BehavioralHuntResult:
+    """Result of a behavioral threat hunt across all LLM-authored queries."""
+    tipper_id: str
+    tipper_title: str
+    hunt_time: str
+    hunts: List[BehavioralHunt] = field(default_factory=list)
+    queries_generated: int = 0
+    queries_executed: int = 0
+    total_hits: int = 0
+    search_hours: int = DEFAULT_THREAT_HUNT_HOURS
+    platform: str = "CrowdStrike LogScale"
+    llm_model: str = ""
+    errors: List[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)

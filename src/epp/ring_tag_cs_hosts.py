@@ -40,7 +40,7 @@ from rich.progress import track
 from webexpythonsdk import WebexAPI
 
 from my_config import get_config
-from services.crowdstrike import CrowdStrikeClient, CSCredentialProfile
+from services.crowdstrike import CrowdStrikeClient, CSCredentialProfile, CrowdStrikeAPIError
 from services.service_now import ServiceNowClient
 from services.epp_tagging_db import insert_tagging_run, bulk_insert_results
 from src.epp.cs_common import is_pmli_hostname
@@ -95,6 +95,11 @@ RING_1_ENVS = {"dev", "poc", "lab", "integration", "development"}  # All values 
 RING_2_ENVS = {"qa", "test"}
 RING_3_ENVS = {"dr"}
 # Ring 4 is for production or unknown environments
+
+# If at least this fraction of hosts hit a CrowdStrike API error (non-200) during
+# device-ID lookup, the lookups are unreliable (e.g. token expired/throttled mid-run),
+# so abort before applying a partial tag set and alert instead of completing silently.
+CS_API_ERROR_ABORT_THRESHOLD = 0.25
 
 # Timezone constant for consistent usage
 EASTERN_TZ = ZoneInfo("America/New_York")
@@ -174,6 +179,7 @@ class Host:
     was_country_guessed: bool = False
     life_cycle_status: str = ""
     status_message: str = ""
+    cs_api_error: bool = False  # True when the CS device-ID lookup failed with a non-200 (transient API/auth error, not a genuine "host not found")
     _os_domain: str = ""  # Internal: osDomain from ServiceNow, used for fallback country detection
 
     @staticmethod
@@ -222,10 +228,10 @@ class Host:
     def _set_host_details_from_cs(self) -> None:
         """Retrieve device ID and tags from CrowdStrike."""
         try:
-            self.device_id = crowdstrike.get_device_id(self.name)
+            self.device_id = crowdstrike.get_device_id(self.name, raise_on_error=True)
 
             if self.device_id is None:
-                self.status_message += f" Error retrieving CrowdStrike Device ID for {self.name}."
+                self.status_message += f" Host not found in CrowdStrike: {self.name}."
                 logger.warning(f"[CrowdStrike] Device ID not found for host: {self.name}")
                 return
 
@@ -250,6 +256,10 @@ class Host:
             # Log success for clarity
             logger.info(f"[CrowdStrike] Retrieved details for {self.name} (device_id: {self.device_id}), tags: {self.current_crowd_strike_tags}, category: {category}")
 
+        except CrowdStrikeAPIError as e:
+            self.cs_api_error = True
+            self.status_message += f" CrowdStrike API error during device-ID lookup: {str(e)}."
+            logger.error(f"[CrowdStrike] API error retrieving device ID for {self.name}: {e}")
         except Exception as e:
             self.status_message += f" Error retrieving CrowdStrike data: {str(e)}."
             logger.error(f"[CrowdStrike] Exception retrieving data for {self.name}: {e}")
@@ -682,6 +692,17 @@ Timing:
             logger.error(f"Error sending report: {e}")
             return False
 
+    @staticmethod
+    def send_alert(room_id, message: str) -> bool:
+        """Send a plain Webex alert (no file attachment) for guardrail failures."""
+        try:
+            webex_api = WebexAPI(config.webex_bot_access_token_jarvis)
+            response = webex_api.messages.create(roomId=room_id, markdown=message)
+            return bool(response)
+        except Exception as e:
+            logger.error(f"Error sending alert: {e}")
+            return False
+
 
 def parse_timestamp(date_str: Optional[str]) -> Optional[datetime]:
     """Parse an ISO 8601 timestamp string into a datetime object."""
@@ -721,11 +742,45 @@ def run_workflow(room_id, run_by: str = None):
         logger.warning("No hostnames found in input file. Exiting.")
         return
 
+    # Pre-flight: verify CrowdStrike auth before touching any host. A dead or
+    # expired WRITE token otherwise makes every device-ID lookup return non-200,
+    # which silently looks like "host not found" for all hosts and reports a
+    # clean "0 tagged" success (see run_id=133, 2026-05-28). Retries transient
+    # token failures with backoff so a momentary blip doesn't sink the whole run;
+    # a 401/403 (bad creds) fails fast without retry.
+    if not crowdstrike.validate_auth_with_retry():
+        logger.error(f"CrowdStrike auth pre-flight failed: {crowdstrike.last_error}. Aborting ring tagging.")
+        ReportHandler.send_alert(
+            room_id,
+            f"❌ Ring tagging aborted: CrowdStrike authentication failed before any host was processed "
+            f"({crowdstrike.last_error}). No tags were applied — re-run once auth is restored."
+        )
+        return
+
     # Use parallel initialization
     hosts = list(Host.initialize_hosts_parallel(hostnames))
 
     fetch_end = time.time()
     timings = {'fetch_duration': fetch_end - fetch_start}
+
+    # Guardrail: if a large fraction of hosts hit a CS API error (non-200) during
+    # device-ID lookup, the run is unreliable (e.g. token expired/throttled mid-run).
+    # Abort before generating/applying a partial tag set rather than reporting a
+    # silent success. Genuine "host not found" results do not count toward this.
+    api_error_count = sum(1 for host in hosts if host.cs_api_error)
+    if hosts and api_error_count / len(hosts) >= CS_API_ERROR_ABORT_THRESHOLD:
+        pct = api_error_count / len(hosts) * 100
+        logger.error(
+            f"CrowdStrike API errors on {api_error_count}/{len(hosts)} hosts ({pct:.0f}%) "
+            f">= {CS_API_ERROR_ABORT_THRESHOLD:.0%} threshold. Aborting ring tagging without applying tags."
+        )
+        ReportHandler.send_alert(
+            room_id,
+            f"❌ Ring tagging aborted: CrowdStrike API errors on {api_error_count} of {len(hosts)} hosts "
+            f"({pct:.0f}%) during device-ID lookup — lookups are unreliable, so no tags were applied. "
+            f"Re-run once CrowdStrike is healthy."
+        )
+        return
 
     # Generate tags
     generate_tag_start = time.time()

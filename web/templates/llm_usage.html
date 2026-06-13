@@ -239,30 +239,15 @@ body.dark-mode .lu-pagination button { background:rgba(99,102,241,0.12); border-
 {% endblock %}
 
 {% block content %}
-<!-- Auth overlay -->
-<div class="lu-auth-overlay" id="luAuthOverlay">
-    <div class="lu-auth-box">
-        <span class="lu-auth-icon">🔐</span>
-        <h2>LLM Usage Dashboard</h2>
-        <p class="lu-auth-sub">Enter password to view cost & usage analytics</p>
-        <form id="luAuthForm" onsubmit="event.preventDefault();luAuth();" autocomplete="on">
-            <input type="text" name="username" id="luUsername" value="admin" autocomplete="username" style="position:absolute;opacity:0;height:0;pointer-events:none;">
-            <input type="password" name="password" id="luPassword" placeholder="Password" autocomplete="current-password">
-            <div class="lu-auth-err" id="luAuthErr"></div>
-            <button type="submit">Unlock Dashboard</button>
-        </form>
-    </div>
-</div>
-
-<!-- Main content (hidden until auth) -->
-<div class="lu-page-bg" id="luMain" style="display:none;">
+<!-- Route is gated by @admin_required — reaching this page means you're an admin. -->
+<div class="lu-page-bg" id="luMain">
 <div class="lu-container">
 
     <!-- Header -->
     <div class="lu-header" style="justify-content:center; text-align:center;">
         <div class="lu-header-left">
             <span class="lu-header-badge">🐚</span>
-            <span class="lu-header-title">the alert triage service' LLM Usage & Cost Analytics</span>
+            <span class="lu-header-title">Barnacles' LLM Usage & Cost Analytics</span>
         </div>
     </div>
 
@@ -338,37 +323,19 @@ body.dark-mode .lu-pagination button { background:rgba(99,102,241,0.12); border-
 (function(){
     const PAGE_SIZE = 50;
     let currentOffset = 0;
-    let authPassword = '';
 
-    const botColors = { barnacles:'#6366f1', money_ball:'#f59e0b' };
     function fmt$(v) { return v != null ? '$' + v.toFixed(4) : '-'; }
     function fmtK(v) { return v >= 1000 ? (v/1000).toFixed(1) + 'k' : (v || 0).toString(); }
     function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
     function botParam() { return 'barnacles'; }
-    function authParam() { return '&password=' + encodeURIComponent(authPassword); }
+    // Admin gating now happens server-side via the session cookie — no
+    // legacy password is sent. authParam() is kept as a no-op so the
+    // existing `... + authParam()` URL templates compile unchanged.
+    function authParam() { return ''; }
     function botTag(name) {
         const cls = name === 'barnacles' ? 'lu-bot-barnacles' : name === 'money_ball' ? 'lu-bot-money_ball' : '';
         return `<span class="lu-bot-tag ${cls}">${esc(name)}</span>`;
     }
-
-    window.luAuth = function() {
-        const pw = document.getElementById('luPassword').value;
-        fetch('/api/llm-usage/auth', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({password: pw})
-        }).then(r => r.json()).then(d => {
-            if (d.success) {
-                authPassword = pw;
-                document.getElementById('luAuthOverlay').style.display = 'none';
-                document.getElementById('luMain').style.display = 'block';
-                loadAll();
-            } else {
-                document.getElementById('luAuthErr').textContent = 'Invalid password';
-                document.getElementById('luPassword').select();
-            }
-        });
-    };
 
     function loadStats() {
         const bot = botParam();
@@ -384,11 +351,6 @@ body.dark-mode .lu-pagination button { background:rgba(99,102,241,0.12); border-
                 document.getElementById('sAvgElapsed').textContent = (d.avg_elapsed || 0).toFixed(1);
 
                 const noData = '<div class="lu-row"><span class="lu-row-label" style="color:#9ca3af">No data yet</span></div>';
-
-                document.getElementById('byBotRows').innerHTML = (d.by_bot || []).map(b => {
-                    const c = botColors[b.bot] || '#6366f1';
-                    return `<div class="lu-row"><span class="lu-row-label"><span class="lu-row-dot" style="background:${c}"></span>${esc(b.bot)}</span><span class="lu-row-val">${b.count} prompts &middot; ${fmtK(b.tokens)} tok &middot; ${fmt$(b.cost)}</span></div>`;
-                }).join('') || noData;
 
                 document.getElementById('byModelRows').innerHTML = (d.by_model || []).map(m =>
                     `<div class="lu-row"><span class="lu-row-label"><span class="lu-row-dot" style="background:#a855f7"></span>${esc(m.model || 'unknown')}</span><span class="lu-row-val">${m.count} &middot; ${fmt$(m.cost)}</span></div>`
@@ -435,7 +397,7 @@ body.dark-mode .lu-pagination button { background:rgba(99,102,241,0.12); border-
     window._luLoadLogs = loadLogs;
     window.loadAll = loadAll;
 
-    document.getElementById('luPassword').focus();
+    loadAll();
 })();
 </script>
 {% endblock %}

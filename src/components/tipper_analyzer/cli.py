@@ -68,6 +68,23 @@ def analyze_recent_tippers(hours_back: int = 1, room_id: str = _config.webex_roo
     config = get_config()
     area_path = azdo_area_paths.get('threat_hunting', 'Detection-Engineering\\DE Rules\\Threat Hunting')
 
+    # First, re-send any analysis cards a prior run could not deliver (e.g. a
+    # transient Webex egress outage parked them). Cheap no-op when the queue is
+    # empty; re-sends the card only (no hunts / no duplicate AZDO comments).
+    try:
+        from .webex_retry import pending, flush_retry_queue
+        if room_id and pending():
+            from src.components.tipper_analyzer.llm_init import ensure_llm_initialized
+            ensure_llm_initialized()
+            n = flush_retry_queue(
+                TipperAnalyzer(), room_id,
+                WebexAPI(access_token=config.webex_bot_access_token_pokedex),
+            )
+            if n:
+                logger.info(f"[Tipper Analysis] Re-sent {n} previously-failed analysis card(s)")
+    except Exception as e:
+        logger.warning(f"[Tipper Analysis] retry-queue flush failed: {e}")
+
     # Note: Tipper index sync is handled by daily_tipper_index_sync job at 6:00 AM
 
     # Calculate cutoff timestamp for Python filtering

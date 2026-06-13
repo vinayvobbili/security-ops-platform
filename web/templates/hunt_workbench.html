@@ -1,0 +1,636 @@
+{% extends "base_layout.html" %}
+{% set page_title_text = "Threat Hunt Workbench" %}
+{% set page_title_left_icon = "🔭" %}
+{% set page_title_right_icon = "🎯" %}
+
+{% block extra_css %}
+<style>
+  /* Colorful page backdrop — light + REQUIRED dark mode (house style) */
+  body.hw-body { background:
+      radial-gradient(1100px 520px at 10% -6%, #dbe7ff 0%, transparent 55%),
+      radial-gradient(1000px 560px at 96% 2%, #ffe0ef 0%, transparent 52%),
+      radial-gradient(1200px 720px at 50% 120%, #d6f5e6 0%, transparent 55%),
+      linear-gradient(160deg, #eef3ff 0%, #fdeef7 48%, #eafaf2 100%) !important;
+      background-attachment: fixed !important; min-height: 100vh; }
+  body.hw-body.dark-mode { background:
+      linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%) !important;
+      color: #e2e8f0; }
+
+  /* Thick multi-color page scrollbar */
+  html { scrollbar-gutter: stable; }
+  ::-webkit-scrollbar { width: 16px; height: 16px; }
+  ::-webkit-scrollbar-track { border-radius: 10px;
+      background: linear-gradient(180deg, rgba(78,84,200,.08), rgba(10,143,214,.10) 50%, rgba(56,239,125,.08)); }
+  ::-webkit-scrollbar-thumb { border-radius: 10px; border: 2px solid transparent; background-clip: padding-box;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
+      background: linear-gradient(180deg, #ffd200 0%, #fc6767 22%, #ec008c 42%, #8f94fb 62%, #0a8fd6 80%, #38ef7d 100%); }
+  ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, #38ef7d 0%, #0a8fd6 20%, #8f94fb 38%, #ec008c 58%, #fc6767 78%, #ffd200 100%); }
+  ::-webkit-scrollbar-corner { background: transparent; }
+  body.dark-mode ::-webkit-scrollbar-track {
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.10) 50%, rgba(255,255,255,.06)); }
+
+  .hw-wrap { max-width: 1180px; margin: 0 auto; padding: 8px 18px 80px; }
+
+  /* ---- Hero band ---- */
+  .hw-hero { position: relative; overflow: hidden; border-radius: 22px; padding: 30px 36px;
+             margin: 8px 0 26px; color: #fff;
+             background: linear-gradient(120deg, #2a0a52 0%, #0046ad 52%, #0a8fd6 100%);
+             box-shadow: 0 20px 50px rgba(20,10,70,.36); }
+  .hw-hero::before { content:""; position:absolute; inset:0;
+             background: radial-gradient(820px 360px at 88% -40%, rgba(141,211,255,.40), transparent 60%),
+                         radial-gradient(560px 320px at -6% 130%, rgba(70,224,138,.38), transparent 60%),
+                         radial-gradient(420px 280px at 60% 150%, rgba(236,0,140,.28), transparent 60%);
+             pointer-events:none; }
+  .hw-hero-in { position: relative; z-index: 1; display:flex; align-items:flex-start; justify-content:space-between; gap:24px; flex-wrap:wrap; }
+  .hw-eyebrow { font-size: .76rem; letter-spacing: 2.4px; text-transform: uppercase;
+                font-weight: 700; color: #b9d6ff; margin-bottom: 11px; display:flex; align-items:center; gap:9px; }
+  .hw-livepip { width: 9px; height: 9px; border-radius: 50%; background: #46e08a;
+                box-shadow: 0 0 0 0 rgba(70,224,138,.7); animation: hwpulse 2s infinite; }
+  @keyframes hwpulse { 0%{box-shadow:0 0 0 0 rgba(70,224,138,.7)} 70%{box-shadow:0 0 0 12px rgba(70,224,138,0)} 100%{box-shadow:0 0 0 0 rgba(70,224,138,0)} }
+  .hw-hero h1 { font-size: 1.95rem; line-height: 1.16; margin: 0 0 10px; font-weight: 800; letter-spacing: -.7px; }
+  .hw-hero h1 .accent { background: linear-gradient(90deg,#8fd3ff,#46e08a); -webkit-background-clip: text;
+                        background-clip: text; -webkit-text-fill-color: transparent; }
+  .hw-hero p { font-size: 1.02rem; line-height: 1.5; margin: 0; color: #e2ecfb; max-width: 660px; }
+  .hw-hero p b { color: #fff; }
+  .hw-howbtn { background: #fff; border: none; color: #0046ad;
+               border-radius: 12px; padding: 12px 20px; font-size: .92rem; cursor: pointer; font-weight: 800;
+               white-space: nowrap; box-shadow: 0 8px 20px rgba(10,20,60,.28); display:inline-flex; align-items:center; gap:8px; }
+  .hw-howbtn:hover { transform: translateY(-2px); box-shadow: 0 12px 26px rgba(10,20,60,.36); filter: brightness(1.02); }
+
+  /* ---- Cards ---- */
+  .hw-card { position: relative; background: rgba(255,255,255,.86); backdrop-filter: blur(7px);
+             border: 1px solid rgba(255,255,255,.9); border-radius: 18px; padding: 22px 24px;
+             margin-bottom: 20px; box-shadow: 0 8px 24px rgba(40,30,90,.10); overflow: hidden; }
+  .hw-card::before { content:""; position:absolute; left:0; top:0; bottom:0; width:5px;
+                     background: linear-gradient(180deg,#0046ad,#00a651); }
+  body.dark-mode .hw-card { background: rgba(30,41,59,.82); border-color: rgba(148,163,184,.18); }
+  .hw-card h3 { margin: 0 0 14px; font-size: 1.12rem; font-weight: 800; color: #0046ad;
+                display:flex; align-items:center; gap:9px; }
+  body.dark-mode .hw-card h3 { color: #4dabf7; }
+
+  /* ---- Input form ---- */
+  .hw-label { font-size: .74rem; text-transform: uppercase; letter-spacing: .8px; font-weight: 800;
+              color: #6b6588; margin: 0 0 6px; }
+  body.dark-mode .hw-label { color: #94a3b8; }
+  .hw-title-in { width: 100%; box-sizing: border-box; border: 1.5px solid #d7def0; border-radius: 11px;
+                 padding: 11px 14px; font-size: .98rem; margin-bottom: 16px; background: #fff; color: #1a1340; }
+  .hw-ta { width: 100%; box-sizing: border-box; min-height: 190px; resize: vertical; border: 1.5px solid #d7def0;
+           border-radius: 12px; padding: 14px 16px; font-size: .95rem; line-height: 1.5; background: #fff; color: #1a1340;
+           font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .hw-title-in:focus, .hw-ta:focus { outline: none; border-color: #0a8fd6; box-shadow: 0 0 0 3px rgba(10,143,214,.16); }
+  body.dark-mode .hw-title-in, body.dark-mode .hw-ta { background: #0f1c30; border-color: #334155; color: #e6edf8; }
+
+  .hw-opts { display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-end; margin: 18px 0 4px; }
+  .hw-optgrp { display: flex; flex-direction: column; gap: 8px; }
+  .hw-checks { display: flex; flex-wrap: wrap; gap: 9px; }
+  .hw-chk { display: inline-flex; align-items: center; gap: 7px; padding: 8px 13px; border-radius: 20px;
+            background: #eef2fb; border: 1.5px solid transparent; cursor: pointer; font-size: .86rem; font-weight: 700;
+            color: #3a4668; user-select: none; transition: all .14s; }
+  .hw-chk input { accent-color: #0046ad; width: 15px; height: 15px; }
+  .hw-chk.on { background: linear-gradient(135deg,#e3ecff,#dff5ea); border-color: #0a8fd6; color: #0046ad; }
+  body.dark-mode .hw-chk { background: #1c2942; color: #aebbd6; }
+  body.dark-mode .hw-chk.on { background: linear-gradient(135deg,#16335c,#0f3a2c); border-color: #4dabf7; color: #8fd3ff; }
+  .hw-sel { border: 1.5px solid #d7def0; border-radius: 10px; padding: 9px 13px; font-size: .9rem; font-weight: 700;
+            background: #fff; color: #1a1340; cursor: pointer; }
+  body.dark-mode .hw-sel { background: #0f1c30; border-color: #334155; color: #e6edf8; }
+
+  .hw-actions { display: flex; gap: 12px; align-items: center; margin-top: 20px; flex-wrap: wrap; }
+  .hw-run { background: linear-gradient(135deg,#0046ad,#00a651); border: none; color: #fff; border-radius: 12px;
+            padding: 13px 26px; font-size: 1rem; font-weight: 800; cursor: pointer;
+            box-shadow: 0 10px 24px rgba(0,70,173,.30); display:flex; align-items:center; gap:9px; }
+  .hw-run:hover { filter: brightness(1.07); transform: translateY(-1px); }
+  .hw-run:disabled { opacity: .55; cursor: not-allowed; transform: none; filter: none; }
+  .hw-ghost { background: transparent; border: 1.5px solid #c9d3e8; border-radius: 12px;
+              padding: 12px 18px; font-size: .92rem; font-weight: 700; cursor: pointer; color: #4a5578; }
+  .hw-ghost:hover { background: rgba(0,70,173,.06); }
+  body.dark-mode .hw-ghost { border-color: #3a4a66; color: #b8c4d8; }
+  .hw-hint { font-size: .82rem; color: #8b86a6; }
+  body.dark-mode .hw-hint { color: #94a3b8; }
+  .hw-err { color: #d12b4a; font-weight: 700; font-size: .9rem; }
+
+  /* ---- Progress ---- */
+  .hw-prog { display: none; align-items: center; gap: 14px; padding: 16px 4px 4px; }
+  .hw-prog.on { display: flex; }
+  .hw-spin { width: 26px; height: 26px; border-radius: 50%; border: 3px solid rgba(10,143,214,.22);
+             border-top-color: #0a8fd6; animation: hwspin .8s linear infinite; flex: none; }
+  @keyframes hwspin { to { transform: rotate(360deg); } }
+  .hw-phase { font-weight: 700; color: #0046ad; font-size: .98rem; }
+  body.dark-mode .hw-phase { color: #8fd3ff; }
+  .hw-phase .sub { display:block; font-weight: 500; color: #8b86a6; font-size: .8rem; margin-top: 2px; }
+
+  /* ---- Verdict ---- */
+  .hw-verdicts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 18px; }
+  .hw-v { border-radius: 16px; padding: 20px 22px; color: #fff; position: relative; overflow: hidden;
+          box-shadow: 0 12px 28px rgba(20,35,63,.20); }
+  .hw-v::before { content:""; position:absolute; right:-30px; top:-30px; width:130px; height:130px;
+                  border-radius:50%; background: rgba(255,255,255,.13); }
+  .hw-v .vk { font-size: .72rem; text-transform: uppercase; letter-spacing: 1.2px; font-weight: 800; opacity: .92; }
+  .hw-v .vv { font-size: 1.7rem; font-weight: 800; margin: 6px 0 8px; display:flex; align-items:center; gap:10px; letter-spacing:-.5px; }
+  .hw-v .vd { font-size: .9rem; line-height: 1.5; opacity: .97; position: relative; z-index: 1; }
+  .v-yes  { background: linear-gradient(135deg,#c31432,#f45c43); }
+  .v-no   { background: linear-gradient(135deg,#11998e,#38ef7d); }
+  .v-incon{ background: linear-gradient(135deg,#f7971e,#ffba30); }
+  .v-full { background: linear-gradient(135deg,#11998e,#38ef7d); }
+  .v-part { background: linear-gradient(135deg,#f7971e,#ffba30); }
+  .v-gap  { background: linear-gradient(135deg,#c31432,#f45c43); }
+  .v-unk  { background: linear-gradient(135deg,#5a6480,#8893ad); }
+
+  .hw-actions-list { list-style: none; padding: 0; margin: 6px 0 0; }
+  .hw-actions-list li { display:flex; gap:10px; align-items:flex-start; padding: 9px 0; border-bottom: 1px dashed #e6e9f2;
+                        font-size: .94rem; color: #2c2748; line-height: 1.45; }
+  .hw-actions-list li:last-child { border-bottom: none; }
+  .hw-actions-list li .n { flex:none; width:22px; height:22px; border-radius:50%; background:linear-gradient(135deg,#0046ad,#0a8fd6);
+                           color:#fff; font-size:.74rem; font-weight:800; display:flex; align-items:center; justify-content:center; margin-top:1px; }
+  body.dark-mode .hw-actions-list li { color: #dbe4f0; border-color: #2c3a52; }
+
+  /* ---- Indicator chips ---- */
+  .hw-chips { display: flex; flex-wrap: wrap; gap: 9px; }
+  .hw-ichip { display:inline-flex; align-items:center; gap:7px; padding: 7px 13px; border-radius: 20px;
+              font-size: .85rem; font-weight: 700; color: #2c2748; background: rgba(255,255,255,.7);
+              border: 1.5px solid rgba(10,143,214,.2); }
+  .hw-ichip b { color: #0046ad; }
+  body.dark-mode .hw-ichip { background: rgba(15,28,48,.6); color: #cdd8ea; border-color: rgba(77,171,247,.25); }
+  body.dark-mode .hw-ichip b { color: #8fd3ff; }
+  .hw-ichip.zero { opacity: .45; }
+
+  /* ---- Tool result rows ---- */
+  .hw-tool { display:flex; align-items:center; gap:14px; padding: 13px 16px; border-radius: 13px;
+             background: rgba(255,255,255,.7); border: 1px solid rgba(0,0,0,.05); margin-bottom: 10px; }
+  body.dark-mode .hw-tool { background: rgba(15,28,48,.55); border-color: rgba(148,163,184,.14); }
+  .hw-tool .tn { font-weight: 800; color: #1a1340; min-width: 130px; display:flex; align-items:center; gap:8px; }
+  body.dark-mode .hw-tool .tn { color: #e8eefc; }
+  .hw-tool .th { font-size: 1.5rem; font-weight: 800; letter-spacing: -.5px; }
+  .hw-tool .th.hit { color: #d12b4a; } .hw-tool .th.clean { color: #17a05a; }
+  .hw-tool .tmeta { font-size: .82rem; color: #7c7693; }
+  body.dark-mode .hw-tool .tmeta { color: #9fb0c9; }
+  .hw-pill { display:inline-block; font-size:.66rem; font-weight:800; padding:3px 10px; border-radius:20px;
+             text-transform:uppercase; letter-spacing:.5px; }
+  .p-hit { background:#fbdce3; color:#b21e3c; } .p-clean { background:#d8f7e4; color:#0f7a3c; }
+  .p-warn { background:#fde3cf; color:#b5530a; }
+  body.dark-mode .p-hit { background:#3a1620; color:#ff8da3; }
+  body.dark-mode .p-clean { background:#143a26; color:#46e08a; }
+  body.dark-mode .p-warn { background:#3a2510; color:#f0a24a; }
+
+  /* ---- Behavioral hunts ---- */
+  .hw-hunt { border: 1px solid rgba(0,0,0,.07); border-radius: 13px; padding: 14px 16px; margin-bottom: 11px;
+             background: rgba(255,255,255,.66); }
+  body.dark-mode .hw-hunt { background: rgba(15,28,48,.5); border-color: rgba(148,163,184,.14); }
+  .hw-hunt .hh { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .hw-hunt .ht { font-weight: 800; color: #1a1340; font-size: .98rem; }
+  body.dark-mode .hw-hunt .ht { color: #e8eefc; }
+  .hw-hunt .hy { font-size: .86rem; color: #5d5878; margin: 6px 0 9px; line-height: 1.45; }
+  body.dark-mode .hw-hunt .hy { color: #9fb0c9; }
+  .hw-q { font-family: ui-monospace, Menlo, monospace; font-size: .8rem; background: #0f1c30; color: #cfe3ff;
+          border-radius: 9px; padding: 11px 13px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+  .hw-tag { display:inline-block; font-size:.66rem; font-weight:800; padding:3px 9px; border-radius:7px;
+            background:#e7ecf7; color:#3a4668; margin-right:6px; }
+  body.dark-mode .hw-tag { background:#1c2942; color:#aebbd6; }
+
+  /* ---- Coverage ---- */
+  .hw-techgrid { display:flex; flex-wrap:wrap; gap:9px; margin-top:6px; }
+  .hw-tech { font-family: ui-monospace, monospace; font-weight:800; font-size:.84rem; padding:7px 13px; border-radius:10px; }
+  .t-cov { background:#d8f7e4; color:#0f7a3c; } .t-gap { background:#fbdce3; color:#b21e3c; }
+  body.dark-mode .t-cov { background:#143a26; color:#46e08a; } body.dark-mode .t-gap { background:#3a1620; color:#ff8da3; }
+  .hw-covsub { font-size:.8rem; color:#7c7693; margin:14px 0 5px; font-weight:800; text-transform:uppercase; letter-spacing:.6px; }
+  body.dark-mode .hw-covsub { color:#94a3b8; }
+  .hw-rule { font-size:.85rem; color:#3a4668; padding:5px 0; }
+  body.dark-mode .hw-rule { color:#cdd8ea; }
+  .hw-note { font-size:.88rem; color:#7c7693; font-style: italic; line-height:1.5; }
+  body.dark-mode .hw-note { color:#9fb0c9; }
+
+  /* ---- Recent rail ---- */
+  .hw-recent { display: grid; grid-template-columns: 1fr; gap: 9px; }
+  .hw-rrow { display:flex; align-items:center; gap:12px; padding: 11px 14px; border-radius: 12px; cursor:pointer;
+             background: rgba(255,255,255,.66); border: 1px solid rgba(0,0,0,.05); transition: all .14s; }
+  .hw-rrow:hover { transform: translateX(3px); box-shadow: 0 6px 16px rgba(40,30,90,.12); }
+  body.dark-mode .hw-rrow { background: rgba(15,28,48,.5); border-color: rgba(148,163,184,.14); }
+  .hw-rrow .rt { flex:1; min-width:0; }
+  .hw-rrow .rt .tt { font-weight:700; color:#1a1340; font-size:.92rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  body.dark-mode .hw-rrow .rt .tt { color:#e8eefc; }
+  .hw-rrow .rt .mm { font-size:.76rem; color:#8b86a6; margin-top:2px; }
+  .hw-dot { width:10px; height:10px; border-radius:50%; flex:none; }
+  .d-yes{background:#f45c43;} .d-no{background:#38ef7d;} .d-incon{background:#ffba30;} .d-run{background:#0a8fd6; animation:hwpulse 1.6s infinite;} .d-err{background:#94a3b8;}
+
+  /* ---- Modal ---- */
+  .hw-modal-bg { position: fixed; inset: 0; background: rgba(20,10,50,.62); display: none;
+                 align-items: flex-start; justify-content: center; z-index: 9000; padding: 40px 16px;
+                 overflow-y: auto; backdrop-filter: blur(3px); }
+  .hw-modal-bg.open { display: flex; }
+  .hw-modal { background: #fff; border-radius: 18px; max-width: 720px; width: 100%;
+              padding: 28px 32px; box-shadow: 0 24px 70px rgba(0,0,0,.38);
+              animation: hwmodal .25s cubic-bezier(.22,1,.36,1); }
+  @keyframes hwmodal { from{opacity:0; transform: translateY(16px) scale(.98)} to{opacity:1; transform:none} }
+  .hw-modal h3 { margin: 0 0 6px; color: #0046ad; }
+  .hw-modal h4 { margin: 18px 0 5px; color: #1a1340; font-size: .98rem; display:flex; align-items:center; gap:8px; }
+  .hw-modal p { color: #4a5568; font-size: .9rem; line-height: 1.55; margin: 5px 0; }
+  .hw-modal .close { float: right; cursor: pointer; color: #95a0b3; font-size: 1.6rem; line-height: 1;
+                     border: none; background: none; }
+  body.dark-mode .hw-modal { background: #1e293b; }
+  body.dark-mode .hw-modal h3 { color: #4dabf7; }
+  body.dark-mode .hw-modal h4 { color: #e8eefc; }
+  body.dark-mode .hw-modal p { color: #b8c4d8; }
+
+  @media (max-width: 820px) {
+    .hw-verdicts { grid-template-columns: 1fr; }
+    .hw-opts { flex-direction: column; align-items: stretch; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="hw-wrap">
+
+  <div class="hw-hero">
+    <div class="hw-hero-in">
+      <div>
+        <div class="hw-eyebrow"><span class="hw-livepip"></span> 🟢 Live hunt &middot; read-only telemetry search</div>
+        <h1>Drop in threat intel. Ask <span class="accent">&ldquo;Were we touched?&rdquo;</span> &amp; <span class="accent">&ldquo;Can we detect it?&rdquo;</span> 🛰️</h1>
+        <p>Paste a CTI report or a set of IOCs &amp; TTPs. We fan the indicators across <b>QRadar, CrowdStrike &amp; XSIAM</b>,
+           let the in-house LLM <b>author behavioral hunts that actually run</b> 🤖, and map the techniques against our
+           <b>detection-rule catalog</b> &mdash; then hand you a verdict and next steps. ⚡</p>
+      </div>
+      <button class="hw-howbtn" onclick="hwOpenModal()">💡 How does this work?</button>
+    </div>
+  </div>
+
+  <!-- Input -->
+  <div class="hw-card">
+    <h3>📝 New hunt</h3>
+    <div class="hw-label">Title (optional)</div>
+    <input type="text" id="hw-title" class="hw-title-in" placeholder="e.g. Ghost / Cring ransomware campaign — CISA AA24-XXX" maxlength="200">
+    <div class="hw-label">Threat intel — CTI report, advisory text, or a list of IOCs &amp; ATT&amp;CK techniques</div>
+    <textarea id="hw-narrative" class="hw-ta" placeholder="Paste the report here. Include IPs, domains, URLs, file names, hashes, CVEs, and MITRE technique IDs (T1059, T1486, …) for the richest hunt."></textarea>
+
+    <div class="hw-opts">
+      <div class="hw-optgrp">
+        <div class="hw-label">Hunt IOCs across</div>
+        <div class="hw-checks" id="hw-tools">
+          <label class="hw-chk on"><input type="checkbox" value="qradar" checked> 🛰️ QRadar</label>
+          <label class="hw-chk on"><input type="checkbox" value="crowdstrike" checked> 🦅 CrowdStrike</label>
+          <label class="hw-chk"><input type="checkbox" value="xsiam"> 🧠 XSIAM</label>
+          <label class="hw-chk"><input type="checkbox" value="abnormal"> 📧 Abnormal</label>
+        </div>
+      </div>
+      <div class="hw-optgrp">
+        <div class="hw-label">Lookback</div>
+        <select id="hw-lookback" class="hw-sel">
+          <option value="24h">Last 24 hours</option>
+          <option value="7d" selected>Last 7 days</option>
+          <option value="30d">Last 30 days</option>
+        </select>
+      </div>
+      <div class="hw-optgrp">
+        <div class="hw-label">Behavioral TTP hunts</div>
+        <label class="hw-chk on" id="hw-beh-lbl"><input type="checkbox" id="hw-beh" checked> 🤖 LLM-authored, run live</label>
+      </div>
+    </div>
+
+    <div class="hw-actions">
+      <button class="hw-run" id="hw-run-btn" onclick="hwSubmit()">🔭 Run hunt</button>
+      <button class="hw-ghost" onclick="hwClear()">Clear</button>
+      <span class="hw-hint" id="hw-hint">Live hunts query corp tools and can take a minute or two.</span>
+    </div>
+    <div class="hw-err" id="hw-err" style="margin-top:10px"></div>
+
+    <div class="hw-prog" id="hw-prog">
+      <div class="hw-spin"></div>
+      <div class="hw-phase" id="hw-phase">Starting…<span class="sub" id="hw-phase-sub"></span></div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="hw-results"></div>
+
+  <!-- Recent -->
+  <div class="hw-card">
+    <h3>🕓 Recent hunts</h3>
+    <div class="hw-recent" id="hw-recent"><div class="hw-note">No hunts yet — run one above.</div></div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="hw-modal-bg" id="hw-modal-bg">
+  <div class="hw-modal">
+    <button class="close" onclick="hwCloseModal()">&times;</button>
+    <h3>🔭 How the Threat Hunt Workbench works</h3>
+    <p>This is the same engine that runs automatically on every piece of threat intel we ingest &mdash; exposed
+       here as a <b>hunter-in-the-loop</b> tool so you can point it at any report, on demand.</p>
+
+    <h4>1️⃣ Extract</h4>
+    <p>The text is parsed for indicators (IPs, domains, URLs, file names, hashes, CVEs), malware families,
+       threat actors and MITRE ATT&amp;CK technique IDs.</p>
+
+    <h4>2️⃣ &ldquo;Were we touched?&rdquo; — live IOC fan-out</h4>
+    <p>Every indicator is searched across the security tools you select (QRadar, CrowdStrike, XSIAM, Abnormal)
+       over your chosen lookback window. Hits come back with the hosts and sources that matched.</p>
+
+    <h4>3️⃣ Behavioral TTP hunts</h4>
+    <p>Beyond known indicators, the in-house LLM <b>authors behavioral hunt queries</b> (CrowdStrike LogScale &amp;
+       XSIAM XQL) from the narrative, validates them, and <b>executes them live</b> &mdash; catching attacker
+       behavior even when the specific IOCs differ.</p>
+
+    <h4>4️⃣ &ldquo;Can we detect this?&rdquo; — coverage map</h4>
+    <p>The report's ATT&amp;CK techniques are checked against our live detection-rule catalog (QRadar / CrowdStrike /
+       Tanium) to show what's <b>covered</b> vs. the <b>gaps</b> worth closing.</p>
+
+    <h4>5️⃣ Verdict</h4>
+    <p>A short verdict and prioritized next actions tie it together. Everything is <b>read-only</b> &mdash; no
+       blocking, quarantine, or detonation &mdash; and every run is logged with an audit trail and saved to the
+       shared hunt history.</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.body.classList.add('hw-body');
+
+let hwPoll = null;
+const esc = s => (s == null ? '' : String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])));
+const num = n => (n == null ? '0' : Number(n).toLocaleString());
+
+// chip toggles
+document.querySelectorAll('#hw-tools .hw-chk').forEach(l => {
+  l.addEventListener('click', () => setTimeout(() => l.classList.toggle('on', l.querySelector('input').checked), 0));
+});
+const behLbl = document.getElementById('hw-beh-lbl');
+document.getElementById('hw-beh').addEventListener('change', e => behLbl.classList.toggle('on', e.target.checked));
+
+function hwOpenModal(){ document.getElementById('hw-modal-bg').classList.add('open'); }
+function hwCloseModal(){ document.getElementById('hw-modal-bg').classList.remove('open'); }
+document.getElementById('hw-modal-bg').addEventListener('click', e => { if (e.target.id === 'hw-modal-bg') hwCloseModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') hwCloseModal(); });
+
+function hwClear(){
+  if (hwPoll) { clearInterval(hwPoll); hwPoll = null; }
+  document.getElementById('hw-title').value = '';
+  document.getElementById('hw-narrative').value = '';
+  document.getElementById('hw-err').textContent = '';
+  document.getElementById('hw-results').innerHTML = '';
+  document.getElementById('hw-prog').classList.remove('on');
+  document.getElementById('hw-run-btn').disabled = false;
+}
+
+async function hwSubmit(){
+  const narrative = document.getElementById('hw-narrative').value.trim();
+  const errEl = document.getElementById('hw-err');
+  errEl.textContent = '';
+  if (!narrative){ errEl.textContent = 'Paste a CTI report, or a set of IOCs / TTPs, to hunt.'; return; }
+
+  const tools = [...document.querySelectorAll('#hw-tools input:checked')].map(i => i.value);
+  const body = {
+    narrative,
+    title: document.getElementById('hw-title').value.trim(),
+    ioc_tools: tools,
+    lookback: document.getElementById('hw-lookback').value,
+    behavioral: document.getElementById('hw-beh').checked,
+  };
+
+  const btn = document.getElementById('hw-run-btn');
+  btn.disabled = true;
+  document.getElementById('hw-results').innerHTML = '';
+  const prog = document.getElementById('hw-prog');
+  prog.classList.add('on');
+  document.getElementById('hw-phase').childNodes[0].nodeValue = 'Submitting…';
+
+  try {
+    const r = await fetch('/hunt-workbench/submit', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) throw new Error(d.error || 'submit failed');
+    hwStartPoll(d.job_id);
+  } catch (e) {
+    errEl.textContent = e.message;
+    prog.classList.remove('on');
+    btn.disabled = false;
+  }
+}
+
+function hwStartPoll(jobId){
+  if (hwPoll) clearInterval(hwPoll);
+  const tick = async () => {
+    try {
+      const r = await fetch('/hunt-workbench/job/' + jobId);
+      const job = await r.json();
+      if (job.error) throw new Error(job.error);
+      hwSetPhase(job);
+      if (job.status === 'done' || job.status === 'error'){
+        clearInterval(hwPoll); hwPoll = null;
+        document.getElementById('hw-prog').classList.remove('on');
+        document.getElementById('hw-run-btn').disabled = false;
+        hwRender(job);
+        hwLoadRecent();
+      }
+    } catch (e) {
+      clearInterval(hwPoll); hwPoll = null;
+      document.getElementById('hw-prog').classList.remove('on');
+      document.getElementById('hw-run-btn').disabled = false;
+      document.getElementById('hw-err').textContent = e.message;
+    }
+  };
+  tick();
+  hwPoll = setInterval(tick, 2500);
+}
+
+function hwSetPhase(job){
+  const p = document.getElementById('hw-phase');
+  p.childNodes[0].nodeValue = job.phase || (job.status === 'queued' ? 'Queued…' : 'Working…');
+  document.getElementById('hw-phase-sub').textContent =
+      job.status === 'queued' ? 'waiting for a hunt slot' : 'live — querying corp tools';
+}
+
+/* ---------- render ---------- */
+const ICON = {ips:'🌐', domains:'🔗', urls:'🧭', filenames:'📄', hashes:'#️⃣', cves:'🐞',
+              mitre_techniques:'🎯', malware_families:'🦠', threat_actors:'🎭'};
+const ILBL = {ips:'IPs', domains:'domains', urls:'URLs', filenames:'files', hashes:'hashes', cves:'CVEs',
+              mitre_techniques:'ATT&CK', malware_families:'malware', threat_actors:'actors'};
+
+function hwRender(job){
+  const host = document.getElementById('hw-results');
+  if (job.status === 'error'){
+    host.innerHTML = `<div class="hw-card"><h3>⚠️ Hunt failed</h3><p class="hw-note">${esc(job.error || 'Unknown error')}</p></div>`;
+    return;
+  }
+  const v = job.verdict || {};
+  host.innerHTML =
+      hwVerdictCard(v) +
+      hwActionsCard(v) +
+      hwIndicatorsCard(job.entities) +
+      hwIocCard(job.ioc) +
+      hwBehavioralCard(job.behavioral) +
+      hwCoverageCard(job.coverage);
+}
+
+function hwVerdictCard(v){
+  const tMap = {yes:['v-yes','🔴','Yes — matches found'], no:['v-no','🟢','No matches'],
+                inconclusive:['v-incon','🟡','Inconclusive']};
+  const dMap = {full:['v-full','🟢','Full coverage'], partial:['v-part','🟡','Partial coverage'],
+                gap:['v-gap','🔴','Coverage gap'], unknown:['v-unk','⚪','Not assessed']};
+  const t = tMap[v.touched] || tMap.no;
+  const d = dMap[v.detection] || dMap.unknown;
+  return `<div class="hw-card"><h3>🧮 Verdict</h3>
+    <div class="hw-verdicts">
+      <div class="hw-v ${t[0]}">
+        <div class="vk">Were we touched?</div>
+        <div class="vv">${t[1]} ${t[2]}</div>
+        <div class="vd">${esc(v.touched_summary || hwTouchedFallback(v))}</div>
+      </div>
+      <div class="hw-v ${d[0]}">
+        <div class="vk">Can we detect this?</div>
+        <div class="vv">${d[1]} ${d[2]}</div>
+        <div class="vd">${esc(v.detection_summary || hwDetectFallback(v))}</div>
+      </div>
+    </div></div>`;
+}
+function hwTouchedFallback(v){
+  const h = v.total_hits || 0;
+  if (h > 0) return `${num(h)} match(es) across IOC + behavioral hunts.`;
+  if ((v.access_issues||[]).length) return 'Some tools could not be queried — re-run when access is restored.';
+  return 'No indicator or behavioral matches in the lookback window.';
+}
+function hwDetectFallback(v){
+  if (v.detection === 'unknown') return 'No ATT&CK technique IDs were provided, so coverage can\'t be assessed.';
+  return `${num(v.covered_count)} technique(s) covered, ${num(v.gap_count)} gap(s).`;
+}
+
+function hwActionsCard(v){
+  const acts = v.recommended_actions || [];
+  if (!acts.length) return '';
+  const llm = v.llm_authored ? '<span class="hw-tag">🤖 LLM</span>' : '';
+  return `<div class="hw-card"><h3>✅ Recommended actions ${llm}</h3>
+    <ul class="hw-actions-list">${acts.map((a,i) => `<li><span class="n">${i+1}</span><span>${esc(a)}</span></li>`).join('')}</ul></div>`;
+}
+
+function hwIndicatorsCard(e){
+  if (!e) return '';
+  const c = e.counts || {};
+  const order = ['ips','domains','urls','filenames','hashes','cves','mitre_techniques','malware_families','threat_actors'];
+  const chips = order.map(k => {
+    const n = c[k] || 0;
+    return `<span class="hw-ichip ${n ? '' : 'zero'}">${ICON[k]} <b>${num(n)}</b> ${ILBL[k]}</span>`;
+  }).join('');
+  return `<div class="hw-card"><h3>🧬 Extracted indicators &amp; TTPs</h3><div class="hw-chips">${chips}</div></div>`;
+}
+
+function hwIocCard(ioc){
+  if (!ioc) return '';
+  const tools = ioc.tools || {};
+  const meta = {qradar:['🛰️','QRadar'], crowdstrike:['🦅','CrowdStrike'], xsiam:['🧠','XSIAM'], abnormal:['📧','Abnormal']};
+  let rows = '';
+  for (const key of ['qradar','crowdstrike','xsiam','abnormal']){
+    const t = tools[key]; if (!t) continue;
+    const hit = (t.total_hits || 0) > 0;
+    const err = (t.errors || []).length;
+    const pill = err ? '<span class="hw-pill p-warn">⚠ error</span>'
+                     : (hit ? '<span class="hw-pill p-hit">hit</span>' : '<span class="hw-pill p-clean">clean</span>');
+    const sub = err ? esc(t.errors[0]).slice(0,120)
+                    : (hit ? 'matched indicators in telemetry' : 'no matches');
+    rows += `<div class="hw-tool"><div class="tn">${meta[key][0]} ${meta[key][1]}</div>
+        <div class="th ${hit?'hit':'clean'}">${num(t.total_hits||0)}</div>
+        <div style="flex:1"><div>${pill}</div><div class="tmeta">${sub}</div></div></div>`;
+  }
+  const access = (ioc.access_issues || []).length
+    ? `<div class="hw-note" style="margin-top:8px">🔒 Access notes: ${ioc.access_issues.map(esc).join('; ')}</div>` : '';
+  const hostLine = ioc.unique_hosts
+    ? `<div class="hw-note" style="margin-top:8px">🖥️ ${num(ioc.unique_hosts)} unique host(s) touched across tools.</div>` : '';
+  if (!rows) rows = '<div class="hw-note">No tools returned results.</div>';
+  return `<div class="hw-card"><h3>🛰️ Were we touched? — IOC fan-out
+     <span class="hw-tag" style="margin-left:6px">${num(ioc.total_iocs_searched||0)} IOCs · ${num(ioc.total_hits||0)} hits</span></h3>
+     ${rows}${hostLine}${access}</div>`;
+}
+
+function hwBehavioralCard(b){
+  if (!b) return '';
+  const hunts = b.hunts || [];
+  const stMap = {executed:['p-clean','ran'], no_hits:['p-clean','no hits'], pending:['p-warn','pending'],
+                 error:['p-warn','error'], skipped_validation:['p-warn','skipped'], skipped_deadline:['p-warn','skipped']};
+  let rows = hunts.map(h => {
+    const st = stMap[h.status] || ['p-warn', h.status || ''];
+    const hit = (h.hit_count || 0) > 0;
+    const tech = h.attack_technique ? `<span class="hw-tag">🎯 ${esc(h.attack_technique)}</span>` : '';
+    const hostLine = (h.hostnames||[]).length ? `<div class="hw-note" style="margin-top:7px">🖥️ ${h.hostnames.map(esc).join(', ')}</div>` : '';
+    return `<div class="hw-hunt">
+        <div class="hh"><div class="ht">${esc(h.title)}</div>
+          <div>${tech}<span class="hw-tag">${esc((h.query_type||'').toUpperCase())}</span>
+          <span class="hw-pill ${hit?'p-hit':st[0]}">${hit ? num(h.hit_count)+' hit(s)' : st[1]}</span></div></div>
+        <div class="hy">${esc(h.hypothesis)}</div>
+        <div class="hw-q">${esc(h.query)}</div>${hostLine}
+        ${h.detail ? `<div class="hw-note" style="margin-top:7px">${esc(h.detail)}</div>` : ''}
+      </div>`;
+  }).join('');
+  if (!hunts.length){
+    const why = (b.errors||[]).length ? esc(b.errors[0]) : 'No behavioral hunts were authored for this narrative.';
+    rows = `<div class="hw-note">${why}</div>`;
+  }
+  const model = b.llm_model ? `<span class="hw-tag" style="margin-left:6px">${esc(b.llm_model)}</span>` : '';
+  return `<div class="hw-card"><h3>🤖 Behavioral TTP hunts ${model}
+     <span class="hw-tag">${num(b.queries_generated||0)} authored · ${num(b.total_hits||0)} hits</span></h3>${rows}</div>`;
+}
+
+function hwCoverageCard(cov){
+  if (!cov) return '';
+  if (!cov.available || !(cov.techniques||[]).length){
+    return `<div class="hw-card"><h3>🎯 Can we detect this? — coverage</h3>
+      <div class="hw-note">${esc(cov.note || 'Coverage could not be assessed.')}</div></div>`;
+  }
+  const cov_ = (cov.covered||[]).map(t => `<span class="hw-tech t-cov">✓ ${esc(t)}</span>`).join('');
+  const gap_ = (cov.gaps||[]).map(t => `<span class="hw-tech t-gap">✕ ${esc(t)}</span>`).join('');
+  let rules = '';
+  const r = cov.rules || {};
+  if (Object.keys(r).length){
+    rules = '<div class="hw-covsub">Detections in place</div>' + Object.entries(r).map(([tech, list]) =>
+      `<div class="hw-rule"><span class="hw-tech t-cov" style="font-size:.76rem;padding:3px 8px">${esc(tech)}</span> ` +
+      list.map(x => `${esc(x.name)} <span class="hw-tag">${esc(x.platform)}</span>`).join(' · ') + '</div>').join('');
+  }
+  return `<div class="hw-card"><h3>🎯 Can we detect this? — ATT&CK coverage
+      <span class="hw-tag">${num((cov.covered||[]).length)} covered · ${num((cov.gaps||[]).length)} gap(s)</span></h3>
+      ${cov_ ? '<div class="hw-covsub">Covered</div><div class="hw-techgrid">'+cov_+'</div>' : ''}
+      ${gap_ ? '<div class="hw-covsub">Gaps — worth closing</div><div class="hw-techgrid">'+gap_+'</div>' : ''}
+      ${rules}
+      <div class="hw-note" style="margin-top:12px">Checked against ${num(cov.catalog_technique_count||0)} techniques covered by our live rule catalog.</div>
+    </div>`;
+}
+
+/* ---------- recent ---------- */
+async function hwLoadRecent(){
+  try {
+    const r = await fetch('/hunt-workbench/recent?limit=25');
+    const d = await r.json();
+    const host = document.getElementById('hw-recent');
+    const jobs = d.jobs || [];
+    if (!jobs.length){ host.innerHTML = '<div class="hw-note">No hunts yet — run one above.</div>'; return; }
+    const dot = j => {
+      if (j.status === 'error') return 'd-err';
+      if (j.status !== 'done') return 'd-run';
+      return {yes:'d-yes', no:'d-no', inconclusive:'d-incon'}[j.touched] || 'd-no';
+    };
+    host.innerHTML = jobs.map(j => {
+      const st = j.status === 'done'
+        ? (j.touched === 'yes' ? `🔴 touched · ${num(j.total_hits)} hits` : (j.touched === 'inconclusive' ? '🟡 inconclusive' : '🟢 clean'))
+        : (j.status === 'error' ? '⚠ failed' : '⏳ ' + (j.phase || 'running'));
+      return `<div class="hw-rrow" onclick="hwOpenJob('${j.id}')">
+          <div class="hw-dot ${dot(j)}"></div>
+          <div class="rt"><div class="tt">${esc(j.title)}</div>
+            <div class="mm">${esc(j.created_at)} · ${esc(j.actor||'')} · ${st}</div></div></div>`;
+    }).join('');
+  } catch (e) { /* leave as-is */ }
+}
+
+async function hwOpenJob(id){
+  try {
+    const r = await fetch('/hunt-workbench/job/' + id);
+    const job = await r.json();
+    if (job.error) return;
+    document.getElementById('hw-title').value = job.title || '';
+    document.getElementById('hw-narrative').value = job.narrative || '';
+    if (job.status === 'done' || job.status === 'error'){ hwRender(job); }
+    else { hwStartPoll(id); }
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  } catch (e) { /* ignore */ }
+}
+
+hwLoadRecent();
+</script>
+{% endblock %}

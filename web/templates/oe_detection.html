@@ -4,9 +4,32 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/oe_detection.css') }}">
+<style>
+  /* ===== OE Detection theme — Crimson / Rose ===== */
+  body.oed-themed { background:
+      radial-gradient(1100px 520px at 4% -8%, #ffd9e1 0%, transparent 55%),
+      radial-gradient(1000px 560px at 98% 0%, #ffdede 0%, transparent 52%),
+      radial-gradient(1200px 720px at 50% 122%, #ffe0ef 0%, transparent 55%),
+      linear-gradient(160deg, #fff0f3 0%, #fff2f2 48%, #fff0f7 100%) !important;
+      background-attachment: fixed !important; min-height: 100vh; }
+  body.oed-themed.dark-mode { background:
+      linear-gradient(135deg, #1c0610 0%, #2a0a18 50%, #16060e 100%) !important; color: #f5dce4; }
+  html { scrollbar-gutter: stable; }
+  ::-webkit-scrollbar { width: 16px; height: 16px; }
+  ::-webkit-scrollbar-track { border-radius: 10px;
+      background: linear-gradient(180deg, rgba(0,0,0,.04), rgba(0,0,0,.06) 50%, rgba(0,0,0,.04)); }
+  ::-webkit-scrollbar-thumb { border-radius: 10px; border: 2px solid transparent; background-clip: padding-box;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
+      background: linear-gradient(180deg, #e11d48 0%, #fb7185 22%, #f43f5e 46%, #ec4899 70%, #f97316 100%); }
+  ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, #f97316 0%, #ec4899 30%, #f43f5e 54%, #fb7185 78%, #e11d48 100%); }
+  ::-webkit-scrollbar-corner { background: transparent; }
+  body.dark-mode ::-webkit-scrollbar-track {
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.10) 50%, rgba(255,255,255,.06)); }
+</style>
 {% endblock %}
 
-{% block body_classes %}oe-detection-page{% endblock %}
+{% block body_classes %}oe-detection-page oed-themed{% endblock %}
 
 {% set page_title_text = 'OE Detection' %}
 {% set page_title_left_icon = '🔍' %}

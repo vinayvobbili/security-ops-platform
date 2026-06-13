@@ -2,9 +2,33 @@
 {% set page_title_text = 'SecOps Daily Roster' %}
 {% set page_title_left_icon = '&#128101;' %}
 {% set page_title_right_icon = '&#128197;' %}
+{% block body_classes %}rost-themed{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/roster.css') }}">
+<style>
+  /* ===== Daily Roster theme — Cyan / Teal ===== */
+  body.rost-themed { background:
+      radial-gradient(1100px 520px at 4% -8%, #cdf7ff 0%, transparent 55%),
+      radial-gradient(1000px 560px at 98% 0%, #d7fff4 0%, transparent 52%),
+      radial-gradient(1200px 720px at 50% 122%, #d9ecff 0%, transparent 55%),
+      linear-gradient(160deg, #eafdff 0%, #eafff9 48%, #eaf6ff 100%) !important;
+      background-attachment: fixed !important; min-height: 100vh; }
+  body.rost-themed.dark-mode { background:
+      linear-gradient(135deg, #06141a 0%, #082021 50%, #05131a 100%) !important; color: #d6f0f4; }
+  html { scrollbar-gutter: stable; }
+  ::-webkit-scrollbar { width: 16px; height: 16px; }
+  ::-webkit-scrollbar-track { border-radius: 10px;
+      background: linear-gradient(180deg, rgba(0,0,0,.04), rgba(0,0,0,.06) 50%, rgba(0,0,0,.04)); }
+  ::-webkit-scrollbar-thumb { border-radius: 10px; border: 2px solid transparent; background-clip: padding-box;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
+      background: linear-gradient(180deg, #06b6d4 0%, #22d3ee 22%, #2dd4bf 46%, #0a8fd6 70%, #3b82f6 100%); }
+  ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, #3b82f6 0%, #0a8fd6 30%, #2dd4bf 54%, #22d3ee 78%, #06b6d4 100%); }
+  ::-webkit-scrollbar-corner { background: transparent; }
+  body.dark-mode ::-webkit-scrollbar-track {
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.10) 50%, rgba(255,255,255,.06)); }
+</style>
 {% endblock %}
 
 {% block content %}

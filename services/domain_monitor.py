@@ -19,8 +19,22 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from services import domain_lookalike
-from services.domain_lookalike import classify_domain_risk, detect_defensive_registration
+# Lookalike generation/resolution is provided by services.domain_lookalike,
+# which is powered by the open-source domainflow toolkit
+# (https://pypi.org/project/domainflow/). The import is still guarded so the
+# module loads even if the optional engine dependency isn't installed yet — in
+# that case the scan paths return clean empty results instead of crashing.
+try:
+    from services import domain_lookalike
+    from services.lookalike_classifier import classify_domain_risk, detect_defensive_registration
+except ImportError:
+    domain_lookalike = None
+
+    def classify_domain_risk(*args, **kwargs):
+        return "unknown"
+
+    def detect_defensive_registration(*args, **kwargs):
+        return False
 
 logger = logging.getLogger(__name__)
 

@@ -7,7 +7,8 @@ war room command and read the structured results back from the incident context.
 """
 
 import logging
-from typing import Any, Dict, Optional
+import os
+from typing import Any, Dict, Literal, Optional
 
 from services.xsoar.ticket_handler import TicketHandler
 
@@ -16,6 +17,84 @@ logger = logging.getLogger(__name__)
 # XSOAR integration instance name for Active Directory.
 # Update this to match the instance name configured in your XSOAR environment.
 _XSOAR_INSTANCE = "ActiveDirectoryV2_instance_1"
+
+
+# --- Email existence check (signup directory validation) -------------------
+#
+# Unlike the methods above (which read structured context from an async war
+# room command), this runs `!ad-get-user email=<addr>` SYNCHRONOUSLY via
+# /entry/execute/sync — the same proven path services/xsoar_email.py uses to
+# send mail. The async /xsoar/entry path 400s on this XSOAR, and pinning a
+# `using=<instance>` arg also 400s (the configured instance names differ), so
+# we deliberately run against ALL Active Directory Query v2 instances (every
+# the company forest) and treat a hit in *any* forest as "exists".
+#
+# Each forest returns a markdown "### Active Directory - Get Users" entry that
+# either contains a result table or the literal "No entries." — that's the
+# signal we key on.
+
+AdEmailStatus = Literal["found", "not_found", "unknown"]
+
+_AD_GET_USERS_HEADER = "Active Directory - Get Users"
+_AD_NO_ENTRIES = "No entries."
+
+
+def email_exists_in_ad(email: str) -> AdEmailStatus:
+    """Check whether ``email`` resolves to a real Active Directory account.
+
+    Returns:
+        "found"      — at least one forest returned a matching user.
+        "not_found"  — every queried forest cleanly returned "No entries.".
+        "unknown"    — the lookup could not be completed (XSOAR/command error,
+                       no usable entries). Callers should FAIL OPEN on this.
+
+    Designed to be cheap to call and never raise — any failure maps to
+    "unknown" so signup can fall back to email-verification gating alone.
+    """
+    email = (email or "").strip()
+    if not email:
+        return "unknown"
+
+    # Imported here to keep module import light and avoid a hard XSOAR
+    # dependency for callers that only use the AD client methods above.
+    from services.xsoar._client import get_prod_client
+    from services.xsoar._utils import _parse_generic_response
+    from services.xsoar_email import MAIL_ROBOT_INCIDENT_ID
+
+    incident_id = os.environ.get("AD_LOOKUP_INCIDENT_ID") or MAIL_ROBOT_INCIDENT_ID
+
+    try:
+        resp = get_prod_client().generic_request(
+            path="/entry/execute/sync",
+            method="POST",
+            body={
+                "investigationId": incident_id,
+                "data": "!ad-get-user",
+                "args": {"email": {"simple": email}},
+            },
+        )
+    except Exception as e:  # network/API/closed-incident — fail open
+        logger.warning("AD email lookup failed for %r: %s", email, e)
+        return "unknown"
+
+    parsed = _parse_generic_response(resp)
+    entries = parsed if isinstance(parsed, list) else [parsed]
+
+    saw_clean_answer = False
+    for ent in entries:
+        if not isinstance(ent, dict):
+            continue
+        # type 4 == error entry; skip (counts as inconclusive for that forest)
+        if ent.get("type") == 4 or ent.get("errorSource"):
+            continue
+        contents = ent.get("contents")
+        if not isinstance(contents, str) or _AD_GET_USERS_HEADER not in contents:
+            continue
+        saw_clean_answer = True
+        if _AD_NO_ENTRIES not in contents:
+            return "found"  # a forest returned an actual user row
+
+    return "not_found" if saw_clean_answer else "unknown"
 
 
 class ActiveDirectoryClient:

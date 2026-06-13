@@ -1,11 +1,9 @@
 """Chat routes: Pokedex AI chat, Toodles chat, page-context chat widget."""
 
 import datetime as _dt
-import hmac
 import json
 import logging
 import time
-from functools import wraps
 
 import requests
 from flask import Blueprint, Response, jsonify, render_template, request, session, current_app
@@ -14,6 +12,7 @@ from src.utils.logging_utils import log_web_activity, get_client_ip
 from src.components.web import pokedex_handler, toodles_handler, approved_testing_handler
 from src.components.web import page_chat_handler
 from src.utils import bot_logs_db
+from web.auth import helpers as auth_helpers
 from web.config import CONFIG, EASTERN, prod_list_handler, prod_ticket_handler
 from web.extensions import limiter
 
@@ -125,33 +124,8 @@ except Exception as e:
 
 # --- Pokedex Chat ---
 
-def _require_pokedex_auth(view):
-    """HTTP Basic auth for the public /pokedex playground.
-
-    Username: 'pokedex'. Password from POKEDEX_WEB_PASSWORD env var.
-    If the env var is unset, auth is skipped (matches pre-feature behavior).
-    """
-    @wraps(view)
-    def wrapper(*args, **kwargs):
-        expected = CONFIG.pokedex_web_password
-        if not expected:
-            return view(*args, **kwargs)
-        auth = request.authorization
-        if (auth
-                and auth.username == 'pokedex'
-                and auth.password is not None
-                and hmac.compare_digest(auth.password, expected)):
-            return view(*args, **kwargs)
-        return Response(
-            'Authentication required',
-            401,
-            {'WWW-Authenticate': 'Basic realm="Pokedex"'},
-        )
-    return wrapper
-
-
 @chat_bp.route('/pokedex')
-@_require_pokedex_auth
+@auth_helpers.admin_required
 @log_web_activity
 def pokedex_chat():
     """Pokedex AI chat interface"""
@@ -159,9 +133,10 @@ def pokedex_chat():
 
 
 @chat_bp.route('/pokedex-demo')
+@auth_helpers.admin_required
 @log_web_activity
 def pokedex_demo():
-    """Guided demo page showcasing Pokedex capabilities (hidden — not in All Pages)."""
+    """Guided demo page showcasing Pokedex capabilities."""
     return render_template('pokedex_demo.html')
 
 
@@ -187,7 +162,9 @@ def _refresh_pokedex_demo_fixtures() -> dict:
 
     # XSOAR ticket + hostname from the local timeline DB (closed tickets, has hostname)
     try:
-        db = _Path('/home/vinay/security-ops-platform/data/xsoar_timeline/xsoar_timeline.db')
+        # Resolve relative to this worktree's root (web/routes/chat.py -> repo
+        # root) so the dev instance reads its own data/, not prod's.
+        db = _Path(__file__).resolve().parents[2] / 'data' / 'xsoar_timeline' / 'xsoar_timeline.db'
         with _sql.connect(str(db)) as conn:
             row = conn.execute(
                 """
@@ -242,6 +219,7 @@ def _refresh_pokedex_demo_fixtures() -> dict:
 
 
 @chat_bp.route('/api/pokedex-demo/fixtures')
+@auth_helpers.admin_required
 @log_web_activity
 def api_pokedex_demo_fixtures():
     """Return fresh placeholder values for the demo script (host, XSOAR ticket, SN INC).
@@ -261,6 +239,7 @@ def api_pokedex_demo_fixtures():
 
 
 @chat_bp.route('/api/pokedex-demo/infra-check')
+@auth_helpers.admin_required
 @log_web_activity
 def api_pokedex_demo_infra_check():
     """Pre-demo readiness probe. Verifies Pokedex bot + critical LLM endpoints + demo fixtures.
@@ -429,7 +408,7 @@ def api_pokedex_demo_infra_check():
 
 
 @chat_bp.route('/api/pokedex-status')
-@_require_pokedex_auth
+@auth_helpers.admin_required
 @limiter.limit("30 per minute")
 @log_web_activity
 def api_pokedex_status():
@@ -439,7 +418,7 @@ def api_pokedex_status():
 
 
 @chat_bp.route('/api/pokedex-models')
-@_require_pokedex_auth
+@auth_helpers.admin_required
 @limiter.limit("30 per minute")
 def api_pokedex_models():
     """Return the configured backends for the playground model dropdown.
@@ -453,7 +432,7 @@ def api_pokedex_models():
 
 
 @chat_bp.route('/api/pokedex-chat', methods=['POST'])
-@_require_pokedex_auth
+@auth_helpers.admin_required
 @limiter.limit("10 per minute")
 @log_web_activity
 def api_pokedex_chat():
@@ -487,23 +466,21 @@ def api_pokedex_chat():
 
 
 def _pokedex_rate_limit_exempt() -> bool:
-    """Exempt the local demo-recording script from rate limits.
+    """Skip the 5/min rate limit for the recording orchestrator.
 
-    Both conditions must hold:
-      1. Request originates from localhost (request.remote_addr).
-      2. `X-Pokedex-Recording: 1` header is present.
-
-    External clients reach Flask through nginx + ProxyFix, which rewrites
-    remote_addr to the real client IP — so condition (1) gates the bypass
-    to the same host that runs the recording script.
+    Gated on two conditions that together can only be met by something
+    running on the same host: an authenticated admin session AND a
+    request that originated from 127.0.0.1. External clients reach
+    Flask through nginx + ProxyFix, which rewrites remote_addr to the
+    real client IP, so they never appear as 127.0.0.1 here.
     """
     if request.remote_addr not in ('127.0.0.1', '::1'):
         return False
-    return request.headers.get('X-Pokedex-Recording') == '1'
+    return bool(auth_helpers.is_admin())
 
 
 @chat_bp.route('/api/pokedex-chat-stream', methods=['POST'])
-@_require_pokedex_auth
+@auth_helpers.admin_required
 @limiter.limit("5 per minute; 100 per day", exempt_when=_pokedex_rate_limit_exempt)
 @log_web_activity
 def api_pokedex_chat_stream():
@@ -636,13 +613,15 @@ def api_pokedex_chat_stream():
 # --- Toodles Chat ---
 
 @chat_bp.route('/toodles')
+@auth_helpers.admin_required
 @log_web_activity
 def toodles_chat():
-    """Toodles chat interface - password protected"""
+    """Toodles chat interface — admin-gated."""
     return render_template('toodles_chat.html')
 
 
 @chat_bp.route('/api/toodles/login', methods=['POST'])
+@auth_helpers.admin_required
 @limiter.limit("5 per minute")
 @log_web_activity
 def api_toodles_login():
@@ -668,6 +647,7 @@ def api_toodles_login():
 
 
 @chat_bp.route('/api/toodles/logout', methods=['POST'])
+@auth_helpers.admin_required
 @log_web_activity
 def api_toodles_logout():
     """API endpoint to logout from Toodles"""
@@ -676,6 +656,7 @@ def api_toodles_logout():
 
 
 @chat_bp.route('/api/toodles/create-x-ticket', methods=['POST'])
+@auth_helpers.admin_required
 @log_web_activity
 def api_create_x_ticket():
     """API endpoint to create X ticket"""
@@ -707,6 +688,7 @@ def api_create_x_ticket():
 
 
 @chat_bp.route('/api/toodles/approved-testing', methods=['POST'])
+@auth_helpers.admin_required
 @log_web_activity
 def api_approved_testing():
     """API endpoint to add approved testing entry"""
@@ -732,6 +714,7 @@ def api_approved_testing():
 
 
 @chat_bp.route('/api/toodles/ioc-hunt', methods=['POST'])
+@auth_helpers.admin_required
 @log_web_activity
 def api_ioc_hunt():
     """API endpoint to create IOC hunt"""
@@ -761,6 +744,7 @@ def api_ioc_hunt():
 
 
 @chat_bp.route('/api/toodles/threat-hunt', methods=['POST'])
+@auth_helpers.admin_required
 @log_web_activity
 def api_threat_hunt():
     """API endpoint to create threat hunt"""
@@ -790,6 +774,7 @@ def api_threat_hunt():
 
 
 @chat_bp.route('/api/toodles/oncall', methods=['GET'])
+@auth_helpers.admin_required
 @log_web_activity
 def api_oncall():
     """API endpoint to get on-call information"""
@@ -805,6 +790,8 @@ def api_oncall():
 # --- Page-Context Chat Widget (shared across all dashboard pages) ---
 
 @chat_bp.route('/api/page-chat/stream', methods=['POST'])
+# Public: read-only LLM query over client-supplied page context (no mutation);
+# rate-limited. Lets the chat widget work on public read-only dashboards.
 @limiter.limit("10 per minute")
 @log_web_activity
 def api_page_chat_stream():
@@ -851,6 +838,7 @@ def api_page_chat_stream():
 
 
 @chat_bp.route('/api/page-chat/translate', methods=['POST'])
+# Public: read-only (see /api/page-chat/stream).
 @limiter.limit("20 per minute")
 @log_web_activity
 def api_page_chat_translate():
@@ -881,6 +869,7 @@ def api_page_chat_translate():
 
 
 @chat_bp.route('/api/page-chat/download', methods=['POST'])
+# Public: read-only (see /api/page-chat/stream).
 @limiter.limit("10 per minute")
 @log_web_activity
 def api_page_chat_download():
@@ -947,6 +936,7 @@ def api_page_chat_download():
 
 
 @chat_bp.route('/api/page-chat/clear', methods=['POST'])
+# Public: read-only (see /api/page-chat/stream).
 @limiter.limit("10 per minute")
 @log_web_activity
 def api_page_chat_clear():
@@ -962,6 +952,7 @@ def api_page_chat_clear():
 # --- Docs Library RAG Chat ---
 
 @chat_bp.route('/api/docs-library/chat/stream', methods=['POST'])
+@auth_helpers.login_required
 @limiter.limit("10 per minute")
 @log_web_activity
 def api_docs_library_chat_stream():
@@ -1003,6 +994,7 @@ def api_docs_library_chat_stream():
 
 
 @chat_bp.route('/api/docs-library/chat/clear', methods=['POST'])
+@auth_helpers.login_required
 @limiter.limit("10 per minute")
 @log_web_activity
 def api_docs_library_chat_clear():

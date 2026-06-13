@@ -208,14 +208,19 @@ body {
 .pbi-charts-empty-icon { font-size: 2.2rem; margin-bottom: 8px; opacity: 0.4; }
 .pbi-charts-empty p { font-size: 0.82rem; max-width: 300px; line-height: 1.4; }
 
-/* KPI row */
-.pbi-kpi-row { display: flex; gap: 10px; flex-wrap: wrap; }
+/* Charts + KPIs layout: charts on the left, narrow vertical KPI column on the right */
+.pbi-charts-content { display: flex; gap: 12px; align-items: flex-start; }
+
+/* KPI column (right side, stacked) */
+.pbi-kpi-row {
+    display: flex; flex-direction: column; gap: 8px;
+    flex: 0 0 170px;
+}
 .pbi-kpi-card {
-    flex: 1; min-width: 120px;
     background: linear-gradient(135deg, #f8f9ff 0%, #eef2ff 100%);
-    border-radius: 12px; padding: 12px 14px; text-align: center;
-    border-left: 4px solid #0046ad;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    border-radius: 10px; padding: 8px 10px; text-align: left;
+    border-left: 3px solid #0046ad;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
     transition: transform 0.2s, box-shadow 0.2s;
     opacity: 0; animation: pbi-cascade-in 0.4s ease-out forwards;
 }
@@ -224,20 +229,26 @@ body {
 .pbi-kpi-card:nth-child(3) { animation-delay: 0.16s; }
 .pbi-kpi-card:nth-child(4) { animation-delay: 0.24s; }
 .pbi-kpi-card:nth-child(5) { animation-delay: 0.32s; }
-.pbi-kpi-card:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
-.pbi-kpi-value { font-size: 1.3rem; font-weight: 800; line-height: 1.2; }
+.pbi-kpi-card:hover { transform: translateY(-1px); box-shadow: 0 3px 10px rgba(0,0,0,0.08); }
+.pbi-kpi-value { font-size: 1.0rem; font-weight: 800; line-height: 1.2; word-break: break-word; }
 .pbi-kpi-label {
-    font-size: 0.68rem; color: #64748b; text-transform: uppercase;
-    letter-spacing: 0.05em; margin-top: 3px; font-weight: 600;
+    font-size: 0.62rem; color: #64748b; text-transform: uppercase;
+    letter-spacing: 0.04em; margin-top: 2px; font-weight: 600;
 }
 
-/* Chart grid */
+/* Chart grid (left side) */
 .pbi-chart-grid {
+    flex: 1; min-width: 0;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 12px;
 }
 @media (max-width: 1200px) { .pbi-chart-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 900px) {
+    .pbi-charts-content { flex-direction: column; }
+    .pbi-kpi-row { flex: 0 0 auto; flex-direction: row; flex-wrap: wrap; }
+    .pbi-kpi-card { flex: 1; min-width: 120px; }
+}
 .pbi-chart-card {
     background: white; border-radius: 14px; padding: 14px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.05);

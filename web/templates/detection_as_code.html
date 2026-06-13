@@ -1,0 +1,778 @@
+{% extends "base_layout.html" %}
+{% set page_title_text = "Detection-as-Code Pipeline" %}
+{% set page_title_left_icon = "🚀" %}
+{% set page_title_right_icon = "🛡️" %}
+
+{% block extra_css %}
+<style>
+  /* Colorful page backdrop — light + REQUIRED dark mode (house style) */
+  body.dac-body { background:
+      radial-gradient(1100px 520px at 6% -6%, #d6ffe6 0%, transparent 55%),
+      radial-gradient(1000px 560px at 96% 2%, #dbe7ff 0%, transparent 52%),
+      radial-gradient(1200px 720px at 50% 120%, #e0fff4 0%, transparent 55%),
+      linear-gradient(160deg, #eefff4 0%, #eef3ff 48%, #ecfff7 100%) !important;
+      background-attachment: fixed !important; min-height: 100vh; }
+  body.dac-body.dark-mode { background:
+      linear-gradient(135deg, #0a1b14 0%, #0f2235 50%, #0a1b14 100%) !important;
+      color: #e2e8f0; }
+
+  /* Thick multi-color page scrollbar */
+  html { scrollbar-gutter: stable; }
+  ::-webkit-scrollbar { width: 16px; height: 16px; }
+  ::-webkit-scrollbar-track { border-radius: 10px;
+      background: linear-gradient(180deg, rgba(56,239,125,.12), rgba(10,143,214,.10) 50%, rgba(143,148,251,.08)); }
+  ::-webkit-scrollbar-thumb { border-radius: 10px; border: 2px solid transparent; background-clip: padding-box;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
+      background: linear-gradient(180deg, #00a651 0%, #38ef7d 20%, #0a8fd6 44%, #8f94fb 64%, #ec008c 82%, #ffd200 100%); }
+  ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, #ffd200 0%, #ec008c 20%, #8f94fb 40%, #0a8fd6 58%, #38ef7d 80%, #00a651 100%); }
+  ::-webkit-scrollbar-corner { background: transparent; }
+  body.dark-mode ::-webkit-scrollbar-track {
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.10) 50%, rgba(255,255,255,.06)); }
+
+  .dac-wrap { max-width: 1180px; margin: 0 auto; padding: 8px 18px 80px; }
+
+  /* ---- Hero band ---- */
+  .dac-hero { position: relative; overflow: hidden; border-radius: 22px; padding: 30px 36px;
+             margin: 8px 0 26px; color: #fff;
+             background: linear-gradient(120deg, #04663a 0%, #0046ad 58%, #0a8fd6 100%);
+             box-shadow: 0 20px 50px rgba(8,40,30,.36); }
+  .dac-hero::before { content:""; position:absolute; inset:0;
+             background: radial-gradient(820px 360px at 88% -40%, rgba(56,239,125,.36), transparent 60%),
+                         radial-gradient(560px 320px at -6% 130%, rgba(70,160,224,.34), transparent 60%),
+                         radial-gradient(420px 280px at 60% 150%, rgba(236,0,140,.22), transparent 60%);
+             pointer-events:none; }
+  .dac-hero-in { position: relative; z-index: 1; display:flex; align-items:flex-start; justify-content:space-between; gap:24px; flex-wrap:wrap; }
+  .dac-eyebrow { font-size: .76rem; letter-spacing: 2.4px; text-transform: uppercase;
+                font-weight: 700; color: #b6ffd6; margin-bottom: 11px; display:flex; align-items:center; gap:9px; }
+  .dac-livepip { width: 9px; height: 9px; border-radius: 50%; background: #38ef7d;
+                box-shadow: 0 0 0 0 rgba(56,239,125,.7); animation: dacpulse 2s infinite; }
+  @keyframes dacpulse { 0%{box-shadow:0 0 0 0 rgba(56,239,125,.7)} 70%{box-shadow:0 0 0 12px rgba(56,239,125,0)} 100%{box-shadow:0 0 0 0 rgba(56,239,125,0)} }
+  .dac-hero h1 { font-size: 1.95rem; line-height: 1.16; margin: 0 0 10px; font-weight: 800; letter-spacing: -.7px; }
+  .dac-hero h1 .accent { background: linear-gradient(90deg,#9bffc7,#7fd3ff); -webkit-background-clip: text;
+                        background-clip: text; -webkit-text-fill-color: transparent; }
+  .dac-hero p { font-size: 1.02rem; line-height: 1.5; margin: 0; color: #eef0fb; max-width: 680px; }
+  .dac-hero p b { color: #fff; }
+  .dac-howbtn { background: #fff; border: none; color: #04663a;
+               border-radius: 12px; padding: 12px 20px; font-size: .92rem; cursor: pointer; font-weight: 800;
+               white-space: nowrap; box-shadow: 0 8px 20px rgba(8,40,30,.28); display:inline-flex; align-items:center; gap:8px; }
+  .dac-howbtn:hover { transform: translateY(-2px); box-shadow: 0 12px 26px rgba(8,40,30,.36); filter: brightness(1.02); }
+
+  /* ---- Cards ---- */
+  .dac-card { position: relative; background: rgba(255,255,255,.88); backdrop-filter: blur(7px);
+             border: 1px solid rgba(255,255,255,.9); border-radius: 18px; padding: 22px 24px;
+             margin-bottom: 20px; box-shadow: 0 8px 24px rgba(20,60,40,.10); overflow: hidden; }
+  .dac-card::before { content:""; position:absolute; left:0; top:0; bottom:0; width:5px;
+                     background: linear-gradient(180deg,#00a651,#0046ad,#8f94fb); }
+  body.dark-mode .dac-card { background: rgba(16,34,53,.84); border-color: rgba(148,163,184,.18); }
+  .dac-card h3 { margin: 0 0 14px; font-size: 1.12rem; font-weight: 800; color: #04663a;
+                display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+  body.dark-mode .dac-card h3 { color: #4ade80; }
+
+  /* ---- Input form ---- */
+  .dac-label { font-size: .74rem; text-transform: uppercase; letter-spacing: .8px; font-weight: 800;
+              color: #5a7068; margin: 0 0 6px; }
+  body.dark-mode .dac-label { color: #94a3b8; }
+  .dac-title-in { width: 100%; box-sizing: border-box; border: 1.5px solid #d2e8dc; border-radius: 11px;
+                 padding: 11px 14px; font-size: .98rem; background: #fff; color: #14271d; margin-bottom: 14px; }
+  .dac-ta { width: 100%; box-sizing: border-box; min-height: 240px; resize: vertical; border: 1.5px solid #d2e8dc;
+           border-radius: 12px; padding: 14px 16px; font-size: .9rem; line-height: 1.5; background: #fbfffd; color: #14271d;
+           font-family: ui-monospace, "SF Mono", Menlo, monospace; tab-size: 2; }
+  .dac-title-in:focus, .dac-ta:focus { outline: none; border-color: #00a651; box-shadow: 0 0 0 3px rgba(0,166,81,.16); }
+  body.dark-mode .dac-title-in, body.dark-mode .dac-ta { background: #0c1f17; border-color: #2c4a3c; color: #e6f8ee; }
+
+  .dac-actions { display: flex; gap: 12px; align-items: center; margin-top: 16px; flex-wrap: wrap; }
+  .dac-run { background: linear-gradient(135deg,#00a651,#0046ad); border: none; color: #fff; border-radius: 12px;
+            padding: 13px 26px; font-size: 1rem; font-weight: 800; cursor: pointer;
+            box-shadow: 0 10px 24px rgba(0,110,70,.28); display:flex; align-items:center; gap:9px; }
+  .dac-run:hover { filter: brightness(1.07); transform: translateY(-1px); }
+  .dac-run:disabled { opacity: .55; cursor: not-allowed; transform: none; filter: none; }
+  .dac-ghost { background: transparent; border: 1.5px solid #c2dccf; border-radius: 12px;
+              padding: 12px 18px; font-size: .92rem; font-weight: 700; cursor: pointer; color: #3f5a4e; }
+  .dac-ghost:hover { background: rgba(0,166,81,.06); }
+  body.dark-mode .dac-ghost { border-color: #345249; color: #b8d8c8; }
+  .dac-hint { font-size: .82rem; color: #7e948a; }
+  body.dark-mode .dac-hint { color: #94a3b8; }
+  .dac-dryrun { display: inline-flex; align-items: center; gap: 7px; font-size: .85rem; font-weight: 600;
+    color: #0046AD; cursor: pointer; padding: 7px 12px; border: 1.5px solid #c2dccf; border-radius: 12px;
+    background: linear-gradient(135deg, rgba(0,70,173,.06), rgba(0,166,81,.06)); user-select: none; }
+  .dac-dryrun input { accent-color: #00A651; width: 15px; height: 15px; cursor: pointer; }
+  body.dark-mode .dac-dryrun { color: #7fb8ff; border-color: #345249;
+    background: linear-gradient(135deg, rgba(0,70,173,.18), rgba(0,166,81,.14)); }
+  .dac-nl-box { margin: 14px 0 18px; padding: 14px 16px; border-radius: 14px;
+               border: 1.5px dashed #b9d8ff; background: linear-gradient(135deg, rgba(0,70,173,.05), rgba(0,166,81,.05)); }
+  body.dark-mode .dac-nl-box { border-color: #2e4a6e; background: linear-gradient(135deg, rgba(0,70,173,.16), rgba(0,166,81,.10)); }
+  .dac-nl-ta { min-height: 80px; }
+  .dac-draft { background: linear-gradient(135deg,#0046ad,#7b2ff7); border: none; color: #fff; border-radius: 12px;
+              padding: 11px 22px; font-size: .95rem; font-weight: 800; cursor: pointer;
+              box-shadow: 0 8px 20px rgba(70,40,173,.26); display:flex; align-items:center; gap:8px; }
+  .dac-draft:hover { filter: brightness(1.08); transform: translateY(-1px); }
+  .dac-draft:disabled { opacity: .55; cursor: not-allowed; transform: none; filter: none; }
+  .dac-seg-wrap { display: inline-flex; gap: 4px; padding: 4px; border-radius: 14px; margin-bottom: 8px;
+                 background: rgba(0,70,173,.07); border: 1.5px solid #d2e8dc; }
+  body.dark-mode .dac-seg-wrap { background: rgba(0,70,173,.18); border-color: #2c4a3c; }
+  .dac-seg { background: transparent; border: none; border-radius: 10px; padding: 9px 18px; cursor: pointer;
+            font-size: .92rem; font-weight: 800; color: #5b766a; transition: all .15s; }
+  body.dark-mode .dac-seg { color: #9fc2b1; }
+  .dac-seg.active { background: linear-gradient(135deg,#0046ad,#00a651); color: #fff; box-shadow: 0 6px 16px rgba(0,90,120,.22); }
+  .dac-source-note { font-size: .84rem; color: #6f8a7e; margin: 2px 0 16px; }
+  body.dark-mode .dac-source-note { color: #93b7a6; }
+  .dac-err { color: #d12b4a; font-weight: 700; font-size: .9rem; }
+
+  /* ---- Pipeline stage strip ---- */
+  .dac-pipe { display:grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 4px 0 2px; }
+  .dac-stage { border-radius: 14px; padding: 14px 14px; background: rgba(255,255,255,.7); border:1px solid rgba(0,0,0,.06);
+               position:relative; overflow:hidden; transition: all .2s; }
+  body.dark-mode .dac-stage { background: rgba(12,31,23,.6); border-color: rgba(148,163,184,.14); }
+  .dac-stage .si { font-size:1.4rem; line-height:1; }
+  .dac-stage .sl { font-size:.8rem; font-weight:800; color:#14271d; margin-top:8px; line-height:1.3; }
+  body.dark-mode .dac-stage .sl { color:#e6f8ee; }
+  .dac-stage .ss { font-size:.74rem; color:#7e948a; margin-top:5px; line-height:1.35; }
+  .dac-stage .sbadge { position:absolute; top:10px; right:11px; font-size:.66rem; font-weight:800; padding:2px 8px; border-radius:20px; text-transform:uppercase; letter-spacing:.4px; }
+  .stg-pending { opacity:.62; }
+  .stg-pending .sbadge { background:#e7ecf0; color:#7e948a; }
+  .stg-running { border-color:#0a8fd6; box-shadow:0 0 0 2px rgba(10,143,214,.18); }
+  .stg-running .sbadge { background:#dcefff; color:#0a6fb0; }
+  .stg-running .si::after { content:" "; }
+  .stg-pass { border-color:#38ef7d; }
+  .stg-pass .sbadge { background:#d6f8e4; color:#0b7a3d; }
+  .stg-warn { border-color:#f7971e; }
+  .stg-warn .sbadge { background:#fdeccf; color:#b5530a; }
+  .stg-fail { border-color:#f45c43; }
+  .stg-fail .sbadge { background:#fbdce3; color:#b21e3c; }
+  .stg-skip .sbadge { background:#e9edf2; color:#7e8aa0; }
+  body.dark-mode .stg-pending .sbadge { background:#1c2a22; color:#7e948a; }
+  body.dark-mode .stg-pass .sbadge { background:#0e3a22; color:#5ee89a; }
+  body.dark-mode .stg-warn .sbadge { background:#3a2510; color:#f0a24a; }
+  body.dark-mode .stg-fail .sbadge { background:#3a1620; color:#ff8da3; }
+  .dac-spin-mini { display:inline-block; width:15px; height:15px; border-radius:50%; border:2.5px solid rgba(10,143,214,.25);
+                   border-top-color:#0a8fd6; animation: dacspin .8s linear infinite; vertical-align:-2px; }
+  @keyframes dacspin { to { transform: rotate(360deg); } }
+
+  .dac-stage-details { margin-top:10px; padding-top:10px; border-top:1px dashed rgba(0,0,0,.1); }
+  body.dark-mode .dac-stage-details { border-color:rgba(148,163,184,.2); }
+  .dac-stage-details li { font-size:.78rem; color:#5d6e64; line-height:1.45; margin:3px 0; word-break:break-word; }
+  body.dark-mode .dac-stage-details li { color:#9fb6a8; }
+
+  /* ---- verdict banner ---- */
+  .dac-verdict { border-radius:16px; padding:18px 24px; color:#fff; display:flex; align-items:center; gap:18px;
+                 box-shadow:0 12px 28px rgba(20,50,40,.20); margin-bottom:20px; flex-wrap:wrap; }
+  .dac-verdict .vk { font-size:2rem; }
+  .dac-verdict .vt { font-size:1.2rem; font-weight:900; letter-spacing:-.3px; }
+  .dac-verdict .vs { font-size:.9rem; opacity:.95; }
+  .v-pass { background: linear-gradient(135deg,#00a651,#38ef7d); }
+  .v-warn { background: linear-gradient(135deg,#f7971e,#ffba30); }
+  .v-fail { background: linear-gradient(135deg,#c31432,#f45c43); }
+
+  /* ---- code blocks ---- */
+  .dac-code { white-space: pre; overflow:auto; font-family: ui-monospace,"SF Mono",Menlo,monospace; font-size:.84rem;
+              line-height:1.5; color:#0b2a1c; background:#f3fbf6; border:1px solid #d7eede; border-radius:10px; padding:14px 16px; max-height: 360px; }
+  body.dark-mode .dac-code { background:#0a1f15; color:#cfeede; border-color:#1f3b2c; }
+  .dac-mini { background:#e7f6ed; border:none; border-radius:9px; padding:7px 13px; font-size:.8rem; font-weight:800;
+             cursor:pointer; color:#04663a; display:inline-flex; align-items:center; gap:6px; }
+  .dac-mini:hover { filter:brightness(.97); }
+  body.dark-mode .dac-mini { background:#123a26; color:#6ee8a0; }
+
+  /* ---- chips / pills ---- */
+  .dac-chips { display:flex; flex-wrap:wrap; gap:9px; margin-top: 4px; }
+  .dac-chip { display:inline-flex; align-items:center; gap:7px; padding:7px 13px; border-radius:20px;
+             font-size:.84rem; font-weight:700; color:#27483a; background: rgba(255,255,255,.74);
+             border:1.5px solid rgba(0,166,81,.22); }
+  .dac-chip b { color:#04663a; }
+  body.dark-mode .dac-chip { background: rgba(12,31,23,.6); color:#cdeada; border-color: rgba(74,222,128,.25); }
+  body.dark-mode .dac-chip b { color:#6ee8a0; }
+  .dac-risk { display:inline-block; font-size:.72rem; font-weight:800; padding:4px 11px; border-radius:8px; text-transform:uppercase; letter-spacing:.4px; }
+  .risk-low { background:#d6f8e4; color:#0b7a3d; } .risk-medium { background:#fdeccf; color:#b5530a; } .risk-high { background:#fbdce3; color:#b21e3c; } .risk-unknown { background:#e9edf2; color:#7e8aa0; }
+  body.dark-mode .risk-low { background:#0e3a22; color:#5ee89a; } body.dark-mode .risk-medium { background:#3a2510; color:#f0a24a; } body.dark-mode .risk-high { background:#3a1620; color:#ff8da3; }
+  .dac-rec { display:inline-block; font-size:.72rem; font-weight:800; padding:4px 11px; border-radius:8px; text-transform:capitalize; }
+  .rec-approve { background:#d6f8e4; color:#0b7a3d; } .rec-revise { background:#fdeccf; color:#b5530a; } .rec-reject { background:#fbdce3; color:#b21e3c; }
+
+  /* ---- score ring ---- */
+  .dac-scorebox { display:flex; align-items:center; gap:18px; flex-wrap:wrap; margin-bottom:14px; }
+  .dac-score { width:74px; height:74px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+               font-weight:900; font-size:1.4rem; color:#fff; flex:none; box-shadow:0 8px 18px rgba(20,50,40,.18); }
+
+  /* ---- lists ---- */
+  .dac-ul { list-style:none; padding:0; margin:8px 0 0; }
+  .dac-ul li { display:flex; gap:9px; align-items:flex-start; padding:7px 0; border-bottom:1px dashed #e2ece6;
+               font-size:.9rem; color:#27483a; line-height:1.45; }
+  .dac-ul li:last-child { border-bottom:none; }
+  body.dark-mode .dac-ul li { color:#cdeada; border-color:#1f3b2c; }
+  .dac-ul li .ic { flex:none; }
+
+  /* ---- overlap rows ---- */
+  .dac-ov { display:flex; align-items:center; gap:11px; padding:9px 12px; border-radius:11px; margin-bottom:7px;
+            background: rgba(255,255,255,.66); border:1px solid rgba(0,0,0,.05); }
+  body.dark-mode .dac-ov { background: rgba(12,31,23,.5); border-color: rgba(148,163,184,.14); }
+  .dac-ov .pf { font-size:.64rem; font-weight:800; padding:3px 8px; border-radius:6px; background:#e3ecff; color:#0046ad; text-transform:uppercase; flex:none; }
+  .dac-ov .nm { font-weight:700; color:#14271d; font-size:.88rem; flex:1; min-width:0; }
+  body.dark-mode .dac-ov .nm { color:#e6f8ee; }
+  .dac-ov .wy { font-size:.76rem; color:#7e948a; }
+
+  /* ---- file list ---- */
+  .dac-file { border:1px solid rgba(0,0,0,.07); border-radius:12px; margin-bottom:10px; overflow:hidden; background: rgba(255,255,255,.7); }
+  body.dark-mode .dac-file { background: rgba(12,31,23,.5); border-color: rgba(148,163,184,.14); }
+  .dac-file-h { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:11px 14px; cursor:pointer; }
+  .dac-file-h .fp { font-family: ui-monospace,Menlo,monospace; font-size:.85rem; font-weight:700; color:#0046ad; }
+  body.dark-mode .dac-file-h .fp { color:#7fb3ff; }
+  .dac-file-body { display:none; padding:0 14px 14px; }
+  .dac-file.open .dac-file-body { display:block; }
+
+  .dac-deployrow { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:14px; }
+  .dac-deploy-btn { background: linear-gradient(135deg,#fc6076,#ff9a44); border:none; color:#fff; border-radius:10px;
+                    padding:11px 20px; font-size:.92rem; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:8px; }
+  .dac-deploy-btn:hover { filter:brightness(1.06); }
+  .dac-deploy-btn:disabled { opacity:.5; cursor:not-allowed; }
+  .dac-deploynote { font-size:.82rem; font-weight:700; }
+  .dac-deploynote.ok { color:#0b7a3d; } .dac-deploynote.bad { color:#b21e3c; } .dac-deploynote.warn { color:#b5530a; }
+
+  .dac-note { font-size:.88rem; color:#7e948a; font-style:italic; line-height:1.5; }
+  body.dark-mode .dac-note { color:#9fb6a8; }
+
+  /* ---- progress (initial submit) ---- */
+  .dac-prog { display:none; align-items:center; gap:14px; padding:16px 4px 4px; }
+  .dac-prog.on { display:flex; }
+  .dac-spin { width:26px; height:26px; border-radius:50%; border:3px solid rgba(0,166,81,.2); border-top-color:#00a651; animation: dacspin .8s linear infinite; flex:none; }
+  .dac-phase { font-weight:700; color:#04663a; font-size:.98rem; }
+  body.dark-mode .dac-phase { color:#6ee8a0; }
+
+  /* ---- recent rail ---- */
+  .dac-recent { display:grid; grid-template-columns:1fr; gap:9px; }
+  .dac-rrow { display:flex; align-items:center; gap:12px; padding:11px 14px; border-radius:12px; cursor:pointer;
+             background: rgba(255,255,255,.68); border:1px solid rgba(0,0,0,.05); transition: all .14s; }
+  .dac-rrow:hover { transform: translateX(3px); box-shadow: 0 6px 16px rgba(20,60,40,.12); }
+  body.dark-mode .dac-rrow { background: rgba(12,31,23,.5); border-color: rgba(148,163,184,.14); }
+  .dac-rrow .rt { flex:1; min-width:0; }
+  .dac-rrow .rt .tt { font-weight:700; color:#14271d; font-size:.92rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  body.dark-mode .dac-rrow .rt .tt { color:#e6f8ee; }
+  .dac-rrow .rt .mm { font-size:.76rem; color:#7e948a; margin-top:2px; }
+  .dac-dot { width:10px; height:10px; border-radius:50%; flex:none; }
+  .d-pass{background:#00a651;} .d-warn{background:#ffba30;} .d-fail{background:#f45c43;} .d-run{background:#8f94fb; animation:dacpulse 1.6s infinite;} .d-err{background:#94a3b8;}
+
+  /* ---- Modal ---- */
+  .dac-modal-bg { position: fixed; inset: 0; background: rgba(8,30,20,.62); display: none;
+                 align-items: flex-start; justify-content: center; z-index: 9000; padding: 40px 16px;
+                 overflow-y: auto; backdrop-filter: blur(3px); }
+  .dac-modal-bg.open { display: flex; }
+  .dac-modal { background: #fff; border-radius: 18px; max-width: 720px; width: 100%;
+              padding: 28px 32px; box-shadow: 0 24px 70px rgba(0,0,0,.38);
+              animation: dacmodal .25s cubic-bezier(.22,1,.36,1); }
+  @keyframes dacmodal { from{opacity:0; transform: translateY(16px) scale(.98)} to{opacity:1; transform:none} }
+  .dac-modal h3 { margin: 0 0 6px; color: #04663a; }
+  .dac-modal h4 { margin: 18px 0 5px; color: #14271d; font-size: .98rem; display:flex; align-items:center; gap:8px; }
+  .dac-modal p { color: #4a5568; font-size: .9rem; line-height: 1.55; margin: 5px 0; }
+  .dac-modal .close { float: right; cursor: pointer; color: #95a0b3; font-size: 1.6rem; line-height: 1; border: none; background: none; }
+  body.dark-mode .dac-modal { background: #102235; }
+  body.dark-mode .dac-modal h3 { color: #6ee8a0; }
+  body.dark-mode .dac-modal h4 { color: #e6f8ee; }
+  body.dark-mode .dac-modal p { color: #b8d8c8; }
+
+  @media (max-width: 860px) { .dac-pipe { grid-template-columns: 1fr 1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dac-wrap">
+
+  <div class="dac-hero">
+    <div class="dac-hero-in">
+      <div>
+        <div class="dac-eyebrow"><span class="dac-livepip"></span> 🟢 Draft &amp; approve &middot; runs like CI/CD</div>
+        <h1>Ship detections like <span class="accent">code</span>. Sigma in, XSIAM out. 🚀</h1>
+        <p>Paste a <b>Sigma rule</b> and watch it run the pipeline: <b>lint</b> &amp; schema-check, <b>compile</b> to
+           an XSIAM <b>XQL</b> query, <b>dry-run</b> it read-only against the live tenant, get a
+           <b>detection-engineering review</b> (quality, false-positive risk, ATT&amp;CK, overlap), and
+           <b>package a GitLab merge request</b>. ⚡ You approve the merge — nothing deploys on its own.</p>
+      </div>
+      <button class="dac-howbtn" onclick="dacOpenModal()">💡 How does this work?</button>
+    </div>
+  </div>
+
+  <!-- Intake -->
+  <div class="dac-card">
+    <h3>🧬 New detection</h3>
+
+    <!-- Source-of-truth lane: portable Sigma (default) or XSIAM-direct XQL -->
+    <div class="dac-seg-wrap">
+      <button class="dac-seg active" id="dac-seg-sigma" onclick="dacSetSource('sigma')">🧬 Sigma rule</button>
+      <button class="dac-seg" id="dac-seg-xql" onclick="dacSetSource('xql')">⚡ XQL · XSIAM-direct</button>
+    </div>
+    <div class="dac-source-note" id="dac-source-note">Sigma is the portable source of truth — it compiles to XSIAM XQL and stays reusable across SIEMs. 🌐</div>
+
+    <div class="dac-label">Title (optional)</div>
+    <input type="text" id="dac-title" class="dac-title-in" placeholder="e.g. Suspicious PowerShell EncodedCommand" maxlength="200">
+
+    <!-- Optional front door: describe the behavior in plain English and let it draft for you -->
+    <div class="dac-nl-box">
+      <div class="dac-label" id="dac-nl-label">✨ Don't have a rule? Describe the behavior in plain English</div>
+      <textarea id="dac-nl" class="dac-ta dac-nl-ta" placeholder="e.g. Detect when PowerShell is launched with an encoded command by a Microsoft Office app — likely a malicious macro spawning a hidden payload."></textarea>
+      <div class="dac-actions">
+        <button class="dac-draft" id="dac-draft-btn" onclick="dacDraft()">✨ Draft Sigma rule</button>
+        <button class="dac-ghost" onclick="dacLoadNlSample()">📝 Load sample</button>
+        <span class="dac-hint" id="dac-draft-hint">It drafts a rule below — review and edit it, then run the pipeline.</span>
+      </div>
+      <div class="dac-err" id="dac-draft-err" style="margin-top:8px"></div>
+    </div>
+
+    <div class="dac-label" id="dac-rule-label">Sigma rule (YAML)</div>
+    <textarea id="dac-rule" class="dac-ta" placeholder="title: ...&#10;logsource:&#10;  product: windows&#10;  category: process_creation&#10;detection:&#10;  selection:&#10;    ...&#10;  condition: selection&#10;level: high"></textarea>
+
+    <div class="dac-actions">
+      <button class="dac-run" id="dac-run-btn" onclick="dacSubmit()">🚀 Run pipeline</button>
+      <button class="dac-ghost" onclick="dacLoadExample()">📄 Load example</button>
+      <button class="dac-ghost" onclick="dacClear()">Clear</button>
+      <label class="dac-dryrun" title="Runs the compiled XQL against the live XSIAM tenant — uses Cortex compute. Leave off to lint, compile and review offline.">
+        <input type="checkbox" id="dac-dryrun"> 🧪 Validate on the live tenant
+      </label>
+      <span class="dac-hint" id="dac-hint">Lints, compiles to XQL, reviews, and packages the MR — usually under a minute. The live XSIAM dry-run only runs if you tick the box.</span>
+    </div>
+    <div class="dac-err" id="dac-err" style="margin-top:10px"></div>
+
+    <div class="dac-prog" id="dac-prog">
+      <div class="dac-spin"></div>
+      <div class="dac-phase" id="dac-phase">Starting…</div>
+    </div>
+  </div>
+
+  <!-- Live pipeline + results -->
+  <div id="dac-results"></div>
+
+  <!-- Recent -->
+  <div class="dac-card">
+    <h3>🕓 Recent pipeline runs</h3>
+    <div class="dac-recent" id="dac-recent"><div class="dac-note">No runs yet — paste a Sigma rule above.</div></div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="dac-modal-bg" id="dac-modal-bg">
+  <div class="dac-modal">
+    <button class="close" onclick="dacCloseModal()">&times;</button>
+    <h3>🚀 How the Detection-as-Code pipeline works</h3>
+    <p>This treats detections the way we treat code: authored as portable <b>Sigma</b>, validated by an
+       automated pipeline, and shipped to <b>XSIAM</b> through GitLab — with a human approving the merge.
+       It's <b>draft-and-approve</b>: everything runs locally and read-only until you open the merge request.</p>
+
+    <h4>1️⃣ Lint &amp; schema-validate</h4>
+    <p>The Sigma rule is parsed and checked for required structure (title, logsource, detection, condition)
+       and best practices (severity, ATT&amp;CK tags). Schema errors stop the pipeline.</p>
+
+    <h4>2️⃣ Compile → XSIAM XQL</h4>
+    <p>An in-house LLM (GPT-4.1) translates the Sigma logic into an XSIAM <b>XQL</b> correlation query,
+       mapping fields and noting any assumptions. A deterministic compiler is the floor if the model is busy.</p>
+
+    <h4>3️⃣ Dry-run on the tenant</h4>
+    <p>The compiled XQL is run <b>read-only</b> against the live XSIAM tenant over a bounded recent window — a
+       real CI gate proving it parses, with the hit count over the last 24h.</p>
+
+    <h4>4️⃣ Detection-engineering review</h4>
+    <p>The LLM reviews quality, <b>false-positive risk</b>, ATT&amp;CK coverage and gaps, suggests improvements,
+       and flags <b>overlap</b> with detections already in the QRadar / CrowdStrike / Tanium catalog.</p>
+
+    <h4>5️⃣ Package &amp; merge</h4>
+    <p>The pipeline emits the rule file, the compiled XQL, a <code>.gitlab-ci.yml</code>, and an MR description.
+       <b>Approve &amp; open MR</b> pushes it to the detection repo via the GitLab API — <b>disabled on the dev
+       instance</b> (it always targets the prod repo). Every run and merge is logged.</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.body.classList.add('dac-body');
+
+let dacPoll = null;
+let dacJob = null;
+let dacSource = 'sigma';   // 'sigma' (default, portable) | 'xql' (XSIAM-direct)
+const esc = s => (s == null ? '' : String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])));
+
+const DAC_COPY = {
+  sigma: {
+    note: "Sigma is the portable source of truth — it compiles to XSIAM XQL and stays reusable across SIEMs. 🌐",
+    nlLabel: "✨ Don't have a rule? Describe the behavior in plain English",
+    draftBtn: "✨ Draft Sigma rule",
+    ruleLabel: "Sigma rule (YAML)",
+    placeholder: "title: ...\nlogsource:\n  product: windows\n  category: process_creation\ndetection:\n  selection:\n    ...\n  condition: selection\nlevel: high",
+    runHint: "Lints, compiles to XQL, dry-runs on XSIAM, reviews, and packages the MR — usually under a minute.",
+  },
+  xql: {
+    note: "Author straight in XSIAM XQL — fewer translation steps, full XQL expressiveness. Sigma is skipped. ⚡",
+    nlLabel: "✨ Don't have a query? Describe the behavior in plain English",
+    draftBtn: "✨ Draft XQL query",
+    ruleLabel: "XSIAM XQL query",
+    placeholder: "dataset = xdr_data\n| filter event_type = ENUM.PROCESS and action_process_image_name contains \"powershell\"\n| fields agent_hostname, action_process_image_command_line, actor_effective_username\n| limit 100",
+    runHint: "Validates the XQL, dry-runs it read-only on XSIAM, reviews, and packages the MR — usually under a minute.",
+  },
+};
+
+const DAC_XQL_EXAMPLE = `dataset = xdr_data
+| filter event_type = ENUM.PROCESS
+    and action_process_image_name = "regsvr32.exe"
+    and action_process_image_command_line contains "scrobj"
+| fields agent_hostname, action_process_image_command_line, actor_effective_username, _time
+| limit 100`;
+
+function dacSetSource(src){
+  dacSource = (src === 'xql') ? 'xql' : 'sigma';
+  const c = DAC_COPY[dacSource];
+  document.getElementById('dac-seg-sigma').classList.toggle('active', dacSource === 'sigma');
+  document.getElementById('dac-seg-xql').classList.toggle('active', dacSource === 'xql');
+  document.getElementById('dac-source-note').textContent = c.note;
+  document.getElementById('dac-nl-label').textContent = c.nlLabel;
+  document.getElementById('dac-draft-btn').textContent = c.draftBtn;
+  document.getElementById('dac-rule-label').textContent = c.ruleLabel;
+  document.getElementById('dac-rule').setAttribute('placeholder', c.placeholder);
+  document.getElementById('dac-hint').textContent = c.runHint;
+}
+
+function dacOpenModal(){ document.getElementById('dac-modal-bg').classList.add('open'); }
+function dacCloseModal(){ document.getElementById('dac-modal-bg').classList.remove('open'); }
+document.getElementById('dac-modal-bg').addEventListener('click', e => { if (e.target.id === 'dac-modal-bg') dacCloseModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') dacCloseModal(); });
+
+const DAC_EXAMPLE = `title: Suspicious PowerShell Encoded Command
+id: 6e897651-f157-4d8f-aaeb-df8151488385
+status: experimental
+description: Detects PowerShell launched with an encoded command, commonly used to obfuscate malicious payloads.
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_img:
+    Image|endswith: '\\\\powershell.exe'
+  selection_flag:
+    CommandLine|contains:
+      - ' -enc '
+      - ' -EncodedCommand '
+      - ' -ec '
+  condition: selection_img and selection_flag
+falsepositives:
+  - Legitimate administration scripts
+level: high
+tags:
+  - attack.execution
+  - attack.t1059.001`;
+
+function dacLoadExample(){
+  document.getElementById('dac-rule').value = (dacSource === 'xql') ? DAC_XQL_EXAMPLE : DAC_EXAMPLE;
+  document.getElementById('dac-title').value = '';
+  document.getElementById('dac-err').textContent = '';
+}
+
+const DAC_NL_SAMPLE = "Detect when PowerShell is launched with a base64-encoded command (-enc or -EncodedCommand) by a Microsoft Office application such as Word, Excel, or Outlook — a common sign of a malicious macro spawning a hidden payload.";
+
+function dacLoadNlSample(){
+  document.getElementById('dac-nl').value = DAC_NL_SAMPLE;
+  document.getElementById('dac-draft-err').textContent = '';
+  document.getElementById('dac-nl').focus();
+}
+
+async function dacDraft(){
+  const text = document.getElementById('dac-nl').value.trim();
+  const errEl = document.getElementById('dac-draft-err');
+  const hintEl = document.getElementById('dac-draft-hint');
+  errEl.textContent = '';
+  if (!text){ errEl.textContent = 'Describe the behavior you want to detect.'; return; }
+
+  const btn = document.getElementById('dac-draft-btn');
+  btn.disabled = true;
+  const orig = hintEl.textContent;
+  const isXql = dacSource === 'xql';
+  hintEl.textContent = isXql ? '✨ Drafting an XQL query…' : '✨ Drafting a Sigma rule…';
+  try {
+    const r = await fetch(isXql ? '/detection-as-code/draft-xql' : '/detection-as-code/draft', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ text }),
+    });
+    const d = await r.json();
+    const drafted = isXql ? d.xql : d.sigma;
+    if (!r.ok || !drafted) throw new Error(d.error || 'drafting failed');
+    document.getElementById('dac-rule').value = drafted;
+    document.getElementById('dac-err').textContent = '';
+    hintEl.textContent = '✅ Drafted below — review and edit it, then run the pipeline.';
+    document.getElementById('dac-rule').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } catch (e) {
+    errEl.textContent = e.message;
+    hintEl.textContent = orig;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function dacClear(){
+  if (dacPoll) { clearInterval(dacPoll); dacPoll = null; }
+  dacJob = null;
+  document.getElementById('dac-title').value = '';
+  document.getElementById('dac-rule').value = '';
+  document.getElementById('dac-nl').value = '';
+  document.getElementById('dac-err').textContent = '';
+  document.getElementById('dac-draft-err').textContent = '';
+  document.getElementById('dac-results').innerHTML = '';
+  document.getElementById('dac-prog').classList.remove('on');
+  document.getElementById('dac-run-btn').disabled = false;
+}
+
+async function dacSubmit(){
+  const rule = document.getElementById('dac-rule').value.trim();
+  const errEl = document.getElementById('dac-err');
+  errEl.textContent = '';
+  if (!rule){ errEl.textContent = (dacSource === 'xql') ? 'Paste an XQL query to run the pipeline.' : 'Paste a Sigma rule to run the pipeline.'; return; }
+
+  const runDry = document.getElementById('dac-dryrun').checked;
+  const body = { rule_source: rule, title: document.getElementById('dac-title').value.trim(), source_type: dacSource, run_dry_run: runDry };
+  const btn = document.getElementById('dac-run-btn');
+  btn.disabled = true;
+  document.getElementById('dac-results').innerHTML = '';
+  const prog = document.getElementById('dac-prog');
+  prog.classList.add('on');
+  document.getElementById('dac-phase').textContent = 'Submitting…';
+
+  try {
+    const r = await fetch('/detection-as-code/submit', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) throw new Error(d.error || 'submit failed');
+    dacStartPoll(d.job_id);
+  } catch (e) {
+    errEl.textContent = e.message;
+    prog.classList.remove('on');
+    btn.disabled = false;
+  }
+}
+
+function dacStartPoll(jobId){
+  if (dacPoll) clearInterval(dacPoll);
+  const tick = async () => {
+    try {
+      const r = await fetch('/detection-as-code/job/' + jobId);
+      const job = await r.json();
+      if (job.error) throw new Error(job.error);
+      dacJob = job;
+      document.getElementById('dac-phase').textContent = job.phase || 'Working…';
+      // Live pipeline view while running.
+      document.getElementById('dac-results').innerHTML =
+        dacVerdictBanner(job) + dacPipeCard(job) + dacResultCards(job);
+      dacWireFiles();
+      if (job.status === 'done' || job.status === 'error'){
+        clearInterval(dacPoll); dacPoll = null;
+        document.getElementById('dac-prog').classList.remove('on');
+        document.getElementById('dac-run-btn').disabled = false;
+        dacLoadRecent();
+      }
+    } catch (e) {
+      clearInterval(dacPoll); dacPoll = null;
+      document.getElementById('dac-prog').classList.remove('on');
+      document.getElementById('dac-run-btn').disabled = false;
+      document.getElementById('dac-err').textContent = e.message;
+    }
+  };
+  tick();
+  dacPoll = setInterval(tick, 2500);
+}
+
+/* ---------- verdict ---------- */
+function dacVerdictBanner(job){
+  if (job.status === 'error')
+    return `<div class="dac-verdict v-fail"><div class="vk">⚠️</div><div><div class="vt">Pipeline error</div><div class="vs">${esc(job.error||'Unknown error')}</div></div></div>`;
+  if (job.status !== 'done') return '';
+  const v = job.verdict || 'warn';
+  const map = {
+    pass: ['v-pass','✅','Pipeline passed','Schema-valid, compiled, dry-run clean, and reviewed — ready to merge.'],
+    warn: ['v-warn','🟠','Passed with warnings','Runnable and packaged — review the flagged items before merging.'],
+    fail: ['v-fail','⛔','Pipeline failed','A gate failed — fix the rule and re-run before it can be merged.'],
+  };
+  const [cls, k, t, s] = map[v] || map.warn;
+  return `<div class="dac-verdict ${cls}"><div class="vk">${k}</div><div><div class="vt">${t}</div><div class="vs">${s}</div></div></div>`;
+}
+
+/* ---------- pipeline strip ---------- */
+const STG = {
+  pending: ['stg-pending','⚪','queued'],
+  running: ['stg-running','<span class="dac-spin-mini"></span>','running'],
+  pass:    ['stg-pass','✅','pass'],
+  warn:    ['stg-warn','🟠','warn'],
+  fail:    ['stg-fail','⛔','fail'],
+  skip:    ['stg-skip','➖','skipped'],
+};
+function dacPipeCard(job){
+  const stages = job.stages || [];
+  if (!stages.length) return '';
+  const cells = stages.map(s => {
+    const [cls, icon, badge] = STG[s.status] || STG.pending;
+    const det = (s.details && s.details.length)
+      ? `<div class="dac-stage-details"><ul style="list-style:none;padding:0;margin:0">${s.details.slice(0,6).map(d=>`<li>${esc(d)}</li>`).join('')}</ul></div>` : '';
+    return `<div class="dac-stage ${cls}">
+        <span class="sbadge">${badge}</span>
+        <div class="si">${icon}</div>
+        <div class="sl">${esc(s.label).replace('&amp;amp;','&amp;')}</div>
+        ${s.summary ? `<div class="ss">${esc(s.summary)}</div>` : ''}
+        ${det}
+      </div>`;
+  }).join('');
+  return `<div class="dac-card"><h3>🛠️ Pipeline</h3><div class="dac-pipe">${cells}</div></div>`;
+}
+
+/* ---------- result detail cards (only when done) ---------- */
+function dacResultCards(job){
+  if (job.status !== 'done') return '';
+  return dacCompiledCard(job) + dacReviewCard(job) + dacArtifactsCard(job);
+}
+
+function dacCompiledCard(job){
+  const c = job.compiled; if (!c || !c.xql) return '';
+  const dry = c.dry_run || {};
+  const fms = (c.field_mappings||[]).map(m => `<span class="dac-chip">${esc(m.sigma_field)} → <b>${esc(m.xql_field)}</b></span>`).join('');
+  return `<div class="dac-card"><h3>🧬 Compiled XSIAM XQL
+      <span class="dac-chip" style="font-size:.74rem">📦 ${esc(c.dataset||'n/a')}</span>
+      <span class="dac-chip" style="font-size:.74rem">${c.llm_authored?'🤖 LLM':'⚙️ floor'} · confidence ${esc(c.confidence||'n/a')}</span></h3>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button class="dac-mini" onclick="dacCopy(this)" data-copy="${esc(c.xql)}">📋 Copy XQL</button></div>
+    <div class="dac-code">${esc(c.xql)}</div>
+    ${fms ? `<div class="dac-chips" style="margin-top:12px">${fms}</div>` : ''}
+    ${(c.assumptions&&c.assumptions.length)?`<ul class="dac-ul">${c.assumptions.map(a=>`<li><span class="ic">📌</span><span>${esc(a)}</span></li>`).join('')}</ul>`:''}
+    ${dry.summary?`<div class="dac-note" style="margin-top:12px;font-style:normal"><b>Dry-run:</b> ${esc(dry.summary)}</div>`:''}
+  </div>`;
+}
+
+function dacReviewCard(job){
+  const rv = job.review; if (!rv) return '';
+  const score = (rv.quality_score==null)?'—':rv.quality_score;
+  const sc = (rv.quality_score==null)?'#94a3b8':(rv.quality_score>=75?'#00a651':(rv.quality_score>=50?'#f7971e':'#c31432'));
+  const risk = (rv.false_positive_risk||'unknown').toLowerCase();
+  const rec = (rv.verdict_recommendation||'revise').toLowerCase();
+  const tech = (rv.mitre_techniques||[]).map(t=>`<span class="dac-chip">🎯 <b>${esc(t)}</b></span>`).join('');
+  const ov = job.review && job.review.catalog_overlap || [];
+  const block = (title, ic, items) => (items&&items.length)?`<div style="margin-top:12px"><div class="dac-label">${ic} ${title}</div><ul class="dac-ul">${items.map(x=>`<li><span class="ic">${ic}</span><span>${esc(x)}</span></li>`).join('')}</ul></div>`:'';
+  let ovBlock = '';
+  if (ov.length){
+    ovBlock = `<div style="margin-top:14px"><div class="dac-label">♻️ Overlap with existing catalog rules</div>` +
+      ov.map(o=>`<div class="dac-ov"><span class="pf">${esc(o.platform)}</span><span class="nm">${esc(o.name)}</span><span class="wy">${esc(o.why)}</span></div>`).join('') + `</div>`;
+  }
+  return `<div class="dac-card"><h3>🧠 Detection-engineering review ${rv.llm_authored?'<span class="dac-chip" style="font-size:.72rem">🤖 LLM</span>':''}</h3>
+    <div class="dac-scorebox">
+      <div class="dac-score" style="background:${sc}">${score}</div>
+      <div>
+        <div class="dac-chips">
+          <span class="dac-chip">⚠️ FP risk <span class="dac-risk risk-${risk}">${esc(risk)}</span></span>
+          <span class="dac-chip">🧭 severity <b>${esc(rv.severity||'n/a')}</b></span>
+          <span class="dac-chip">🗳️ recommends <span class="dac-rec rec-${rec}">${esc(rec)}</span></span>
+        </div>
+        ${rv.fp_rationale?`<div class="dac-note" style="margin-top:8px">${esc(rv.fp_rationale)}</div>`:''}
+      </div>
+    </div>
+    ${rv.summary?`<div style="font-size:.94rem;line-height:1.55;color:inherit;margin-bottom:6px">${esc(rv.summary)}</div>`:''}
+    ${tech?`<div class="dac-chips" style="margin-top:8px">${tech}</div>`:''}
+    ${block('Strengths','💪',rv.strengths)}
+    ${block('Improvements','🔧',rv.improvements)}
+    ${block('Coverage gaps','🕳️',rv.coverage_gaps)}
+    ${ovBlock}
+  </div>`;
+}
+
+function dacArtifactsCard(job){
+  const a = job.artifacts; if (!a) return '';
+  const files = a.files || {};
+  const rows = Object.keys(files).map((p,i) => `
+    <div class="dac-file" id="dac-file-${i}">
+      <div class="dac-file-h" onclick="document.getElementById('dac-file-${i}').classList.toggle('open')">
+        <span class="fp">📄 ${esc(p)}</span>
+        <button class="dac-mini" onclick="event.stopPropagation();dacCopy(this)" data-copy="${esc(files[p])}">📋 Copy</button>
+      </div>
+      <div class="dac-file-body"><div class="dac-code">${esc(files[p])}</div></div>
+    </div>`).join('');
+  const deploys = job.deploys || [];
+  const opened = deploys.find(d => d.status === 'opened' && d.mr_url);
+  let noteHtml = '';
+  if (opened) noteHtml = `<span class="dac-deploynote ok">✅ MR opened — <a href="${esc(opened.mr_url)}" target="_blank">${esc(opened.mr_url)}</a></span>`;
+  return `<div class="dac-card"><h3>📦 GitLab merge request <span class="dac-chip" style="font-size:.74rem">🌿 ${esc(a.branch)}</span></h3>
+    <div class="dac-label" style="margin-bottom:6px">MR title</div>
+    <div style="font-weight:700;margin-bottom:12px">${esc(a.mr_title)}</div>
+    <div class="dac-label" style="margin-bottom:6px">Files to commit (${Object.keys(files).length})</div>
+    ${rows}
+    <div class="dac-file" id="dac-file-mrdesc">
+      <div class="dac-file-h" onclick="document.getElementById('dac-file-mrdesc').classList.toggle('open')">
+        <span class="fp">📝 Merge-request description</span>
+        <button class="dac-mini" onclick="event.stopPropagation();dacCopy(this)" data-copy="${esc(a.mr_description)}">📋 Copy</button>
+      </div>
+      <div class="dac-file-body"><div class="dac-code">${esc(a.mr_description)}</div></div>
+    </div>
+    <div class="dac-deployrow">
+      <button class="dac-deploy-btn" id="dac-deploy-btn" onclick="dacDeploy('${job.id}')">🚀 Approve &amp; open merge request</button>
+      <span class="dac-deploynote" id="dac-deploy-note">${noteHtml}</span>
+    </div>
+    <div class="dac-note" style="margin-top:8px">Opening the MR pushes these files to the detection repo via the GitLab API. Disabled on the dev instance (it always targets the prod repo).</div>
+  </div>`;
+}
+
+function dacWireFiles(){ /* file toggles are inline onclick; nothing to wire */ }
+
+async function dacDeploy(jobId){
+  const note = document.getElementById('dac-deploy-note');
+  const btn = document.getElementById('dac-deploy-btn');
+  note.className = 'dac-deploynote'; note.textContent = 'Opening merge request…';
+  btn.disabled = true;
+  try {
+    const r = await fetch('/detection-as-code/deploy', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({job_id: jobId})});
+    const d = await r.json();
+    if (d.ok){ note.className='dac-deploynote ok'; note.innerHTML = '✅ MR opened — ' + (d.mr_url?`<a href="${esc(d.mr_url)}" target="_blank">${esc(d.mr_url)}</a>`:'logged to the audit trail.'); }
+    else if (d.error === 'deploy_disabled_in_dev'){ note.className='dac-deploynote warn'; note.textContent = '🔒 ' + (d.warning || 'Disabled on dev — copy the artifacts instead.'); btn.disabled = false; }
+    else if (d.error === 'gitlab_not_configured'){ note.className='dac-deploynote warn'; note.textContent = '⚙️ ' + (d.warning || 'GitLab is not configured yet.'); btn.disabled = false; }
+    else { note.className='dac-deploynote bad'; note.textContent = '⚠ ' + (d.error || 'Could not open MR.'); btn.disabled = false; }
+  } catch(e){ note.className='dac-deploynote bad'; note.textContent = '⚠ ' + e.message; btn.disabled = false; }
+}
+
+/* ---------- copy ---------- */
+function dacCopy(btn){
+  const txt = (btn.getAttribute('data-copy')||'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"');
+  const ta = document.createElement('textarea'); ta.value = txt;
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); } catch(e){}
+  document.body.removeChild(ta);
+  const old = btn.innerHTML; btn.innerHTML = '✅ Copied';
+  setTimeout(() => { btn.innerHTML = old; }, 1400);
+}
+
+/* ---------- recent ---------- */
+async function dacLoadRecent(){
+  try {
+    const r = await fetch('/detection-as-code/recent?limit=25');
+    const d = await r.json();
+    const host = document.getElementById('dac-recent');
+    const jobs = d.jobs || [];
+    if (!jobs.length){ host.innerHTML = '<div class="dac-note">No runs yet — paste a Sigma rule above.</div>'; return; }
+    const dot = j => {
+      if (j.status === 'error') return 'd-err';
+      if (j.status !== 'done') return 'd-run';
+      return {pass:'d-pass', warn:'d-warn', fail:'d-fail'}[(j.verdict||'').toLowerCase()] || 'd-warn';
+    };
+    const vlabel = j => j.status === 'done'
+      ? ({pass:'✅ passed', warn:'🟠 warnings', fail:'⛔ failed'}[(j.verdict||'').toLowerCase()] || j.verdict || 'done')
+      : (j.status === 'error' ? '⚠ error' : '⏳ ' + (j.phase || 'running'));
+    host.innerHTML = jobs.map(j =>
+      `<div class="dac-rrow" onclick="dacOpenJob('${j.id}')">
+          <div class="dac-dot ${dot(j)}"></div>
+          <div class="rt"><div class="tt">${esc(j.title)}</div>
+            <div class="mm">${esc(j.created_at)} · ${esc(j.actor||'')} · ${vlabel(j)}</div></div></div>`
+    ).join('');
+  } catch (e) { /* leave as-is */ }
+}
+
+async function dacOpenJob(id){
+  try {
+    const r = await fetch('/detection-as-code/job/' + id);
+    const job = await r.json();
+    if (job.error) return;
+    dacJob = job;
+    dacSetSource(job.source_type === 'xql' ? 'xql' : 'sigma');
+    document.getElementById('dac-title').value = job.title || '';
+    document.getElementById('dac-rule').value = job.rule_source || '';
+    if (job.status === 'done' || job.status === 'error'){
+      document.getElementById('dac-results').innerHTML = dacVerdictBanner(job) + dacPipeCard(job) + dacResultCards(job);
+      dacWireFiles();
+    } else { dacStartPoll(id); }
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  } catch (e) { /* ignore */ }
+}
+
+dacLoadRecent();
+</script>
+{% endblock %}

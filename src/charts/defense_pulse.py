@@ -1279,8 +1279,6 @@ def _generate_ai_analysis(stats: dict, tickets: List[dict]) -> dict:
     Returns {} on LLM failure so the caller can carry forward prior content.
     """
     try:
-        from src.components.tipper_analyzer.llm_init import get_llm
-
         # ── Deterministic steps (run even if LLM is down) ────────────────────
         full_cirs = _build_cirs(tickets, cap=None)  # every ticket, for cluster stats
         clusters = _aggregate_cir_clusters(full_cirs)
@@ -1296,13 +1294,11 @@ def _generate_ai_analysis(stats: dict, tickets: List[dict]) -> dict:
             },
         }
 
-        llm = get_llm()
-        if llm is None:
-            logger.warning("LLM unavailable — skipping AI analysis")
-            return {}
+        # Non-tool structured analysis → GPT-4.1 (m1 GLM fallback).
+        from my_bot.utils.llm_factory import create_llm, structured_output
+        llm = create_llm()
 
         prompt = _build_analysis_prompt(stats, clusters, total_cirs=len(cirs))
-        from my_bot.utils.llm_factory import structured_output
         structured_llm = structured_output(llm, DefensePulseStructuredAnalysis)
         response = structured_llm.invoke(prompt)
         llm_output = response.model_dump()

@@ -2,9 +2,33 @@
 {% set page_title_text = 'Favorite URLs' %}
 {% set page_title_left_icon = '🔗' %}
 {% set page_title_right_icon = '⭐' %}
+{% block body_classes %}fav-themed{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/favorite_urls.css') }}?v=20260506a">
+<style>
+  /* ===== DnR URLs theme — Sky Blue ===== */
+  body.fav-themed { background:
+      radial-gradient(1100px 520px at 4% -8%, #cfe8ff 0%, transparent 55%),
+      radial-gradient(1000px 560px at 98% 0%, #d9f0ff 0%, transparent 52%),
+      radial-gradient(1200px 720px at 50% 122%, #e0f7ff 0%, transparent 55%),
+      linear-gradient(160deg, #ecf7ff 0%, #f0fbff 48%, #eef9ff 100%) !important;
+      background-attachment: fixed !important; min-height: 100vh; }
+  body.fav-themed.dark-mode { background:
+      linear-gradient(135deg, #06121f 0%, #0a1c30 50%, #05111c 100%) !important; color: #d6e8f5; }
+  html { scrollbar-gutter: stable; }
+  ::-webkit-scrollbar { width: 16px; height: 16px; }
+  ::-webkit-scrollbar-track { border-radius: 10px;
+      background: linear-gradient(180deg, rgba(0,0,0,.04), rgba(0,0,0,.06) 50%, rgba(0,0,0,.04)); }
+  ::-webkit-scrollbar-thumb { border-radius: 10px; border: 2px solid transparent; background-clip: padding-box;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
+      background: linear-gradient(180deg, #0ea5e9 0%, #38bdf8 22%, #0a8fd6 46%, #06b6d4 70%, #3b82f6 100%); }
+  ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, #3b82f6 0%, #06b6d4 30%, #0a8fd6 54%, #38bdf8 78%, #0ea5e9 100%); }
+  ::-webkit-scrollbar-corner { background: transparent; }
+  body.dark-mode ::-webkit-scrollbar-track {
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.10) 50%, rgba(255,255,255,.06)); }
+</style>
 {% endblock %}
 
 {% block content %}

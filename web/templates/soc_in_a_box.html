@@ -1,0 +1,590 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'SOC-in-a-Box' %}
+{% set page_title_left_icon = '🛡️' %}
+{% set page_title_right_icon = '🤖' %}
+
+{% block extra_css %}
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   SOC-in-a-Box — tactical command-center theme
+   ============================================================ */
+:root {
+  --soc-bg-0:#05080f; --soc-bg-1:#0a1020; --soc-bg-2:#0e1730;
+  --soc-panel:rgba(17,27,49,0.55);
+  --soc-panel-2:rgba(13,21,40,0.72);
+  --soc-line:rgba(120,160,255,0.14);
+  --soc-line-2:rgba(120,160,255,0.30);
+  --soc-text:#e8eefb; --soc-dim:#9db0d3; --soc-faint:#6478a0;
+  --soc-cyan:#34e3f0; --soc-emerald:#37e0a0; --soc-blue:#5b8dff;
+  --soc-amber:#ffc14d; --soc-red:#ff6b7d; --soc-violet:#b08bff;
+  --soc-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --soc-disp:'Chakra Petch',system-ui,sans-serif;
+  --soc-body:'IBM Plex Sans',system-ui,sans-serif;
+}
+
+/* page atmosphere — dark backdrop + tactical grid + aurora */
+body {
+  background:
+    radial-gradient(1100px 540px at 12% -8%, rgba(52,227,240,0.10), transparent 60%),
+    radial-gradient(960px 520px at 92% 0%, rgba(55,224,160,0.09), transparent 58%),
+    linear-gradient(180deg, var(--soc-bg-1) 0%, var(--soc-bg-0) 100%);
+  background-attachment: fixed;
+}
+body::before {
+  content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+  background-image:
+    linear-gradient(rgba(120,160,255,0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120,160,255,0.045) 1px, transparent 1px);
+  background-size: 44px 44px; mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, #000 40%, transparent 100%);
+}
+
+.sib-container { position:relative; z-index:1; flex:1 1 auto; max-width:1480px;
+  margin:24px auto 90px; padding:0 22px; color:var(--soc-text);
+  font-family:var(--soc-body); }
+
+/* shared panel surface */
+.sib-stat, .sib-tile, .sib-svc, .sib-table-wrap, .sib-tele,
+.sib-tele-stats-summary, .sib-demo-bar {
+  background:var(--soc-panel); backdrop-filter:blur(14px) saturate(125%);
+  -webkit-backdrop-filter:blur(14px) saturate(125%);
+  border:1px solid var(--soc-line);
+  box-shadow:0 1px 0 rgba(255,255,255,0.04) inset, 0 18px 44px rgba(0,0,0,0.42);
+}
+
+/* ---------- Hero ---------- */
+.sib-hero {
+  position:relative; overflow:hidden; margin-bottom:20px; border-radius:20px;
+  padding:32px 34px; color:#fff;
+  background:
+    radial-gradient(900px 300px at 0% 0%, rgba(52,227,240,0.28), transparent 55%),
+    linear-gradient(125deg, #06223f 0%, #0a2d63 42%, #06402f 100%);
+  border:1px solid rgba(120,180,255,0.22);
+  box-shadow:0 22px 60px rgba(2,12,30,0.6), 0 0 0 1px rgba(120,180,255,0.08) inset;
+}
+.sib-hero::before { /* scanning sweep */
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(100deg, transparent 30%, rgba(120,220,255,0.10) 50%, transparent 70%);
+  transform:translateX(-100%); animation:soc-sweep 7s ease-in-out infinite;
+}
+.sib-hero::after { /* corner reticle glow */
+  content:''; position:absolute; right:-80px; top:-90px; width:320px; height:320px;
+  border-radius:50%; background:radial-gradient(circle, rgba(55,224,160,0.30), transparent 68%);
+  filter:blur(6px);
+}
+.sib-hero > * { position:relative; z-index:1; }
+.sib-hero h1 { margin:0 0 8px; font-family:var(--soc-disp); font-size:2.05rem;
+  font-weight:700; letter-spacing:0.01em; text-shadow:0 2px 20px rgba(0,0,0,0.5); }
+.sib-hero p { margin:0; font-size:1rem; line-height:1.6; max-width:840px;
+  color:rgba(232,240,255,0.9); }
+@keyframes soc-sweep { 0%,55% {transform:translateX(-100%);} 92%,100%{transform:translateX(100%);} }
+
+/* ---------- KPI strip ---------- */
+.sib-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+  gap:14px; margin-bottom:20px; }
+.sib-stat { border-radius:15px; padding:16px 20px; position:relative; overflow:hidden;
+  transition:transform .16s ease, border-color .16s ease, box-shadow .16s ease; }
+.sib-stat::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
+  background:linear-gradient(180deg,var(--soc-cyan),var(--soc-emerald)); opacity:.85; }
+.sib-stat:hover { transform:translateY(-3px); border-color:var(--soc-line-2);
+  box-shadow:0 22px 50px rgba(0,0,0,0.5); }
+.sib-stat-label { font-family:var(--soc-mono); font-size:0.7rem; text-transform:uppercase;
+  letter-spacing:0.14em; color:var(--soc-dim); margin-bottom:6px; }
+.sib-stat-value { font-family:var(--soc-disp); font-size:1.9rem; font-weight:700;
+  color:#fff; line-height:1; text-shadow:0 0 22px rgba(91,141,255,0.35); }
+.sib-stat-value.warn { color:var(--soc-red); text-shadow:0 0 22px rgba(255,107,125,0.4); }
+.sib-stat-value.good { color:var(--soc-emerald); text-shadow:0 0 22px rgba(55,224,160,0.4); }
+.sib-stat-value span { color:var(--soc-faint) !important; }
+.sib-stat-sub { font-size:0.78rem; color:var(--soc-faint); margin-top:5px; }
+
+/* ---------- Section headers ---------- */
+.sib-section { margin:34px 0 14px; }
+.sib-section h2 { margin:0 0 4px; font-family:var(--soc-disp); font-size:1.15rem;
+  font-weight:600; color:#fff; letter-spacing:0.01em; }
+.sib-section h2::before { content:'▍'; color:var(--soc-cyan); margin-right:8px; }
+.sib-section .hint { font-size:0.84rem; color:var(--soc-dim); }
+.sib-section .hint code, .hint code { background:rgba(120,160,255,0.12);
+  color:var(--soc-cyan); padding:1px 6px; border-radius:5px; font-family:var(--soc-mono);
+  font-size:0.78rem; }
+
+/* ---------- Quick-link tiles ---------- */
+.sib-tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+  gap:14px; margin-bottom:22px; }
+.sib-tile { position:relative; border-radius:16px; padding:18px 20px; overflow:hidden;
+  text-decoration:none; color:var(--soc-text);
+  transition:transform .16s ease, border-color .16s ease, box-shadow .16s ease; }
+.sib-tile::after { content:''; position:absolute; inset:0; border-radius:16px;
+  background:linear-gradient(135deg, rgba(52,227,240,0.10), transparent 55%); opacity:0;
+  transition:opacity .2s ease; }
+.sib-tile:hover { transform:translateY(-4px); border-color:var(--soc-line-2);
+  box-shadow:0 24px 56px rgba(0,0,0,0.55), 0 0 0 1px var(--soc-line-2); }
+.sib-tile:hover::after { opacity:1; }
+.sib-tile .tile-emoji { font-size:1.6rem; margin-bottom:9px;
+  filter:drop-shadow(0 0 10px rgba(52,227,240,0.45)); }
+.sib-tile .tile-title { font-family:var(--soc-disp); font-weight:600; font-size:1.02rem;
+  color:#fff; margin-bottom:3px; }
+.sib-tile .tile-sub { font-size:0.83rem; color:var(--soc-dim); }
+
+/* ---------- Service grid ---------- */
+.sib-svc-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); gap:14px; }
+.sib-svc { border-radius:16px; padding:18px 20px; border-left:3px solid var(--soc-faint);
+  transition:transform .14s ease, box-shadow .14s ease; }
+.sib-svc:hover { transform:translateY(-2px); box-shadow:0 20px 46px rgba(0,0,0,0.5); }
+.sib-svc.svc-good { border-left-color:var(--soc-emerald);
+  box-shadow:-12px 0 26px -18px rgba(55,224,160,0.7), 0 18px 44px rgba(0,0,0,0.42); }
+.sib-svc.svc-bad { border-left-color:var(--soc-red);
+  box-shadow:-12px 0 26px -18px rgba(255,107,125,0.7), 0 18px 44px rgba(0,0,0,0.42); }
+.sib-svc.svc-muted { border-left-color:var(--soc-faint); opacity:0.82; }
+.sib-svc-head { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+.sib-svc-head .name { font-family:var(--soc-disp); font-weight:600; font-size:1.06rem; color:#fff; }
+.sib-svc-head .role { font-size:0.78rem; color:var(--soc-dim); }
+.sib-svc-desc { font-size:0.86rem; color:var(--soc-dim); margin:9px 0 11px; line-height:1.5; }
+.sib-svc-meta { font-family:var(--soc-mono); font-size:0.76rem; color:var(--soc-faint); line-height:1.6; }
+.sib-svc-meta code { background:rgba(120,160,255,0.10); color:var(--soc-cyan);
+  padding:1px 6px; border-radius:4px; font-size:0.74rem; }
+.svc-badge { display:inline-block; padding:3px 11px; border-radius:999px; font-family:var(--soc-mono);
+  font-size:0.66rem; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; border:1px solid transparent; }
+.svc-badge.running { background:rgba(55,224,160,0.14); color:var(--soc-emerald); border-color:rgba(55,224,160,0.35); }
+.svc-badge.scheduled { background:rgba(91,141,255,0.14); color:var(--soc-blue); border-color:rgba(91,141,255,0.35); }
+.svc-badge.stopped { background:rgba(255,107,125,0.14); color:var(--soc-red); border-color:rgba(255,107,125,0.4); }
+.svc-badge.disabled { background:rgba(120,160,255,0.08); color:var(--soc-faint); border-color:var(--soc-line); }
+.svc-badge.running { position:relative; }
+
+/* ---------- Recent activity table ---------- */
+.sib-table-wrap { border-radius:16px; overflow:hidden; margin-top:2px; }
+.sib-table { width:100%; border-collapse:collapse; font-size:0.86rem; }
+.sib-table thead { background:rgba(120,160,255,0.07); }
+.sib-table th, .sib-table td { text-align:left; padding:10px 14px;
+  border-bottom:1px solid rgba(120,160,255,0.08); }
+.sib-table th { font-family:var(--soc-mono); font-size:0.68rem; text-transform:uppercase;
+  letter-spacing:0.1em; color:var(--soc-dim); font-weight:600; }
+.sib-table td { color:var(--soc-text); }
+.sib-table tr:hover td { background:rgba(120,160,255,0.05); }
+.sib-table .muted { color:var(--soc-faint); }
+.sib-table code { font-family:var(--soc-mono); background:rgba(120,160,255,0.10);
+  color:var(--soc-cyan); padding:1px 6px; border-radius:4px; }
+.bucket { display:inline-block; padding:2px 9px; border-radius:999px; font-family:var(--soc-mono);
+  font-size:0.68rem; font-weight:600; background:rgba(120,160,255,0.12); color:var(--soc-dim);
+  border:1px solid rgba(120,160,255,0.18); }
+.bucket.tier1 { background:rgba(255,193,77,0.14); color:var(--soc-amber); border-color:rgba(255,193,77,0.3); }
+.bucket.tier2 { background:rgba(176,139,255,0.16); color:var(--soc-violet); border-color:rgba(176,139,255,0.32); }
+.bucket.ir { background:rgba(255,107,125,0.14); color:var(--soc-red); border-color:rgba(255,107,125,0.32); }
+.bucket.ti { background:rgba(52,227,240,0.14); color:var(--soc-cyan); border-color:rgba(52,227,240,0.32); }
+.bucket.det { background:rgba(255,193,77,0.14); color:var(--soc-amber); border-color:rgba(255,193,77,0.3); }
+.bucket.hunter { background:rgba(55,224,160,0.14); color:var(--soc-emerald); border-color:rgba(55,224,160,0.3); }
+.bucket.manager { background:rgba(91,141,255,0.16); color:var(--soc-blue); border-color:rgba(91,141,255,0.32); }
+.bucket.hitl { background:rgba(255,140,190,0.16); color:#ff9ecb; border-color:rgba(255,140,190,0.32); }
+.bucket.handoff { background:rgba(120,160,255,0.10); color:var(--soc-dim); }
+.empty { padding:32px; text-align:center; color:var(--soc-faint); }
+
+/* ---------- Demo control bar ---------- */
+.sib-demo-bar { border-radius:16px; padding:18px 22px; margin-bottom:20px;
+  border-left:3px solid var(--soc-amber);
+  box-shadow:-12px 0 26px -18px rgba(255,193,77,0.6), 0 18px 44px rgba(0,0,0,0.42);
+  display:flex; flex-wrap:wrap; gap:14px; align-items:center; }
+.sib-demo-bar .demo-label { font-family:var(--soc-disp); font-weight:600; color:var(--soc-amber); font-size:0.98rem; }
+.sib-demo-bar .demo-hint { font-size:0.83rem; color:var(--soc-dim); flex:1 1 240px; }
+.sib-demo-bar .demo-hint code { background:rgba(255,193,77,0.12); color:var(--soc-amber);
+  padding:1px 6px; border-radius:4px; font-family:var(--soc-mono); font-size:0.78rem; }
+.sib-demo-bar form { display:inline-flex; gap:8px; align-items:center; margin:0; }
+.sib-demo-bar select { padding:8px 12px; border-radius:9px; border:1px solid var(--soc-line-2);
+  background:var(--soc-panel-2); color:var(--soc-text); font-size:0.88rem; font-family:var(--soc-body); }
+.btn-demo-fire { background:linear-gradient(135deg,var(--soc-emerald),#1fb37a); color:#04130c;
+  border:none; padding:10px 20px; border-radius:11px; font-family:var(--soc-disp); font-weight:600;
+  cursor:pointer; font-size:0.9rem; box-shadow:0 8px 22px rgba(55,224,160,0.32); transition:transform .12s ease, box-shadow .12s ease; }
+.btn-demo-fire:hover { transform:translateY(-2px); box-shadow:0 12px 30px rgba(55,224,160,0.5); }
+.btn-demo-clean { background:rgba(120,160,255,0.08); color:var(--soc-dim); border:1px solid var(--soc-line-2);
+  padding:10px 16px; border-radius:11px; font-weight:600; cursor:pointer; font-size:0.9rem; transition:background .12s ease; }
+.btn-demo-clean:hover { background:rgba(120,160,255,0.16); color:#fff; }
+
+/* ---------- Banner ---------- */
+.sib-banner { border-radius:13px; padding:14px 18px; margin-bottom:16px; border:1px solid; border-left-width:3px; }
+.sib-banner.good { background:rgba(55,224,160,0.10); border-color:rgba(55,224,160,0.4); color:#7af0c2; }
+.sib-banner.bad { background:rgba(255,107,125,0.10); border-color:rgba(255,107,125,0.4); color:#ffb3bd; }
+.sib-banner.muted { background:rgba(120,160,255,0.08); border-color:var(--soc-line-2); color:var(--soc-dim); }
+.sib-banner strong { margin-right:6px; color:#fff; }
+
+/* ---------- Telemetry panel ---------- */
+.sib-stats-panel-head { display:flex; flex-wrap:wrap; align-items:baseline; gap:14px; margin:38px 0 12px; }
+.sib-stats-panel-head h2 { margin:0; font-family:var(--soc-disp); font-size:1.15rem; font-weight:600; color:#fff; }
+.sib-stats-panel-head .hint { font-size:0.83rem; color:var(--soc-dim); flex:1; }
+.sib-stats-panel-head .window-pills { display:inline-flex; gap:6px; }
+.sib-stats-panel-head .window-pills a { padding:6px 13px; border-radius:999px; font-family:var(--soc-mono);
+  font-size:0.76rem; font-weight:500; color:var(--soc-dim); background:rgba(120,160,255,0.08);
+  border:1px solid var(--soc-line); text-decoration:none; transition:all .12s ease; }
+.sib-stats-panel-head .window-pills a.active { background:linear-gradient(135deg,var(--soc-blue),#2f6dff);
+  color:#fff; border-color:transparent; box-shadow:0 6px 18px rgba(91,141,255,0.4); }
+.sib-stats-panel-head .window-pills a:hover:not(.active) { background:rgba(120,160,255,0.18); color:#fff; }
+.sib-tele-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(360px,1fr)); gap:14px; }
+.sib-tele { border-radius:16px; padding:17px 19px; transition:transform .14s ease, box-shadow .14s ease; }
+.sib-tele:hover { transform:translateY(-2px); box-shadow:0 20px 46px rgba(0,0,0,0.5); }
+.sib-tele-head { display:flex; align-items:baseline; gap:8px; margin-bottom:8px; }
+.sib-tele-head .emoji { font-size:1.25rem; }
+.sib-tele-head .name { font-family:var(--soc-disp); font-weight:600; color:#fff; }
+.sib-tele-head .count { margin-left:auto; font-family:var(--soc-disp); font-size:1.7rem; font-weight:700;
+  color:var(--soc-cyan); text-shadow:0 0 20px rgba(52,227,240,0.4); }
+.sib-tele-head .count.zero { color:var(--soc-faint); text-shadow:none; }
+.sib-tele-head .count-label { font-family:var(--soc-mono); font-size:0.66rem; text-transform:uppercase;
+  letter-spacing:0.1em; color:var(--soc-faint); margin-left:2px; }
+.sib-tele-perf { display:flex; gap:18px; font-size:0.82rem; color:var(--soc-dim); margin:4px 0 8px; }
+.sib-tele-perf .perf-label { color:var(--soc-faint); text-transform:uppercase; letter-spacing:0.08em;
+  font-family:var(--soc-mono); font-size:0.66rem; font-weight:500; }
+.sib-tele-extra { font-size:0.84rem; color:var(--soc-dim); margin-top:6px; }
+.sib-tele-extra .extra-row { margin-bottom:4px; }
+.sib-tele-extra .extra-label { color:var(--soc-faint); text-transform:uppercase; letter-spacing:0.08em;
+  font-family:var(--soc-mono); font-size:0.66rem; font-weight:500; margin-right:6px; }
+.sib-tele-extra code { background:rgba(120,160,255,0.10); color:var(--soc-cyan); padding:1px 6px;
+  border-radius:4px; font-family:var(--soc-mono); font-size:0.75rem; }
+.sib-tele-stats-summary { border-radius:12px; padding:11px 15px; margin-bottom:14px;
+  font-size:0.86rem; color:var(--soc-dim); }
+.sib-tele-stats-summary strong { color:#fff; }
+
+/* ---------- Backtest panel ---------- */
+.sib-backtest { border-radius:16px; padding:20px; margin:26px 0;
+  background:linear-gradient(135deg, rgba(255,193,77,0.07), rgba(91,141,255,0.06));
+  border:1px solid rgba(255,193,77,0.3);
+  box-shadow:0 18px 44px rgba(0,0,0,0.42); }
+.sib-backtest-head { display:flex; align-items:baseline; gap:12px; margin-bottom:16px; flex-wrap:wrap; }
+.sib-backtest-head h2 { margin:0; font-family:var(--soc-disp); font-size:1.13rem; font-weight:600; color:#fff; }
+.sib-backtest-head .meta { font-size:0.85rem; color:var(--soc-dim); flex:1; }
+.sib-backtest-head .meta strong { color:#fff; }
+.sib-backtest-head .mode-pill { background:rgba(255,193,77,0.16); color:var(--soc-amber); font-family:var(--soc-mono);
+  font-size:0.66rem; font-weight:600; padding:3px 9px; border-radius:10px; text-transform:uppercase; letter-spacing:0.08em; }
+.sib-backtest-headline { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:16px; }
+.sib-backtest-headline .kpi { background:var(--soc-panel-2); border-radius:11px; padding:12px; text-align:center;
+  border:1px solid var(--soc-line); }
+.sib-backtest-headline .kpi-label { font-family:var(--soc-mono); font-size:0.66rem; color:var(--soc-dim);
+  text-transform:uppercase; letter-spacing:0.1em; font-weight:500; }
+.sib-backtest-headline .kpi-value { font-family:var(--soc-disp); font-size:1.7rem; font-weight:700; color:#fff;
+  line-height:1.15; text-shadow:0 0 20px rgba(91,141,255,0.3); }
+.sib-backtest-headline .kpi-value.none { color:var(--soc-faint); font-size:1rem; text-shadow:none; }
+.sib-backtest-body { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.sib-backtest-cell { background:var(--soc-panel-2); border-radius:11px; padding:12px 15px;
+  border:1px solid var(--soc-line); font-size:0.86rem; color:var(--soc-dim); }
+.sib-backtest-cell h3 { margin:0 0 9px; font-family:var(--soc-mono); font-size:0.72rem; text-transform:uppercase;
+  letter-spacing:0.08em; color:var(--soc-amber); font-weight:600; }
+.sib-backtest-cell .row { margin-bottom:5px; }
+.sib-backtest-cell .row strong { color:#fff; }
+.sib-backtest-cell code { font-family:var(--soc-mono); background:rgba(120,160,255,0.10); color:var(--soc-cyan);
+  padding:1px 6px; border-radius:4px; font-size:0.78rem; }
+.sib-backtest-conf { display:grid; grid-template-columns:1fr 1fr; gap:7px; font-size:0.8rem; }
+.sib-backtest-conf .cell { background:rgba(120,160,255,0.06); border-radius:8px; padding:7px 11px;
+  display:flex; justify-content:space-between; align-items:baseline; color:var(--soc-dim); }
+.sib-backtest-conf .cell strong { color:#fff; }
+.sib-backtest-conf .cell.good { background:rgba(55,224,160,0.12); }
+.sib-backtest-conf .cell.bad { background:rgba(255,107,125,0.12); }
+.sib-backtest-empty { background:var(--soc-panel); border:1px dashed var(--soc-line-2); border-radius:13px;
+  padding:16px; margin:20px 0; font-size:0.89rem; color:var(--soc-dim); }
+.sib-backtest-empty strong { color:#fff; }
+.sib-backtest-empty code { background:rgba(120,160,255,0.12); color:var(--soc-cyan); padding:1px 6px;
+  border-radius:4px; font-family:var(--soc-mono); font-size:0.78rem; }
+
+/* ---------- staggered load-in ---------- */
+@keyframes soc-rise { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+.sib-hero, .sib-banner, .sib-demo-bar, .sib-stats, .sib-tiles,
+.sib-stats-panel-head, .sib-tele-stats-summary, .sib-tele-grid,
+.sib-backtest, .sib-section, .sib-svc-grid, .sib-table-wrap {
+  animation:soc-rise .5s cubic-bezier(.2,.7,.2,1) both;
+}
+.sib-banner { animation-delay:.04s; }
+.sib-demo-bar { animation-delay:.08s; }
+.sib-stats { animation-delay:.12s; }
+.sib-tiles { animation-delay:.16s; }
+.sib-stats-panel-head, .sib-tele-stats-summary { animation-delay:.2s; }
+.sib-tele-grid { animation-delay:.24s; }
+@media (prefers-reduced-motion: reduce) {
+  .sib-hero, .sib-banner, .sib-demo-bar, .sib-stats, .sib-tiles,
+  .sib-stats-panel-head, .sib-tele-stats-summary, .sib-tele-grid,
+  .sib-backtest, .sib-section, .sib-svc-grid, .sib-table-wrap,
+  .sib-hero::before { animation:none; }
+}
+@media (max-width:720px) {
+  .sib-backtest-headline { grid-template-columns:repeat(2,1fr); }
+  .sib-backtest-body { grid-template-columns:1fr; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="sib-container">
+
+  <div class="sib-hero">
+    <h1>🛡️ SOC-in-a-Box</h1>
+    <p>AI agents playing SOC roles (Sentinel → Tier 2 → IR Lead → Threat Intel),
+       plus periodic SOC Manager / Detection Engineer / Threat Hunter sweeps,
+       all coordinated over a Redis Streams bus with a Human-In-The-Loop
+       approval gate before any real-system action. AVP-sponsored, production
+       bar from day one.</p>
+  </div>
+
+  {% if banner %}
+  <div class="sib-banner {{ banner.kind }}">
+    <strong>{{ banner.title }}.</strong> {{ banner.body }}
+  </div>
+  {% endif %}
+
+  <div class="sib-demo-bar">
+    <span class="demo-label">🎬 Demo controls</span>
+    <span class="demo-hint">Fire a synthetic incident through the full agent chain.
+      Tickets use prefix <code>999</code> so cleanup is precise.</span>
+    <form method="POST" action="{{ url_for('soc_in_a_box.fire_demo') }}">
+      <select name="scenario">
+        {% for s in scenarios %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+      </select>
+      <button type="submit" class="btn-demo-fire">🚀 Fire demo</button>
+    </form>
+    <form method="POST" action="{{ url_for('soc_in_a_box.cleanup_demo') }}"
+          onsubmit="return confirm('Wipe ALL demo artifacts (ticket prefix 999) from the bus + HITL sidecar?');">
+      <button type="submit" class="btn-demo-clean">🧹 Cleanup demo</button>
+    </form>
+  </div>
+
+  <div class="sib-stats">
+    <div class="sib-stat">
+      <div class="sib-stat-label">Agents online</div>
+      <div class="sib-stat-value {% if services_running == services_total %}good{% elif services_running == 0 %}warn{% endif %}">
+        {{ services_running }} <span style="color:#cbd5e1; font-weight:500;">/ {{ services_total }}</span>
+      </div>
+      <div class="sib-stat-sub">long-running + timer</div>
+    </div>
+    <div class="sib-stat">
+      <div class="sib-stat-label">Pending HITL</div>
+      <div class="sib-stat-value {% if pending_hitl > 0 %}warn{% endif %}">{{ pending_hitl }}</div>
+      <div class="sib-stat-sub">containment approvals awaiting click</div>
+    </div>
+    <div class="sib-stat">
+      <div class="sib-stat-label">Recent bus events</div>
+      <div class="sib-stat-value">{{ events|length }}</div>
+      <div class="sib-stat-sub">last 25 from soc.audit</div>
+    </div>
+  </div>
+
+  <div class="sib-tiles">
+    <a class="sib-tile" href="/soc-in-a-box/analyze">
+      <div class="tile-emoji">🧪</div>
+      <div class="tile-title">Analyze a Log or Email</div>
+      <div class="tile-sub">Paste input → real triage → watch it cascade</div>
+    </a>
+    <a class="sib-tile" href="/soc-timeline">
+      <div class="tile-emoji">📜</div>
+      <div class="tile-title">Live Timeline</div>
+      <div class="tile-sub">Every triage event, newest first</div>
+    </a>
+    <a class="sib-tile" href="/soc-hitl/audit">
+      <div class="tile-emoji">🤝</div>
+      <div class="tile-title">HITL Audit Trail</div>
+      <div class="tile-sub">All proposed + decided containment actions</div>
+    </a>
+    <a class="sib-tile" href="https://github.com/vinayvobbili/security-ops-platform/tree/main/src/components/soc_in_box" target="_blank">
+      <div class="tile-emoji">📖</div>
+      <div class="tile-title">README + Architecture</div>
+      <div class="tile-sub">Module docs (GitHub)</div>
+    </a>
+  </div>
+
+  <div class="sib-stats-panel-head">
+    <h2>📊 Per-agent telemetry</h2>
+    <span class="hint">Computed live from <code>soc.audit</code>. Use for cumulative
+      "what has SOC-in-a-Box done in this window" numbers.</span>
+    <span class="window-pills">
+      <a href="?stats_window=24"  class="{% if stats_window_hours == 24 %}active{% endif %}">24h</a>
+      <a href="?stats_window=168" class="{% if stats_window_hours == 168 %}active{% endif %}">7d</a>
+      <a href="?stats_window=720" class="{% if stats_window_hours == 720 %}active{% endif %}">30d</a>
+    </span>
+  </div>
+
+  <div class="sib-tele-stats-summary">
+    Examined <strong>{{ stats.events_examined }}</strong> events from the bus
+    in the last
+    {% if stats_window_hours == 24 %}24 hours{% elif stats_window_hours == 168 %}7 days{% else %}30 days{% endif %}
+    ({{ stats.total_events_on_bus }} total on the bus).
+  </div>
+
+  <div class="sib-tele-grid">
+    {% for r in stats.roles %}
+    <div class="sib-tele">
+      <div class="sib-tele-head">
+        <span class="emoji">{{ r.emoji }}</span>
+        <span class="name">{{ r.name }}</span>
+        <span class="count {% if r.events == 0 %}zero{% endif %}">{{ r.events }}</span>
+        <span class="count-label">events</span>
+      </div>
+      {% if r.avg_wall_ms is not none or r.avg_tools is not none %}
+      <div class="sib-tele-perf">
+        {% if r.avg_wall_ms is not none %}
+        <span><span class="perf-label">avg wall</span> {{ r.avg_wall_ms }} ms</span>
+        {% endif %}
+        {% if r.avg_tools is not none %}
+        <span><span class="perf-label">avg tools</span> {{ r.avg_tools }}</span>
+        {% endif %}
+      </div>
+      {% endif %}
+      <div class="sib-tele-extra">
+        {% for label, value in r.extras %}
+        <div class="extra-row"><span class="extra-label">{{ label }}</span>{{ value|safe }}</div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if backtest %}
+  <div class="sib-backtest">
+    <div class="sib-backtest-head">
+      <h2>🧪 Backtest replay vs. historical analyst actions</h2>
+      <span class="meta">
+        Last run <strong>{{ backtest.generated_at_display or backtest.generated_at }}</strong>
+        on <strong>{{ backtest.ticket_count }}</strong> CrowdStrike tickets
+        ({{ backtest.tickets_with_truth }} with usable ground truth) ·
+        wall <strong>{{ backtest.wall_seconds }}s</strong>
+      </span>
+      <span class="mode-pill">{{ backtest.mode }}{% if backtest.dry_run %} • dry-run{% endif %}</span>
+    </div>
+
+    {% set conf = backtest.escalation_confusion %}
+    <div class="sib-backtest-headline">
+      <div class="kpi">
+        <div class="kpi-label">Precision</div>
+        <div class="kpi-value {% if conf.precision_pct is none %}none{% endif %}">
+          {% if conf.precision_pct is not none %}{{ conf.precision_pct }}%{% else %}—{% endif %}
+        </div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Recall</div>
+        <div class="kpi-value {% if conf.recall_pct is none %}none{% endif %}">
+          {% if conf.recall_pct is not none %}{{ conf.recall_pct }}%{% else %}—{% endif %}
+        </div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Accuracy</div>
+        <div class="kpi-value {% if conf.accuracy_pct is none %}none{% endif %}">
+          {% if conf.accuracy_pct is not none %}{{ conf.accuracy_pct }}%{% else %}—{% endif %}
+        </div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">F1</div>
+        <div class="kpi-value {% if conf.f1 is none %}none{% endif %}">
+          {% if conf.f1 is not none %}{{ conf.f1 }}{% else %}—{% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="sib-backtest-body">
+      <div class="sib-backtest-cell">
+        <h3>Escalation agreement (Tier 2 → IR Lead vs human)</h3>
+        <div class="sib-backtest-conf">
+          <div class="cell good"><span>TP (system escalated, human did too)</span><strong>{{ conf.true_positive }}</strong></div>
+          <div class="cell bad"><span>FN (human escalated, system didn't)</span><strong>{{ conf.false_negative }}</strong></div>
+          <div class="cell bad"><span>FP (system escalated, human didn't)</span><strong>{{ conf.false_positive }}</strong></div>
+          <div class="cell good"><span>TN (both closed)</span><strong>{{ conf.true_negative }}</strong></div>
+        </div>
+      </div>
+      <div class="sib-backtest-cell">
+        <h3>Per-stage engagement</h3>
+        <div class="row">Tier 2 engaged: <strong>{{ backtest.tier2_engagement }}</strong>
+          of {{ backtest.ticket_count }}
+          {% if backtest.avg_wall_ms.tier2 %}· avg <strong>{{ backtest.avg_wall_ms.tier2 }} ms</strong>{% endif %}
+        </div>
+        <div class="row">IR Lead engaged: <strong>{{ backtest.ir_engagement }}</strong>
+          of {{ backtest.ticket_count }}
+          {% if backtest.avg_wall_ms.ir_lead %}· avg <strong>{{ backtest.avg_wall_ms.ir_lead }} ms</strong>{% endif %}
+        </div>
+        <div class="row">Threat Intel engaged: <strong>{{ backtest.ti_engagement }}</strong>
+          of {{ backtest.ticket_count }} ·
+          named actor on <strong>{{ backtest.ti_with_actor }}</strong>
+          {% if backtest.avg_wall_ms.threat_intel %}· avg <strong>{{ backtest.avg_wall_ms.threat_intel }} ms</strong>{% endif %}
+        </div>
+        <div class="row" style="margin-top:8px;">
+          IR severity mix:
+          {% for sev, c in backtest.ir_severity_mix.items() %}
+            <code>{{ sev }}</code> <strong>{{ c }}</strong>{% if not loop.last %} · {% endif %}
+          {% else %}<em>none</em>{% endfor %}
+        </div>
+        {% if backtest.errors %}
+        <div class="row" style="margin-top:8px; color:#b45309;">
+          ⚠ {{ backtest.errors|length }} ticket(s) had errors — see CLI report
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="sib-backtest-empty">
+    🧪 <strong>Backtest panel.</strong> No run yet. Replay historical CrowdStrike
+    tickets through the agent cascade with
+    <code>python scripts/soc_in_box_backtest.py --limit 30</code>
+    (or <code>--dry-run</code> to validate plumbing without LLM calls).
+    The summary file at <code>data/soc_in_box/backtest_summary.json</code>
+    will render here on next page load.
+  </div>
+  {% endif %}
+
+  <div class="sib-section">
+    <h2>Service health</h2>
+    <div class="hint">3 long-running consumers, 3 calendar-driven timers, plus the Sentinel triage source and the HITL Flask endpoints.</div>
+  </div>
+
+  <div class="sib-svc-grid">
+    {% for s in services %}
+    <div class="sib-svc svc-{{ s.status_color }}">
+      <div class="sib-svc-head">
+        <div>
+          <span style="font-size: 1.2rem;">{{ s.emoji }}</span>
+          <span class="name">{{ s.name }}</span>
+        </div>
+        <span class="svc-badge {{ s.status }}">{{ s.status }}</span>
+      </div>
+      <div class="sib-svc-head" style="margin-top: 2px;">
+        <div class="role">{{ s.role }}</div>
+      </div>
+      <div class="sib-svc-desc">{{ s.description }}</div>
+      <div class="sib-svc-meta">
+        <code>{{ s.unit }}</code><br>
+        {% if s.is_timer %}
+        Last run: {{ s.last_run }}<br>
+        Next run: {{ s.next_run }}
+        {% else %}
+        PID: {{ s.main_pid }}<br>
+        Since: {{ s.active_since }}
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="sib-section">
+    <h2>Recent bus activity</h2>
+    <div class="hint">Last 25 events from <code>soc.audit</code> (mirror of every published event). Newest first.</div>
+  </div>
+
+  <div class="sib-table-wrap">
+    <table class="sib-table">
+      <thead>
+        <tr>
+          <th>When</th>
+          <th>Role</th>
+          <th>Event</th>
+          <th>Ticket</th>
+          <th>By</th>
+          <th>Verdict / sev</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in events %}
+        <tr>
+          <td class="muted">{{ e.timestamp_eastern }}</td>
+          <td><span class="bucket {% if e.bucket == 'Tier 1' %}tier1{% elif e.bucket == 'Tier 2' %}tier2{% elif e.bucket == 'IR' %}ir{% elif e.bucket == 'TI' %}ti{% elif e.bucket == 'DetEng' %}det{% elif e.bucket == 'Hunter' %}hunter{% elif e.bucket == 'Manager' %}manager{% elif e.bucket == 'HITL' %}hitl{% elif e.bucket == 'Handoff' %}handoff{% endif %}">{{ e.bucket }}</span></td>
+          <td>{{ e.label }}</td>
+          <td><code>#{{ e.ticket_id }}</code></td>
+          <td class="muted">{{ e.produced_by }}</td>
+          <td class="muted">{{ e.verdict or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="empty">No events on the bus yet — fire the demo CLI to populate.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+{% endblock %}

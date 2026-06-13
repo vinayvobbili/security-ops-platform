@@ -77,7 +77,7 @@ BENIGN_DOMAINS = _get_company_domains() | {
     'fireeye.com', 'symantec.com', 'mcafee.com', 'kaspersky.com',
     'fortinet.com', 'sentinelone.com', 'elastic.co', 'splunk.com',
     'checkpoint.com', 'sophos.com', 'rapid7.com', 'qualys.com',
-    'tenable.com', 'proofpoint.com', 'mimecast.com',
+    'tenable.com', 'proxy.com', 'proofpoint.com', 'mimecast.com',
     'secureworks.com', 'volexity.com', 'unit42.paloaltonetworks.com',
     'blog.talosintelligence.com', 'talosintelligence.com',
     'threatpost.com', 'bleepingcomputer.com', 'thehackernews.com',
@@ -258,6 +258,41 @@ def init_db():
         """)
 
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_attackiq_status ON attackiq_assessments(status)")
+
+        # Per-result BAS outcomes polled from AttackIQ. One row per scenario
+        # result. prevention_outcome = was the action blocked; detection_outcome
+        # = did our SIEM/EDR alert on it ("Detected"/"Not Detected") — the latter
+        # is what powers the "did our detection actually fire?" matrix overlay.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS attackiq_scenario_results (
+                result_id TEXT PRIMARY KEY,
+                project_id TEXT,
+                project_name TEXT,
+                scenario_id TEXT,
+                scenario_name TEXT,
+                asset_hostname TEXT,
+                prevention_outcome TEXT,
+                detection_outcome TEXT,
+                outcome_name TEXT,
+                tested_at TEXT,
+                polled_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_aiq_res_scenario ON attackiq_scenario_results(scenario_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_aiq_res_tested ON attackiq_scenario_results(tested_at)")
+
+        # Reverse index: which AttackIQ scenario UUIDs exercise a MITRE technique.
+        # Built from the tag-list endpoint (scenario detail GET is 403), refreshed
+        # periodically. Used to attribute a result's scenario back to a technique.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS attackiq_technique_scenarios (
+                technique_id TEXT NOT NULL,
+                scenario_id TEXT NOT NULL,
+                refreshed_at TEXT DEFAULT (datetime('now')),
+                PRIMARY KEY (technique_id, scenario_id)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_aiq_ts_scenario ON attackiq_technique_scenarios(scenario_id)")
 
         # Migration: add procedure_text column if missing
         cursor.execute("PRAGMA table_info(tipper_mitre_techniques)")
@@ -454,6 +489,216 @@ def get_attackiq_assessments_by_status(status: str) -> list:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM attackiq_assessments WHERE status = ?", (status,))
         return [dict(r) for r in cursor.fetchall()]
+
+
+# --- AttackIQ BAS validation (results overlay) ---------------------------
+
+def upsert_technique_scenarios(technique_id: str, scenario_ids: list):
+    """Replace the cached scenario list for one technique (reverse index)."""
+    with get_connection() as conn:
+        conn.execute("DELETE FROM attackiq_technique_scenarios WHERE technique_id = ?", (technique_id,))
+        conn.executemany(
+            "INSERT OR IGNORE INTO attackiq_technique_scenarios (technique_id, scenario_id) VALUES (?, ?)",
+            [(technique_id, sid) for sid in scenario_ids],
+        )
+
+
+def get_technique_validation_status() -> dict:
+    """Roll up polled BAS results into a per-technique validation verdict.
+
+    Joins scenario results to the technique->scenario reverse index. For each
+    technique we report:
+        status: 'detected' (≥1 result our SIEM/EDR alerted on),
+                'gap'      (scenarios ran but NOTHING detected — covered on
+                            paper, silent in practice),
+                'untested' (no results) — techniques with no row are untested.
+        detected/total/prevented counts + last_tested timestamp.
+    """
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        # Only CONCLUSIVE detection outcomes count toward the verdict.
+        # 'Errored'/'Not Configured'/'Canceled' mean the sim didn't validly
+        # exercise the control, so they don't make a technique a false "gap".
+        cursor.execute("""
+            SELECT ts.technique_id AS technique_id,
+                   SUM(CASE WHEN r.detection_outcome IN ('Detected','Not Detected') THEN 1 ELSE 0 END) AS conclusive,
+                   SUM(CASE WHEN r.detection_outcome = 'Detected' THEN 1 ELSE 0 END) AS detected,
+                   SUM(CASE WHEN r.prevention_outcome = 'Prevented' THEN 1 ELSE 0 END) AS prevented,
+                   MAX(CASE WHEN r.detection_outcome IN ('Detected','Not Detected') THEN r.tested_at END) AS last_tested
+            FROM attackiq_technique_scenarios ts
+            JOIN attackiq_scenario_results r ON r.scenario_id = ts.scenario_id
+            GROUP BY ts.technique_id
+        """)
+        out = {}
+        for row in cursor.fetchall():
+            conclusive = row['conclusive'] or 0
+            if conclusive == 0:
+                continue  # only inconclusive runs → leave untested
+            detected = row['detected'] or 0
+            out[row['technique_id']] = {
+                'status': 'detected' if detected > 0 else 'gap',
+                'detected': detected,
+                'prevented': row['prevented'] or 0,
+                'total': conclusive,
+                'last_tested': row['last_tested'],
+            }
+        return out
+
+
+def refresh_technique_scenario_index(max_techniques: int = None) -> dict:
+    """Rebuild the technique->scenario reverse index for techniques that
+    actually appear on the matrix (present in tipper_mitre_techniques).
+
+    Rate-limited (the client sleeps 3s/request), so this is a scheduler job,
+    not a request-path call. Returns {techniques, scenarios}.
+    """
+    from services.attackiq import AttackIQClient
+    aq = AttackIQClient()
+    if not aq.is_configured():
+        return {'error': 'AttackIQ not configured'}
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT DISTINCT technique_id FROM tipper_mitre_techniques")
+        techniques = [r['technique_id'] for r in cursor.fetchall()]
+    if max_techniques:
+        techniques = techniques[:max_techniques]
+
+    mapped = aq.get_scenario_uuids_for_techniques(techniques)
+    total_scenarios = 0
+    for tech_id, scenario_ids in mapped.items():
+        upsert_technique_scenarios(tech_id, scenario_ids)
+        total_scenarios += len(scenario_ids)
+
+    logger.info(f"AttackIQ technique index: {len(techniques)} techniques, {total_scenarios} scenario links")
+    return {'techniques': len(techniques), 'scenarios': total_scenarios}
+
+
+def refresh_attackiq_results(max_pages: int = 20) -> dict:
+    """Poll recent AttackIQ results and upsert per-scenario detection outcomes.
+
+    Read-only against the tenant. Backfills from existing run history too, so
+    the overlay shows real data without anything new being fired. Returns
+    {polled} count.
+    """
+    from services.attackiq import AttackIQClient
+    aq = AttackIQClient()
+    if not aq.is_configured():
+        return {'error': 'AttackIQ not configured'}
+
+    results = aq.list_recent_results(max_pages=max_pages)
+    polled = 0
+    with get_connection() as conn:
+        for r in results:
+            scenario = r.get('scenario') or {}
+            scenario_id = scenario.get('id') if isinstance(scenario, dict) else scenario
+            result_id = r.get('result_id') or r.get('id')
+            if not result_id or not scenario_id:
+                continue
+            conn.execute("""
+                INSERT INTO attackiq_scenario_results
+                    (result_id, project_id, project_name, scenario_id, scenario_name,
+                     asset_hostname, prevention_outcome, detection_outcome, outcome_name,
+                     tested_at, polled_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                ON CONFLICT(result_id) DO UPDATE SET
+                    prevention_outcome = excluded.prevention_outcome,
+                    detection_outcome = excluded.detection_outcome,
+                    outcome_name = excluded.outcome_name,
+                    tested_at = excluded.tested_at,
+                    polled_at = datetime('now')
+            """, (
+                result_id, r.get('project_id'), r.get('project_name'),
+                scenario_id, r.get('scenario_name') or (scenario.get('name') if isinstance(scenario, dict) else None),
+                r.get('asset_hostname'), r.get('outcome_description'), r.get('detection_outcome'),
+                r.get('outcome_name'), r.get('modified') or r.get('completed'),
+            ))
+            polled += 1
+
+    logger.info(f"AttackIQ results poll: {polled} results upserted")
+    return {'polled': polled}
+
+
+def auto_fire_pending_assessments(max_scenarios: int = 25) -> dict:
+    """Fire newly-built tipper assessments at the small test group, throttled
+    to a per-night SCENARIO budget — the auto-execution half of the
+    tipper -> BAS -> dashboard loop.
+
+    `sync_tippers` auto-BUILDS an assessment per new tipper (status='created')
+    but does not run it. This pass picks those up oldest-first and fires each
+    one WHOLE (run_all = all its matched scenarios) at the configured test
+    asset group, stopping once the night's cumulative scenario count would
+    exceed `max_scenarios`. Anything left stays 'created' and drains on a later
+    night — so a tipper spike can never fire a huge batch in one window.
+
+    Safety: the firing primitive (`fire_built_assessment`) re-verifies the
+    bound target is the small 1..MAX curated test group before every trigger,
+    so blast radius is bounded by construction. The actor hosts are on the
+    SOC-approved testing list, so runs raise no SOC tickets. Idempotent: a
+    fired assessment is marked 'fired' and never re-run here.
+
+    Returns {fired, scenarios, skipped, remaining, [error]}.
+    """
+    from services.attackiq import AttackIQClient
+    aq = AttackIQClient()
+    if not aq.is_configured():
+        return {'error': 'AttackIQ not configured', 'fired': 0, 'scenarios': 0}
+
+    asset_group_id = getattr(aq.config, 'attackiq_test_asset_group_id', None)
+    if not asset_group_id:
+        logger.info("AttackIQ auto-fire skipped: no ATTACKIQ_TEST_ASSET_GROUP_ID configured")
+        return {'error': 'no test asset group configured', 'fired': 0, 'scenarios': 0}
+
+    # Verify the target is the small curated test group ONCE up front — if it's
+    # missing or unexpectedly large, fire nothing this run.
+    asset_count, group_err = aq._verify_test_group_size(asset_group_id)
+    if group_err:
+        logger.warning(f"AttackIQ auto-fire refused: {group_err}")
+        return {'error': group_err, 'fired': 0, 'scenarios': 0}
+
+    pending = get_attackiq_assessments_by_status('created')
+    # Oldest tippers first so the backlog drains in arrival order.
+    pending.sort(key=lambda a: (a.get('created_at') or '', a.get('tipper_id') or 0))
+
+    fired = 0
+    scenarios = 0
+    skipped = 0
+    for a in pending:
+        matched = a.get('scenarios_matched') or 0
+        if matched <= 0:
+            # Nothing to fire; mark so it's not reconsidered every night.
+            upsert_attackiq_assessment(
+                tipper_id=a['tipper_id'], assessment_id=a['assessment_id'],
+                assessment_url=a.get('assessment_url', ''), test_id=a.get('test_id', ''),
+                scenarios_matched=matched, status='empty')
+            skipped += 1
+            continue
+        # Stop before exceeding the budget — but always fire at least one so a
+        # single large assessment can't permanently stall the queue.
+        if scenarios > 0 and scenarios + matched > max_scenarios:
+            break
+
+        result = aq.fire_built_assessment(a['assessment_id'], asset_group_id)
+        if result.get('error'):
+            logger.warning(f"AttackIQ auto-fire failed for tipper {a['tipper_id']}: {result['error']}")
+            skipped += 1
+            continue
+
+        upsert_attackiq_assessment(
+            tipper_id=a['tipper_id'], assessment_id=a['assessment_id'],
+            assessment_url=a.get('assessment_url', ''), test_id=a.get('test_id', ''),
+            scenarios_matched=matched, status='fired')
+        fired += 1
+        scenarios += matched
+        if scenarios >= max_scenarios:
+            break
+
+    remaining = max(0, len(pending) - fired - skipped)
+    logger.info(
+        f"AttackIQ auto-fire: fired {fired} assessment(s) / {scenarios} scenario(s) "
+        f"at {asset_count}-host test group (cap {max_scenarios}); "
+        f"{remaining} still pending, {skipped} skipped")
+    return {'fired': fired, 'scenarios': scenarios, 'skipped': skipped, 'remaining': remaining}
 
 
 def sync_tippers(days_back=365) -> dict:

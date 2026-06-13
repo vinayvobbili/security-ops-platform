@@ -2,9 +2,33 @@
 {% set page_title_text = 'GDnR Wiki' %}
 {% set page_title_left_icon = '🧠' %}
 {% set page_title_right_icon = '📖' %}
+{% block body_classes %}wk-themed{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/wiki.css') }}">
+<style>
+  /* ===== GDnR Wiki theme — Sage Gold (parchment) ===== */
+  body.wk-themed { background:
+      radial-gradient(1100px 520px at 4% -8%, #fdeecb 0%, transparent 55%),
+      radial-gradient(1000px 560px at 98% 0%, #e7f7cf 0%, transparent 52%),
+      radial-gradient(1200px 720px at 50% 122%, #f7f0d4 0%, transparent 55%),
+      linear-gradient(160deg, #fff9e8 0%, #f4fbe6 48%, #fdfae8 100%) !important;
+      background-attachment: fixed !important; min-height: 100vh; }
+  body.wk-themed.dark-mode { background:
+      linear-gradient(135deg, #16140a 0%, #1f1d0c 50%, #121006 100%) !important; color: #ece6cf; }
+  html { scrollbar-gutter: stable; }
+  ::-webkit-scrollbar { width: 16px; height: 16px; }
+  ::-webkit-scrollbar-track { border-radius: 10px;
+      background: linear-gradient(180deg, rgba(0,0,0,.04), rgba(0,0,0,.06) 50%, rgba(0,0,0,.04)); }
+  ::-webkit-scrollbar-thumb { border-radius: 10px; border: 2px solid transparent; background-clip: padding-box;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
+      background: linear-gradient(180deg, #ca8a04 0%, #eab308 22%, #84cc16 46%, #10b981 70%, #f59e0b 100%); }
+  ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, #f59e0b 0%, #10b981 30%, #84cc16 54%, #eab308 78%, #ca8a04 100%); }
+  ::-webkit-scrollbar-corner { background: transparent; }
+  body.dark-mode ::-webkit-scrollbar-track {
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.10) 50%, rgba(255,255,255,.06)); }
+</style>
 {% endblock %}
 
 {% block content %}

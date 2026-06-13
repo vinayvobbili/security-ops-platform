@@ -22,6 +22,13 @@ demos/videos/*/output/
 demos/videos/*/work/
 demos/videos/*/work_teaser/
 local_pdfs_docs
+# Wiki compile cache (source-hash → slug map). Rewritten on every wiki compile
+# — incl. the weekly prod compile — so tracking it keeps dirtying the prod
+# worktree and blocking deploys. Read only by the compiler (_load_meta); the
+# runtime viewer reads each article's .md frontmatter, so ignoring it is safe.
+# The generated wiki_articles/*.md stay tracked (local_pdfs_docs sources are
+# gitignored, so the .md are the only copy of that content in git).
+wiki_articles/.wiki_meta.json
 debug/*
 data/certs*
 
@@ -72,6 +79,7 @@ data/epp_tagging/*.db
 data/escalation_contacts/
 data/ruai_screening/
 data/rules_cache/
+data/salesforce_scanner/
 data/recaps/
 data/favorite_urls/
 
@@ -79,8 +87,9 @@ data/favorite_urls/
 teams_bots/toodles-bot.zip
 
 # Claude Code
-.claude/
+.claude/*
 !.claude/commands/
+!.claude/settings.json
 .mcp.json
 
 # Data — generated/runtime (keep reference files like data/metrics/, data/samples/, data_maps.py)
@@ -90,11 +99,15 @@ data/logs/
 data/ai_intake/
 data/oe_detection/
 data/customer_assurance/
+data/soc_in_box/*
+!data/soc_in_box/.gitkeep
 models/
 *.db
 *.db.bak.*
 
 # CTI Tipper remote/local LLM variants (contain API keys in .env)
+src/components/CyberIQ_RemoteVersion/
+src/components/CyberIQ_RemoteVersion.zip
 src/components/cti_tipper_assistant/
 
 # Misc one-off scripts
@@ -113,3 +126,6 @@ docs/CLAUDE_CODE_USER_SETUP.md
 docs/CLAUDE_CODE_USER_SETUP.docx
 docs/CLAUDE_CODE_ADMIN_SETUP.md
 docs/CLAUDE_CODE_ADMIN_SETUP.docx
+
+# Domain monitoring findings ledger (runtime triage state)
+data/domain_monitoring/

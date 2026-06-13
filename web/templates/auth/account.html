@@ -151,6 +151,46 @@ body.dark-mode .pat-token { background: rgba(0,0,0,0.45); border-color: rgba(148
 }
 .token-copy:hover { filter: brightness(1.06); transform: translateY(-1px); }
 .token-copy.copied { background: linear-gradient(135deg, #10b981 0%, #047857 100%); }
+
+/* Role editor — self-service role change. */
+.role-edit { display: flex; flex-direction: column; gap: 10px; max-width: 360px; }
+.role-edit select, .role-edit input[type=text] {
+    width: 100%; padding: 10px 12px; font-size: 14px;
+    border: 1px solid rgba(15,23,42,0.18); border-radius: 8px;
+    background: var(--bg-secondary, #ffffff); color: var(--text-primary, #0f172a);
+}
+.role-edit select:focus, .role-edit input[type=text]:focus {
+    outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
+}
+body.dark-mode .role-edit select, body.dark-mode .role-edit input[type=text] {
+    background: rgba(0,0,0,0.30); border-color: rgba(148,163,184,0.30); color: #e2e8f0;
+}
+.role-edit .btn-sm { align-self: flex-start; margin-top: 2px; }
+.acct-saved {
+    margin-bottom: 14px; padding: 9px 12px; border-radius: 8px; font-size: 13px;
+    background: rgba(16,185,129,0.14); color: #047857; border: 1px solid rgba(16,185,129,0.40);
+}
+body.dark-mode .acct-saved { color: #86efac; background: rgba(16,185,129,0.18); }
+.acct-error {
+    margin-bottom: 14px; padding: 9px 12px; border-radius: 8px; font-size: 13px;
+    background: rgba(220,38,38,0.10); color: #b91c1c; border: 1px solid rgba(220,38,38,0.40);
+}
+body.dark-mode .acct-error { color: #fca5a5; background: rgba(220,38,38,0.16); }
+
+/* Password editor — mirrors the role editor. */
+.pw-edit { display: flex; flex-direction: column; gap: 10px; max-width: 360px; }
+.pw-edit input[type=password] {
+    width: 100%; padding: 10px 12px; font-size: 14px;
+    border: 1px solid rgba(15,23,42,0.18); border-radius: 8px;
+    background: var(--bg-secondary, #ffffff); color: var(--text-primary, #0f172a);
+}
+.pw-edit input[type=password]:focus {
+    outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
+}
+body.dark-mode .pw-edit input[type=password] {
+    background: rgba(0,0,0,0.30); border-color: rgba(148,163,184,0.30); color: #e2e8f0;
+}
+.pw-edit .btn-sm { align-self: flex-start; margin-top: 2px; }
 </style>
 {% endblock %}
 
@@ -187,27 +227,42 @@ body.dark-mode .pat-token { background: rgba(0,0,0,0.45); border-color: rgba(148
         </div>
     </div>
 
+    {% if user.role != 'admin' %}
     <div class="acct-card">
-        <h2>Appearance</h2>
-        <p>Pick a theme — it applies to every page.</p>
-        <div class="nav-theme-dropdown" id="themeDropdown" style="display:inline-flex;">
-            <button type="button" class="theme-dd-trigger" id="themeDdTrigger"
-                    aria-haspopup="listbox" aria-expanded="false" aria-label="Change theme">
-                <span class="theme-dd-icon" id="themeDdIcon" aria-hidden="true">🖥️</span>
-                <span class="theme-dd-chevron" aria-hidden="true">▾</span>
-            </button>
-            <div class="theme-dd-menu" id="themeDdMenu" role="listbox" hidden>
-                <button type="button" class="theme-dd-opt" data-theme="light"  role="option">
-                    <span class="theme-dd-opt-icon" aria-hidden="true">☀️</span><span>Light</span>
-                </button>
-                <button type="button" class="theme-dd-opt" data-theme="dark"   role="option">
-                    <span class="theme-dd-opt-icon" aria-hidden="true">🌙</span><span>Dark</span>
-                </button>
-                <button type="button" class="theme-dd-opt" data-theme="system" role="option">
-                    <span class="theme-dd-opt-icon" aria-hidden="true">🖥️</span><span>System</span>
-                </button>
-            </div>
-        </div>
+        <h2>Your role</h2>
+        <p>How you're listed to the team. Pick the closest match, or choose “Other” to add your own — new roles become selectable for everyone.</p>
+        {% if role_saved %}<div class="acct-saved">✓ Role updated.</div>{% endif %}
+        <form method="POST" action="/account/role" class="role-edit">
+            <select id="role" name="role" required>
+                <option value="" disabled {% if not user.role %}selected{% endif %}>Select your role…</option>
+                {% for key, label in public_roles %}
+                <option value="{{ key }}" {% if user.role == key %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+                <option value="{{ custom_role_key }}">Other (specify)…</option>
+            </select>
+            <input type="text" id="custom_role" name="custom_role" maxlength="60"
+                   placeholder="e.g. Threat Intel Lead" style="display:none;">
+            <button class="btn-sm" type="submit">Save role</button>
+        </form>
+    </div>
+    {% endif %}
+
+    <div class="acct-card" id="password">
+        <h2>Change password</h2>
+        <p>Re-enter your current password, then choose a new one. {{ password_policy }} A long passphrase you don't reuse anywhere else is best — especially for an account with elevated capabilities.</p>
+        {% with msgs = get_flashed_messages(with_categories=true) %}
+          {% for cat, m in msgs %}
+            {% if cat == 'pw_ok' %}<div class="acct-saved">✓ {{ m }}</div>
+            {% elif cat == 'pw_error' %}<div class="acct-error">{{ m }}</div>{% endif %}
+          {% endfor %}
+        {% endwith %}
+        <form method="POST" action="/account/password" class="pw-edit">
+            <input type="password" name="current_password" autocomplete="current-password" placeholder="Current password" required>
+            <input type="password" name="new_password" autocomplete="new-password" placeholder="New password" minlength="{{ min_password_len }}" required>
+            <input type="password" name="new_password2" autocomplete="new-password" placeholder="Confirm new password" minlength="{{ min_password_len }}" required>
+            <span style="font-size:12px; color:var(--text-secondary,#64748b);">{{ password_policy }}</span>
+            <button class="btn-sm" type="submit">Update password</button>
+        </form>
     </div>
 
     <div class="acct-card">
@@ -258,6 +313,22 @@ body.dark-mode .pat-token { background: rgba(0,0,0,0.45); border-color: rgba(148
 </div>
 
 <script>
+// Role editor: reveal the free-text box only when "Other" is picked.
+(() => {
+    const sel = document.getElementById('role');
+    const custom = document.getElementById('custom_role');
+    if (!sel || !custom) return;
+    const OTHER = {{ custom_role_key | tojson }};
+    const sync = () => {
+        const isOther = sel.value === OTHER;
+        custom.style.display = isOther ? 'block' : 'none';
+        custom.required = isOther;
+        if (isOther) custom.focus();
+    };
+    sel.addEventListener('change', sync);
+    sync();
+})();
+
 (() => {
     const fallbackCopy = (codeEl) => {
         const range = document.createRange();

@@ -18,7 +18,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytz
-import requests
 from webexpythonsdk import WebexAPI
 
 from my_config import get_config
@@ -27,7 +26,6 @@ from services.xsoar import TicketHandler, XsoarEnvironment
 logger = logging.getLogger(__name__)
 
 CONFIG = get_config()
-LLM_URL = f"{CONFIG.m1_analysis_base_url}/chat/completions"
 EASTERN = pytz.timezone('US/Eastern')
 WEBEX_CHAR_LIMIT = 6800
 
@@ -277,18 +275,23 @@ Rules:
 
 
 def _call_llm(prompt: str) -> str:
-    """Send prompt to local LLM and return response text."""
+    """Send prompt to the analysis LLM and return response text.
+
+    Routes to GPT-4.1 (``create_llm``), which is the non-tool
+    analysis path; m1 GLM is the built-in fallback if the LLM gateway is unreachable. QA
+    review is non-agentic prose, and GPT-4.1 also dodges the m1 nightly-batch
+    contention that this job (running at 05:00) used to read-time-out on.
+    """
     try:
-        model = CONFIG.llm_model or "default"
-        resp = requests.post(LLM_URL, json={
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 1500,
-        }, headers={"api-key": "not-needed"}, timeout=90)
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"].strip()[:3000]
+        from my_bot.utils.llm_factory import create_llm
+        from langchain_core.messages import HumanMessage
+        resp = create_llm().invoke([HumanMessage(content=prompt)])
+        content = (resp.content or "").strip() if hasattr(resp, "content") else str(resp).strip()
+        if not content:
+            raise ValueError("empty completion content")
+        return content[:3000]
     except Exception as e:
-        logger.error(f"LLM QA review failed: {e}")
+        logger.error(f"LLM QA review failed ({e})")
         return "_LLM review unavailable._"
 
 

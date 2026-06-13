@@ -16,9 +16,12 @@ from flask import Blueprint, jsonify, make_response, render_template, request
 from src.utils.logging_utils import log_web_activity
 from web.auth import helpers
 
+# Default resolves relative to this worktree's root (web/routes/ -> repo root)
+# so the dev instance reads its own captures, not prod's.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CCR_CAPTURE_DIR = os.environ.get(
     'CCR_SHIM_CAPTURE_DIR',
-    '/home/vinay/security-ops-platform/data/transient/shim_captures',
+    os.path.join(_REPO_ROOT, 'data', 'transient', 'shim_captures'),
 )
 _EASTERN = ZoneInfo('America/New_York')
 _CAPTURE_FNAME_RE = re.compile(r'^\d+-[A-Za-z0-9._-]+\.json$')
@@ -47,13 +50,6 @@ def traffic_logs_exclude_me():
     return resp
 
 
-@traffic_logs_bp.route('/api/traffic-logs/auth', methods=['POST'])
-def traffic_logs_auth():
-    if not _check_admin(request):
-        return jsonify({'success': False, 'error': 'Invalid password'}), 403
-    return jsonify({'success': True})
-
-
 @traffic_logs_bp.route('/api/traffic-logs/web-activity')
 
 
@@ -64,8 +60,29 @@ def api_web_activity():
     limit = request.args.get('limit', 200, type=int)
     offset = request.args.get('offset', 0, type=int)
     path_filter = request.args.get('path', '').strip()
-    rows = get_web_activity(limit=limit, offset=offset, path_filter=path_filter)
+    user_filter = request.args.get('user', '').strip()
+    rows = get_web_activity(limit=limit, offset=offset, path_filter=path_filter,
+                            user_filter=user_filter)
     return jsonify({'success': True, 'rows': rows})
+
+
+@traffic_logs_bp.route('/api/traffic-logs/url-users')
+def api_url_users():
+    """Per-URL user breakdown: each URL with its top users + hit counts."""
+    if not _check_admin(request):
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    from src.utils.bot_logs_db import get_url_user_breakdown
+    limit_urls = request.args.get('limit_urls', 50, type=int)
+    users_per_url = request.args.get('users_per_url', 20, type=int)
+    days = request.args.get('days', 30, type=int)
+    path_prefix = request.args.get('path_prefix', '/').strip() or '/'
+    rows = get_url_user_breakdown(
+        limit_urls=limit_urls,
+        users_per_url=users_per_url,
+        path_prefix=path_prefix,
+        days=days,
+    )
+    return jsonify({'success': True, 'rows': rows, 'days': days})
 
 
 @traffic_logs_bp.route('/api/traffic-logs/stats')

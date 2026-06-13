@@ -14,6 +14,8 @@ from src.utils.logging_utils import get_client_ip, log_web_activity
 from src.components.web import shift_performance_handler, meaningful_metrics_handler, epp_tagging_handler, threat_intel_dashboard_handler
 from src.components.web.async_export_manager import get_export_manager, hash_export_request
 from web.config import CONFIG, EASTERN, prod_ticket_handler
+from web.auth.helpers import login_required
+from web.auth.rbac import require_capability, RUN_BAS
 
 logger = logging.getLogger(__name__)
 metrics_bp = Blueprint('metrics', __name__)
@@ -44,6 +46,7 @@ def get_shift_list():
 
 
 @metrics_bp.route('/api/clear-cache', methods=['POST'])
+@login_required
 @log_web_activity
 def clear_shift_cache():
     """No-op endpoint for compatibility with frontend cache clearing."""
@@ -145,6 +148,7 @@ def api_meaningful_metrics_data_range_stream():
 
 
 @metrics_bp.route('/api/meaningful-metrics/export', methods=['POST'])
+@login_required
 @log_web_activity
 def api_meaningful_metrics_export():
     """Server-side Excel export with professional formatting."""
@@ -181,6 +185,7 @@ def api_meaningful_metrics_export():
 
 
 @metrics_bp.route('/api/meaningful-metrics/export-async/start', methods=['POST'])
+@login_required
 @log_web_activity
 def api_meaningful_metrics_export_async_start():
     """Start an async export job and return job ID immediately.
@@ -550,6 +555,7 @@ def api_threat_intel_tippers_for_entity():
 
 
 @metrics_bp.route('/api/threat-intel/enrich', methods=['POST'])
+@login_required
 @log_web_activity
 def api_threat_intel_enrich():
     """Trigger IOC enrichment with VT and RF data."""
@@ -591,6 +597,7 @@ def api_attackiq_status():
 
 
 @metrics_bp.route('/api/threat-intel/attackiq/create/<int:tipper_id>', methods=['POST'])
+@login_required
 @log_web_activity
 def api_attackiq_create_assessment(tipper_id):
     """Manually create an AttackIQ assessment for a single tipper."""
@@ -600,6 +607,62 @@ def api_attackiq_create_assessment(tipper_id):
         return jsonify(result), status_code
     except Exception as exc:
         logger.error(f"Error creating AttackIQ assessment for tipper {tipper_id}: {exc}", exc_info=True)
+        return jsonify({'success': False, 'error': 'An internal error occurred'}), 500
+
+
+@metrics_bp.route('/api/threat-intel/attackiq/validation')
+@log_web_activity
+def api_attackiq_validation():
+    """Per-technique BAS validation verdicts for the ATT&CK matrix overlay."""
+    try:
+        result = threat_intel_dashboard_handler.get_attackiq_validation()
+        return jsonify(result)
+    except Exception as exc:
+        logger.error(f"Error fetching AttackIQ validation: {exc}", exc_info=True)
+        return jsonify({'success': False, 'error': 'An internal error occurred'}), 500
+
+
+@metrics_bp.route('/api/threat-intel/attackiq/build-technique/<technique_id>', methods=['POST'])
+@login_required
+@log_web_activity
+def api_attackiq_build_technique(technique_id):
+    """Build (but never run) an AttackIQ assessment for a single technique."""
+    try:
+        result = threat_intel_dashboard_handler.build_attackiq_assessment_for_technique(technique_id)
+        status_code = 200 if result.get('success') else 400
+        return jsonify(result), status_code
+    except Exception as exc:
+        logger.error(f"Error building AttackIQ assessment for {technique_id}: {exc}", exc_info=True)
+        return jsonify({'success': False, 'error': 'An internal error occurred'}), 500
+
+
+@metrics_bp.route('/api/threat-intel/attackiq/run', methods=['POST'])
+@require_capability(RUN_BAS)
+@log_web_activity
+def api_attackiq_run():
+    """Fire a single hard-gated BAS scenario (one scenario, one asset).
+
+    Gated on the run.bas capability; the handler additionally refuses outside
+    production and unless a one-asset test group is configured. Pass
+    dry_run=true to validate the whole guard chain without launching a TTP.
+    """
+    try:
+        payload = request.get_json(silent=True) or {}
+        technique_id = (payload.get('technique_id') or '').strip()
+        scenario_id = (payload.get('scenario_id') or '').strip() or None
+        dry_run = bool(payload.get('dry_run'))
+        platform = (payload.get('platform') or 'windows').strip().lower()
+        if not technique_id:
+            return jsonify({'success': False, 'error': 'technique_id is required'}), 400
+        actor = getattr(request, 'user', {}) or {}
+        result = threat_intel_dashboard_handler.run_bas_scenario(
+            technique_id, scenario_id=scenario_id, dry_run=dry_run,
+            actor_email=actor.get('email', ''), platform=platform,
+        )
+        status_code = 200 if result.get('success') else 400
+        return jsonify(result), status_code
+    except Exception as exc:
+        logger.error(f"Error running BAS scenario: {exc}", exc_info=True)
         return jsonify({'success': False, 'error': 'An internal error occurred'}), 500
 
 
@@ -666,19 +729,19 @@ def api_xsoar_timeline_status():
         return jsonify({'success': False, 'error': 'An internal error occurred'}), 500
 
 
-# --- control-efficacy analytics ---
+# --- Defense Pulse ---
 
 @metrics_bp.route('/defense-pulse')
 @log_web_activity
 def defense_pulse():
-    """control-efficacy analytics — systemic security gap analysis dashboard."""
+    """Defense Pulse — systemic security gap analysis dashboard."""
     return render_template('defense_pulse.html')
 
 
 @metrics_bp.route('/api/defense-pulse/filter')
 @log_web_activity
 def api_defense_pulse_filter():
-    """Return re-computed control-efficacy analytics data filtered by a single dimension."""
+    """Return re-computed Defense Pulse data filtered by a single dimension."""
     try:
         category = request.args.get('category')
         impact = request.args.get('impact')
@@ -737,32 +800,32 @@ def api_defense_pulse_filter():
     except FileNotFoundError:
         return jsonify({'success': False, 'error': 'Ticket data not found'}), 404
     except Exception as exc:
-        logger.error(f"Error filtering control-efficacy analytics data: {exc}", exc_info=True)
+        logger.error(f"Error filtering Defense Pulse data: {exc}", exc_info=True)
         return jsonify({'success': False, 'error': 'An internal error occurred'}), 500
 
 
 @metrics_bp.route('/api/defense-pulse/data')
 @log_web_activity
 def api_defense_pulse_data():
-    """API to get control-efficacy analytics chart paths and report markdown."""
+    """API to get Defense Pulse chart paths and report markdown."""
     try:
         web_dir = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         charts_root = web_dir / 'static' / 'charts'
 
-        # Find the latest dated folder that contains control-efficacy analytics charts
+        # Find the latest dated folder that contains Defense Pulse charts
         chart_date = None
         for folder in sorted(charts_root.iterdir(), reverse=True):
-            if folder.is_dir() and (folder / 'control-efficacy analytics - Dashboard.png').exists():
+            if folder.is_dir() and (folder / 'Defense Pulse - Dashboard.png').exists():
                 chart_date = folder.name
                 break
 
         if not chart_date:
-            return jsonify({'success': False, 'error': 'No control-efficacy analytics charts found. Run: python src/charts/defense_pulse.py'}), 404
+            return jsonify({'success': False, 'error': 'No Defense Pulse charts found. Run: python src/charts/defense_pulse.py'}), 404
 
         chart_dir = charts_root / chart_date
 
         # Read the markdown report
-        report_path = chart_dir / 'control-efficacy analytics - Strategic Report.md'
+        report_path = chart_dir / 'Defense Pulse - Strategic Report.md'
         report_md = report_path.read_text(encoding='utf-8') if report_path.exists() else ''
 
         # Get generated timestamp from report first line
@@ -773,14 +836,14 @@ def api_defense_pulse_data():
                 break
 
         # Get chart file modification time as "last refreshed" timestamp
-        dashboard_path = chart_dir / 'control-efficacy analytics - Dashboard.png'
+        dashboard_path = chart_dir / 'Defense Pulse - Dashboard.png'
         last_refreshed = datetime.fromtimestamp(
             dashboard_path.stat().st_mtime, tz=EASTERN
         ).strftime('%B %d, %Y %I:%M %p %Z') if dashboard_path.exists() else ''
 
         # Read KPI summary if available
         import json as _json
-        kpi_path = chart_dir / 'control-efficacy analytics - KPIs.json'
+        kpi_path = chart_dir / 'Defense Pulse - KPIs.json'
         kpis = _json.loads(kpi_path.read_text(encoding='utf-8')) if kpi_path.exists() else {}
 
         return jsonify({
@@ -792,15 +855,15 @@ def api_defense_pulse_data():
                 'next_refresh': 'Biweekly Monday at 06:00 AM ET',
                 'kpis': kpis,
                 'charts': {
-                    'heatmap': 'control-efficacy analytics - Category Impact Heatmap.png',
-                    'dashboard': 'control-efficacy analytics - Dashboard.png',
-                    'root_cause': 'control-efficacy analytics - Root Cause Detection Source.png',
-                    'awareness': 'control-efficacy analytics - Awareness Trends.png',
-                    'repeat_offenders': 'control-efficacy analytics - Repeat Offenders.png',
+                    'heatmap': 'Defense Pulse - Category Impact Heatmap.png',
+                    'dashboard': 'Defense Pulse - Dashboard.png',
+                    'root_cause': 'Defense Pulse - Root Cause Detection Source.png',
+                    'awareness': 'Defense Pulse - Awareness Trends.png',
+                    'repeat_offenders': 'Defense Pulse - Repeat Offenders.png',
                 },
                 'report_markdown': report_md,
             }
         })
     except Exception as exc:
-        logger.error(f"Error loading control-efficacy analytics data: {exc}", exc_info=True)
+        logger.error(f"Error loading Defense Pulse data: {exc}", exc_info=True)
         return jsonify({'success': False, 'error': 'An internal error occurred'}), 500

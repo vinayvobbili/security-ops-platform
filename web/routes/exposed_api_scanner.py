@@ -10,7 +10,6 @@ with rollback to the last 5 backups.
 """
 
 import hashlib
-import hmac
 import json
 import os
 import re
@@ -22,10 +21,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
-from flask import Blueprint, abort, jsonify, render_template, request, Response
+from flask import Blueprint, jsonify, render_template, request, Response
 
 from my_config import get_config
 from src.utils.logging_utils import log_web_activity
+from web.routes._vendor_logs import register_vendor_logs
+from web.auth.helpers import login_required
+from web.auth.rbac import require_capability, DEPLOY_SIDECAR
 
 exposed_api_scanner_bp = Blueprint("exposed_api_scanner", __name__)
 
@@ -51,6 +53,8 @@ DOCKER_IMAGE = "ir-exposed-api-scanner"
 DOCKER_TAG_CURRENT = "current"
 VERSION_ID_RE = re.compile(r"^v\d{8}_\d{6}_[a-f0-9]{6}$")
 
+register_vendor_logs(exposed_api_scanner_bp, "exposed-api-scanner", SERVICE_NAME, "Exposed API Scanner")
+
 
 def _now_utc_iso():
     return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
@@ -59,19 +63,6 @@ def _now_utc_iso():
 def _new_version_id(digest_hex: str) -> str:
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     return f"v{ts}_{digest_hex[:6]}"
-
-
-def _require_token():
-    expected = get_config().scanner_upload_token
-    if not expected:
-        abort(500, description="Upload token not configured on server")
-    provided = (
-        request.headers.get("X-Upload-Token")
-        or request.form.get("token")
-        or (request.get_json(silent=True) or {}).get("token", "")
-    )
-    if not provided or not hmac.compare_digest(str(provided), str(expected)):
-        abort(401, description="Invalid or missing upload token")
 
 
 def _audit(action: str, version_id: str | None, extra: dict | None = None):
@@ -291,6 +282,7 @@ def exposed_api_scanner_active_version():
 
 @exposed_api_scanner_bp.route(f"{PROXY_PREFIX}/", defaults={"path": ""}, methods=["GET", "POST"])
 @exposed_api_scanner_bp.route(f"{PROXY_PREFIX}/<path:path>", methods=["GET", "POST"])
+@login_required
 def exposed_api_scanner_proxy(path):
     upstream_url = f"{SCANNER_BASE}/{path}"
     headers = {k: v for k, v in request.headers.items() if k.lower() != "host"}
@@ -313,6 +305,7 @@ def exposed_api_scanner_proxy(path):
         body = body.replace(b"const API = ''", f"const API = '{PROXY_PREFIX}'".encode())
         body = body.replace(b"fetch('/api/", f"fetch('{PROXY_PREFIX}/api/".encode())
         body = body.replace(b'fetch("/api/', f'fetch("{PROXY_PREFIX}/api/'.encode())
+        body = body.replace(b"fetch(`/api/", f"fetch(`{PROXY_PREFIX}/api/".encode())
 
     out_headers = [(k, v) for k, v in upstream.headers.items()
                    if k.lower() not in HOP_BY_HOP]
@@ -324,8 +317,8 @@ def exposed_api_scanner_proxy(path):
 # ---------------------------------------------------------------------------
 
 @exposed_api_scanner_bp.route("/api/exposed-api-scanner/versions", methods=["GET"])
+@login_required
 def exposed_api_scanner_versions():
-    _require_token()
     active_info = _dir_info(ACTIVE_DIR)
     staged = sorted(
         (d for d in STAGING_DIR.iterdir() if d.is_dir()),
@@ -345,8 +338,8 @@ def exposed_api_scanner_versions():
 
 
 @exposed_api_scanner_bp.route("/api/exposed-api-scanner/upload", methods=["POST"])
+@require_capability(DEPLOY_SIDECAR, sidecar='exposed_api_scanner')
 def exposed_api_scanner_upload():
-    _require_token()
     f = request.files.get("zip")
     if not f or not f.filename:
         return jsonify({"ok": False, "error": "No 'zip' file in request"}), 400
@@ -405,8 +398,8 @@ def exposed_api_scanner_upload():
 
 
 @exposed_api_scanner_bp.route("/api/exposed-api-scanner/activate", methods=["POST"])
+@require_capability(DEPLOY_SIDECAR, sidecar='exposed_api_scanner')
 def exposed_api_scanner_activate():
-    _require_token()
     data = request.get_json(silent=True) or request.form
     version_id = (data.get("version_id") or "").strip()
     if not VERSION_ID_RE.match(version_id):
@@ -458,8 +451,8 @@ def exposed_api_scanner_activate():
 
 
 @exposed_api_scanner_bp.route("/api/exposed-api-scanner/rollback", methods=["POST"])
+@require_capability(DEPLOY_SIDECAR, sidecar='exposed_api_scanner')
 def exposed_api_scanner_rollback():
-    _require_token()
     data = request.get_json(silent=True) or request.form
     backup_id = (data.get("backup_id") or "").strip()
     if not VERSION_ID_RE.match(backup_id):
@@ -499,8 +492,8 @@ def exposed_api_scanner_rollback():
 
 
 @exposed_api_scanner_bp.route("/api/exposed-api-scanner/staged/<version_id>", methods=["DELETE"])
+@require_capability(DEPLOY_SIDECAR, sidecar='exposed_api_scanner')
 def exposed_api_scanner_delete_staged(version_id):
-    _require_token()
     if not VERSION_ID_RE.match(version_id):
         return jsonify({"ok": False, "error": "Invalid version_id"}), 400
     target = STAGING_DIR / version_id

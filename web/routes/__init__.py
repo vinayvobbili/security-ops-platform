@@ -9,7 +9,7 @@ from .xsoar import xsoar_bp
 from .metrics import metrics_bp
 from .security_tools import security_tools_bp
 from .chat import chat_bp
-from .monitoring import monitoring_bp
+from .domain_monitoring import domain_monitoring_bp
 from .detection_rules import detection_rules_bp
 from .connectors import connectors_bp
 from .cribl_diagnostics import cribl_diagnostics_bp
@@ -44,8 +44,21 @@ from .gitlab_onboarding import gitlab_onboarding_bp
 from .vibe_coding import vibe_coding_bp
 from .regulatory_matrix import regulatory_matrix_bp
 from .tipper_automation import tipper_automation_bp
+from .tipper_replay import tipper_replay_bp
 from .person_of_interest import person_of_interest_bp
 from .bench_local import bench_local_bp
+from .lessons import lessons_bp
+from .admin_lessons import admin_lessons_bp
+from .soc_timeline import soc_timeline_bp
+from .soc_hitl import soc_hitl_bp
+from .soc_in_a_box import soc_in_a_box_bp
+from .github_advisories import github_advisories_bp
+from .vulnerability_deep_dive import vuln_deep_dive_bp
+from .app_logs import app_logs_bp
+from .markdown_viewer import markdown_viewer_bp
+from .phish_sentiment import phish_sentiment_bp
+from .hunt_workbench import hunt_workbench_bp
+from .detection_as_code import detection_as_code_bp
 
 __all__ = [
     'utilities_bp',
@@ -54,7 +67,7 @@ __all__ = [
     'metrics_bp',
     'security_tools_bp',
     'chat_bp',
-    'monitoring_bp',
+    'domain_monitoring_bp',
     'detection_rules_bp',
     'connectors_bp',
     'cribl_diagnostics_bp',
@@ -88,8 +101,21 @@ __all__ = [
     'vibe_coding_bp',
     'regulatory_matrix_bp',
     'tipper_automation_bp',
+    'tipper_replay_bp',
     'person_of_interest_bp',
     'bench_local_bp',
+    'lessons_bp',
+    'admin_lessons_bp',
+    'soc_timeline_bp',
+    'soc_hitl_bp',
+    'soc_in_a_box_bp',
+    'github_advisories_bp',
+    'vuln_deep_dive_bp',
+    'app_logs_bp',
+    'markdown_viewer_bp',
+    'phish_sentiment_bp',
+    'hunt_workbench_bp',
+    'detection_as_code_bp',
 ]
 
 
@@ -105,7 +131,7 @@ def register_all_blueprints(app):
     app.register_blueprint(metrics_bp)
     app.register_blueprint(security_tools_bp)
     app.register_blueprint(chat_bp)
-    app.register_blueprint(monitoring_bp)
+    app.register_blueprint(domain_monitoring_bp)
     app.register_blueprint(detection_rules_bp)
     app.register_blueprint(connectors_bp)
     app.register_blueprint(cribl_diagnostics_bp)
@@ -140,5 +166,18 @@ def register_all_blueprints(app):
     app.register_blueprint(vibe_coding_bp)
     app.register_blueprint(regulatory_matrix_bp)
     app.register_blueprint(tipper_automation_bp)
+    app.register_blueprint(tipper_replay_bp)
     app.register_blueprint(person_of_interest_bp)
     app.register_blueprint(bench_local_bp)
+    app.register_blueprint(lessons_bp)
+    app.register_blueprint(admin_lessons_bp)
+    app.register_blueprint(soc_timeline_bp)
+    app.register_blueprint(soc_hitl_bp)
+    app.register_blueprint(soc_in_a_box_bp)
+    app.register_blueprint(github_advisories_bp)
+    app.register_blueprint(vuln_deep_dive_bp)
+    app.register_blueprint(app_logs_bp)
+    app.register_blueprint(markdown_viewer_bp)
+    app.register_blueprint(phish_sentiment_bp)
+    app.register_blueprint(hunt_workbench_bp)
+    app.register_blueprint(detection_as_code_bp)

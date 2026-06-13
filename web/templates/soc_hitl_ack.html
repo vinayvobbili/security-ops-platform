@@ -1,0 +1,157 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'HITL Decision Recorded' %}
+{% set page_title_left_icon = '🤝' %}
+{% set page_title_right_icon = '🛡️' %}
+
+{% block extra_css %}
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --soc-bg-0:#05080f; --soc-bg-1:#0a1020;
+  --soc-panel:rgba(17,27,49,0.55); --soc-panel-2:rgba(9,15,28,0.85);
+  --soc-line:rgba(120,160,255,0.14); --soc-line-2:rgba(120,160,255,0.30);
+  --soc-text:#e8eefb; --soc-dim:#9db0d3; --soc-faint:#6478a0;
+  --soc-cyan:#34e3f0; --soc-emerald:#37e0a0; --soc-amber:#ffc14d; --soc-red:#ff6b7d;
+  --soc-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --soc-disp:'Chakra Petch',system-ui,sans-serif;
+  --soc-body:'IBM Plex Sans',system-ui,sans-serif;
+  --ack-accent: {% if decision == 'approved' %}var(--soc-emerald){% else %}var(--soc-red){% endif %};
+  --ack-accent-soft: {% if decision == 'approved' %}rgba(55,224,160,0.16){% else %}rgba(255,107,125,0.16){% endif %};
+}
+body {
+  background:
+    radial-gradient(1000px 500px at 50% -10%, {% if decision == 'approved' %}rgba(55,224,160,0.12){% else %}rgba(255,107,125,0.12){% endif %}, transparent 60%),
+    linear-gradient(180deg, var(--soc-bg-1) 0%, var(--soc-bg-0) 100%);
+  background-attachment: fixed;
+}
+body::before { content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+  background-image:
+    linear-gradient(rgba(120,160,255,0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120,160,255,0.045) 1px, transparent 1px);
+  background-size:44px 44px; mask-image:radial-gradient(ellipse 90% 70% at 50% 0%, #000 40%, transparent 100%); }
+
+.ack-container { position:relative; z-index:1; flex:1 1 auto; max-width:760px;
+  margin:24px auto 90px; padding:0 22px; color:var(--soc-text); font-family:var(--soc-body); }
+
+.ack-hero { position:relative; overflow:hidden; border-radius:20px; padding:32px 34px; text-align:center;
+  margin-bottom:20px; color:#fff;
+  background: {% if decision == 'approved' %}linear-gradient(135deg,#04130c 0%, #0a3d28 60%, #04130c 100%){% else %}linear-gradient(135deg,#160406 0%, #4a0d18 60%, #160406 100%){% endif %};
+  border:1px solid var(--ack-accent-soft);
+  box-shadow:0 22px 60px rgba(2,12,30,0.6), 0 0 0 1px var(--ack-accent-soft) inset; }
+.ack-hero .check { font-size:3.1rem; margin-bottom:6px; filter:drop-shadow(0 4px 18px rgba(0,0,0,0.5)); }
+.ack-hero h1 { margin:0 0 8px; font-family:var(--soc-disp); font-size:1.65rem; font-weight:700;
+  text-shadow:0 2px 20px rgba(0,0,0,0.5); }
+.ack-hero p { margin:0; font-size:1rem; color:rgba(255,255,255,0.92); }
+.ack-hero strong { color:#fff; }
+
+.ack-card { border-radius:16px; padding:22px 26px; margin-bottom:18px;
+  background:var(--soc-panel); backdrop-filter:blur(14px) saturate(125%);
+  -webkit-backdrop-filter:blur(14px) saturate(125%);
+  border:1px solid var(--soc-line);
+  box-shadow:0 1px 0 rgba(255,255,255,0.04) inset, 0 18px 44px rgba(0,0,0,0.42); color:var(--soc-text); }
+.ack-card h2 { margin:0 0 12px; font-family:var(--soc-disp); font-size:1.08rem; color:#fff; font-weight:600; }
+.ack-meta { display:grid; grid-template-columns:repeat(2,1fr); gap:14px 28px; }
+.ack-meta .label { font-family:var(--soc-mono); font-size:0.7rem; text-transform:uppercase;
+  letter-spacing:0.1em; color:var(--soc-dim); margin-bottom:5px; }
+.ack-meta .value { font-size:0.98rem; color:var(--soc-text); font-weight:500; }
+.ack-meta .value code, .ack-card code { font-family:var(--soc-mono); background:rgba(120,160,255,0.10);
+  color:var(--soc-cyan); padding:1px 6px; border-radius:4px; }
+
+.ack-actions { background:var(--soc-panel-2); border-radius:10px; padding:13px 16px; margin-top:14px;
+  font-size:0.92rem; border:1px solid var(--soc-line); }
+.ack-actions strong { color:#fff; }
+.ack-actions ul { margin:6px 0 0 16px; padding:0; color:var(--soc-dim); }
+.ack-actions li { margin:4px 0; }
+
+.dummy-banner { background:rgba(255,193,77,0.08); border:1px dashed rgba(255,193,77,0.45); padding:12px 18px;
+  border-radius:11px; color:var(--soc-amber); font-size:0.9rem; margin-bottom:18px; }
+.dummy-banner strong { color:#fff; }
+
+.ack-links { text-align:center; margin-top:20px; }
+.ack-links a { display:inline-block; margin:0 8px; color:var(--soc-cyan); text-decoration:none;
+  font-family:var(--soc-mono); font-weight:600; font-size:0.92rem;
+  border-bottom:1px dashed var(--soc-line-2); }
+.ack-links a:hover { color:#fff; }
+
+@keyframes soc-rise { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+@keyframes soc-pop { from { opacity:0; transform:scale(.9); } to { opacity:1; transform:scale(1); } }
+.ack-hero { animation:soc-pop .45s cubic-bezier(.2,.8,.2,1) both; }
+.ack-card, .dummy-banner, .ack-links { animation:soc-rise .5s cubic-bezier(.2,.7,.2,1) both; }
+.dummy-banner { animation-delay:.06s; } .ack-card { animation-delay:.1s; }
+@media (prefers-reduced-motion: reduce) { .ack-hero, .ack-card, .dummy-banner, .ack-links { animation:none; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ack-container">
+    <div class="ack-hero">
+        <div class="check">{% if decision == 'approved' %}✅{% else %}🛑{% endif %}</div>
+        <h1>{% if decision == 'approved' %}Approval recorded{% else %}Rejection recorded{% endif %}</h1>
+        <p>Ticket <strong>#{{ action.ticket_id }}</strong>
+           — decided by {{ record.decided_by }} at {{ record.decided_at }}</p>
+    </div>
+
+    <div class="dummy-banner">
+        <strong>Demo mode:</strong> no real-system actions were executed.
+        The decision has been logged to the agent bus + HITL audit trail.
+    </div>
+
+    <div class="ack-card">
+        <h2>What was {{ decision }}</h2>
+        <div>{{ action.description }}</div>
+        <div class="ack-actions">
+            <strong>Actions ({{ action.actions_summary|length }}):</strong>
+            <ul>
+                {% for a in action.actions_summary %}
+                <li>{{ a }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <div class="ack-card">
+        <h2>Decision metadata</h2>
+        <div class="ack-meta">
+            <div>
+                <div class="label">Action id</div>
+                <div class="value"><code>{{ action.action_id }}</code></div>
+            </div>
+            <div>
+                <div class="label">Proposed by</div>
+                <div class="value">{{ action.proposed_by }}</div>
+            </div>
+            {% if action.approver_role or action.approver_name %}
+            <div>
+                <div class="label">Addressed to</div>
+                <div class="value">
+                    {% if action.approver_name %}<strong>{{ action.approver_name }}</strong>{% endif %}
+                    {% if action.approver_role %}<br><em style="color: #64748b;">{{ action.approver_role }}</em>{% endif %}
+                </div>
+            </div>
+            {% endif %}
+            <div>
+                <div class="label">Decision</div>
+                <div class="value">{{ decision }}</div>
+            </div>
+            <div>
+                <div class="label">Decided by</div>
+                <div class="value">{{ record.decided_by }}</div>
+            </div>
+            <div>
+                <div class="label">Decided at</div>
+                <div class="value">{{ record.decided_at }}</div>
+            </div>
+            {% if record.reason %}
+            <div style="grid-column: 1/-1;">
+                <div class="label">Reason</div>
+                <div class="value">{{ record.reason }}</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="ack-links">
+        <a href="{{ url_for('soc_hitl.hitl_audit') }}">📜 View full HITL audit log</a>
+    </div>
+</div>
+{% endblock %}

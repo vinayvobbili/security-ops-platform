@@ -5,13 +5,36 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/detection_rules.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/chat_widget.css') }}">
+<style>
+  /* ===== Detection Rules theme — Steel Blue / Cyan / Emerald ===== */
+  body.dr-themed { background:
+      radial-gradient(1100px 520px at 4% -8%, #d2e6ff 0%, transparent 55%),
+      radial-gradient(1000px 560px at 98% 0%, #cdf3f0 0%, transparent 52%),
+      radial-gradient(1200px 720px at 50% 122%, #d6ffe6 0%, transparent 55%),
+      linear-gradient(160deg, #eef5ff 0%, #ecfdfb 48%, #effff6 100%) !important;
+      background-attachment: fixed !important; min-height: 100vh; }
+  body.dr-themed.dark-mode { background:
+      linear-gradient(135deg, #060f1a 0%, #0a1f24 50%, #06160f 100%) !important; }
+  html { scrollbar-gutter: stable; }
+  ::-webkit-scrollbar { width: 16px; height: 16px; }
+  ::-webkit-scrollbar-track { border-radius: 10px;
+      background: linear-gradient(180deg, rgba(0,0,0,.04), rgba(0,0,0,.06) 50%, rgba(0,0,0,.04)); }
+  ::-webkit-scrollbar-thumb { border-radius: 10px; border: 2px solid transparent; background-clip: padding-box;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
+      background: linear-gradient(180deg, #0046ad 0%, #0a8fd6 22%, #06b6d4 46%, #14b8a6 70%, #00a651 100%); }
+  ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, #00a651 0%, #14b8a6 30%, #06b6d4 54%, #0a8fd6 78%, #0046ad 100%); }
+  ::-webkit-scrollbar-corner { background: transparent; }
+  body.dark-mode ::-webkit-scrollbar-track {
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.10) 50%, rgba(255,255,255,.06)); }
+</style>
 {% endblock %}
 
 {% block head_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 {% endblock %}
 
-{% block body_classes %}detection-rules-page{% endblock %}
+{% block body_classes %}detection-rules-page dr-themed{% endblock %}
 
 {% set page_title_text = 'Detection Rules Catalog' %}
 {% set page_title_left_icon = '🛡️' %}

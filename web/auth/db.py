@@ -6,6 +6,7 @@ the database safely.
 """
 from __future__ import annotations
 
+import ipaddress
 import os
 import sqlite3
 import time
@@ -26,6 +27,8 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
     email_verified_at INTEGER,
     role TEXT,
+    access_reason TEXT,
+    exclude_from_traffic_log INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS email_verify_tokens (
@@ -95,6 +98,38 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if 'role' not in user_cols:
         conn.execute('ALTER TABLE users ADD COLUMN role TEXT')
 
+    # Free-text "why do you need this access?" captured at signup. Old rows
+    # pre-date the field and stay NULL — the admin reads it as a blank cell.
+    if 'access_reason' not in user_cols:
+        conn.execute('ALTER TABLE users ADD COLUMN access_reason TEXT')
+
+    # The role a user *requested* at signup (or via /account). Non-binding —
+    # the effective `role` (which drives capabilities) is admin-assigned.
+    # Old rows pre-date the split; their self-selected value lives in `role`
+    # and is mirrored here so the admin can see what they originally asked
+    # for. See web/auth/rbac.py.
+    if 'requested_role' not in user_cols:
+        conn.execute('ALTER TABLE users ADD COLUMN requested_role TEXT')
+        conn.execute(
+            'UPDATE users SET requested_role = role '
+            'WHERE requested_role IS NULL AND role IS NOT NULL'
+        )
+
+    # Per-user capability grants ON TOP of what the role confers, as a
+    # comma-separated token list (e.g. "data.destructive"). Lets an admin
+    # grant a single person a sensitive capability on request without
+    # changing their role or promoting them to admin. See web/auth/rbac.py.
+    if 'extra_capabilities' not in user_cols:
+        conn.execute('ALTER TABLE users ADD COLUMN extra_capabilities TEXT')
+
+    # Per-user opt-out from web traffic logging, keyed on auth identity rather
+    # than IP (replaces the old SCANNER_IPS self-exclusion). Old rows default
+    # to 0 = logged.
+    if 'exclude_from_traffic_log' not in user_cols:
+        conn.execute(
+            'ALTER TABLE users ADD COLUMN exclude_from_traffic_log INTEGER NOT NULL DEFAULT 0'
+        )
+
     # Persist the plaintext PAT so users can come back to /account and copy
     # it later — by design this trades the "shown once" security property
     # for ergonomics on this internal tool. Old rows stay NULL (we never
@@ -124,18 +159,62 @@ def now() -> int:
 
 # --- users -----------------------------------------------------------------
 
-def create_user(email: str, password_hash: str, role: str) -> int:
+def create_user(email: str, password_hash: str, role: str,
+                access_reason: Optional[str] = None,
+                requested_role: Optional[str] = None) -> int:
     with connect() as c:
         cur = c.execute(
-            'INSERT INTO users(email, password_hash, role, created_at) VALUES (?, ?, ?, ?)',
-            (email.strip().lower(), password_hash, role, now()),
+            'INSERT INTO users(email, password_hash, role, access_reason, requested_role, created_at) '
+            'VALUES (?, ?, ?, ?, ?, ?)',
+            (email.strip().lower(), password_hash, role, access_reason, requested_role, now()),
         )
         return cur.lastrowid
 
 
 def set_user_role(user_id: int, role: str) -> None:
+    """Set a user's *effective* (capability-bearing) role. Admin action."""
     with connect() as c:
         c.execute('UPDATE users SET role = ? WHERE id = ?', (role, user_id))
+
+
+def set_user_requested_role(user_id: int, role: str) -> None:
+    """Set a user's *requested* role hint. Self-service; non-binding."""
+    with connect() as c:
+        c.execute('UPDATE users SET requested_role = ? WHERE id = ?', (role, user_id))
+
+
+def set_user_extra_capabilities(user_id: int, caps_csv: str) -> None:
+    """Set a user's per-user capability grants (comma-separated tokens, or ''
+    to clear). Admin action; capabilities granted on top of the role."""
+    with connect() as c:
+        c.execute('UPDATE users SET extra_capabilities = ? WHERE id = ?',
+                  (caps_csv or None, user_id))
+
+
+def set_user_traffic_log_exclude(user_id: int, exclude: bool) -> None:
+    with connect() as c:
+        c.execute(
+            'UPDATE users SET exclude_from_traffic_log = ? WHERE id = ?',
+            (1 if exclude else 0, user_id),
+        )
+
+
+def distinct_assigned_roles() -> list[str]:
+    """Distinct, non-empty role values held by verified accounts, sorted.
+
+    Used to surface roles a previous registrant entered via the "Other"
+    box on the signup dropdown, so the next person can pick one instead
+    of re-typing it. Verified-only so an unconfirmed drive-by signup
+    can't pollute the list; preset/admin filtering happens in helpers.
+    """
+    with connect() as c:
+        rows = c.execute(
+            "SELECT DISTINCT role FROM users "
+            "WHERE role IS NOT NULL AND TRIM(role) != '' "
+            "AND email_verified_at IS NOT NULL "
+            "ORDER BY role COLLATE NOCASE"
+        ).fetchall()
+        return [r['role'] for r in rows]
 
 
 def list_users_without_role() -> list[sqlite3.Row]:
@@ -155,7 +234,8 @@ def list_users_with_pat_summary() -> list[dict]:
     now_ts = now()
     with connect() as c:
         rows = c.execute(
-            'SELECT u.id, u.email, u.role, u.email_verified_at, u.created_at, '
+            'SELECT u.id, u.email, u.role, u.requested_role, u.extra_capabilities, u.access_reason, u.exclude_from_traffic_log, '
+            '       u.email_verified_at, u.created_at, '
             '       COUNT(p.id) AS total_pats, '
             '       SUM(CASE WHEN p.revoked_at IS NULL AND p.expires_at >= ? THEN 1 ELSE 0 END) AS active_pats, '
             '       MAX(p.last_used_at) AS last_pat_used_at, '
@@ -170,6 +250,10 @@ def list_users_with_pat_summary() -> list[dict]:
                 'id': r['id'],
                 'email': r['email'],
                 'role': r['role'],
+                'requested_role': r['requested_role'],
+                'extra_capabilities': r['extra_capabilities'],
+                'access_reason': r['access_reason'],
+                'exclude_from_traffic_log': bool(r['exclude_from_traffic_log']),
                 'email_verified': r['email_verified_at'] is not None,
                 'created_at': r['created_at'],
                 'total_pats': r['total_pats'] or 0,
@@ -281,14 +365,49 @@ def revoke_pat(user_id: int, pat_id: int) -> bool:
         return cur.rowcount > 0
 
 
-def record_pat_usage(pat_id: int, client_ip: str) -> bool:
-    """Stamp this (pat_id, client_ip) pair. Returns True if this is the
-    first time this PAT has been seen from this IP — caller uses that as
-    the signal to fire a sharing-alert Webex ping.
+# Corp-side IP ranges where NAT/proxy egress rotates within a pool. An IP
+# inside one of these ranges is collapsed to its /24 for the "is this a
+# new client?" check, so the same user bouncing between adjacent NAT
+# exits (e.g. <internal-host> → 134 → 135) does not look like 3 separate
+# clients. Public IPs are NOT bucketed — that's where genuine PAT sharing
+# (a token leaked to someone outside corp) would show up.
+_CORP_BUCKET_NETS = tuple(
+    ipaddress.ip_network(n) for n in (
+        '10.0.0.0/8',       # RFC1918 private range
+        '172.16.0.0/12',    # RFC1918 private range
+        '192.168.0.0/16',   # RFC1918 private range
+        '127.0.0.0/8',      # loopback
+    )
+)
 
-    Atomic via INSERT OR IGNORE on the UNIQUE(pat_id, client_ip) constraint:
-    if the row didn't exist we inserted it (rowcount==1); otherwise we bump
-    last_seen_at + request_count.
+
+def _bucket_ip(ip: str) -> str:
+    """Return a stable bucket key for sharing-detection purposes.
+
+    Corp/private ranges → /24 of the address (so a NAT pool counts once).
+    Public IPs → unchanged (1:1 — that's where real sharing surfaces).
+    Unparseable input → returned as-is.
+    """
+    s = (ip or '').strip()
+    if not s or s == 'unknown':
+        return s or 'unknown'
+    try:
+        addr = ipaddress.ip_address(s)
+    except ValueError:
+        return s
+    for net in _CORP_BUCKET_NETS:
+        if addr in net:
+            return str(ipaddress.ip_network(f'{s}/24', strict=False))
+    return s
+
+
+def record_pat_usage(pat_id: int, client_ip: str) -> None:
+    """Stamp this (pat_id, client_ip) pair for the admin audit view.
+
+    The raw IP is stored 1:1 in `pat_usage` (UNIQUE(pat_id, client_ip)).
+    The admin Traffic Logs page uses `_bucket_ip` at read time to collapse
+    corp NAT exits when surfacing the SHARED signal — see
+    `list_pat_usage_admin`.
     """
     ts = now()
     ip = (client_ip or '').strip() or 'unknown'
@@ -298,24 +417,28 @@ def record_pat_usage(pat_id: int, client_ip: str) -> bool:
             'VALUES (?, ?, ?, ?, 1)',
             (pat_id, ip, ts, ts),
         )
-        is_new_ip = cur.rowcount == 1
-        if not is_new_ip:
+        if cur.rowcount == 0:
             c.execute(
                 'UPDATE pat_usage SET last_seen_at = ?, request_count = request_count + 1 '
                 'WHERE pat_id = ? AND client_ip = ?',
                 (ts, pat_id, ip),
             )
-        return is_new_ip
 
 
 def list_pat_usage_admin() -> list[dict]:
-    """Return one row per active (non-revoked) PAT joined with its IP
-    fingerprint summary. Used by the Traffic Logs admin tab.
+    """Return one row per PAT joined with its IP fingerprint summary.
+    Used by the Traffic Logs admin tab.
 
-    `ips` is a JSON-serializable list of {ip, first_seen_at, last_seen_at,
-    request_count} sorted by last_seen desc. `distinct_ip_count` is the
-    sharing signal — >1 means the same PAT has been observed from multiple
-    client IPs.
+    `ips` is a JSON-serializable list of {ip, bucket, first_seen_at,
+    last_seen_at, request_count} sorted by last_seen desc.
+
+    Sharing signal:
+      `distinct_ip_count`     — raw row count (forensic — counts NAT exits)
+      `distinct_bucket_count` — buckets the IPs fall into (corp NATs
+                                collapsed to /24, public IPs 1:1). This is
+                                what the UI should highlight; >1 means the
+                                token has been seen from genuinely
+                                different clients.
     """
     with connect() as c:
         rows = c.execute(
@@ -332,15 +455,18 @@ def list_pat_usage_admin() -> list[dict]:
                 'ORDER BY last_seen_at DESC',
                 (r['pat_id'],),
             ).fetchall()
-            ips = [
-                {
+            ips = []
+            buckets: set[str] = set()
+            for ipr in ip_rows:
+                bucket = _bucket_ip(ipr['client_ip'])
+                buckets.add(bucket)
+                ips.append({
                     'ip': ipr['client_ip'],
+                    'bucket': bucket,
                     'first_seen_at': ipr['first_seen_at'],
                     'last_seen_at': ipr['last_seen_at'],
                     'request_count': ipr['request_count'],
-                }
-                for ipr in ip_rows
-            ]
+                })
             out.append({
                 'pat_id': r['pat_id'],
                 'email': r['email'],
@@ -350,6 +476,7 @@ def list_pat_usage_admin() -> list[dict]:
                 'last_used_at': r['last_used_at'],
                 'revoked': r['revoked_at'] is not None,
                 'distinct_ip_count': len(ips),
+                'distinct_bucket_count': len(buckets),
                 'ips': ips,
             })
         return out

@@ -41,6 +41,7 @@ msrest
 
 # Data Processing/Analysis
 openpyxl
+pymssql  # MSSQL client (FreeTDS-backed) — NTLM auth path to EAI DBs (V_APP_INFO etc.)
 tabulate
 beautifulsoup4
 pyarrow
@@ -59,9 +60,11 @@ Cartopy
 crowdstrike-falconpy
 py7zr  # 7-zip decompression for CrowdStrike RTR file downloads
 demisto-py>=3.2.21  # Official Palo Alto XSOAR Python SDK
-dnspython  # DNS toolkit (required by dnstwist for MX/NS/extended DNS lookups)
-dnstwist  # Domain typosquatting detection
+dnspython  # DNS toolkit (MX/NS/extended DNS lookups for the lookalike engine)
 python-whois  # WHOIS lookup library
+# Lookalike-domain engine — discover/monitor/score/cluster the typo-squat space
+# (own OSS package, extracted from the domain-monitoring portal)
+domainflow[ct,whois,score]>=0.1.0
 
 # Task Scheduling/Utilities
 schedule
@@ -93,6 +96,7 @@ jsonschema
 json-repair
 pydantic
 pydantic-settings
+redis>=5.0
 typing_extensions
 
 texttable
@@ -106,3 +110,7 @@ ddgs
 
 # MCP Server
 fastmcp>=2.0
+
+# Detection-as-Code workbench — vendor-neutral lint/draft/overlap/review core
+# (own OSS package, extracted from services/detection_pipeline.py)
+detflow>=0.1.0

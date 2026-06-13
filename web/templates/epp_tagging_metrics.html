@@ -7,6 +7,105 @@
 {% endblock %}
 {% block extra_css %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/epp_tagging_metrics.css') }}">
+<style>
+  /* House rainbow scrollbar (consistency with the rest of GDnR) — inner class-scoped scrollbars are preserved by specificity */
+  html { scrollbar-gutter: stable; }
+  ::-webkit-scrollbar { width: 16px; height: 16px; }
+  ::-webkit-scrollbar-track { border-radius: 10px;
+      background: linear-gradient(180deg, rgba(202,138,4,0.08), rgba(0,70,173,0.10) 50%, rgba(124,58,237,0.08)); }
+  ::-webkit-scrollbar-thumb { border-radius: 10px; border: 2px solid transparent; background-clip: padding-box;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35);
+      background: linear-gradient(180deg, #ca8a04 0%, #d97706 20%, #00a651 40%, #0d9488 60%, #0046ad 80%, #7c3aed 100%); }
+  ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, #7c3aed 0%, #0046ad 20%, #0d9488 40%, #00a651 60%, #d97706 80%, #ca8a04 100%); }
+  ::-webkit-scrollbar-corner { background: transparent; }
+  body.dark-mode ::-webkit-scrollbar-track {
+      background: linear-gradient(180deg, rgba(252,211,77,0.08), rgba(125,211,252,0.10) 50%, rgba(196,181,253,0.08)); }
+  body.dark-mode ::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, #fcd34d 0%, #fdba74 20%, #6ee7b7 40%, #5eead4 60%, #7dd3fc 80%, #c4b5fd 100%);
+      background-clip: padding-box; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18); }
+
+  /* ── Methodology button + modal ──────────────────────────────── */
+  .meth-bar { display: flex; justify-content: flex-end; margin: 0 0 12px; }
+  .methodology-btn {
+      border: none; cursor: pointer; padding: 7px 14px; border-radius: 999px;
+      font-size: 0.82rem; font-weight: 700; color: #fff; letter-spacing: 0.2px;
+      background: linear-gradient(135deg, #0046ad 0%, #00a651 100%);
+      box-shadow: 0 2px 8px rgba(0,70,173,0.30); transition: transform .12s ease, box-shadow .12s ease; }
+  .methodology-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,70,173,0.40); }
+
+  .meth-overlay {
+      display: none; position: fixed; inset: 0; z-index: 4000;
+      background: rgba(15,23,42,0.55); backdrop-filter: blur(4px);
+      align-items: flex-start; justify-content: center; padding: 5vh 16px; overflow-y: auto; }
+  .meth-overlay.open { display: flex; }
+  .meth-modal {
+      width: min(820px, 100%); border-radius: 20px; overflow: hidden;
+      background: #ffffff; color: #1e293b;
+      box-shadow: 0 24px 70px rgba(2,6,23,0.45); animation: methPop .22s ease; }
+  @keyframes methPop { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: none; } }
+  .meth-header {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 20px 26px; color: #fff;
+      background: linear-gradient(135deg, #0046ad 0%, #0d9488 55%, #00a651 100%); }
+  .meth-header h2 { margin: 0; font-size: 1.25rem; font-weight: 800; }
+  .meth-close {
+      border: none; background: rgba(255,255,255,0.18); color: #fff; cursor: pointer;
+      width: 34px; height: 34px; border-radius: 50%; font-size: 1rem; line-height: 1;
+      transition: background .12s ease; }
+  .meth-close:hover { background: rgba(255,255,255,0.34); }
+  .meth-body { padding: 22px 26px; max-height: 64vh; overflow-y: auto; }
+  .meth-lead {
+      margin: 0 0 18px; font-size: 1rem; line-height: 1.55; padding: 14px 16px; border-radius: 12px;
+      background: linear-gradient(135deg, rgba(0,70,173,0.07), rgba(0,166,81,0.07));
+      border-left: 4px solid #0046ad; }
+  .meth-h3 { margin: 22px 0 10px; font-size: 1.02rem; font-weight: 800; color: #0046ad; }
+  .meth-bots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .meth-bot {
+      display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 12px;
+      background: #f1f5f9; border: 1px solid #e2e8f0; font-size: 0.9rem; line-height: 1.3; }
+  .meth-bot-icon { font-size: 1.6rem; }
+  .meth-note { margin: 10px 0 0; font-size: 0.85rem; color: #64748b; font-style: italic; }
+  .meth-steps { margin: 0; padding: 0; list-style: none; counter-reset: methstep; }
+  .meth-steps li {
+      position: relative; padding: 12px 14px 12px 18px; margin-bottom: 10px; border-radius: 12px;
+      background: #f8fafc; border: 1px solid #e2e8f0; font-size: 0.92rem; line-height: 1.5; }
+  .meth-step-chip {
+      display: inline-block; margin-right: 8px; padding: 2px 10px; border-radius: 999px;
+      font-size: 0.78rem; font-weight: 700; color: #fff; white-space: nowrap;
+      background: linear-gradient(135deg, #0046ad, #00a651); }
+  .meth-list { margin: 0; padding-left: 4px; list-style: none; }
+  .meth-list li { padding: 6px 0; font-size: 0.92rem; line-height: 1.5; }
+  .meth-body code {
+      background: rgba(0,70,173,0.10); color: #0046ad; padding: 1px 6px; border-radius: 6px;
+      font-size: 0.85em; }
+  .meth-footer {
+      display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+      padding: 14px 26px; font-size: 0.82rem; color: #475569;
+      background: #f1f5f9; border-top: 1px solid #e2e8f0; }
+  .meth-pdf-btn {
+      border: none; cursor: pointer; padding: 10px 18px; border-radius: 999px;
+      font-size: 0.9rem; font-weight: 800; color: #fff; letter-spacing: 0.2px; white-space: nowrap;
+      background: linear-gradient(135deg, #ca8a04 0%, #d97706 22%, #00a651 50%, #0d9488 72%, #0046ad 100%);
+      background-size: 220% 220%; background-position: 0% 50%;
+      box-shadow: 0 4px 16px rgba(217,119,6,0.34);
+      transition: transform .12s ease, box-shadow .12s ease, background-position .5s ease; }
+  .meth-pdf-btn:hover { transform: translateY(-1px); background-position: 100% 50%;
+      box-shadow: 0 6px 22px rgba(0,70,173,0.42); }
+  .meth-pdf-btn:active { transform: translateY(0); }
+  .meth-pdf-btn:disabled { opacity: 0.6; cursor: progress; }
+  .meth-pdf-emoji { font-size: 1.05em; }
+
+  /* Dark mode (required) */
+  body.dark-mode .meth-modal { background: #0f172a; color: #e2e8f0; }
+  body.dark-mode .meth-lead { background: linear-gradient(135deg, rgba(125,211,252,0.10), rgba(110,231,183,0.10)); border-left-color: #7dd3fc; }
+  body.dark-mode .meth-h3 { color: #7dd3fc; }
+  body.dark-mode .meth-bot { background: #1e293b; border-color: #334155; }
+  body.dark-mode .meth-note { color: #94a3b8; }
+  body.dark-mode .meth-steps li { background: #1e293b; border-color: #334155; }
+  body.dark-mode .meth-body code { background: rgba(125,211,252,0.15); color: #7dd3fc; }
+  body.dark-mode .meth-footer { background: #1e293b; color: #cbd5e1; border-top-color: #334155; }
+</style>
 {% endblock %}
 {% block content %}
     <div class="dashboard-container">
@@ -14,6 +113,11 @@
         <div id="loadingOverlay" class="loading-overlay">
             <div class="loading-spinner"></div>
             <div class="loading-text">Loading metrics...</div>
+        </div>
+
+        <!-- Top action bar -->
+        <div class="meth-bar">
+            <button class="methodology-btn" id="methodologyBtn" title="How does ring tagging work?">💡 How does this work?</button>
         </div>
 
         <!-- Filters Section -->
@@ -325,6 +429,61 @@
         </div>
         <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
     </div>
+
+    <!-- Methodology Modal (kept OUTSIDE .dashboard-container — its backdrop-filter would otherwise trap this position:fixed overlay) -->
+        <div id="methodologyOverlay" class="meth-overlay" role="dialog" aria-modal="true" aria-labelledby="methTitle">
+            <div class="meth-modal">
+                <div class="meth-header">
+                    <h2 id="methTitle">💡 How Ring Tagging Works</h2>
+                    <button class="meth-close" id="methClose" aria-label="Close">✕</button>
+                </div>
+                <div class="meth-body">
+                    <p class="meth-lead">
+                        Three bots automatically assign <strong>deployment ring tags</strong> across our
+                        CrowdStrike and Tanium fleet, so software rolls out in safe, phased waves. 🚀
+                    </p>
+
+                    <h3 class="meth-h3">🤖 The three bots — one per platform</h3>
+                    <div class="meth-bots">
+                        <div class="meth-bot"><span class="meth-bot-icon">🦅</span><div><strong>Jarvis</strong><br>CrowdStrike hosts</div></div>
+                        <div class="meth-bot"><span class="meth-bot-icon">🖧</span><div><strong>Case</strong><br>Tanium On-Prem hosts</div></div>
+                        <div class="meth-bot"><span class="meth-bot-icon">☁️</span><div><strong>Tars</strong><br>Tanium Cloud hosts</div></div>
+                    </div>
+                    <p class="meth-note">All three follow the same 5-step pipeline — only the platform endpoints differ.</p>
+
+                    <h3 class="meth-h3">🔄 The flow, end to end</h3>
+                    <ol class="meth-steps">
+                        <li><span class="meth-step-chip">📥 Fetch</span> Pull hosts that are missing a ring tag — Jarvis from the <strong>CrowdStrike API</strong> (OAuth2), Case/Tars from the <strong>Tanium GraphQL API</strong> (token auth).</li>
+                        <li><span class="meth-step-chip">🗂️ Enrich</span> Look each host up in <strong>ServiceNow CMDB</strong> (<code>cmdb_ci_computer</code>) for its <strong>environment, country, and lifecycle</strong> — this is what makes the tag correct.</li>
+                        <li><span class="meth-step-chip">🧠 Decide</span> <strong>Workstations</strong> spread across <strong>Rings 1–4 by region</strong> (phased %); <strong>servers</strong> get their ring by <strong>environment</strong> (Dev/Lab→1, Test/QA→2, Stage/DR→3, Prod→4). A hostname-prefix fallback guesses the country if CMDB is empty.</li>
+                        <li><span class="meth-step-chip">🏷️ Apply</span> Write the tag back — Jarvis as <code>FalconGroupingTags/…</code> in CrowdStrike, Case/Tars via a bulk Tanium action.</li>
+                        <li><span class="meth-step-chip">📊 Report</span> Post success/fail counts + an Excel detail file to Webex, and log the run to the history database behind this dashboard.</li>
+                    </ol>
+
+                    <h3 class="meth-h3">⏰ Where &amp; when it runs</h3>
+                    <ul class="meth-list">
+                        <li>🖥️ Always-on services on a <strong>VM in the Cyber lab</strong>.</li>
+                        <li>🗓️ Scheduled <strong>Mon &amp; Thu at 04:00, 12:00, 20:00 ET</strong>.</li>
+                        <li>🛑 A <strong>safety window + STOP button</strong> in Webex lets anyone abort the CrowdStrike run before tags apply.</li>
+                        <li>🙋 Bots also take <strong>manual Webex commands</strong> for on-demand reports or tagging.</li>
+                    </ul>
+
+                    <h3 class="meth-h3">🛠️ Why a host ends up untagged</h3>
+                    <ul class="meth-list">
+                        <li>🗂️ <strong>Missing CMDB data</strong> — no environment/country to derive a ring from (the most common reason).</li>
+                        <li>🔌 <strong>No CMDB entry</strong> for the host at all.</li>
+                        <li>⚠️ <strong>API error</strong> applying the tag.</li>
+                    </ul>
+                    <p class="meth-note">The "🔍 Untagged Hosts Breakdown by Reason" chart above splits these out for any time range.</p>
+                </div>
+                <div class="meth-footer">
+                    <span>🔐 Data sources: CrowdStrike · Tanium (Cloud + On-Prem) · ServiceNow CMDB</span>
+                    <button class="meth-pdf-btn" id="methPdfBtn" title="Download this as a PDF">
+                        <span class="meth-pdf-emoji">📥</span> Download as PDF <span class="meth-pdf-emoji">📄✨</span>
+                    </button>
+                </div>
+            </div>
+        </div>
 {% endblock %}
 
 {% block extra_js %}
@@ -336,6 +495,58 @@
 <script src="{{ url_for('static', filename='js/drilldown_drawer.js') }}"></script>
 <script src="{{ url_for('static', filename='js/exec_summary.js') }}"></script>
 <script>
+// Methodology modal open/close
+(function () {
+    const overlay = document.getElementById('methodologyOverlay');
+    const openBtn = document.getElementById('methodologyBtn');
+    const closeBtn = document.getElementById('methClose');
+    if (!overlay || !openBtn) return;
+    const open = () => { overlay.classList.add('open'); document.body.style.overflow = 'hidden'; };
+    const close = () => { overlay.classList.remove('open'); document.body.style.overflow = ''; };
+    openBtn.addEventListener('click', open);
+    closeBtn.addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && overlay.classList.contains('open')) close(); });
+
+    // Download the methodology as a branded PDF (reuses the shared export util)
+    const pdfBtn = document.getElementById('methPdfBtn');
+    const modal = overlay.querySelector('.meth-modal');
+    const bodyEl = overlay.querySelector('.meth-body');
+    const footEl = overlay.querySelector('.meth-footer');
+    if (pdfBtn && modal && window.DashboardExport) {
+        pdfBtn.addEventListener('click', () => {
+            const original = pdfBtn.innerHTML;
+            // Unclip the scroll area + hide the footer (so the button itself isn't in the PDF)
+            const prevMax = bodyEl.style.maxHeight, prevOv = bodyEl.style.overflow, prevFoot = footEl.style.display;
+            bodyEl.style.maxHeight = 'none'; bodyEl.style.overflow = 'visible'; footEl.style.display = 'none';
+            pdfBtn.disabled = true;
+            pdfBtn.innerHTML = '<span class="meth-pdf-emoji">⏳</span> Building PDF…';
+            let restored = false;
+            const restore = () => {
+                if (restored) return; restored = true;
+                bodyEl.style.maxHeight = prevMax; bodyEl.style.overflow = prevOv; footEl.style.display = prevFoot;
+                pdfBtn.disabled = false; pdfBtn.innerHTML = original;
+            };
+            try {
+                // The modal has an opaque, theme-aware background, so it captures cleanly in light or dark mode.
+                window.DashboardExport.exportPdf(null, {
+                    title: 'EPP Ring Tagging — How It Works',
+                    subtitle: 'Jarvis (CrowdStrike) · Case (Tanium On-Prem) · Tars (Tanium Cloud)  ·  Cyber Security',
+                    sections: [modal]
+                });
+                // exportPdf is fire-and-forget for our purposes; restore once capture has had time to run
+                setTimeout(restore, 4000);
+            } catch (err) {
+                restore();
+                if (window.showToast) showToast('PDF export failed — try again', 'error');
+            }
+        });
+    } else if (pdfBtn) {
+        // No export util loaded → fall back to the browser print dialog
+        pdfBtn.addEventListener('click', () => window.print());
+    }
+})();
+
 // Theme management — hooks into the global slider from common.js
 // Re-render charts when theme changes (dispatched by applyTheme)
 window.addEventListener('themechange', () => {
