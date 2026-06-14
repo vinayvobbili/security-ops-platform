@@ -6,15 +6,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/domain_monitoring_report.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/chat_widget.css') }}">
 <style>
-  /* ===== Domain Monitoring theme — Cyan / Blue / Violet (radar) ===== */
-  body.dm-themed { background:
-      radial-gradient(1100px 520px at 4% -8%, #cdf0ff 0%, transparent 55%),
-      radial-gradient(1000px 560px at 98% 0%, #d6e2ff 0%, transparent 52%),
-      radial-gradient(1200px 720px at 50% 122%, #e7dcff 0%, transparent 55%),
-      linear-gradient(160deg, #ecfaff 0%, #eef3ff 48%, #f2edff 100%) !important;
-      background-attachment: fixed !important; min-height: 100vh; }
-  body.dm-themed.dark-mode { background:
-      linear-gradient(135deg, #06121f 0%, #0a1530 50%, #0d0a24 100%) !important; color: #d9e6f2; }
+  /* ===== Domain Monitoring — thick rainbow page scrollbar ===== */
   html { scrollbar-gutter: stable; }
   ::-webkit-scrollbar { width: 16px; height: 16px; }
   ::-webkit-scrollbar-track { border-radius: 10px;
@@ -30,7 +22,7 @@
 </style>
 {% endblock %}
 
-{% block body_classes %}monitoring-report-page dm-themed{% endblock %}
+{% block body_classes %}monitoring-report-page{% endblock %}
 
 {% set page_title_text = 'Domain Monitoring Report' %}
 {% set page_title_left_icon = '📊' %}
@@ -114,6 +106,10 @@
             style="display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border-radius:10px; text-decoration:none; font-weight:600; color:#fff; background:linear-gradient(135deg,#0a8fd6,#0046AD); box-shadow:0 3px 12px rgba(10,143,214,.28);">
             🛡️ Monthly Report
         </a>
+        <button onclick="openHowItWorks()" title="How does this work? — a 2-minute guided overview"
+            style="display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border:none; border-radius:10px; cursor:pointer; font-weight:600; color:#fff; background:linear-gradient(135deg,#7c3aed,#0046AD); box-shadow:0 3px 12px rgba(124,58,237,.28);">
+            🎬 How does this work?
+        </button>
     </div>
 
     <div id="loadingIndicator" class="loading">
@@ -173,6 +169,72 @@
         <div class="modal-body" id="modalBody"></div>
         <div class="modal-footer">
             <a id="modalExternalLink" href="#" target="_blank" class="btn-view" style="display:none;text-decoration:none;padding:8px 16px;">Open External Link</a>
+        </div>
+    </div>
+</div>
+
+<!-- "How does this work?" — guided overview video -->
+<div id="howItWorksModal" onclick="if(event.target===this)closeHowItWorks()"
+     style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); backdrop-filter:blur(4px); z-index:10000; align-items:center; justify-content:center;">
+    <div style="background:linear-gradient(135deg,#1b1733 0%,#24243e 55%,#1a2740 100%); color:#e2e8f0; max-width:980px; width:94%; max-height:90vh; overflow-y:auto; border-radius:18px; padding:24px; border:1px solid rgba(255,255,255,.12); box-shadow:0 24px 70px rgba(0,0,0,.65);">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:14px; margin-bottom:14px;">
+            <div>
+                <div style="display:inline-block; font-size:.78em; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:#bcd2ff; background:rgba(122,165,255,.16); padding:4px 11px; border-radius:99px; margin-bottom:8px;">🎬 Guided overview</div>
+                <h2 style="margin:0; font-size:1.45em; font-weight:800; background:linear-gradient(135deg,#7aa5ff,#5ee0b0); -webkit-background-clip:text; background-clip:text; color:transparent;">How Domain Monitoring works</h2>
+                <p style="margin:6px 0 0; color:#94a3b8; font-size:.95em;">From a lookalike landing on the radar to triage, hunt, and takedown — a two-minute walkthrough. Turn your sound on for the narration. 🔊</p>
+            </div>
+            <button onclick="closeHowItWorks()" aria-label="Close"
+                style="flex:none; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.15); border-radius:10px; width:36px; height:36px; font-size:1.3em; cursor:pointer; color:#e2e8f0; line-height:1;">&times;</button>
+        </div>
+        <video id="howItWorksVideo" controls playsinline preload="metadata"
+               style="width:100%; border-radius:12px; background:#000; box-shadow:0 8px 28px rgba(0,0,0,.5);"
+               poster="{{ url_for('static', filename='videos/domain_monitoring_demo_poster.jpg') }}"
+               src="{{ url_for('static', filename='videos/domain_monitoring_demo.mp4') }}"></video>
+        <p style="margin:12px 0 4px; color:#94a3b8; font-size:.86em;">Discover lookalikes → assess weaponization (P1–P4) → IOC Hunt across our detection tools → block &amp; takedown → track SLAs and campaigns. All in one workspace.</p>
+
+        <div style="margin-top:20px; display:grid; gap:12px;">
+            <div style="display:flex; gap:13px; align-items:flex-start; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:14px 16px;">
+                <span style="flex:none; font-size:1.5em; line-height:1;">🔍</span>
+                <div>
+                    <h4 style="margin:0 0 4px; color:#bcd2ff; font-size:1.02em; font-weight:700;">Discover &amp; prioritize</h4>
+                    <p style="margin:0; color:#cbd5e1; font-size:.9em; line-height:1.5;">Newly registered lookalikes of our brands land here automatically — each one <strong>scored, ranked, and grouped</strong>, so the dangerous ones rise to the top instead of hiding in a scattered feed. Red means act now; green is dormant and just being watched.</p>
+                </div>
+            </div>
+            <div style="display:flex; gap:13px; align-items:flex-start; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:14px 16px;">
+                <span style="flex:none; font-size:1.5em; line-height:1;">🧪</span>
+                <div>
+                    <h4 style="margin:0 0 4px; color:#bcd2ff; font-size:1.02em; font-weight:700;">Assess weaponization</h4>
+                    <p style="margin:0; color:#cbd5e1; font-size:.9em; line-height:1.5;">One click on <strong>Assess</strong> answers the first question — is this actually dangerous? It checks whether the page is live, built to harvest credentials, and mail-ready for phishing, then hands back a clear verdict from a <strong>P1</strong> live phishing kit down to a <strong>P4</strong> harmless parked page.</p>
+                </div>
+            </div>
+            <div style="display:flex; gap:13px; align-items:flex-start; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:14px 16px;">
+                <span style="flex:none; font-size:1.5em; line-height:1;">🎯</span>
+                <div>
+                    <h4 style="margin:0 0 4px; color:#bcd2ff; font-size:1.02em; font-weight:700;">IOC Hunt — “did this touch us?”</h4>
+                    <p style="margin:0; color:#cbd5e1; font-size:.9em; line-height:1.5;"><strong>IOC Hunt</strong> builds the exact searches across our detection tools for you. Review them first, <strong>open them straight in the QRadar or CrowdStrike console</strong>, or run the hunt right here — and it comes back in plain terms: <strong>0 hits</strong>, or the hosts and users that made contact.</p>
+                </div>
+            </div>
+            <div style="display:flex; gap:13px; align-items:flex-start; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:14px 16px;">
+                <span style="flex:none; font-size:1.5em; line-height:1;">🛡️</span>
+                <div>
+                    <h4 style="margin:0 0 4px; color:#bcd2ff; font-size:1.02em; font-weight:700;">Contain &amp; take down</h4>
+                    <p style="margin:0; color:#cbd5e1; font-size:.9em; line-height:1.5;">When something's real, containment is one click — <strong>block it across our security stack</strong> and raise a takedown request, with the ticket linked right on the row so everyone can follow it through to resolution.</p>
+                </div>
+            </div>
+            <div style="display:flex; gap:13px; align-items:flex-start; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:14px 16px;">
+                <span style="flex:none; font-size:1.5em; line-height:1;">📊</span>
+                <div>
+                    <h4 style="margin:0 0 4px; color:#bcd2ff; font-size:1.02em; font-weight:700;">Measure &amp; cluster</h4>
+                    <p style="margin:0; color:#cbd5e1; font-size:.9em; line-height:1.5;">It keeps score: how fast we respond, how fast domains actually come down against their <strong>takedown SLAs</strong>, and which lookalikes belong to the same <strong>coordinated campaign</strong> — so a wave of fakes reads as one story, not fifty separate alerts.</p>
+                </div>
+            </div>
+            <div style="display:flex; gap:13px; align-items:flex-start; background:rgba(94,224,176,.07); border:1px solid rgba(94,224,176,.22); border-radius:12px; padding:14px 16px;">
+                <span style="flex:none; font-size:1.5em; line-height:1;">💬</span>
+                <div>
+                    <h4 style="margin:0 0 4px; color:#5ee0b0; font-size:1.02em; font-weight:700;">Ask about these domains</h4>
+                    <p style="margin:0; color:#cbd5e1; font-size:.9em; line-height:1.5;">The chat assistant in the corner is <strong>grounded in the scan you're looking at</strong> — ask it which findings are highest-risk, whether a domain has shown up before, which brands are most impersonated, or for a quick leadership summary. It's <strong>read-only</strong>: it explains and summarizes, but takedowns and watchlist edits stay on the on-page buttons.</p>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -286,9 +348,11 @@ async function loadReport(filename) {
         }
 
         currentData = data.results;
+        window.currentData = data.results;  // expose to the grounded chat widget (separate <script> scope)
         renderReport(data.results);
         document.getElementById('reportContent').style.display = 'block';
         paintBlockSlots();  // reflect any already-blocked domains on freshly-rendered rows
+        loadWeaponizationMap();  // tag rows with stored P1-P4 tiers for the high-threat filter
 
     } catch (e) {
         console.error('Failed to load report:', e);
@@ -451,52 +515,52 @@ function renderRFWatchlist(results) {
     const keywords = (results.brand_keyword_impersonation && results.brand_keyword_impersonation.keywords_searched) || [];
 
     if (!wl.length && !kwHits.length) {
-        container.innerHTML = `<div class="no-data" style="padding:30px;text-align:center;">
+        container.innerHTML = `<div class="no-data" style="padding:30px;text-align:center;color:var(--text-primary);">
             <div style="font-size:2em;">🛰️</div>
             <div>No Recorded Future watchlist data in this report.</div>
-            <div style="margin-top:8px;font-size:0.9em;color:#888;">Onboard the RF export via <strong>⚙️ Manage Monitoring</strong>, then it populates on the next daily run.</div>
+            <div style="margin-top:8px;font-size:0.9em;color:var(--text-muted);">Onboard the RF export via <strong>⚙️ Manage Monitoring</strong>, then it populates on the next daily run.</div>
         </div>`;
         return;
     }
 
     const riskColor = (s) => s == null ? '#94a3b8' : (s >= 90 ? '#dc2626' : s >= 65 ? '#f59e0b' : s >= 25 ? '#eab308' : '#22c55e');
 
-    let html = `<div style="margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+    let html = `<div style="margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;color:var(--text-primary);">
         <span style="font-weight:700;">🛰️ Recorded Future Watchlist</span>
-        <span style="background:rgba(0,70,173,.1);color:#0046AD;padding:3px 10px;border-radius:20px;font-size:0.85em;font-weight:600;">${wl.length} domains</span>`;
+        <span style="background:rgba(122,165,255,.18);color:#bcd2ff;padding:3px 10px;border-radius:20px;font-size:0.85em;font-weight:600;">${wl.length} domains</span>`;
     keywords.forEach(k => {
-        html += `<span style="background:rgba(99,102,241,.12);color:#4f46e5;padding:3px 10px;border-radius:20px;font-size:0.8em;font-weight:600;">${k}</span>`;
+        html += `<span style="background:rgba(129,140,248,.2);color:#c7d2fe;padding:3px 10px;border-radius:20px;font-size:0.8em;font-weight:600;">${k}</span>`;
     });
     html += `</div>`;
 
     if (kwHits.length) {
-        html += `<div style="background:rgba(220,38,38,.07);border:1px solid rgba(220,38,38,.25);border-radius:12px;padding:14px;margin-bottom:16px;">
-            <div style="font-weight:700;color:#b91c1c;margin-bottom:8px;">⚠️ ${kwHits.length} new impersonation certificate(s) across brand keywords</div>
-            <table style="width:100%;border-collapse:collapse;font-size:0.9em;"><thead><tr style="text-align:left;border-bottom:1px solid rgba(0,0,0,.1);">
-            <th style="padding:6px;">Domain</th><th style="padding:6px;">Brand</th><th style="padding:6px;">Issuer</th><th style="padding:6px;">Actions</th></tr></thead><tbody>`;
+        html += `<div style="background:rgba(220,38,38,.14);border:1px solid rgba(248,113,113,.4);border-radius:12px;padding:14px;margin-bottom:16px;color:var(--text-primary);">
+            <div style="font-weight:700;color:#fca5a5;margin-bottom:8px;">⚠️ ${kwHits.length} new impersonation certificate(s) across brand keywords</div>
+            <table class="findings-table"><thead><tr>
+            <th>Domain</th><th>Brand</th><th>Issuer</th><th>Actions</th></tr></thead><tbody>`;
         kwHits.forEach(d => {
-            html += `<tr style="border-bottom:1px solid rgba(0,0,0,.05);">
-                <td style="padding:6px;font-family:monospace;">${d.domain || ''}</td>
-                <td style="padding:6px;">${d.brand_keyword || ''}</td>
-                <td style="padding:6px;">${d.issuer || ''}</td>
-                <td style="padding:6px;">${renderActionsCell({domain: d.domain})}</td></tr>`;
+            html += `<tr>
+                <td><code>${d.domain || ''}</code></td>
+                <td>${d.brand_keyword || ''}</td>
+                <td style="color:var(--text-secondary);">${d.issuer || ''}</td>
+                <td>${renderActionsCell({domain: d.domain})}</td></tr>`;
         });
         html += `</tbody></table></div>`;
     }
 
-    html += `<table style="width:100%;border-collapse:collapse;font-size:0.9em;"><thead><tr style="text-align:left;border-bottom:2px solid rgba(0,0,0,.12);">
-        <th style="padding:8px;">Domain</th><th style="padding:8px;">RF Risk</th><th style="padding:8px;">RF Rules</th><th style="padding:8px;">Reputation</th><th style="padding:8px;">Actions</th></tr></thead><tbody>`;
+    html += `<table class="findings-table"><thead><tr>
+        <th>Domain</th><th>RF Risk</th><th>RF Rules</th><th>Reputation</th><th>Actions</th></tr></thead><tbody>`;
     wl.forEach(d => {
         const s = d.rf_risk_score;
-        const badge = `<span style="background:${riskColor(s)};color:#fff;padding:2px 9px;border-radius:20px;font-size:0.85em;font-weight:700;">${s == null ? 'n/a' : s}</span> <span style="color:#64748b;font-size:0.85em;">${d.rf_risk_level || ''}</span>`;
+        const badge = `<span style="background:${riskColor(s)};color:#fff;padding:2px 9px;border-radius:20px;font-size:0.85em;font-weight:700;">${s == null ? 'n/a' : s}</span> <span style="color:var(--text-muted);font-size:0.85em;">${d.rf_risk_level || ''}</span>`;
         const rep = d.reputation_malicious ? `<span style="background:#dc2626;color:#fff;padding:2px 8px;border-radius:6px;font-size:0.75em;">MALICIOUS</span>` : '';
         const rules = (d.rf_rules || []).slice(0, 3).join(', ');
-        html += `<tr style="border-bottom:1px solid rgba(0,0,0,.05);">
-            <td style="padding:8px;font-family:monospace;">${d.domain || ''}</td>
-            <td style="padding:8px;">${badge}</td>
-            <td style="padding:8px;color:#475569;font-size:0.85em;">${rules}</td>
-            <td style="padding:8px;">${rep}</td>
-            <td style="padding:8px;">${renderActionsCell({domain: d.domain})}</td></tr>`;
+        html += `<tr>
+            <td><code>${d.domain || ''}</code></td>
+            <td>${badge}</td>
+            <td style="color:var(--text-secondary);font-size:0.85em;">${rules}</td>
+            <td>${rep}</td>
+            <td>${renderActionsCell({domain: d.domain})}</td></tr>`;
     });
     html += `</tbody></table>`;
     container.innerHTML = html;
@@ -815,6 +879,9 @@ function addToWatchlist(domain) {
 
 // Track risk filter state
 let currentRiskFilter = 'all';
+// Client-side pagination for the lookalikes table (can run to ~700 rows).
+let currentPage = 1;
+const DM_PAGE_SIZE = 50;
 
 function renderLookalikes(domains) {
     let html = '';
@@ -832,6 +899,11 @@ function renderLookalikes(domains) {
                     style="background:rgba(220,38,38,0.8);color:white;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.85em;font-weight:500;transition:all 0.2s;">
                     🔴 Threats
                 </button>
+                <button class="risk-filter-btn" data-filter="weaponized" onclick="filterByRisk('weaponized', this)"
+                    title="Weaponization-triaged high threats (P1-P3) — confirmed/likely live phishing"
+                    style="background:rgba(124,58,237,0.85);color:white;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.85em;font-weight:500;transition:all 0.2s;">
+                    🎯 High Threat (P1-P3)
+                </button>
                 <button class="risk-filter-btn" data-filter="defensive" onclick="filterByRisk('defensive', this)"
                     style="background:rgba(34,197,94,0.8);color:white;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.85em;font-weight:500;transition:all 0.2s;">
                     🛡️ Defensive
@@ -839,6 +911,11 @@ function renderLookalikes(domains) {
                 <button class="risk-filter-btn" data-filter="parked" onclick="filterByRisk('parked', this)"
                     style="background:rgba(245,158,11,0.8);color:white;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.85em;font-weight:500;transition:all 0.2s;">
                     🅿️ Parked
+                </button>
+                <button class="risk-filter-btn" data-filter="archived" onclick="filterByRisk('archived', this)"
+                    title="Findings auto-archived after 7 days with no scan activity (hidden from the other views)"
+                    style="background:rgba(100,116,139,0.8);color:white;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.85em;font-weight:500;transition:all 0.2s;">
+                    📦 Archived
                 </button>
             </div>
         </div>
@@ -875,7 +952,7 @@ function renderLookalikes(domains) {
             if (becameActive.length > 0) {
                 html += `<h4 style="color:#dc2626;margin-bottom:10px;">🔴 Domains Now Active (Previously Parked)</h4>
                 <table class="findings-table">
-                    <thead><tr><th>Domain</th><th>Risk</th><th>Status</th><th>IP Address</th><th>Registrar</th><th>Reg. Date</th><th>VT</th><th>RF</th><th>Actions</th></tr></thead>
+                    <thead><tr><th>Domain</th><th>Detected</th><th>Risk</th><th>Status</th><th>IP Address</th><th>Registrar</th><th>Reg. Date</th><th>VT</th><th>RF</th><th>Actions</th></tr></thead>
                     <tbody>`;
 
                 becameActive.forEach(d => {
@@ -883,8 +960,9 @@ function renderLookalikes(domains) {
                     const isDefensive = d.is_defensive === true;
                     // Dark theme colors: subtle tinted backgrounds that work with light text
                     const rowBg = isDefensive ? 'rgba(34,197,94,0.15)' : 'rgba(220,38,38,0.15)';
-                    html += `<tr style="background:${rowBg};" data-risk="${riskLevel}" class="domain-row">
+                    html += `<tr style="background:${rowBg};" data-risk="${riskLevel}" data-domain="${d.domain}" class="domain-row">
                         <td><code>${d.domain}</code></td>
+                        <td class="dm-detected" data-domain="${d.domain}">—</td>
                         <td>${renderRiskBadge(riskLevel, isDefensive)}</td>
                         <td><span class="badge badge-danger">NOW ACTIVE</span></td>
                         <td>${d.dns_a ? d.dns_a.join(', ') : '-'}</td>
@@ -903,7 +981,7 @@ function renderLookalikes(domains) {
                 html += `<h4 style="margin-bottom:5px;">📡 Recently Detected Lookalikes</h4>
                 <p style="margin:0 0 10px;font-size:0.85em;color:#94a3b8;">Domains newly detected by monitoring (may have been registered years ago)</p>
                 <table class="findings-table">
-                    <thead><tr><th>Domain</th><th>Risk</th><th>Status</th><th>IP Address</th><th>Registrar</th><th>Reg. Date</th><th>VT</th><th>RF</th><th>Actions</th></tr></thead>
+                    <thead><tr><th>Domain</th><th>Detected</th><th>Risk</th><th>Status</th><th>IP Address</th><th>Registrar</th><th>Reg. Date</th><th>VT</th><th>RF</th><th>Actions</th></tr></thead>
                     <tbody>`;
 
                 newDomains.forEach(d => {
@@ -911,8 +989,9 @@ function renderLookalikes(domains) {
                     const isDefensive = d.is_defensive === true;
                     // Dark theme colors: subtle tinted backgrounds that work with light text
                     const rowBg = isDefensive ? 'rgba(34,197,94,0.15)' : (riskLevel === 'high_risk' ? 'rgba(220,38,38,0.15)' : '');
-                    html += `<tr style="background:${rowBg};" data-risk="${riskLevel}" class="domain-row">
+                    html += `<tr style="background:${rowBg};" data-risk="${riskLevel}" data-domain="${d.domain}" class="domain-row">
                         <td><code>${d.domain}</code></td>
+                        <td class="dm-detected" data-domain="${d.domain}">—</td>
                         <td>${renderRiskBadge(riskLevel, isDefensive)}</td>
                         <td>${renderParkingStatusCell(d)}</td>
                         <td>${d.dns_a ? d.dns_a.join(', ') : '-'}</td>
@@ -934,6 +1013,10 @@ function renderLookalikes(domains) {
     });
 
     document.getElementById('lookalikes').innerHTML = html || '<div class="no-data">No domains monitored.</div>';
+    // Paginate right away so a 700-row scan doesn't dump every row at once
+    // (re-runs once the weaponization tiers load via applyTierTags).
+    currentPage = 1;
+    applyRowVisibility(currentRiskFilter);
 }
 
 function renderVTCell(domainData) {
@@ -992,15 +1075,71 @@ function renderActionsCell(domainData) {
 
     const btn = (onclick, title, bg, label) =>
         `<button onclick="${onclick}" title="${title}"
-            style="background:${bg};color:white;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.8em;margin:1px;">
+            style="background:${bg};color:white;border:none;padding:5px 6px;border-radius:5px;cursor:pointer;font-size:0.78em;width:100%;box-sizing:border-box;white-space:nowrap;">
             ${label}</button>`;
     const safeBrand = String(brand).replace(/'/g, "");
-    return `<span class="dm-actions" data-domain="${domain}">`
-        + btn(`assessDomain('${domain}','${safeBrand}')`, 'Assess weaponization — is this a live phishing kit?', '#7c3aed', '🎯 Assess')
-        + btn(`runExposureHunt('${domain}')`, 'Were we touched? Hunt DNS/proxy/EDR for internal contact', '#0a8fd6', '🛰️ Touched?')
-        + `<span class="dm-block-slot" data-domain="${domain}">${blockSlotHtml(domain)}</span>`
-        + btn(`submitTakedown('${domain}')`, 'Submit takedown request', '#dc2626', '🚫 TakeDown')
-        + `<span class="dm-triage-badge" data-domain="${domain}"></span></span>`;
+    return `<div class="dm-actions" data-domain="${domain}">`
+        + `<div class="dm-action-grid">`
+        +     btn(`assessDomain('${domain}','${safeBrand}')`, 'Assess weaponization — is this a live phishing kit?', '#7c3aed', '🎯 Assess')
+        +     btn(`openHuntModal('${domain}')`, 'IOC Hunt — did any host or user contact this domain? Review queries, then run or open in console', '#0a8fd6', '🔍 IOC Hunt?')
+        +     `<span class="dm-block-slot" data-domain="${domain}">${blockSlotHtml(domain)}</span>`
+        +     btn(`submitTakedown('${domain}')`, 'Submit takedown request', '#dc2626', '🚫 TakeDown')
+        + `</div>`
+        + `<span class="dm-triage-badge" data-domain="${domain}"></span>`
+        + `<span class="dm-archive-slot" data-domain="${domain}">${archiveSlotHtml(domain)}</span>`
+        + `</div>`;
+}
+
+// Archive control under each row's action grid. Shows "Archive" on active rows;
+// on archived rows it flips to "Unarchive" + who archived it (system vs analyst).
+function archiveSlotHtml(domain) {
+    const w = weaponizationMap[domain] || {};
+    if (w.status === 'archived') {
+        const who = w.archived_by || 'system';
+        return `<button onclick="unarchiveDomain('${domain}')" title="Restore this finding to the active view"
+                    style="width:100%;box-sizing:border-box;margin-top:4px;background:rgba(255,255,255,.08);color:#cbd5e1;border:1px solid rgba(148,163,184,.35);padding:4px 6px;border-radius:5px;cursor:pointer;font-size:0.74em;white-space:nowrap;">♻️ Unarchive</button>
+                <div style="margin-top:3px;font-size:0.7em;color:#94a3b8;text-align:center;">Archived by ${who}</div>`;
+    }
+    return `<button onclick="archiveDomain('${domain}')" title="Ignore — hide this finding from the active views (reversible, logged)"
+                style="width:100%;box-sizing:border-box;margin-top:4px;background:rgba(100,116,139,.18);color:#cbd5e1;border:1px solid rgba(100,116,139,.4);padding:4px 6px;border-radius:5px;cursor:pointer;font-size:0.74em;white-space:nowrap;">🗄️ Archive</button>`;
+}
+
+// Repaint every row's archive slot from the loaded weaponizationMap (status +
+// archived_by). Run after the bulk map loads and after an archive toggle.
+function paintArchiveSlots() {
+    document.querySelectorAll('.dm-archive-slot[data-domain]').forEach(slot => {
+        slot.innerHTML = archiveSlotHtml(slot.dataset.domain);
+    });
+}
+
+async function archiveDomain(domain) {
+    try {
+        const resp = await fetch('/api/domain-monitoring/archive', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({domain: domain, action: 'archive'})
+        });
+        const data = await resp.json();
+        if (!data.success) { showToast('Could not archive: ' + (data.error || 'error')); return; }
+        weaponizationMap[domain] = Object.assign({}, weaponizationMap[domain],
+            {status: 'archived', archived_by: data.archived_by || 'you'});
+        applyTierTags();  // re-tag data-status, repaint slots, hide the row from this view
+        showToast('🗄️ Archived ' + domain + ' — find it under 📦 Archived');
+    } catch (e) { showToast('Archive failed: ' + e.message); }
+}
+
+async function unarchiveDomain(domain) {
+    try {
+        const resp = await fetch('/api/domain-monitoring/archive', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({domain: domain, action: 'unarchive'})
+        });
+        const data = await resp.json();
+        if (!data.success) { showToast('Could not unarchive: ' + (data.error || 'error')); return; }
+        weaponizationMap[domain] = Object.assign({}, weaponizationMap[domain],
+            {status: 'new', archived_by: null});
+        applyTierTags();
+        showToast('♻️ Restored ' + domain + ' to the active view');
+    } catch (e) { showToast('Unarchive failed: ' + e.message); }
 }
 
 // Once a domain is blocked we swap its 🛑 Block button for a link to the XSOAR
@@ -1040,6 +1179,41 @@ async function hydrateBlockedDomains() {
     } catch (e) { /* non-fatal — buttons stay as Block */ }
 }
 
+// Stored weaponization tiers (P1-P4), keyed by domain. Loaded on render so the
+// high-threat (P1-P3) view filter can tag rows without re-scoring.
+let weaponizationMap = {};
+function fmtDetected(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return isNaN(d) ? '—' : d.toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'});
+}
+function applyTierTags() {
+    document.querySelectorAll('.domain-row[data-domain]').forEach(row => {
+        const w = weaponizationMap[row.dataset.domain];
+        if (!w) return;
+        if (w.tier) row.setAttribute('data-tier', w.tier);
+        if (w.status) row.setAttribute('data-status', w.status);
+    });
+    document.querySelectorAll('.dm-detected[data-domain]').forEach(cell => {
+        const w = weaponizationMap[cell.dataset.domain];
+        if (w && w.first_seen) cell.textContent = fmtDetected(w.first_seen);
+    });
+    paintArchiveSlots();  // reflect status + archived_by on each row's archive control
+    // Re-enforce the active filter so archived rows hide once status has loaded.
+    applyRowVisibility(currentRiskFilter);
+}
+async function loadWeaponizationMap() {
+    try {
+        const resp = await fetch('/api/domain-monitoring/weaponization');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (data.success && data.weaponization) {
+            weaponizationMap = data.weaponization;
+            applyTierTags();
+        }
+    } catch (e) { /* non-fatal — high-threat filter just won't tag rows */ }
+}
+
 // Reflect a stored weaponization tier as an inline badge next to the domain's actions.
 function tierBadge(tier, active) {
     if (!tier) return '';
@@ -1051,6 +1225,13 @@ function tierBadge(tier, active) {
 function paintTierBadges(domain, tier, active) {
     document.querySelectorAll(`.dm-triage-badge[data-domain="${CSS.escape(domain)}"]`)
         .forEach(el => { el.innerHTML = tierBadge(tier, active); });
+    // Keep the map + row tag in sync so a freshly-assessed domain immediately
+    // honours the High Threat (P1-P3) filter.
+    if (tier) {
+        weaponizationMap[domain] = {tier: tier, active: !!active};
+        document.querySelectorAll(`.domain-row[data-domain="${CSS.escape(domain)}"]`)
+            .forEach(row => row.setAttribute('data-tier', tier));
+    }
 }
 
 // Submit a takedown: creates a PhishFort incident (prod) + notifies the Domain
@@ -1124,11 +1305,11 @@ function showTriageModal(title, bodyHtml) {
     if (!m) {
         m = document.createElement('div');
         m.id = 'triageModal';
-        m.style = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;';
-        m.innerHTML = `<div style="background:#ffffff;color:#1e293b;max-width:640px;width:92%;max-height:84vh;overflow:auto;border-radius:16px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.4);">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-                <h3 id="triageModalTitle" style="margin:0;"></h3>
-                <button onclick="document.getElementById('triageModal').remove()" style="background:none;border:none;font-size:1.5em;cursor:pointer;color:inherit;">&times;</button>
+        m.style = 'position:fixed;inset:0;background:rgba(0,0,0,.62);backdrop-filter:blur(3px);z-index:9999;display:flex;align-items:center;justify-content:center;';
+        m.innerHTML = `<div style="background:linear-gradient(135deg,#1b1733 0%,#24243e 55%,#1a2740 100%);color:#e2e8f0;max-width:640px;width:92%;max-height:84vh;overflow-y:auto;overflow-x:hidden;border-radius:16px;padding:22px;border:1px solid rgba(255,255,255,.12);box-shadow:0 20px 60px rgba(0,0,0,.6);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid rgba(255,255,255,.1);padding-bottom:10px;">
+                <h3 id="triageModalTitle" style="margin:0;font-size:1.15em;background:linear-gradient(135deg,#7aa5ff,#5ee0b0);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:800;"></h3>
+                <button onclick="document.getElementById('triageModal').remove()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:8px;width:32px;height:32px;font-size:1.2em;cursor:pointer;color:#e2e8f0;line-height:1;">&times;</button>
             </div>
             <div id="triageModalBody"></div></div>`;
         document.body.appendChild(m);
@@ -1138,50 +1319,436 @@ function showTriageModal(title, bodyHtml) {
     m.querySelector('#triageModalBody').innerHTML = bodyHtml;
 }
 
+// ── Weaponization "Assess" progress + result modals ────────────────────────
+const ASSESS_MESSAGES = [
+    "🎯 Fetching the live page — phishing kits love a convincing login form.",
+    "🤖 The LLM is reading the page like an analyst: brand clone? credential trap? parked?",
+    "🔎 Checking MX / SPF / DMARC — a mail-capable lookalike can phish by email too.",
+    "🪜 P1 = confirmed live phishing, P4 = dormant. Placing this domain on that ladder.",
+    "🧪 Redirects off-domain? Hidden forms? Every tell is weighed before the verdict.",
+    "🎭 A pixel-perfect clone is still a fake — we compare brand cues, not just looks.",
+];
+
+// Colorful loading view for an assessment (reuses the hunt animation machinery;
+// only one operation runs at a time so the shared intervals are safe).
+function showAssessProgress(domain) {
+    const startedAt = Date.now();
+    const EXPECTED_MS = 18000;  // assessment is quick; bar eases toward 95% over ~18s
+    ensureHuntKeyframes();
+    showTriageModal('Assessing — ' + domain, `
+        <div style="text-align:center;padding:4px 0 2px;">
+            <div style="font-size:2.8em;line-height:1;margin-bottom:8px;display:inline-block;animation:dmPulse 1.4s ease-in-out infinite;">🎯</div>
+            <div style="font-weight:800;font-size:1.08em;color:#e2e8f0;">Fetching the live page + scoring with the LLM…</div>
+            <div style="color:#94a3b8;font-size:0.9em;margin-top:5px;">Judging whether
+                <code style="background:rgba(167,139,250,.2);padding:2px 8px;border-radius:6px;color:#d6bcfa;font-weight:700;">${domain}</code>
+                is weaponized (P1–P4).</div>
+        </div>
+        <div style="display:flex;justify-content:center;align-items:baseline;gap:8px;margin:16px 0 10px;">
+            <span style="font-size:0.82em;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;">Elapsed</span>
+            <span id="huntTimer" style="font-variant-numeric:tabular-nums;font-weight:800;font-size:1.5em;background:linear-gradient(135deg,#a78bfa,#7aa5ff);-webkit-background-clip:text;background-clip:text;color:transparent;">0:00</span>
+        </div>
+        <div style="height:14px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,.3);">
+            <div id="huntBar" style="height:100%;width:5%;border-radius:99px;background:linear-gradient(90deg,#7c3aed,#0046AD,#22d3ee,#7c3aed);background-size:200% 100%;animation:dmShimmer 1.3s linear infinite;transition:width .8s ease;"></div>
+        </div>
+        <div id="huntMsg" style="margin-top:18px;text-align:center;min-height:48px;display:flex;align-items:center;justify-content:center;padding:13px 16px;border-radius:12px;background:linear-gradient(135deg,rgba(167,139,250,.12),rgba(122,165,255,.08));border:1px solid rgba(167,139,250,.22);color:#cbd5e1;font-size:0.96em;line-height:1.4;transition:opacity .4s;box-shadow:0 0 0 rgba(167,139,250,0);animation:dmGlow 3s ease-in-out infinite;"></div>
+    `);
+    stopHuntAnimations();
+
+    let msgIdx = Math.floor(startedAt / 997) % ASSESS_MESSAGES.length;
+    const setMsg = () => {
+        const el = document.getElementById('huntMsg');
+        if (!el) { stopHuntAnimations(); return; }
+        el.style.opacity = '0';
+        setTimeout(() => {
+            const e2 = document.getElementById('huntMsg');
+            if (!e2) return;
+            e2.innerHTML = ASSESS_MESSAGES[msgIdx % ASSESS_MESSAGES.length];
+            e2.style.opacity = '1';
+            msgIdx++;
+        }, 260);
+    };
+    setMsg();
+    huntMsgInterval = setInterval(setMsg, 10000);
+    huntTickInterval = setInterval(() => {
+        const t = document.getElementById('huntTimer');
+        const bar = document.getElementById('huntBar');
+        if (!t || !bar) { stopHuntAnimations(); return; }
+        const elapsed = Date.now() - startedAt;
+        const s = Math.floor(elapsed / 1000);
+        t.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+        bar.style.width = Math.min(95, 5 + 90 * (1 - Math.exp(-elapsed / EXPECTED_MS))).toFixed(1) + '%';
+    }, 250);
+}
+
 async function assessDomain(domain, brand) {
-    showToast('🎯 Assessing ' + domain + '… (fetching page + LLM verdict)');
+    showAssessProgress(domain);
     try {
         const resp = await fetch('/api/domain-monitoring/assess', {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({domain: domain, brand: brand || null})
         });
         const data = await resp.json();
+        stopHuntAnimations();
         const r = (data.result) || {};
         const v = r.verdict, s = r.signals || {}, p = s.page || {}, dns = s.dns || {};
+
+        // Colored signal chip — danger=true means "true is bad" (turns red).
+        const chip = (label, val, danger) => {
+            const t = val === true;
+            const bg = t ? (danger ? 'rgba(220,38,38,.16)' : 'rgba(34,197,94,.16)') : 'rgba(255,255,255,.06)';
+            const bd = t ? (danger ? 'rgba(248,113,113,.45)' : 'rgba(134,239,172,.4)') : 'rgba(148,163,184,.3)';
+            const tx = t ? (danger ? '#fca5a5' : '#86efac') : '#cbd5e1';
+            const ic = t ? (danger ? '⚠️' : '✓') : '–';
+            return `<span style="display:inline-flex;align-items:center;gap:5px;background:${bg};border:1px solid ${bd};color:${tx};padding:4px 11px;border-radius:16px;font-size:0.82em;font-weight:600;white-space:nowrap;">${ic} ${label}</span>`;
+        };
+
         if (!v) {
-            showTriageModal('Assessment — ' + domain,
-                `<p style="color:#b91c1c;">The LLM verdict was unavailable (${r.llm_error || 'error'}), but signals were captured:</p>
-                 <ul><li>Page reachable: ${p.reachable} (HTTP ${p.status_code ?? '-'})</li>
-                 <li>Login/password form: ${p.has_password_input}</li><li>Mail-capable (MX): ${dns.has_mx}</li>
-                 <li>Parked: ${s.parked}</li></ul>`);
+            showTriageModal('Assessment — ' + domain, `
+                <div style="background:rgba(202,138,4,.14);border:1px solid rgba(250,204,21,.4);border-radius:12px;padding:14px;margin-bottom:14px;color:#fcd34d;">
+                    <div style="font-weight:700;margin-bottom:4px;">⚠️ LLM verdict unavailable</div>
+                    <div style="font-size:0.9em;color:#fde68a;">${r.llm_error || 'error'} — signals below were still captured.</div>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                    ${chip('Live page', p.reachable, false)}
+                    ${chip('Login/password form', p.has_password_input, true)}
+                    ${chip('Mail-capable (MX)', dns.has_mx, true)}
+                    ${chip('Parked', s.parked, false)}
+                </div>`);
             return;
         }
+
         paintTierBadges(domain, v.risk_tier, v.is_active_phishing);
-        const colors = {P1:'#b91c1c', P2:'#ea580c', P3:'#ca8a04', P4:'#16a34a'};
+        const TIER_META = {
+            P1: {c:'#b91c1c', label:'Critical — live phishing',     emoji:'🚨'},
+            P2: {c:'#ea580c', label:'High — likely weaponized',     emoji:'🔥'},
+            P3: {c:'#ca8a04', label:'Medium — suspicious',          emoji:'⚠️'},
+            P4: {c:'#16a34a', label:'Low — dormant / benign',       emoji:'🌱'},
+        };
+        const m = TIER_META[v.risk_tier] || {c:'#64748b', label:'Unknown', emoji:'❓'};
+
         showTriageModal('Weaponization — ' + domain, `
-            <div style="font-size:1.1em;margin-bottom:8px;">
-                <span style="background:${colors[v.risk_tier]||'#64748b'};color:#fff;padding:3px 12px;border-radius:20px;font-weight:700;">${v.risk_tier}</span>
-                ${v.is_active_phishing ? '<span style="margin-left:8px;color:#b91c1c;font-weight:700;">🔥 ACTIVE PHISHING</span>' : ''}
-                <span style="margin-left:8px;color:#64748b;">confidence: ${v.confidence}</span>
+            <div style="background:linear-gradient(135deg, ${m.c}, ${m.c}bb);color:#fff;border-radius:14px;padding:16px 18px;margin-bottom:16px;box-shadow:0 8px 24px ${m.c}55;">
+                <div style="display:flex;align-items:center;gap:13px;flex-wrap:wrap;">
+                    <span style="font-size:2em;line-height:1;">${m.emoji}</span>
+                    <div>
+                        <div style="font-size:1.35em;font-weight:800;line-height:1.1;">${v.risk_tier} · ${m.label}</div>
+                        <div style="opacity:.92;font-size:0.88em;margin-top:3px;font-family:monospace;">${domain}</div>
+                    </div>
+                    <div style="margin-left:auto;text-align:right;">
+                        ${v.is_active_phishing ? '<div style="font-weight:800;font-size:0.95em;">🔥 ACTIVE PHISHING</div>' : ''}
+                        <div style="font-size:0.82em;opacity:.92;margin-top:2px;">confidence <strong>${v.confidence ?? '—'}</strong></div>
+                    </div>
+                </div>
             </div>
-            <p><strong>Rationale:</strong> ${v.rationale || ''}</p>
-            <p><strong>Recommended:</strong> ${v.recommended_action || ''}</p>
-            <div style="background:rgba(0,0,0,.04);border-radius:10px;padding:10px;font-size:0.9em;margin-top:10px;">
-                <strong>Signals</strong><br>
-                Live page: ${p.reachable} (HTTP ${p.status_code ?? '-'}) ${p.redirected_offsite ? '· redirected off-domain' : ''}<br>
-                Login/password form: ${p.has_password_input} · Any form: ${p.has_form}<br>
-                Brand name on page: ${s.brand_in_page} · Title: ${p.title ? `"${p.title}"` : '-'}<br>
-                Mail-capable (MX): ${dns.has_mx} ${(dns.mx_hosts||[]).join(', ')} · SPF: ${dns.has_spf} · DMARC: ${dns.has_dmarc}<br>
-                Parked markers: ${s.parked}
+            <div style="display:grid;gap:10px;">
+                <div style="background:linear-gradient(135deg,rgba(122,165,255,.1),rgba(94,224,176,.08));border:1px solid rgba(122,165,255,.2);border-radius:12px;padding:12px 14px;">
+                    <div style="font-weight:700;color:#7aa5ff;margin-bottom:4px;">🧠 Rationale</div>
+                    <div style="color:#cbd5e1;font-size:0.92em;line-height:1.45;">${v.rationale || '—'}</div>
+                </div>
+                <div style="background:rgba(220,38,38,.1);border:1px solid rgba(248,113,113,.3);border-radius:12px;padding:12px 14px;">
+                    <div style="font-weight:700;color:#fca5a5;margin-bottom:4px;">🎯 Recommended action</div>
+                    <div style="color:#cbd5e1;font-size:0.92em;line-height:1.45;">${v.recommended_action || '—'}</div>
+                </div>
             </div>
-            <p style="color:#64748b;font-size:0.85em;margin-top:10px;">Saved — this evidence is auto-attached if you raise a takedown.</p>`);
+            <div style="margin-top:16px;">
+                <div style="font-weight:700;color:#94a3b8;font-size:0.8em;text-transform:uppercase;letter-spacing:1px;margin-bottom:9px;">Signals</div>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                    ${chip('Live page', p.reachable, false)}
+                    ${p.reachable ? `<span style="display:inline-flex;align-items:center;background:rgba(255,255,255,.06);color:#cbd5e1;border:1px solid rgba(148,163,184,.3);padding:4px 11px;border-radius:16px;font-size:0.82em;font-weight:600;">HTTP ${p.status_code ?? '-'}</span>` : ''}
+                    ${chip('Redirects off-domain', p.redirected_offsite, true)}
+                    ${chip('Login/password form', p.has_password_input, true)}
+                    ${chip('Any form', p.has_form, true)}
+                    ${chip('Brand on page', s.brand_in_page, true)}
+                    ${chip('Mail-capable (MX)', dns.has_mx, true)}
+                    ${chip('SPF', dns.has_spf, false)}
+                    ${chip('DMARC', dns.has_dmarc, false)}
+                    ${chip('Parked', s.parked, false)}
+                </div>
+                ${p.title ? `<div style="margin-top:9px;color:#94a3b8;font-size:0.85em;">Page title: "${p.title}"</div>` : ''}
+                ${dns.has_mx && (dns.mx_hosts||[]).length ? `<div style="margin-top:4px;color:#94a3b8;font-size:0.85em;">MX: ${(dns.mx_hosts||[]).join(', ')}</div>` : ''}
+            </div>
+            <p style="color:#94a3b8;font-size:0.82em;margin-top:14px;">💾 Saved — this evidence is auto-attached if you raise a takedown.</p>`);
     } catch (e) {
+        stopHuntAnimations();
         alert('Assessment failed: ' + e.message);
     }
 }
 
-async function runExposureHunt(domain) {
-    showToast('🛰️ Hunting DNS/proxy/EDR for ' + domain + '… this can take a minute');
+// ── "Were we touched?" hunt progress modal ─────────────────────────────────
+// Rotating jokes + hygiene tips shown every 20s while the hunt polls.
+const HUNT_MESSAGES = [
+    "🎣 Phishers love a typo — so does autocorrect. Only one of them wants your password.",
+    "🧼 Hygiene tip: set DMARC to <strong>p=reject</strong> so lookalikes can't spoof a brand that left the door open.",
+    "🛰️ Still hunting… EDR telemetry is a big haystack, and we're checking every needle.",
+    "🔐 A lookalike domain is just a costume. We're checking whether anyone opened the door for it.",
+    "🧪 Fun fact: most malicious lookalikes go live within 48h of registration — speed is the whole game.",
+    "🧼 Hygiene tip: block freshly-registered domains at the proxy — newborn domains rarely mean well.",
+    "☕ Good time for a sip of coffee — QRadar is reading more logs than a caffeinated SOC analyst.",
+    "🪪 Homograph attacks swap 'o' for 'о' (Cyrillic). Your eyes can't tell — our tooling can.",
+    "🧼 Hygiene tip: SPF + DKIM + DMARC is the trio that makes spoofing your brand expensive.",
+    "🚪 We're politely asking every host and user: 'Have you seen this domain?' — in query form.",
+    "🐟 Why did the phishing email get a bad review? Too many red flags. 🚩",
+    "🧭 Cross-referencing proxy + EDR so a single sighting doesn't slip through the cracks.",
+];
+
+let huntTickInterval = null;
+let huntMsgInterval = null;
+
+function stopHuntAnimations() {
+    if (huntTickInterval) { clearInterval(huntTickInterval); huntTickInterval = null; }
+    if (huntMsgInterval) { clearInterval(huntMsgInterval); huntMsgInterval = null; }
+}
+
+function ensureHuntKeyframes() {
+    if (document.getElementById('dmHuntKeyframes')) return;
+    const st = document.createElement('style');
+    st.id = 'dmHuntKeyframes';
+    st.textContent = `
+        @keyframes dmShimmer { 0%{background-position:0% 0} 100%{background-position:200% 0} }
+        @keyframes dmRadar { 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }
+        @keyframes dmPulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.08);opacity:.85} }
+        @keyframes dmGlow { 0%,100%{box-shadow:0 0 0 rgba(122,165,255,0)} 50%{box-shadow:0 0 16px rgba(122,165,255,.25)} }`;
+    document.head.appendChild(st);
+}
+
+// Per-tool incremental status rows — QRadar renders the moment it's done while
+// CrowdStrike keeps running. Driven by the finding's exposure_progress blob.
+function huntToolRowsHtml(progress) {
+    const tools = (progress && progress.tools) || {};
+    const order = ['qradar', 'crowdstrike', 'xsiam', 'abnormal'];
+    const present = order.filter(k => tools[k]);
+    if (!present.length) return '';
+    const icon = {qradar: '📡', crowdstrike: '🦅', xsiam: '🛡️', abnormal: '📧'};
+    return present.map(k => {
+        const t = tools[k] || {};
+        const label = t.label || k;
+        let right, color, bd, bg = 'rgba(255,255,255,.04)';
+        if (t.status === 'error') {
+            right = '⚠️ ' + (t.error ? String(t.error).slice(0, 46) : 'error');
+            color = '#fca5a5'; bd = 'rgba(248,113,113,.4)';
+        } else if (t.status === 'done') {
+            const hits = t.hits || 0;
+            right = hits > 0
+                ? `🔴 ${hits} hit${hits > 1 ? 's' : ''} · ${t.hosts || 0} host${(t.hosts || 0) !== 1 ? 's' : ''}`
+                : '✅ 0 hits';
+            color = hits > 0 ? '#fca5a5' : '#86efac';
+            bd = hits > 0 ? 'rgba(248,113,113,.4)' : 'rgba(134,239,172,.35)';
+            if (hits > 0) bg = 'rgba(220,38,38,.08)';
+        } else {  // running
+            right = '<span class="dm-dots">⏳ running</span>';
+            color = '#94a3b8'; bd = 'rgba(148,163,184,.25)';
+        }
+        return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 13px;border-radius:10px;background:${bg};border:1px solid ${bd};">
+            <span style="font-weight:700;color:#e2e8f0;">${icon[k] || '🔎'} ${label}</span>
+            <span style="font-size:0.9em;font-weight:700;color:${color};white-space:nowrap;">${right}</span>
+        </div>`;
+    }).join('');
+}
+
+function paintHuntTools(progress) {
+    const host = document.getElementById('huntTools');
+    if (!host) return;
+    const html = huntToolRowsHtml(progress);
+    if (html) host.innerHTML = html;
+}
+
+// Colorful loading view: spinning radar, live timer, easing progress bar, live
+// per-tool status, and a tip that rotates every 20s. startedAt = epoch ms.
+function showHuntProgress(domain, startedAt) {
+    const EXPECTED_MS = 90000;  // typical hunt duration; bar eases toward (not past) 95%
+    ensureHuntKeyframes();
+    showTriageModal('IOC Hunt — ' + domain, `
+        <div style="text-align:center;padding:4px 0 2px;">
+            <div style="font-size:2.8em;line-height:1;margin-bottom:8px;display:inline-block;animation:dmRadar 1.8s linear infinite;">🛰️</div>
+            <div style="font-weight:800;font-size:1.08em;color:#e2e8f0;">Hunting DNS / proxy (QRadar) + EDR (CrowdStrike)…</div>
+            <div style="color:#94a3b8;font-size:0.9em;margin-top:5px;">Checking whether
+                <code style="background:rgba(122,165,255,.18);padding:2px 8px;border-radius:6px;color:#bcd2ff;font-weight:700;">${domain}</code>
+                ever touched the environment.</div>
+        </div>
+        <div style="display:flex;justify-content:center;align-items:baseline;gap:8px;margin:16px 0 10px;">
+            <span style="font-size:0.82em;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;">Elapsed</span>
+            <span id="huntTimer" style="font-variant-numeric:tabular-nums;font-weight:800;font-size:1.5em;background:linear-gradient(135deg,#7aa5ff,#5ee0b0);-webkit-background-clip:text;background-clip:text;color:transparent;">0:00</span>
+        </div>
+        <div style="height:14px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,.3);">
+            <div id="huntBar" style="height:100%;width:4%;border-radius:99px;background:linear-gradient(90deg,#0046AD,#00A651,#22d3ee,#0046AD);background-size:200% 100%;animation:dmShimmer 1.4s linear infinite;transition:width .8s ease;"></div>
+        </div>
+        <div id="huntTools" style="margin-top:16px;display:grid;gap:8px;"></div>
+        <div id="huntMsg" style="margin-top:14px;text-align:center;min-height:46px;display:flex;align-items:center;justify-content:center;padding:13px 16px;border-radius:12px;background:linear-gradient(135deg,rgba(122,165,255,.1),rgba(94,224,176,.08));border:1px solid rgba(122,165,255,.2);color:#cbd5e1;font-size:0.96em;line-height:1.4;transition:opacity .4s;box-shadow:0 0 0 rgba(122,165,255,0);animation:dmGlow 3s ease-in-out infinite;"></div>
+    `);
+    stopHuntAnimations();
+
+    let msgIdx = Math.floor(startedAt / 997) % HUNT_MESSAGES.length;  // vary which tip leads
+    const setMsg = () => {
+        const el = document.getElementById('huntMsg');
+        if (!el) { stopHuntAnimations(); return; }
+        el.style.opacity = '0';
+        setTimeout(() => {
+            const e2 = document.getElementById('huntMsg');
+            if (!e2) return;
+            e2.innerHTML = HUNT_MESSAGES[msgIdx % HUNT_MESSAGES.length];
+            e2.style.opacity = '1';
+            msgIdx++;
+        }, 260);
+    };
+    setMsg();
+    huntMsgInterval = setInterval(setMsg, 20000);
+
+    huntTickInterval = setInterval(() => {
+        const t = document.getElementById('huntTimer');
+        const bar = document.getElementById('huntBar');
+        if (!t || !bar) { stopHuntAnimations(); return; }
+        const elapsed = Date.now() - startedAt;
+        const s = Math.floor(elapsed / 1000);
+        t.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+        const pct = Math.min(95, 4 + 91 * (1 - Math.exp(-elapsed / EXPECTED_MS)));
+        bar.style.width = pct.toFixed(1) + '%';
+    }, 250);
+}
+
+// Is the hunt modal currently showing THIS domain? (so a finished background
+// hunt only repaints its own modal, not whatever the analyst opened since.)
+function huntModalIsFor(domain) {
+    const t = document.querySelector('#triageModal #triageModalTitle');
+    return !!t && t.textContent === ('IOC Hunt — ' + domain);
+}
+
+// Best-effort desktop notification (works even if the tab is backgrounded);
+// falls back to the in-page toast, which always fires.
+function notifyDesktop(title, body) {
+    try {
+        if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification(title, {body: body, icon: '/static/favicon.ico'});
+        }
+    } catch (e) { /* non-fatal */ }
+}
+
+function finishHunt(domain, f, status) {
+    const open = huntModalIsFor(domain);
+    if (status === 'error') {
+        showToast('⚠️ Hunt error for ' + domain + ' — check SIEM connectors');
+        notifyDesktop('Hunt error — ' + domain, 'The exposure hunt hit an error.');
+        if (open) showTriageModal('IOC Hunt — ' + domain,
+            '<p style="color:#fca5a5;">The hunt hit an error. Check the SIEM connectors.</p>');
+        return;
+    }
+    const ex = f.exposure || {};
+    const touched = !!f.exposure_touched;
+    const hosts = ex.hosts || [], users = ex.users || [];
+    const totalHits = ex.total_hits ?? f.exposure_hosts ?? 0;
+    const summary = touched
+        ? `⚠️ ${domain}: ${totalHits} hit(s) across ${ex.unique_hosts ?? 0} host(s)`
+        : `✅ ${domain}: 0 hits`;
+    showToast(summary);
+    notifyDesktop('IOC Hunt complete — ' + domain, touched
+        ? `${totalHits} hit(s): ${ex.unique_hosts ?? 0} host(s), ${ex.unique_users ?? 0} user(s).`
+        : '0 hits — no host or user contacted this domain.');
+    if (!open) return;  // backgrounded — the toast/notification is the report
+    const toolRows = huntToolRowsHtml(f.exposure_progress);
+    showTriageModal('IOC Hunt — ' + domain, `
+        <div style="font-size:1.18em;font-weight:800;margin-bottom:12px;color:${touched ? '#fca5a5' : '#86efac'};">
+            ${touched ? `⚠️ ${ex.total_hits ?? f.exposure_hosts ?? 0} hit(s) — internal contact` : '✅ 0 hits — no contact found'}
+        </div>
+        ${toolRows ? `<div style="display:grid;gap:8px;margin-bottom:14px;">${toolRows}</div>` : ''}
+        <p style="color:#cbd5e1;">Total hits: <strong style="color:#e2e8f0;">${ex.total_hits ?? f.exposure_hosts ?? 0}</strong> ·
+           Unique hosts: <strong style="color:#e2e8f0;">${ex.unique_hosts ?? 0}</strong> ·
+           Unique users: <strong style="color:#e2e8f0;">${ex.unique_users ?? 0}</strong></p>
+        ${hosts.length ? `<p style="color:#cbd5e1;"><strong>Hosts:</strong> ${hosts.slice(0,30).join(', ')}</p>` : ''}
+        ${users.length ? `<p style="color:#cbd5e1;"><strong>Users:</strong> ${users.slice(0,30).join(', ')}</p>` : ''}
+        ${(ex.access_issues||[]).length ? `<p style="color:#fcd34d;">Note: limited coverage — ${ex.access_issues.join(', ')}</p>` : ''}
+        <p style="color:#94a3b8;font-size:0.85em;">Searched: ${(ex.tools||['qradar','crowdstrike']).join(', ')}. Saved to this finding.</p>`);
+}
+
+// ── IOC Hunt pre-flight: review queries, then Run here or open in console ──────
+let currentHuntPlan = null;
+
+function huntEsc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function fallbackCopy(text, cb) {
+    try {
+        const ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+        if (cb) cb();
+    } catch (e) { /* clipboard unavailable */ }
+}
+
+function huntCopyQuery(i, silent) {
+    const t = currentHuntPlan && currentHuntPlan.tools[i];
+    if (!t) return;
+    const done = () => { if (!silent) showToast('📋 ' + t.label + ' query copied'); };
+    try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(t.query).then(done, () => fallbackCopy(t.query, done));
+        } else { fallbackCopy(t.query, done); }
+    } catch (e) { fallbackCopy(t.query, done); }
+}
+
+function huntOpenPortal(i) {
+    const t = currentHuntPlan && currentHuntPlan.tools[i];
+    if (!t || !t.url) return;
+    if (!t.deeplink) {  // console doesn't take the query in the URL — copy it to paste
+        huntCopyQuery(i, true);
+        showToast('📋 ' + t.label + ' query copied — paste it into the search bar');
+    }
+    window.open(t.url, '_blank', 'noopener');
+}
+
+// Pre-flight modal: shows the IOC + per-tool query and lets the analyst run the
+// hunt here or pivot into the native console. Fires no SIEM searches on open.
+async function openHuntModal(domain) {
+    ensureHuntKeyframes();
+    showTriageModal('IOC Hunt — ' + domain,
+        '<div style="text-align:center;padding:14px 0;color:#94a3b8;"><div style="font-size:2.2em;animation:dmRadar 1.8s linear infinite;">🔍</div><div style="margin-top:6px;">Loading hunt plan…</div></div>');
+    let plan = null;
+    try {
+        const r = await fetch('/api/domain-monitoring/hunt-plan/' + encodeURIComponent(domain));
+        const j = await r.json();
+        if (j.success) plan = j.plan;
+    } catch (e) { /* fall through to run-anyway */ }
+
+    const runBtn = `<button onclick="startHuntNow('${domain}')" style="background:linear-gradient(135deg,#0046AD,#00A651);color:#fff;border:none;padding:12px 28px;border-radius:10px;font-weight:800;font-size:1.04em;cursor:pointer;box-shadow:0 4px 16px rgba(0,70,173,.4);">▶ Run IOC Hunt</button>`;
+
+    if (!plan) {
+        showTriageModal('IOC Hunt — ' + domain,
+            '<p style="color:#fca5a5;">Could not load the hunt plan — you can still run the hunt.</p>' +
+            '<div style="text-align:center;margin-top:14px;">' + runBtn + '</div>');
+        return;
+    }
+    currentHuntPlan = plan;
+
+    const cards = plan.tools.map((t, i) => {
+        const openBtn = t.url
+            ? `<button onclick="huntOpenPortal(${i})" title="${huntEsc(t.portal)}" style="background:rgba(122,165,255,.15);color:#bcd2ff;border:1px solid rgba(122,165,255,.35);padding:7px 13px;border-radius:8px;font-weight:700;font-size:.85em;cursor:pointer;">${t.deeplink ? '↗ Open in ' + huntEsc(t.label) : '↗ Open ' + huntEsc(t.label) + ' (paste)'}</button>`
+            : '';
+        return `<div style="padding:13px 15px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);">
+            <div style="font-weight:800;color:#e2e8f0;">${t.emoji} ${huntEsc(t.label)}
+                <span style="font-weight:600;color:#94a3b8;font-size:.8em;">· last ${t.window_days}d · ${huntEsc(t.portal)}</span></div>
+            <pre style="margin:9px 0;padding:10px 12px;border-radius:8px;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.08);color:#9fe2c0;font-size:.76em;line-height:1.45;white-space:pre-wrap;word-break:break-word;max-height:140px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">${huntEsc(t.query)}</pre>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">${openBtn}
+                <button onclick="huntCopyQuery(${i})" style="background:rgba(255,255,255,.06);color:#cbd5e1;border:1px solid rgba(255,255,255,.15);padding:7px 13px;border-radius:8px;font-weight:700;font-size:.85em;cursor:pointer;">📋 Copy query</button>
+            </div>
+        </div>`;
+    }).join('');
+
+    showTriageModal('IOC Hunt — ' + domain, `
+        <div style="color:#cbd5e1;font-size:.95em;line-height:1.5;">
+            Check whether any internal host or user contacted
+            <code style="background:rgba(122,165,255,.18);padding:2px 8px;border-radius:6px;color:#bcd2ff;font-weight:700;">${huntEsc(plan.domain)}</code>.
+            Review the queries, then <strong style="color:#e2e8f0;">run them here</strong> — or open them straight in the console.
+        </div>
+        <div style="display:grid;gap:12px;margin:14px 0 16px;">${cards}</div>
+        <div style="text-align:center;">${runBtn}
+            <div style="color:#94a3b8;font-size:.82em;margin-top:8px;">Runs in the background — you can close this and you'll be pinged when it's done.</div>
+        </div>`);
+}
+
+async function startHuntNow(domain) {
+    // Ask once for notification permission so a backgrounded hunt can ping us.
+    try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch (e) {}
+    showToast('🔍 IOC hunt running for ' + domain + '… runs in the background, you can close this');
     try {
         const resp = await fetch('/api/domain-monitoring/exposure-hunt', {
             method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -1189,37 +1756,23 @@ async function runExposureHunt(domain) {
         });
         const data = await resp.json();
         if (!data.success) { alert('Could not start hunt: ' + (data.error || 'error')); return; }
-        showTriageModal('Were we touched? — ' + domain,
-            '<p>🛰️ Hunting across DNS/proxy (QRadar) + EDR (CrowdStrike)… polling for results.</p>');
-        // Poll the finding until the hunt finishes.
+        // The hunt runs server-side on a daemon thread; this poll only drives the
+        // UI. It keeps polling even if the modal is closed, so a backgrounded hunt
+        // still notifies on completion.
         const started = Date.now();
+        showHuntProgress(domain, started);
         const poll = setInterval(async () => {
-            if (Date.now() - started > 300000) { clearInterval(poll); return; }  // 5-min safety
+            if (Date.now() - started > 300000) { clearInterval(poll); stopHuntAnimations(); return; }  // 5-min safety
             let f;
             try {
                 const fr = await fetch('/api/domain-monitoring/finding/' + encodeURIComponent(domain));
                 f = (await fr.json()).finding;
             } catch (e) { return; }
+            if (f && f.exposure_progress) paintHuntTools(f.exposure_progress);  // live per-tool, even mid-run
             if (!f || f.exposure_status === 'running') return;
             clearInterval(poll);
-            if (f.exposure_status === 'error') {
-                showTriageModal('Were we touched? — ' + domain, '<p style="color:#b91c1c;">The hunt hit an error. Check the SIEM connectors.</p>');
-                return;
-            }
-            const ex = f.exposure || {};
-            const touched = !!f.exposure_touched;
-            const hosts = ex.hosts || [], users = ex.users || [];
-            showTriageModal('Were we touched? — ' + domain, `
-                <div style="font-size:1.15em;font-weight:700;margin-bottom:10px;color:${touched ? '#b91c1c' : '#16a34a'};">
-                    ${touched ? '⚠️ YES — internal contact detected' : '✅ No internal contact found'}
-                </div>
-                <p>Total hits: <strong>${ex.total_hits ?? f.exposure_hosts ?? 0}</strong> ·
-                   Unique hosts: <strong>${ex.unique_hosts ?? 0}</strong> ·
-                   Unique users: <strong>${ex.unique_users ?? 0}</strong></p>
-                ${hosts.length ? `<p><strong>Hosts:</strong> ${hosts.slice(0,30).join(', ')}</p>` : ''}
-                ${users.length ? `<p><strong>Users:</strong> ${users.slice(0,30).join(', ')}</p>` : ''}
-                ${(ex.access_issues||[]).length ? `<p style="color:#ca8a04;">Note: limited coverage — ${ex.access_issues.join(', ')}</p>` : ''}
-                <p style="color:#64748b;font-size:0.85em;">Searched: ${(ex.tools||['qradar','crowdstrike']).join(', ')}. Saved to this finding.</p>`);
+            stopHuntAnimations();
+            finishHunt(domain, f, f.exposure_status === 'error' ? 'error' : 'done');
         }, 4000);
     } catch (e) {
         alert('Exposure hunt failed: ' + e.message);
@@ -1233,6 +1786,19 @@ function exportReport() {
     const url = date ? `/api/domain-monitoring/export/${date}` : '/api/domain-monitoring/export';
     showToast('Building Excel export…');
     window.location = url;
+}
+
+// ── "How does this work?" guided-overview video ────────────────────────────
+function openHowItWorks() {
+    const m = document.getElementById('howItWorksModal');
+    if (m) m.style.display = 'flex';
+}
+function closeHowItWorks() {
+    const m = document.getElementById('howItWorksModal');
+    if (!m) return;
+    m.style.display = 'none';
+    const v = document.getElementById('howItWorksVideo');
+    if (v) { try { v.pause(); } catch (e) {} }
 }
 
 // ── Manage Monitoring panel ────────────────────────────────────────────────
@@ -1513,37 +2079,64 @@ function filterByRisk(filter, button) {
     button.classList.add('active');
     button.style.opacity = '1';
 
-    // Filter table rows
-    document.querySelectorAll('.domain-row').forEach(row => {
-        const rowRisk = row.getAttribute('data-risk');
+    currentPage = 1;  // a new filter always starts on the first page
+    applyRowVisibility(filter);
+}
 
-        let show = false;
-        switch(filter) {
-            case 'all':
-                show = true;
-                break;
-            case 'threats':
-                show = rowRisk === 'high_risk' || rowRisk === 'suspicious';
-                break;
-            case 'defensive':
-                show = rowRisk === 'defensive';
-                break;
-            case 'parked':
-                show = rowRisk === 'parked';
-                break;
-            default:
-                show = true;
+// Does a row pass the active filter? (visibility = passes filter AND on the current page)
+function rowPassesFilter(row, filter) {
+    const rowRisk = row.getAttribute('data-risk');
+    const archived = row.getAttribute('data-status') === 'archived';
+    switch(filter) {
+        case 'all':        return !archived;  // archived rows are hidden from the default view
+        case 'threats':    return !archived && (rowRisk === 'high_risk' || rowRisk === 'suspicious');
+        case 'weaponized': {
+            const tier = row.getAttribute('data-tier');
+            return !archived && (tier === 'P1' || tier === 'P2' || tier === 'P3');
+        }
+        case 'defensive':  return !archived && rowRisk === 'defensive';
+        case 'parked':     return !archived && rowRisk === 'parked';
+        case 'archived':   return archived;  // only the archived rows
+        default:           return !archived;
+    }
+}
+
+// Apply the current filter + pagination. Split out so it can be re-run once the
+// bulk finding metadata (tier/status) loads asynchronously, or on page change.
+function applyRowVisibility(filter) {
+    const allRows = Array.from(document.querySelectorAll('#lookalikes .domain-row'));
+    const eligible = allRows.filter(r => rowPassesFilter(r, filter));
+
+    const totalPages = Math.max(1, Math.ceil(eligible.length / DM_PAGE_SIZE));
+    if (currentPage > totalPages) currentPage = totalPages;
+    if (currentPage < 1) currentPage = 1;
+    const start = (currentPage - 1) * DM_PAGE_SIZE;
+    const pageSet = new Set(eligible.slice(start, start + DM_PAGE_SIZE));
+
+    allRows.forEach(r => { r.style.display = pageSet.has(r) ? '' : 'none'; });
+
+    // Per-table chrome: hide tables (and their section heading) that have no
+    // visible rows. Distinguish "filtered out entirely" (show the empty note)
+    // from "just on another page" (hide silently).
+    document.querySelectorAll('#lookalikes .findings-table').forEach(table => {
+        const rows = Array.from(table.querySelectorAll('tbody .domain-row'));
+        const eligibleInTable = rows.filter(r => rowPassesFilter(r, filter)).length;
+        const visibleInTable = rows.filter(r => r.style.display !== 'none').length;
+        const filterEmpty = eligibleInTable === 0 && filter !== 'all';
+        const showTable = visibleInTable > 0;
+        const showChrome = showTable || filterEmpty;  // keep the heading above the empty note
+
+        table.style.display = showTable ? '' : 'none';
+        let prev = table.previousElementSibling;
+        while (prev && (prev.tagName === 'H4' || prev.tagName === 'P')) {
+            prev.style.display = showChrome ? '' : 'none';
+            prev = prev.previousElementSibling;
         }
 
-        row.style.display = show ? '' : 'none';
-    });
-
-    // Show/hide empty state messages
-    document.querySelectorAll('.findings-table').forEach(table => {
-        const visibleRows = table.querySelectorAll('tbody .domain-row:not([style*="display: none"])');
         const emptyMsg = table.nextElementSibling;
-        if (visibleRows.length === 0 && filter !== 'all') {
-            if (!emptyMsg || !emptyMsg.classList.contains('filter-empty-msg')) {
+        const hasMsg = emptyMsg && emptyMsg.classList && emptyMsg.classList.contains('filter-empty-msg');
+        if (filterEmpty) {
+            if (!hasMsg) {
                 const msg = document.createElement('div');
                 msg.className = 'filter-empty-msg no-data';
                 msg.style.padding = '10px';
@@ -1551,10 +2144,61 @@ function filterByRisk(filter, button) {
                 msg.textContent = `No ${filter} domains in this section`;
                 table.after(msg);
             }
-        } else if (emptyMsg && emptyMsg.classList.contains('filter-empty-msg')) {
+        } else if (hasMsg) {
             emptyMsg.remove();
         }
     });
+
+    renderPager(eligible.length, totalPages);
+}
+
+function gotoPage(p) {
+    currentPage = p;
+    applyRowVisibility(currentRiskFilter);
+    const tab = document.getElementById('lookalikes');
+    if (tab) tab.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Page-number list with ellipsis: first, last, and a window around current.
+function dmPageList(cur, total) {
+    const out = [];
+    let last = 0;
+    for (let p = 1; p <= total; p++) {
+        if (p === 1 || p === total || (p >= cur - 1 && p <= cur + 1)) {
+            if (last && p - last > 1) out.push('…');
+            out.push(p);
+            last = p;
+        }
+    }
+    return out;
+}
+
+function renderPager(totalRows, totalPages) {
+    const container = document.getElementById('lookalikes');
+    if (!container) return;
+    let pager = document.getElementById('dm-pager');
+
+    if (totalRows <= DM_PAGE_SIZE) { if (pager) pager.remove(); return; }
+
+    if (!pager) { pager = document.createElement('div'); pager.id = 'dm-pager'; }
+    container.appendChild(pager);  // keep the pager pinned to the bottom of the tab
+    pager.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin:24px 0 8px;padding:14px;background:linear-gradient(135deg, rgba(30,41,59,0.95) 0%, rgba(51,65,85,0.9) 100%);border:1px solid rgba(99,102,241,0.3);border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.3);';
+
+    const start = (currentPage - 1) * DM_PAGE_SIZE + 1;
+    const end = Math.min(currentPage * DM_PAGE_SIZE, totalRows);
+    const base = 'background:rgba(99,102,241,0.25);color:#e2e8f0;border:1px solid rgba(99,102,241,0.4);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:0.85em;font-weight:600;min-width:38px;';
+    const active = 'background:linear-gradient(135deg,#0046AD,#00A651);color:#fff;border:none;padding:6px 12px;border-radius:6px;font-size:0.85em;font-weight:700;min-width:38px;';
+    const off = 'opacity:0.4;cursor:not-allowed;';
+
+    let h = `<span style="color:#94a3b8;font-size:0.85em;margin-right:6px;">Showing <strong style="color:#e2e8f0;">${start}–${end}</strong> of <strong style="color:#e2e8f0;">${totalRows}</strong></span>`;
+    h += `<button onclick="gotoPage(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''} style="${base}${currentPage <= 1 ? off : ''}">‹ Prev</button>`;
+    dmPageList(currentPage, totalPages).forEach(p => {
+        if (p === '…') h += `<span style="color:#64748b;">…</span>`;
+        else if (p === currentPage) h += `<button style="${active}">${p}</button>`;
+        else h += `<button onclick="gotoPage(${p})" style="${base}">${p}</button>`;
+    });
+    h += `<button onclick="gotoPage(${currentPage + 1})" ${currentPage >= totalPages ? 'disabled' : ''} style="${base}${currentPage >= totalPages ? off : ''}">Next ›</button>`;
+    pager.innerHTML = h;
 }
 
 function renderDarkWeb(domains) {

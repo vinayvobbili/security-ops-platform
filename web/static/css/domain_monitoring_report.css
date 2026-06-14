@@ -69,9 +69,9 @@
     66% { transform: translate(40px, -20px) rotate(-240deg); }
 }
 
-/* Container */
+/* Container — wide enough to use big laptop/desktop screens, capped at 95vw. */
 .monitoring-container {
-    max-width: 1400px;
+    max-width: min(1800px, 95vw);
     margin: 0 auto;
     padding: 30px 20px;
     position: relative;
@@ -489,14 +489,14 @@
 /* Column width constraints for readability */
 .findings-table th:nth-child(1),
 .findings-table td:nth-child(1) {
-    width: 120px;
-    min-width: 120px;
+    width: 160px;
+    min-width: 160px;
 }
 
 .findings-table th:last-child,
 .findings-table td:last-child {
-    width: 120px;
-    min-width: 120px;
+    width: 188px;
+    min-width: 188px;
     text-align: center;
 }
 
@@ -509,17 +509,48 @@
     text-align: center;
 }
 
-/* Name/URL column - allow wrapping but constrain */
-.findings-table td:nth-child(2) {
+/* Domain column (col 1) — wrap long names inside the cell so they never
+   overflow into the Risk badge beside them. */
+.findings-table td:nth-child(1) {
     word-break: break-all;
     overflow: hidden;
-    text-overflow: ellipsis;
 }
 
-.findings-table td:nth-child(2) code {
+.findings-table td:nth-child(1) code {
     display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
+    white-space: normal;
+}
+
+/* Detected-On column — compact date, never wraps. */
+.findings-table td.dm-detected {
+    white-space: nowrap;
+    font-size: 0.82em;
+    color: var(--text-secondary);
+}
+
+/* Action cell — 2×2 button grid keeps rows compact instead of a tall stack. */
+.findings-table td:last-child .dm-action-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+}
+
+.findings-table td:last-child .dm-action-grid > .dm-block-slot {
+    display: block;
+}
+
+.findings-table td:last-child .dm-action-grid .dm-block-slot button,
+.findings-table td:last-child .dm-action-grid .dm-block-slot a {
+    width: 100%;
+    box-sizing: border-box;
+    display: inline-block;
+    text-align: center;
+}
+
+.findings-table td:last-child .dm-triage-badge:not(:empty) {
+    display: block;
+    margin-top: 4px;
 }
 
 .findings-table code {

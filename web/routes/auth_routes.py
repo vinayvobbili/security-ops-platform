@@ -129,7 +129,7 @@ def register():
         from services.active_directory import email_exists_in_ad
         ad_status = email_exists_in_ad(email)
         if ad_status == 'not_found':
-            err = ("We couldn't find that address in the the company directory — "
+            err = ("We couldn't find that address in the company directory — "
                    "please double-check for typos.")
 
     if err:
@@ -200,7 +200,7 @@ def check_email():
     if status == 'found':
         msg = ''
     elif status == 'not_found':
-        msg = "We couldn't find that address in the the company directory — check for typos."
+        msg = "We couldn't find that address in the company directory — check for typos."
     else:  # unknown — directory unreachable; don't block, don't alarm
         msg = ''
     return jsonify({'status': status, 'message': msg})

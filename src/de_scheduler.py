@@ -399,6 +399,21 @@ def main() -> None:
                        _lazy_component('services.phish_fort', 'sync_phishfort_statuses'),
                        name="phishfort_status_sync")
 
+    # Age out stale findings by ARCHIVING only (reversibly hide) — never hard
+    # delete. Threat actors register lookalikes and let them sit dormant for
+    # months before weaponizing, so a quiet domain at day 31 is precisely the one
+    # we must NOT forget: dropping its row loses first_seen ("registered N months
+    # ago, just went live" is a top signal) and its history in the monthly report.
+    # Storage for archived rows is trivial, so we keep them indefinitely.
+    #   12:40 — archive anything quiet for 7 days (guarded; reversible).
+    # The 30-day hard prune (prune_stale_findings) is intentionally NOT scheduled
+    # — it remains for manual ops only. Re-add a schedule_daily here to re-enable.
+    logger.info("Scheduling stale-findings archive (12:40) ET daily (no auto-prune)...")
+    schedule_daily('12:40',
+                   _lazy_component('src.components.domain_monitoring.findings_ledger',
+                                   'archive_stale_findings'),
+                   name="domain_monitoring_archive")
+
     # Monthly Brand-Protection report — generated + posted on the 1st (the
     # `schedule` library has no native monthly trigger, so a daily job guards on
     # the day-of-month).

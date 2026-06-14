@@ -2,7 +2,7 @@
 
 The vendor ships an end-to-end app that takes a pasted CTI tipper email body,
 parses it, matches MITRE techniques against AttackIQ scenarios, and creates +
-runs an assessment in the company AttackIQ tenant. Runs live by default; vendor
+runs an assessment in the AttackIQ tenant. Runs live by default; vendor
 UI should fall back to seeded demo data when creds are absent or the API fails,
 and surface a LIVE/DEMO badge on screen.
 

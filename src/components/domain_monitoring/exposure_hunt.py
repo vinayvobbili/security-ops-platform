@@ -9,6 +9,7 @@ findings ledger; the dashboard polls the finding for status.
 """
 
 import logging
+import re
 import threading
 from typing import Any, Dict, List, Optional
 
@@ -45,9 +46,88 @@ def _collect_hits(tool_result) -> Dict[str, Any]:
     }
 
 
+def _qradar_domain_aql(domain: str, hours: int) -> str:
+    """The DNS/proxy/email AQL the hunt runs for a domain — analyst-readable, so
+    it doubles as the QRadar console deep-link and a copy-paste query."""
+    d = (domain or "").replace("'", "''")
+    return (
+        'SELECT sourceip, destinationip, starttime, '
+        'logsourcetypename(devicetype) AS source, username, "Computer Hostname", '
+        'qidname(qid) AS eventName, URL, "TSLD", sender, recipient, "Subject" '
+        'FROM events '
+        f"WHERE (URL ILIKE '%{d}%' OR sender ILIKE '%{d}%' "
+        f"OR \"Subject\" ILIKE '%{d}%' OR \"TSLD\" ILIKE '%{d}%') "
+        f'LAST {hours} HOURS'
+    )
+
+
+def _crowdstrike_domain_query(domain: str) -> str:
+    """LogScale/Advanced Event Search query for DNS resolution of the domain."""
+    esc = re.escape((domain or "").strip().lower())
+    return (
+        f"#event_simpleName=DnsRequest | DomainName=/(^|\\.){esc}$/i "
+        "| table([timestamp, ComputerName, UserName, DomainName, aid]) "
+        "| sort(timestamp, order=desc, limit=500)"
+    )
+
+
+def hunt_plan(domain: str) -> Dict[str, Any]:
+    """Pre-flight plan for the 'IOC Hunt' modal — the IOC set and, per tool, the
+    exact query plus a console deep-link. Builds NO network calls / runs no
+    search; it just shows what *would* run so the analyst can review, run it
+    here, or pivot into the native console. Deep-links reuse the same builders
+    the tipper uses for its ticket notes.
+    """
+    domain = (domain or "").strip().lower()
+    tools: List[Dict[str, Any]] = []
+
+    # QRadar — true deep-link that lands on the AQL results.
+    aql = _qradar_domain_aql(domain, _QRADAR_HOURS)
+    qr_url = None
+    try:
+        from src.components.tipper_analyzer.formatters import _get_qradar_console_link
+        link = _get_qradar_console_link(aql)
+        if link:
+            qr_url = link[0]
+    except Exception as e:
+        logger.warning(f"QRadar deep-link build failed for {domain}: {e}")
+    tools.append({
+        "key": "qradar", "label": "QRadar", "emoji": "📡",
+        "portal": "QRadar Log Activity", "query": aql, "url": qr_url,
+        "deeplink": bool(qr_url), "window_days": _QRADAR_HOURS // 24,
+    })
+
+    # CrowdStrike — domain hunting goes through ThreatGraph/LogScale, which has no
+    # clean filter-URL, so we open the Falcon Advanced Event Search app and hand
+    # the analyst the query to paste (copy fallback).
+    cql = _crowdstrike_domain_query(domain)
+    cs_url = None
+    try:
+        from my_config import get_config
+        base = (get_config().cs_falcon_console_url or "").rstrip("/")
+        if base:
+            cs_url = base + "/investigate/events"
+    except Exception as e:
+        logger.warning(f"Falcon console URL lookup failed for {domain}: {e}")
+    tools.append({
+        "key": "crowdstrike", "label": "CrowdStrike", "emoji": "🦅",
+        "portal": "Falcon Advanced Event Search", "query": cql, "url": cs_url,
+        "deeplink": False, "window_days": _CROWDSTRIKE_HOURS // 24,
+    })
+
+    return {
+        "domain": domain,
+        "iocs": [domain],
+        "qradar_days": _QRADAR_HOURS // 24,
+        "crowdstrike_days": _CROWDSTRIKE_HOURS // 24,
+        "tools": tools,
+    }
+
+
 def check_domain_exposure(domain: str, tools: Optional[List[str]] = None,
                           qradar_hours: int = _QRADAR_HOURS,
-                          crowdstrike_hours: int = _CROWDSTRIKE_HOURS) -> Dict[str, Any]:
+                          crowdstrike_hours: int = _CROWDSTRIKE_HOURS,
+                          on_tool_complete=None) -> Dict[str, Any]:
     """Synchronously hunt one domain across the selected log sources.
 
     Returns a compact, JSON-serializable result:
@@ -68,6 +148,7 @@ def check_domain_exposure(domain: str, tools: Optional[List[str]] = None,
             qradar_hours=qradar_hours,
             crowdstrike_hours=crowdstrike_hours,
             tools=tools,
+            on_tool_complete=on_tool_complete,
         )
         per_tool = {
             "qradar": _collect_hits(result.qradar),
@@ -99,11 +180,33 @@ def check_domain_exposure(domain: str, tools: Optional[List[str]] = None,
 
 
 def run_and_record(domain: str, tools: Optional[List[str]] = None) -> Dict[str, Any]:
-    """Run an exposure hunt and persist the result to the findings ledger."""
-    from .findings_ledger import set_exposure_status, set_exposure_result
+    """Run an exposure hunt and persist the result to the findings ledger.
+
+    Each tool's result is written to the ledger the moment it finishes (via the
+    ``on_tool_complete`` callback), so the dashboard can render QRadar as soon as
+    it's done while CrowdStrike keeps running.
+    """
+    from .findings_ledger import (set_exposure_status, set_exposure_result,
+                                  record_tool_progress)
     domain = (domain or "").strip().lower()
     set_exposure_status(domain, "running")
-    result = check_domain_exposure(domain, tools=tools)
+
+    def _on_tool_complete(tool_result, *_args, **_kwargs):
+        try:
+            key = (getattr(tool_result, "tool_name", "") or "").strip().lower()
+            flat = _collect_hits(tool_result)
+            errs = flat.get("errors") or []
+            record_tool_progress(domain, key, {
+                "status": "error" if errs else "done",
+                "hits": flat["hits"],
+                "hosts": len(flat["hosts"]),
+                "users": len(flat["users"]),
+                "error": errs[0] if errs else None,
+            })
+        except Exception as e:  # progress is best-effort; never break the hunt
+            logger.warning(f"tool-progress write failed for {domain}: {e}")
+
+    result = check_domain_exposure(domain, tools=tools, on_tool_complete=_on_tool_complete)
     if result.get("error"):
         try:
             set_exposure_status(domain, "error")
@@ -124,8 +227,9 @@ def start_exposure_hunt(domain: str, tools: Optional[List[str]] = None) -> None:
     domain = (domain or "").strip().lower()
     if not domain:
         return
-    from .findings_ledger import set_exposure_status
+    from .findings_ledger import set_exposure_status, init_exposure_progress
     set_exposure_status(domain, "running")  # set before the thread so polling sees it instantly
+    init_exposure_progress(domain, tools or _DEFAULT_TOOLS)  # seed both tools as 'running'
 
     def _worker():
         try:

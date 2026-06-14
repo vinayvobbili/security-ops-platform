@@ -631,8 +631,8 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
         slow (it generates to the token cap) and reliably unparseable (returns
         None). A concise *filled-in template* elicits a valid object in one shot.
 
-        ``self.llm`` is the the chat model (GPT-4.1 primary, m1 GLM
-        fallback): a plain invoke falls over to m1 on a the LLM gateway failure, while a
+        ``self.llm`` is the chat model (GPT-4.1 primary, m1 GLM
+        fallback): a plain invoke falls over to m1 on an LLM gateway failure, while a
         parse failure just retries the primary. The concise-template approach
         works on either backend. Returns a NoveltyLLMResponse, or None if every
         attempt fails (caller then posts a degraded card).

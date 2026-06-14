@@ -331,6 +331,25 @@ def api_exposure_hunt():
         return jsonify({'success': False, 'error': 'An internal error occurred'}), 500
 
 
+# ── IOC Hunt pre-flight — what would run, per tool, + console deep-links ───────
+@domain_monitoring_bp.route('/api/domain-monitoring/hunt-plan/<path:domain>')
+@login_required
+@log_web_activity
+def api_hunt_plan(domain):
+    """Return the IOC-hunt pre-flight for a domain: the IOC set and, per tool,
+    the exact query + a console deep-link. Runs no searches — it's what the
+    'IOC Hunt' modal shows before the analyst clicks Run."""
+    try:
+        from src.components.domain_monitoring.exposure_hunt import hunt_plan
+        d = (domain or '').strip().lower()
+        if not d:
+            return jsonify({'success': False, 'error': 'Domain is required'}), 400
+        return jsonify({'success': True, 'plan': hunt_plan(d)})
+    except Exception as exc:
+        logger.error(f"Error building hunt plan: {exc}", exc_info=True)
+        return jsonify({'success': False, 'error': 'An internal error occurred'}), 500
+
+
 # ── Finding detail — poll target for assess/hunt status + stored verdicts ──────
 @domain_monitoring_bp.route('/api/domain-monitoring/finding/<path:domain>')
 @login_required
@@ -350,9 +369,51 @@ def api_get_finding(domain):
                     row[blob_key.replace('_json', '')] = _json.loads(row[blob_key])
                 except (ValueError, TypeError):
                     pass
+        # Per-tool incremental progress is stored as JSON text; parse to an object.
+        if row.get('exposure_progress'):
+            try:
+                row['exposure_progress'] = _json.loads(row['exposure_progress'])
+            except (ValueError, TypeError):
+                pass
         return jsonify({'success': True, 'finding': row})
     except Exception as exc:
         logger.error(f"Error loading finding: {exc}", exc_info=True)
+        return jsonify({'success': False, 'error': 'An internal error occurred'}), 500
+
+
+# ── Manual archive — analyst dismisses a row (attributed + audit-logged) ───────
+@domain_monitoring_bp.route('/api/domain-monitoring/archive', methods=['POST'])
+@login_required
+@log_web_activity
+def api_archive_finding():
+    """Archive (reversibly hide) or unarchive a finding by analyst request.
+
+    The auto 7-day job stamps archived_by='system'; a manual archive records the
+    analyst's name/email so the Archived view shows who hid the row. The action
+    is captured in the web audit log via @log_web_activity.
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        domain = (data.get('domain') or '').strip().lower()
+        action = (data.get('action') or 'archive').strip().lower()
+        if not domain:
+            return jsonify({'success': False, 'error': 'Domain is required'}), 400
+
+        user = current_user() or {}
+        actor = user.get('name') or user.get('email') or 'analyst'
+
+        from src.components.domain_monitoring.findings_ledger import (
+            archive_finding, unarchive_finding)
+        if action == 'unarchive':
+            changed = unarchive_finding(domain)
+            return jsonify({'success': True, 'domain': domain,
+                            'status': 'new' if changed else 'unchanged'})
+        changed = archive_finding(domain, archived_by=actor)
+        return jsonify({'success': True, 'domain': domain,
+                        'status': 'archived', 'archived_by': actor,
+                        'changed': changed})
+    except Exception as exc:
+        logger.error(f"Error archiving finding: {exc}", exc_info=True)
         return jsonify({'success': False, 'error': 'An internal error occurred'}), 500
 
 
@@ -374,6 +435,21 @@ def api_blocked_domains():
         return jsonify({'success': True, 'blocked': blocked})
     except Exception as exc:
         logger.error(f"Error loading blocked domains: {exc}", exc_info=True)
+        return jsonify({'success': False, 'error': 'An internal error occurred'}), 500
+
+
+@domain_monitoring_bp.route('/api/domain-monitoring/weaponization')
+@login_required
+@log_web_activity
+def api_weaponization_map():
+    """Return {domain: {tier, active}} for every weaponization-scored finding, so
+    the dashboard can tag rows with their stored P1-P4 tier and drive the
+    high-threat (P1-P3) view filter without re-scoring on the fly."""
+    try:
+        from src.components.domain_monitoring.findings_ledger import weaponization_map
+        return jsonify({'success': True, 'weaponization': weaponization_map()})
+    except Exception as exc:
+        logger.error(f"Error loading weaponization map: {exc}", exc_info=True)
         return jsonify({'success': False, 'error': 'An internal error occurred'}), 500
 
 

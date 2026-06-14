@@ -13,8 +13,9 @@ slices it into the sheets the monthly report needs.
 import json
 import logging
 import sqlite3
+import threading
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -44,6 +45,11 @@ _MIGRATION_COLUMNS = (
     ("exposure_hosts",          "INTEGER"),  # count of unique internal hosts
     ("exposure_json",           "TEXT"),     # full hunt result blob
     ("exposure_checked_at",     "TEXT"),
+    ("exposure_progress",       "TEXT"),     # per-tool incremental status {tools:{qradar:{...}}}
+    # Archive attribution — who hid the row ('system' for the auto 7-day job,
+    # else the analyst's name/email) and when.
+    ("archived_by",             "TEXT"),
+    ("archived_at",             "TEXT"),
     # SLA / response lifecycle timestamps — power the turnaround metrics.
     ("blocked_at",              "TEXT"),     # first XSOAR block recorded for this domain
     ("takedown_at",             "TEXT"),     # takedown submitted to PhishFort
@@ -410,6 +416,61 @@ def set_exposure_result(domain: str, touched: bool, hosts: int,
     logger.info(f"Exposure hunt recorded for {domain}: touched={touched} hosts={hosts}")
 
 
+# Incremental per-tool progress merges fire from parallel hunt threads; serialize
+# the read-modify-write so QRadar's and CrowdStrike's callbacks don't clobber.
+_progress_lock = threading.Lock()
+
+# Human labels for the per-tool progress UI.
+_TOOL_LABELS = {"qradar": "QRadar", "crowdstrike": "CrowdStrike",
+                "xsiam": "XSIAM", "abnormal": "Abnormal"}
+
+
+def init_exposure_progress(domain: str, tools: List[str]) -> None:
+    """Seed per-tool progress (each tool 'running') so the modal can show both
+    sources before either finishes."""
+    domain = (domain or "").strip().lower()
+    if not domain:
+        return
+    upsert_finding(domain, source="manual")
+    blob = {
+        "tools": {t: {"status": "running", "label": _TOOL_LABELS.get(t, t)}
+                  for t in (tools or [])},
+        "updated_at": _now(),
+    }
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE domain_findings SET exposure_progress = ?, updated_at = ? WHERE domain = ?",
+            (json.dumps(blob), _now(), domain),
+        )
+
+
+def record_tool_progress(domain: str, tool_key: str, data: Dict[str, Any]) -> None:
+    """Merge one tool's completion into the exposure progress blob (thread-safe)."""
+    domain = (domain or "").strip().lower()
+    tool_key = (tool_key or "").strip().lower()
+    if not domain or not tool_key:
+        return
+    with _progress_lock, get_connection() as conn:
+        row = conn.execute(
+            "SELECT exposure_progress FROM domain_findings WHERE domain = ?", (domain,)
+        ).fetchone()
+        try:
+            blob = json.loads(row["exposure_progress"]) if row and row["exposure_progress"] else {}
+        except (ValueError, TypeError):
+            blob = {}
+        tools = blob.get("tools") or {}
+        entry = tools.get(tool_key) or {}
+        entry.update(data)
+        entry.setdefault("label", _TOOL_LABELS.get(tool_key, tool_key))
+        tools[tool_key] = entry
+        blob["tools"] = tools
+        blob["updated_at"] = _now()
+        conn.execute(
+            "UPDATE domain_findings SET exposure_progress = ?, updated_at = ? WHERE domain = ?",
+            (json.dumps(blob), _now(), domain),
+        )
+
+
 def list_findings(
     month: Optional[str] = None,
     status: Optional[str] = None,
@@ -435,6 +496,199 @@ def list_findings(
             (*params, limit),
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def weaponization_map() -> Dict[str, Dict[str, Any]]:
+    """Map of domain -> {tier, active, first_seen, status} for every finding.
+
+    Lets the dashboard, in one bulk load, tag rows with their stored tier (P1-P4)
+    for the high-threat filter, show the 'Detected On' date (first_seen), and
+    hide archived rows from the default view.
+    """
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT domain, weaponization_tier, weaponization_active, "
+            "       first_seen, status, archived_by "
+            "FROM domain_findings"
+        ).fetchall()
+    return {
+        r["domain"]: {"tier": r["weaponization_tier"],
+                      "active": bool(r["weaponization_active"]),
+                      "first_seen": r["first_seen"],
+                      "status": r["status"],
+                      "archived_by": r["archived_by"]}
+        for r in rows
+    }
+
+
+def untriaged_findings(limit: int = 2000) -> List[Dict[str, Any]]:
+    """Findings that have never been weaponization-scored, highest-signal first.
+
+    Ordered so a bounded backfill spends its LLM budget on the domains that
+    actually resolve (and then by risk score) before the dormant long tail.
+    """
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT * FROM domain_findings
+               WHERE weaponization_scored_at IS NULL
+               ORDER BY
+                 CASE WHEN ip_addresses IS NOT NULL AND ip_addresses != ''
+                           AND ip_addresses != '[]' THEN 0 ELSE 1 END,
+                 COALESCE(risk_score, 0) DESC,
+                 first_seen DESC
+               LIMIT ?""",
+            (limit,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def archive_finding(domain: str, archived_by: str) -> bool:
+    """Manually archive (reversibly hide) one finding, recording who did it.
+
+    Unlike the auto job this has no quiet-time/safety guards — an analyst is
+    explicitly choosing to ignore the row. ``archived_by`` is the analyst's
+    name/email (the auto job stamps 'system'). Returns True if a row changed.
+    """
+    domain = (domain or "").strip().lower()
+    if not domain:
+        return False
+    upsert_finding(domain, source="manual")
+    now = _now()
+    with get_connection() as conn:
+        cur = conn.execute(
+            "UPDATE domain_findings SET status = 'archived', archived_by = ?, "
+            "archived_at = ?, updated_at = ? WHERE domain = ?",
+            (archived_by or "analyst", now, now, domain),
+        )
+    logger.info(f"Finding {domain} archived by {archived_by}")
+    return cur.rowcount > 0
+
+
+def unarchive_finding(domain: str) -> bool:
+    """Restore an archived finding to the active ('new') view, clearing the
+    archive attribution. Returns True if a row changed."""
+    domain = (domain or "").strip().lower()
+    if not domain:
+        return False
+    now = _now()
+    with get_connection() as conn:
+        cur = conn.execute(
+            "UPDATE domain_findings SET status = 'new', archived_by = NULL, "
+            "archived_at = NULL, updated_at = ? WHERE domain = ? AND status = 'archived'",
+            (now, domain),
+        )
+    logger.info(f"Finding {domain} unarchived")
+    return cur.rowcount > 0
+
+
+def archive_stale_findings(days: int = 7, dry_run: bool = False) -> Dict[str, Any]:
+    """Archive (reversibly hide) findings that have gone quiet — no scan activity
+    in ``days`` — and that no one has acted on.
+
+    Sets ``status='archived'`` rather than deleting, so the row drops off the
+    default dashboard view but stays in the ledger and monthly report and can be
+    surfaced again via the 'Archived' filter. Same guards as the hard prune: an
+    analyst-triaged, weaponized (active/P1/P2), exposure-touched, or in-flight
+    finding is never archived. The 30-day :func:`prune_stale_findings` later
+    hard-deletes anything (new or archived) that stays quiet that long.
+
+    Returns ``{eligible, archived, cutoff, dry_run, sample}``.
+    """
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    where = """
+        last_seen < ?
+        AND status = 'new'
+        AND COALESCE(weaponization_active, 0) = 0
+        AND (weaponization_tier IS NULL OR weaponization_tier NOT IN ('P1', 'P2'))
+        AND COALESCE(exposure_touched, 0) = 0
+        AND (phishfort_incident_id IS NULL OR phishfort_incident_id = '')
+        AND (xsoar_id IS NULL OR xsoar_id = '')
+        AND blocked_at IS NULL
+        AND takedown_at IS NULL
+    """
+    now = _now()
+    with get_connection() as conn:
+        rows = conn.execute(
+            f"SELECT domain, brand, last_seen FROM domain_findings WHERE {where} "
+            f"ORDER BY last_seen LIMIT 25",
+            (cutoff,),
+        ).fetchall()
+        eligible = conn.execute(
+            f"SELECT COUNT(*) FROM domain_findings WHERE {where}", (cutoff,)
+        ).fetchone()[0]
+        archived = 0
+        if not dry_run and eligible:
+            cur = conn.execute(
+                f"UPDATE domain_findings SET status = 'archived', "
+                f"archived_by = 'system', archived_at = ?, updated_at = ? WHERE {where}",
+                (now, now, cutoff),
+            )
+            archived = cur.rowcount
+    logger.info(
+        f"archive_stale_findings(days={days}, dry_run={dry_run}): "
+        f"{eligible} eligible, {archived} archived (cutoff {cutoff[:10]})"
+    )
+    return {
+        "eligible": eligible,
+        "archived": archived,
+        "cutoff": cutoff,
+        "dry_run": dry_run,
+        "sample": [dict(r) for r in rows],
+    }
+
+
+def prune_stale_findings(days: int = 30, dry_run: bool = False) -> Dict[str, Any]:
+    """Delete findings that have gone quiet — not re-surfaced by a scan in
+    ``days`` — and that no one has acted on.
+
+    Aggressively guarded: only ``status='new'`` rows that are NOT weaponized
+    (no active flag, not P1/P2), NOT exposure-touched, and NOT in any block or
+    takedown workflow are eligible. So an analyst-triaged, confirmed, or
+    in-flight finding is never pruned regardless of age. ``last_seen`` tracks
+    last *activity* (new / became-active / reregistered / RF / CT), so a domain
+    still on the RF watchlist or showing new behaviour keeps getting refreshed
+    and won't age out.
+
+    Returns ``{eligible, pruned, cutoff, dry_run, sample}``.
+    """
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    where = """
+        last_seen < ?
+        AND status IN ('new', 'archived')
+        AND COALESCE(weaponization_active, 0) = 0
+        AND (weaponization_tier IS NULL OR weaponization_tier NOT IN ('P1', 'P2'))
+        AND COALESCE(exposure_touched, 0) = 0
+        AND (phishfort_incident_id IS NULL OR phishfort_incident_id = '')
+        AND (xsoar_id IS NULL OR xsoar_id = '')
+        AND blocked_at IS NULL
+        AND takedown_at IS NULL
+    """
+    with get_connection() as conn:
+        rows = conn.execute(
+            f"SELECT domain, brand, last_seen FROM domain_findings WHERE {where} "
+            f"ORDER BY last_seen LIMIT 25",
+            (cutoff,),
+        ).fetchall()
+        eligible = conn.execute(
+            f"SELECT COUNT(*) FROM domain_findings WHERE {where}", (cutoff,)
+        ).fetchone()[0]
+        pruned = 0
+        if not dry_run and eligible:
+            cur = conn.execute(
+                f"DELETE FROM domain_findings WHERE {where}", (cutoff,)
+            )
+            pruned = cur.rowcount
+    logger.info(
+        f"prune_stale_findings(days={days}, dry_run={dry_run}): "
+        f"{eligible} eligible, {pruned} pruned (cutoff {cutoff[:10]})"
+    )
+    return {
+        "eligible": eligible,
+        "pruned": pruned,
+        "cutoff": cutoff,
+        "dry_run": dry_run,
+        "sample": [dict(r) for r in rows],
+    }
 
 
 def available_months() -> List[str]:

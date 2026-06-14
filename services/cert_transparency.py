@@ -8,18 +8,68 @@ Uses crt.sh (free) to query CT logs.
 """
 
 import logging
+import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError, as_completed
 from datetime import UTC, datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Callable
 
 import requests
 
 logger = logging.getLogger(__name__)
 
-# Request timeout
-TIMEOUT = 30
+# Per-request timeout. crt.sh is frequently slow/overloaded; anything past this
+# is treated as a miss (best-effort monitoring) rather than blocking the sweep.
+TIMEOUT = 15
 
 # crt.sh API endpoint
 CRT_SH_URL = "https://crt.sh"
+
+# CT sweeps fan out across the watchlist + generated lookalikes (often 100+
+# domains). Querying crt.sh one-at-a-time serialised the whole slot and blew
+# past the scheduler's job timeout, so the sweeps run concurrently under a
+# wall-clock budget — whatever hasn't returned when the budget elapses is
+# simply skipped this cycle.
+_CT_MAX_WORKERS = 8
+_CT_TIME_BUDGET_S = 300
+
+
+def _parallel_ct(
+    domains: list[str],
+    work_fn: Callable[[str], Any],
+    time_budget_s: int = _CT_TIME_BUDGET_S,
+    max_workers: int = _CT_MAX_WORKERS,
+) -> dict[str, Any]:
+    """Run ``work_fn(domain)`` across ``domains`` with a bounded worker pool and
+    an overall wall-clock budget.
+
+    Returns ``{domain: result}`` for every domain that completed within the
+    budget. Domains still in flight when the budget elapses are dropped (the
+    sweep is best-effort and re-runs on the next scheduled cycle), guaranteeing
+    the CT step can never consume the entire slot.
+    """
+    out: dict[str, Any] = {}
+    if not domains:
+        return out
+
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        futures = {ex.submit(work_fn, d): d for d in domains}
+        try:
+            for fut in as_completed(futures, timeout=time_budget_s):
+                d = futures[fut]
+                try:
+                    out[d] = fut.result()
+                except Exception as e:  # never let one domain kill the sweep
+                    out[d] = {"success": False, "domain": d, "error": str(e)}
+        except FuturesTimeoutError:
+            logger.warning(
+                f"CT sweep hit {time_budget_s}s budget; {len(out)}/{len(domains)} "
+                f"domains completed, remainder deferred to next cycle"
+            )
+        finally:
+            # Don't block on stragglers; cancel anything not yet started.
+            ex.shutdown(wait=False, cancel_futures=True)
+
+    return out
 
 
 class CertTransparencyMonitor:
@@ -47,7 +97,11 @@ class CertTransparencyMonitor:
             url = f"{CRT_SH_URL}/?q=%.{domain}&output=json"
 
             logger.info(f"Searching CT logs for: {domain}")
-            response = self.session.get(url, timeout=TIMEOUT)
+            # Fresh session per call: this method runs concurrently under the
+            # parallel sweep, and requests.Session isn't guaranteed thread-safe.
+            session = requests.Session()
+            session.headers.update({"User-Agent": "Mozilla/5.0 (Security Research)"})
+            response = session.get(url, timeout=TIMEOUT)
 
             if response.status_code == 404:
                 return {
@@ -187,57 +241,19 @@ class CertTransparencyMonitor:
 
         cutoff_date = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days_back)
 
+        checked = _parallel_ct(
+            domains,
+            lambda d: self._check_suspicious_one(d, cutoff_date),
+        )
+
         for domain in domains:
-            try:
-                url = f"{CRT_SH_URL}/?q={domain}&output=json"
-                response = self.session.get(url, timeout=TIMEOUT)
-
-                if response.status_code == 404 or not response.text.strip() or response.text.strip() == "[]":
-                    results["domains_without_certs"].append(domain)
-                    continue
-
-                if response.status_code != 200:
-                    logger.warning(f"crt.sh returned {response.status_code} for {domain}")
-                    continue
-
-                certs = response.json()
-
-                # Filter for recent certs
-                recent_certs = []
-                for cert in certs:
-                    entry_time_str = cert.get("entry_timestamp")
-                    if entry_time_str:
-                        try:
-                            entry_time = datetime.fromisoformat(
-                                entry_time_str.replace("T", " ").split(".")[0]
-                            )
-                            if entry_time >= cutoff_date:
-                                recent_certs.append({
-                                    "issuer": cert.get("issuer_name"),
-                                    "not_before": cert.get("not_before"),
-                                    "not_after": cert.get("not_after"),
-                                    "entry_timestamp": entry_time_str,
-                                })
-                        except (ValueError, TypeError):
-                            recent_certs.append({
-                                "issuer": cert.get("issuer_name"),
-                                "entry_timestamp": entry_time_str,
-                            })
-
-                if recent_certs:
-                    results["domains_with_certs"].append({
-                        "domain": domain,
-                        "cert_count": len(recent_certs),
-                        "most_recent": recent_certs[0] if recent_certs else None,
-                        "crt_sh_link": f"https://crt.sh/?q={domain}",
-                    })
-                else:
-                    results["domains_without_certs"].append(domain)
-
-            except requests.exceptions.Timeout:
-                logger.warning(f"Timeout checking {domain}")
-            except Exception as e:
-                logger.warning(f"Error checking {domain}: {e}")
+            res = checked.get(domain)
+            if res is None:  # deferred (budget elapsed) — skip this cycle
+                continue
+            if res.get("with_cert"):
+                results["domains_with_certs"].append(res["with_cert"])
+            else:
+                results["domains_without_certs"].append(domain)
 
         logger.info(
             f"CT check: {len(results['domains_with_certs'])}/{len(domains)} "
@@ -245,6 +261,64 @@ class CertTransparencyMonitor:
         )
 
         return results
+
+    def _check_suspicious_one(self, domain: str, cutoff_date: datetime) -> dict[str, Any]:
+        """Check a single domain for a recent cert (worker for the parallel sweep).
+
+        Returns ``{"with_cert": {...}}`` when a certificate newer than
+        ``cutoff_date`` exists, otherwise ``{"with_cert": None}``. Uses a fresh
+        session per call so it's safe to run concurrently.
+        """
+        try:
+            session = requests.Session()
+            session.headers.update({"User-Agent": "Mozilla/5.0 (Security Research)"})
+            url = f"{CRT_SH_URL}/?q={domain}&output=json"
+            response = session.get(url, timeout=TIMEOUT)
+
+            if response.status_code == 404 or not response.text.strip() or response.text.strip() == "[]":
+                return {"with_cert": None}
+            if response.status_code != 200:
+                logger.warning(f"crt.sh returned {response.status_code} for {domain}")
+                return {"with_cert": None}
+
+            certs = response.json()
+
+            recent_certs = []
+            for cert in certs:
+                entry_time_str = cert.get("entry_timestamp")
+                if entry_time_str:
+                    try:
+                        entry_time = datetime.fromisoformat(
+                            entry_time_str.replace("T", " ").split(".")[0]
+                        )
+                        if entry_time >= cutoff_date:
+                            recent_certs.append({
+                                "issuer": cert.get("issuer_name"),
+                                "not_before": cert.get("not_before"),
+                                "not_after": cert.get("not_after"),
+                                "entry_timestamp": entry_time_str,
+                            })
+                    except (ValueError, TypeError):
+                        recent_certs.append({
+                            "issuer": cert.get("issuer_name"),
+                            "entry_timestamp": entry_time_str,
+                        })
+
+            if recent_certs:
+                return {"with_cert": {
+                    "domain": domain,
+                    "cert_count": len(recent_certs),
+                    "most_recent": recent_certs[0],
+                    "crt_sh_link": f"https://crt.sh/?q={domain}",
+                }}
+            return {"with_cert": None}
+
+        except requests.exceptions.Timeout:
+            logger.warning(f"Timeout checking {domain}")
+            return {"with_cert": None}
+        except Exception as e:
+            logger.warning(f"Error checking {domain}: {e}")
+            return {"with_cert": None}
 
     def check_lookalike_certificates(
         self,
@@ -271,8 +345,15 @@ class CertTransparencyMonitor:
             "details": {},
         }
 
+        details = _parallel_ct(
+            lookalike_domains,
+            lambda d: self.search_certificates(d, days_back),
+        )
+
         for domain in lookalike_domains:
-            result = self.search_certificates(domain, days_back)
+            result = details.get(domain)
+            if result is None:  # deferred (budget elapsed) — skip this cycle
+                continue
             results["details"][domain] = result
 
             if result.get("success") and result.get("recent_count", 0) > 0:

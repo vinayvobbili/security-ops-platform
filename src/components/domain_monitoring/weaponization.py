@@ -239,6 +239,82 @@ def score_and_record(domain: str, brand: Optional[str] = None) -> Dict[str, Any]
     return result
 
 
+def backfill_untriaged(llm_limit: int = 40, budget_s: int = 900,
+                       dry_run: bool = False) -> Dict[str, Any]:
+    """One-shot triage of findings that were never weaponization-scored.
+
+    The dormant majority (no resolving A record) can't be live phishing, so they
+    get a cheap heuristic P4 with no LLM call. Only the domains that actually
+    resolve are worth the LLM's time, and those are scored up to ``llm_limit``
+    within ``budget_s``; the rest stay untriaged for the next daily auto-triage
+    pass to pick up.
+
+    Returns ``{total, heuristic_tiered, llm_scored, llm_deferred, dry_run}``.
+    """
+    import json
+    import time
+
+    from .findings_ledger import set_weaponization, untriaged_findings
+
+    rows = untriaged_findings()
+    if not rows:
+        return {"total": 0, "heuristic_tiered": 0, "llm_scored": 0,
+                "llm_deferred": 0, "dry_run": dry_run}
+
+    def _resolves(r: Dict[str, Any]) -> bool:
+        v = (r.get("ip_addresses") or "").strip()
+        return bool(v) and v != "[]"
+
+    live = [r for r in rows if _resolves(r)]
+    dormant = [r for r in rows if not _resolves(r)]
+
+    heuristic = {
+        "verdict": {
+            "risk_tier": "P4",
+            "is_active_phishing": False,
+            "confidence": "low",
+            "rationale": "Heuristic backfill: no resolving A record at scan time, "
+                         "treated as dormant. Re-scored automatically if it goes live.",
+        },
+        "heuristic": True,
+    }
+
+    heuristic_tiered = llm_scored = 0
+    if not dry_run:
+        for r in dormant:
+            try:
+                set_weaponization(r["domain"], tier="P4", is_active=False,
+                                  verdict_blob=heuristic)
+                heuristic_tiered += 1
+            except Exception as e:
+                logger.warning(f"Backfill heuristic tier failed for {r['domain']}: {e}")
+    else:
+        heuristic_tiered = len(dormant)
+
+    deadline = time.monotonic() + budget_s
+    to_score = live[:llm_limit]
+    if not dry_run:
+        for r in to_score:
+            if time.monotonic() > deadline:
+                logger.warning(f"Backfill hit {budget_s}s budget after {llm_scored} LLM scores")
+                break
+            try:
+                score_and_record(r["domain"], brand=r.get("brand"))
+                llm_scored += 1
+            except Exception as e:
+                logger.warning(f"Backfill LLM score failed for {r['domain']}: {e}")
+    else:
+        llm_scored = len(to_score)
+
+    deferred = len(live) - llm_scored
+    logger.info(
+        f"backfill_untriaged: {len(rows)} untriaged → {heuristic_tiered} heuristic P4, "
+        f"{llm_scored} LLM-scored, {deferred} live deferred (dry_run={dry_run})"
+    )
+    return {"total": len(rows), "heuristic_tiered": heuristic_tiered,
+            "llm_scored": llm_scored, "llm_deferred": deferred, "dry_run": dry_run}
+
+
 def evidence_summary(verdict_blob: Dict[str, Any]) -> str:
     """Render a stored weaponization result into a plain-text evidence block for a
     takedown request / Webex notification. Safe on partial/None blobs."""
