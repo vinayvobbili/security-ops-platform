@@ -60,10 +60,14 @@ it have a password/login form, does the brand name appear, is it mail-capable
 of the deterministic heuristic. P1 = live credential-harvest clone; P4 =
 registered placeholder.
 
-### 3. "Were we touched?" exposure hunt
-For confirmed-weaponized domains, a one-click (and auto-fired, for P1/P2) hunt
-sweeps the SIEM/EDR for any internal interaction with the hostile domain —
-turning "this domain is dangerous" into "this domain was visited by N hosts."
+### 3. IOC Hunt — "were we touched?"
+For confirmed-weaponized domains, an IOC Hunt sweeps the SIEM/EDR for any
+internal interaction with the hostile domain — turning "this domain is
+dangerous" into "this domain was visited by N hosts." A pre-flight modal shows
+the exact per-tool queries first, so the analyst can review them, open them as a
+true deep-link straight into the QRadar or CrowdStrike console, or run the hunt
+inline and get the result in plain terms: **0 hits**, or the hosts and users
+that made contact.
 
 ### 4. Block + takedown
 One-click XSOAR block raises the block ticket and links it back to the finding;
@@ -135,10 +139,11 @@ The web app exposes a domain-monitoring page that lets reviewers:
 
 - Browse the current watchlist and add/remove brands and patterns
 - Triage recent findings with full enrichment + the P1–P4 weaponization verdict
-- Fire a "were we touched?" exposure hunt and a one-click XSOAR block per finding
+- Fire an IOC Hunt (review queries, deep-link into the console, or run inline) and a one-click XSOAR block per finding
 - Track takedown status synced live from PhishFort
 - See coordinated waves grouped as campaigns
 - Read a monthly Brand-Protection report with takedown SLA tiles
+- Ask a built-in assistant grounded in the loaded scan ("which findings are highest-risk?", "draft a leadership summary"), plus a guided how-it-works walkthrough
 
 A SQLite findings ledger underpins the dashboard so triage state, infrastructure
 pivots, and SLA timestamps persist across runs.
