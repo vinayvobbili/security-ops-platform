@@ -12,6 +12,7 @@ import logging
 import re
 import threading
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote, urlencode
 
 logger = logging.getLogger(__name__)
 
@@ -75,8 +76,8 @@ def hunt_plan(domain: str) -> Dict[str, Any]:
     """Pre-flight plan for the 'IOC Hunt' modal — the IOC set and, per tool, the
     exact query plus a console deep-link. Builds NO network calls / runs no
     search; it just shows what *would* run so the analyst can review, run it
-    here, or pivot into the native console. Deep-links reuse the same builders
-    the tipper uses for its ticket notes.
+    here, or pivot into the native console via a true deep-link that lands
+    straight on the pre-filled query results (QRadar AQL + Falcon LogScale).
     """
     domain = (domain or "").strip().lower()
     tools: List[Dict[str, Any]] = []
@@ -97,22 +98,36 @@ def hunt_plan(domain: str) -> Dict[str, Any]:
         "deeplink": bool(qr_url), "window_days": _QRADAR_HOURS // 24,
     })
 
-    # CrowdStrike — domain hunting goes through ThreatGraph/LogScale, which has no
-    # clean filter-URL, so we open the Falcon Advanced Event Search app and hand
-    # the analyst the query to paste (copy fallback).
+    # CrowdStrike — true deep-link into Falcon Advanced Event Search (LogScale).
+    # The CQL rides in ?query=, repo=all spans every retained source, and the
+    # window is a relative range (start=Nd, end=<empty>=now) so the link never
+    # goes stale. Mirrors exactly what the console produces when you run the query
+    # by hand, so the analyst lands straight on results instead of pasting.
     cql = _crowdstrike_domain_query(domain)
     cs_url = None
+    cs_deeplink = False
     try:
         from my_config import get_config
         base = (get_config().cs_falcon_console_url or "").rstrip("/")
         if base:
-            cs_url = base + "/investigate/events"
+            params = urlencode(
+                {
+                    "query": cql,
+                    "repo": "all",
+                    "searchViewInteractions": "NoXSA",
+                    "start": f"{_CROWDSTRIKE_HOURS // 24}d",
+                    "end": "",
+                },
+                quote_via=quote,
+            )
+            cs_url = f"{base}/investigate/search?{params}"
+            cs_deeplink = True
     except Exception as e:
-        logger.warning(f"Falcon console URL lookup failed for {domain}: {e}")
+        logger.warning(f"Falcon deep-link build failed for {domain}: {e}")
     tools.append({
         "key": "crowdstrike", "label": "CrowdStrike", "emoji": "🦅",
         "portal": "Falcon Advanced Event Search", "query": cql, "url": cs_url,
-        "deeplink": False, "window_days": _CROWDSTRIKE_HOURS // 24,
+        "deeplink": cs_deeplink, "window_days": _CROWDSTRIKE_HOURS // 24,
     })
 
     return {

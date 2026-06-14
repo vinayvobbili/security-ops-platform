@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from .models import NoveltyAnalysis, IOCHuntResult, ToolHuntResult, BehavioralHuntResult
 from .utils import (
@@ -67,6 +67,34 @@ def _get_falcon_console_link(query_type: str, fql_query: str) -> Optional[Tuple[
         link_text = "Open in Falcon Event Search"
 
     return (url, link_text)
+
+
+def _get_falcon_logscale_link(cql_query: str, window: str = "30d") -> Optional[str]:
+    """True deep-link into Falcon Advanced Event Search (LogScale) that lands the
+    analyst on the pre-filled query's results — no copy-paste.
+
+    The CQL rides in ?query=, repo=all spans every retained source, and the
+    window is a relative range (start=<Nd>, end empty = now) so the link never
+    goes stale. Mirrors exactly what the console produces when the query is run
+    by hand. LogScale event search is a different surface than the FQL filter
+    pages handled by ``_get_falcon_console_link``.
+    """
+    from my_config import get_config
+
+    falcon_base = (get_config().cs_falcon_console_url or "").rstrip("/")
+    if not falcon_base:
+        return None
+    params = urlencode(
+        {
+            "query": cql_query,
+            "repo": "all",
+            "searchViewInteractions": "NoXSA",
+            "start": window,
+            "end": "",
+        },
+        quote_via=quote,
+    )
+    return f"{falcon_base}/investigate/search?{params}"
 
 
 def _get_qradar_console_link(aql_query: str) -> Optional[Tuple[str, str]]:
@@ -1275,14 +1303,6 @@ def format_single_tool_hunt_for_azdo(
 
     # Event Search queries (LogScale) - shown prominently for analysts
     if logscale_queries and tool_result.tool_name == 'CrowdStrike':
-        # Get Falcon console URL for Event Search link
-        falcon_base = config.cs_falcon_console_url
-        if falcon_base:
-            falcon_base = falcon_base.rstrip('/')
-            event_search_url = f"{falcon_base}/investigate/event-search"
-        else:
-            event_search_url = None
-
         # Check if any queries were executed successfully
         executed_queries = [q for q in logscale_queries if q.get('execution_status') == 'executed']
         manual_queries = [q for q in logscale_queries if q.get('execution_status') != 'executed']
@@ -1291,8 +1311,6 @@ def format_single_tool_hunt_for_azdo(
             # Show executed queries with results
             total_events = sum(q.get('event_count', 0) for q in executed_queries)
             html_parts.append(f"<h4>&#x1F50E; Event Search Results ({total_events} events found)</h4>")
-            if event_search_url:
-                html_parts.append(f"<p><a href='{event_search_url}' target='_blank' style='color: #1976d2; font-weight: bold;'>&#x1F517; Open Falcon Event Search</a></p>")
 
             for q in executed_queries:
                 query_type = q.get('type', 'Event Search')
@@ -1312,6 +1330,9 @@ def format_single_tool_hunt_for_azdo(
                     f"<pre style='background-color: #e3f2fd; padding: 10px; font-size: 11px; "
                     f"overflow-x: auto; white-space: pre-wrap; border-left: 4px solid #1976d2;'>{escaped_query}</pre>"
                 )
+                cs_link = _get_falcon_logscale_link(query_text)
+                if cs_link:
+                    html_parts.append(f"<p><a href='{cs_link}' target='_blank' style='color: #1976d2;'>&#x1F517; Open in Falcon Event Search</a></p>")
 
                 # Show sample events if any
                 if sample_events:
@@ -1332,9 +1353,7 @@ def format_single_tool_hunt_for_azdo(
                 html_parts.append("<h4>&#x1F4CB; Additional Queries (manual execution)</h4>")
             else:
                 html_parts.append("<h4>&#x1F50E; Event Search Queries (for deeper investigation)</h4>")
-                if event_search_url:
-                    html_parts.append(f"<p><a href='{event_search_url}' target='_blank' style='color: #1976d2; font-weight: bold;'>&#x1F517; Open Falcon Event Search</a></p>")
-            html_parts.append("<p><em>Copy and paste these queries into Event Search to hunt across raw telemetry:</em></p>")
+            html_parts.append("<p><em>Open each query straight in Falcon Event Search, or copy it to hunt across raw telemetry:</em></p>")
 
             for q in manual_queries:
                 query_type = q.get('type', 'Event Search')
@@ -1345,6 +1364,9 @@ def format_single_tool_hunt_for_azdo(
                     f"<pre style='background-color: #e3f2fd; padding: 10px; font-size: 11px; "
                     f"overflow-x: auto; white-space: pre-wrap; border-left: 4px solid #1976d2;'>{escaped_query}</pre>"
                 )
+                cs_link = _get_falcon_logscale_link(query_text)
+                if cs_link:
+                    html_parts.append(f"<p><a href='{cs_link}' target='_blank' style='color: #1976d2;'>&#x1F517; Open in Falcon Event Search</a></p>")
 
     # API queries executed (FQL) - collapsed for reference
     if api_queries:
@@ -1825,17 +1847,8 @@ def format_hunt_results_for_azdo(result: IOCHuntResult, rf_enrichment: dict = No
 
     # Event Search queries (LogScale) - collapsed for reference
     if logscale_queries:
-        falcon_base = config.cs_falcon_console_url
-        if falcon_base:
-            falcon_base = falcon_base.rstrip('/')
-            event_search_url = f"{falcon_base}/investigate/event-search"
-        else:
-            event_search_url = None
-
         html_parts.append("<details><summary>&#x1F50E; <strong>Event Search Queries</strong> (for deeper investigation)</summary>")
-        if event_search_url:
-            html_parts.append(f"<p><a href='{event_search_url}' target='_blank' style='color: #1976d2; font-weight: bold;'>&#x1F517; Open Falcon Event Search</a></p>")
-        html_parts.append("<p><em>Copy and paste these queries into Event Search to hunt across raw telemetry:</em></p>")
+        html_parts.append("<p><em>Open each query straight in Falcon Event Search, or copy it to hunt across raw telemetry:</em></p>")
 
         for tool, query_type, query in logscale_queries:
             escaped_query = query.replace('<', '&lt;').replace('>', '&gt;')
@@ -1844,6 +1857,9 @@ def format_hunt_results_for_azdo(result: IOCHuntResult, rf_enrichment: dict = No
                 f"<pre style='background-color: #e3f2fd; padding: 10px; font-size: 11px; "
                 f"overflow-x: auto; white-space: pre-wrap; border-left: 4px solid #1976d2;'>{escaped_query}</pre>"
             )
+            cs_link = _get_falcon_logscale_link(query)
+            if cs_link:
+                html_parts.append(f"<p><a href='{cs_link}' target='_blank' style='color: #1976d2;'>&#x1F517; Open in Falcon Event Search</a></p>")
         html_parts.append("</details>")
 
     # API queries executed - collapsed for reference
