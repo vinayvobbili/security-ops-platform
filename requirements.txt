@@ -114,3 +114,9 @@ fastmcp>=2.0
 # Detection-as-Code workbench — vendor-neutral lint/draft/overlap/review core
 # (own OSS package, extracted from services/detection_pipeline.py)
 detflow>=0.1.0
+
+# SOC-in-a-Box kernel — vendor-neutral event contract + bus + case-memory +
+# agent framework (own OSS package, extracted from src/components/soc_in_box/).
+# The [agent] extra brings the role agents' langgraph/langchain-core; the
+# [redis] extra brings the durable RedisBus the agent pipeline runs on.
+aisoc[agent,redis]>=0.1.0

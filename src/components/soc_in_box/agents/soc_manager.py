@@ -1,17 +1,16 @@
-"""SOC Manager agent — periodic shift summary over the bus.
+"""SOC Manager agent — periodic shift summary, wired to the SOC.
 
-Unlike Tier 1 (event-driven), SOC Manager is invoked on a timer. Each run:
-
-1. Replays ``soc.audit`` over a configurable window (default last 8h).
-2. Filters to ``alert.triaged`` events.
-3. Aggregates deterministic stats (counts by verdict, top tickets by priority).
-4. Asks the LLM for a 2-paragraph narrative (exec summary + analyst takeaways).
-5. Publishes a ``ShiftSummary`` event to ``soc.cases``.
-6. Sends the Markdown report to Webex (dev test space by default).
+The windowed rollup (replay the audit window, aggregate verdict/priority stats,
+ask the model for a short shift narrative, publish a ``ShiftSummary``) now lives
+in the vendor-neutral ``aisoc`` package — extracted from this module. What stays
+here is the *environment* (the live bus + the corporate-gateway model, injected
+through the aisoc seams) plus the IR-specific Webex surface: the rich Adaptive
+Card (Eastern-time window, verdict colors, XSOAR ticket links) and its Markdown
+fallback.
 
 CLI::
 
-    python -m src.components.soc_in_box.agents.soc_manager \
+    python -m src.components.soc_in_box.agents.soc_manager \\
         --window-hours 8 [--dry-run] [--no-webex] [--no-llm] [--room <id>]
 """
 
@@ -23,24 +22,17 @@ import logging
 import os
 import sys
 from collections import Counter
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
-from langchain_core.messages import HumanMessage, SystemMessage
-
-from src.components.soc_in_box.bus import (
-    STREAM_AUDIT, STREAM_CASES, get_redis_client, publish, replay,
-)
-from src.components.soc_in_box.schemas import ShiftSummary
+from aisoc.agents.soc_manager import DEFAULT_WINDOW_HOURS, WindowStats
+from aisoc.agents.soc_manager import run_once as _aisoc_run_once
 
 logger = logging.getLogger(__name__)
 
 
 ROLE_NAME = "soc_manager"
-DEFAULT_WINDOW_HOURS = 8
-TOP_TICKETS_LIMIT = 5
 
 EASTERN = ZoneInfo("America/New_York")
 
@@ -52,8 +44,6 @@ def _fmt_eastern(dt: datetime) -> str:
 
 # Verdict display strings (mirror web/routes/soc_timeline.py).
 # `close_ticket` is the bus's "no verdict" sentinel — not a real classification.
-# Aggregation filters it out into a separate counter, but stray references
-# (e.g. a top ticket's verdict field) render as "(no verdict)" for honesty.
 VERDICT_DISPLAY = {
     "true_positive_malicious":           "TP — Malicious",
     "true_positive_malicious_contained": "TP — Contained",
@@ -61,36 +51,6 @@ VERDICT_DISPLAY = {
     "false_positive":                     "False Positive",
     "close_ticket":                       "(no verdict)",
 }
-
-
-# -- aggregation ---------------------------------------------------------
-
-@dataclass
-class WindowStats:
-    window_start: datetime
-    window_end: datetime
-    total_alerts: int = 0
-    verdict_counts: Counter = field(default_factory=Counter)
-    # `close_ticket` is the bus's sentinel for "no real verdict" (e.g. m1 LLM
-    # offline, Sentinel structured-output failure) — not a classification. Track
-    # those separately so they don't pollute the dominant-verdict KPI.
-    no_verdict_count: int = 0
-    priority_bucket_counts: Counter = field(default_factory=Counter)
-    host_counts: Counter = field(default_factory=Counter)
-    top_tickets: list[dict[str, Any]] = field(default_factory=list)
-
-
-def _parse_event_ts(raw: Any) -> Optional[datetime]:
-    """Pydantic serializes datetimes to ISO strings — re-parse for filtering."""
-    if isinstance(raw, datetime):
-        return raw if raw.tzinfo else raw.replace(tzinfo=timezone.utc)
-    if not isinstance(raw, str):
-        return None
-    try:
-        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
-    except ValueError:
-        return None
 
 
 def _priority_bucket(score: int) -> str:
@@ -101,136 +61,6 @@ def _priority_bucket(score: int) -> str:
     if score >= 1:
         return "low"
     return "unknown"
-
-
-def aggregate(events: list[dict[str, Any]],
-              window_start: datetime,
-              window_end: datetime) -> WindowStats:
-    """Compute stats over the window. Caller already filtered by stream."""
-    stats = WindowStats(window_start=window_start, window_end=window_end)
-
-    triaged: list[dict[str, Any]] = []
-    for e in events:
-        if e.get("event_type") != "alert.triaged":
-            continue
-        ts = _parse_event_ts(e.get("timestamp"))
-        if ts is None or ts < window_start or ts > window_end:
-            continue
-        triaged.append(e)
-
-    stats.total_alerts = len(triaged)
-    for e in triaged:
-        v = e.get("verdict") or ""
-        if v in {"", "close_ticket", "unknown"}:
-            stats.no_verdict_count += 1
-        else:
-            stats.verdict_counts[v] += 1
-        stats.priority_bucket_counts[_priority_bucket(int(e.get("priority_score") or 0))] += 1
-        host = e.get("hostname") or ""
-        if host:
-            stats.host_counts[host] += 1
-
-    triaged.sort(key=lambda e: int(e.get("priority_score") or 0), reverse=True)
-    for e in triaged[:TOP_TICKETS_LIMIT]:
-        stats.top_tickets.append({
-            "ticket_id": e.get("ticket_id") or "",
-            "priority_score": int(e.get("priority_score") or 0),
-            "verdict": e.get("verdict") or "",
-            "hostname": e.get("hostname") or "",
-            "username": e.get("username") or "",
-            "summary": (e.get("summary") or "")[:160],
-        })
-
-    return stats
-
-
-# -- narrative -----------------------------------------------------------
-
-SYSTEM_PROMPT = """You are the SOC Manager agent for the company's Detection & Response team.
-You write a SHORT shift summary for the on-call lead based on triage activity.
-
-Constraints:
-- Maximum 100 words total. Tight is better than complete.
-- One short paragraph if volume is light; two paragraphs only if there is genuinely a second beat to call out (recurring host, high-priority item, escalation candidate).
-- Plain prose. No bullets, no headings, no markdown.
-- Cite ticket ids and hostnames only when they materially change the picture. Don't restate raw counts the reader can see in the bulleted breakdown below.
-- Never pad. If there is nothing notable, say so in one sentence and stop.
-"""
-
-
-def build_llm_prompt(stats: WindowStats) -> str:
-    lines = [
-        f"Window: {stats.window_start.isoformat()} → {stats.window_end.isoformat()}",
-        f"Total triaged alerts: {stats.total_alerts}",
-        "",
-        "Verdict counts:",
-    ]
-    if stats.verdict_counts:
-        for v, c in stats.verdict_counts.most_common():
-            lines.append(f"  - {VERDICT_DISPLAY.get(v, v)}: {c}")
-    else:
-        lines.append("  (none)")
-
-    lines.append("")
-    lines.append("Priority buckets:")
-    for bucket in ("high", "medium", "low", "unknown"):
-        c = stats.priority_bucket_counts.get(bucket, 0)
-        if c:
-            lines.append(f"  - {bucket}: {c}")
-
-    if stats.host_counts:
-        repeats = [(h, c) for h, c in stats.host_counts.most_common(5) if c > 1]
-        if repeats:
-            lines.append("")
-            lines.append("Hosts seen more than once:")
-            for h, c in repeats:
-                lines.append(f"  - {h}: {c}")
-
-    if stats.top_tickets:
-        lines.append("")
-        lines.append(f"Top {len(stats.top_tickets)} by priority:")
-        for t in stats.top_tickets:
-            lines.append(
-                f"  - #{t['ticket_id']} pri={t['priority_score']} "
-                f"verdict={VERDICT_DISPLAY.get(t['verdict'], t['verdict'])} "
-                f"host={t['hostname'] or '-'}: {t['summary']}"
-            )
-
-    return "\n".join(lines)
-
-
-def generate_narrative(stats: WindowStats) -> str:
-    """Call the failover LLM. Falls back to a deterministic stub on error.
-
-    Quiet windows (zero alerts) skip the LLM entirely — there's nothing to
-    summarize and LLMs pad. The stub is a single sentence.
-    """
-    if stats.total_alerts == 0:
-        return _fallback_narrative(stats)
-    try:
-        from my_bot.utils.llm_factory import create_llm
-        llm = create_llm()
-        prompt = build_llm_prompt(stats)
-        resp = llm.invoke([
-            SystemMessage(content=SYSTEM_PROMPT),
-            HumanMessage(content=prompt),
-        ])
-        text = (resp.content or "").strip() if hasattr(resp, "content") else str(resp).strip()
-        if not text:
-            raise RuntimeError("LLM returned empty content")
-        return text
-    except Exception as exc:
-        logger.warning("soc_manager LLM narrative failed, using fallback: %s", exc)
-        return _fallback_narrative(stats)
-
-
-def _fallback_narrative(stats: WindowStats) -> str:
-    if stats.total_alerts == 0:
-        return "No triage activity in this window — Sentinel is idle or paused."
-    top_v = stats.verdict_counts.most_common(1)[0][0] if stats.verdict_counts else ""
-    top_v_display = VERDICT_DISPLAY.get(top_v, top_v)
-    return (f"{stats.total_alerts} alerts triaged; dominant verdict was {top_v_display}. "
-            "Breakdown below. (LLM narrative unavailable.)")
 
 
 # -- markdown render -----------------------------------------------------
@@ -440,15 +270,15 @@ def render_adaptive_card(stats: WindowStats, narrative: str) -> dict[str, Any]:
 def send_to_webex(markdown: str, card: dict[str, Any], room_id: str) -> Optional[str]:
     """Send Adaptive Card (with Markdown fallback text) via WebexTeamsAPI.
 
-    Uses the **Sleuth** bot identity — SOC-in-a-Box agents all speak as Sleuth
+    Uses the **Pokedex** bot identity — SOC-in-a-Box agents all speak as Pokedex
     so the user-facing voice stays consistent. Returns Webex message id.
     """
     from my_config import get_config
     from webexteamssdk import WebexTeamsAPI
     cfg = get_config()
-    token = cfg.webex_bot_access_token_sleuth
+    token = cfg.webex_bot_access_token_pokedex
     if not token:
-        logger.warning("soc_manager: WEBEX_BOT_ACCESS_TOKEN_SLEUTH not set, skipping send")
+        logger.warning("soc_manager: WEBEX_BOT_ACCESS_TOKEN_POKEDEX not set, skipping send")
         return None
     attachment = {
         "contentType": "application/vnd.microsoft.card.adaptive",
@@ -469,24 +299,48 @@ def send_to_webex(markdown: str, card: dict[str, Any], room_id: str) -> Optional
 
 # -- orchestration -------------------------------------------------------
 
+def _stats_from_result(result: dict[str, Any]) -> WindowStats:
+    """Rebuild the WindowStats the card renderers want from aisoc's result dict.
+
+    The rich card needs only the window, totals, verdict counts (incl. the
+    no-verdict sentinel bucket) and the top tickets — all returned by aisoc's
+    ``run_once``. The aggregation-only fields (host/priority-bucket counters)
+    aren't rendered, so they stay at their dataclass defaults.
+    """
+    return WindowStats(
+        window_start=datetime.fromisoformat(result["window_start"]),
+        window_end=datetime.fromisoformat(result["window_end"]),
+        total_alerts=result["total_alerts"],
+        verdict_counts=Counter(result["verdict_counts"]),
+        no_verdict_count=result.get("no_verdict_count", 0),
+        top_tickets=result["top_tickets"],
+    )
+
+
 def run_once(*,
              window_hours: float = DEFAULT_WINDOW_HOURS,
              dry_run: bool = False,
              send_webex: bool = True,
              use_llm: bool = True,
              room_id: Optional[str] = None) -> dict[str, Any]:
-    """Single shift-summary cycle. Returns a small status dict."""
-    now = datetime.now(timezone.utc)
-    window_end = now
-    window_start = now - timedelta(hours=window_hours)
+    """One shift-summary cycle over the live bus, with a rich Pokedex Webex card.
 
-    client = get_redis_client()
-    events = replay(client, STREAM_AUDIT, start="-", end="+", count=None)
-    stats = aggregate(events, window_start, window_end)
-    logger.info("soc_manager: window=%sh total=%s verdicts=%s",
-                window_hours, stats.total_alerts, dict(stats.verdict_counts))
+    The aggregate/narrate/publish is aisoc's ``run_once``, fed our live Redis bus
+    and the summary model (this windowed role calls no tools). We then render the
+    IR Adaptive Card from the returned stats and send it.
+    """
+    from src.components.soc_in_box.aisoc_seams import soc_bus, soc_summary_model
 
-    narrative = generate_narrative(stats) if use_llm else _fallback_narrative(stats)
+    result = _aisoc_run_once(
+        bus=soc_bus(),
+        model=soc_summary_model() if use_llm else None,
+        window_hours=window_hours,
+        dry_run=dry_run,
+        use_llm=use_llm,
+    )
+
+    stats = _stats_from_result(result)
+    narrative = result["narrative"]
     markdown = render_markdown(stats, narrative)
     card = render_adaptive_card(stats, narrative)
 
@@ -506,33 +360,10 @@ def run_once(*,
         else:
             logger.warning("soc_manager: no Webex room configured, skipping send")
 
-    if not dry_run:
-        event = ShiftSummary(
-            correlation_id=window_start.isoformat(),
-            produced_by=ROLE_NAME,
-            window_start=window_start,
-            window_end=window_end,
-            total_alerts=stats.total_alerts,
-            verdict_counts=dict(stats.verdict_counts),
-            top_tickets=stats.top_tickets,
-            narrative_markdown=narrative,
-            webex_message_id=webex_msg_id,
-        )
-        publish(client, STREAM_CASES, event)
-        logger.info("soc_manager: published shift.summary event_id=%s", event.event_id)
-
-    return {
-        "window_start": window_start.isoformat(),
-        "window_end": window_end.isoformat(),
-        "total_alerts": stats.total_alerts,
-        "verdict_counts": dict(stats.verdict_counts),
-        "top_tickets": stats.top_tickets,
-        "narrative": narrative,
-        "markdown": markdown,
-        "card": card,
-        "webex_message_id": webex_msg_id,
-        "dry_run": dry_run,
-    }
+    result["markdown"] = markdown
+    result["card"] = card
+    result["webex_message_id"] = webex_msg_id
+    return result
 
 
 def _build_argparser() -> argparse.ArgumentParser:

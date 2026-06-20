@@ -196,9 +196,9 @@ def extract_entities(events: list[dict[str, Any]]) -> dict[str, set[str]]:
     (hostname, username, actor, campaigns, mitre, iocs_examined) are preferred;
     free-text summaries are mined as a backstop.
     """
-    # Lazy import — keeps this module light and avoids importing the agent
-    # (and its langchain deps) unless extraction is actually requested.
-    from src.components.soc_in_box.agents.threat_hunter import _extract_indicators
+    # Indicator extraction lives in the kernel (vendor-neutral, dependency-free)
+    # so every subsystem agrees on what counts as an IP/domain.
+    from aisoc.extract import extract_indicators as _extract_indicators
 
     ents: dict[str, set[str]] = defaultdict(set)
     text_blobs: list[str] = []
@@ -259,8 +259,8 @@ def extract_entities(events: list[dict[str, Any]]) -> dict[str, set[str]]:
 # -- case summarization --------------------------------------------------
 
 def _parse_ts(raw: Any) -> Optional[datetime]:
-    from src.components.soc_in_box.agents.threat_hunter import _parse_event_ts
-    return _parse_event_ts(raw)
+    from aisoc.extract import parse_event_ts
+    return parse_event_ts(raw)
 
 
 # Verdict severity order (worst first) — used to pick a ticket's terminal verdict
@@ -1271,7 +1271,7 @@ def _short(v: Any, limit: int = 240) -> str:
 
 def render_reasoning_for_chat(trace: dict[str, Any]) -> str:
     """Render a :func:`get_case_reasoning` trace into a grounding block for a
-    toolless narrator LLM.
+    toolless narrator (the LLM).
 
     The block is a system instruction + the recorded facts. It tells the model
     to answer ONLY from this record and to cite the role + recorded reason — so a
