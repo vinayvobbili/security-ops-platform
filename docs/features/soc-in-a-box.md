@@ -16,6 +16,8 @@ that the next agent picks up.
 
 > 📝 **Deep dive:** [Giving an AI SOC a Memory: Precedent, Proof, and the Campaigns No Analyst Sees](https://vinayvobbili.github.io/posts/soc-in-a-box-case-memory/) — the design story behind case memory, ground-truth accuracy, and cross-incident campaigns.
 
+> 📦 **Open source:** the vendor-neutral kernel behind this — the event contract, message bus, case-memory read models, and the agent framework — is published as [aisoc on PyPI](https://pypi.org/project/aisoc/), so you can model your own SOC as an event-sourced team. The agents here are the thin integration layer that injects a live LLM, enrichment tools, and a Redis bus into it.
+
 ---
 
 ## Why this exists
