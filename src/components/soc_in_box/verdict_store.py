@@ -82,3 +82,45 @@ def save_verdict(
         logger.debug("verdict_store.save id=%s ticket=%s role=%s verdict=%s",
                      cur.lastrowid, ticket_id, role, verdict)
         return cur.lastrowid
+
+
+def get_verdicts_since(since_sql: str) -> list[dict]:
+    """All verdict rows created at/after ``since_sql`` ('YYYY-MM-DD HH:MM:SS' UTC).
+
+    Used by the case-memory trend rollup for per-role cost / latency / confidence
+    and decision-accuracy-vs-ground-truth aggregation.
+    """
+    with _connect() as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """SELECT role, verdict, confidence, tool_calls_made, wall_time_ms,
+                      input_tokens, output_tokens, ground_truth, shadow_mode, created_at
+               FROM verdicts WHERE created_at >= ? ORDER BY created_at ASC""",
+            (since_sql,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_verdicts_for_ticket(ticket_id: str) -> list[dict]:
+    """All verdict rows for a ticket, oldest first.
+
+    Used by the case-memory reasoning trace so a "why did role X decide Y?"
+    answer can cite each role's recorded reason / confidence / evidence.
+    """
+    with _connect() as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """SELECT role, verdict, confidence, reason, evidence_json,
+                      tool_calls_made, wall_time_ms, shadow_mode, created_at
+               FROM verdicts WHERE ticket_id = ? ORDER BY created_at ASC""",
+            (ticket_id,),
+        ).fetchall()
+    out = []
+    for r in rows:
+        item = dict(r)
+        try:
+            item["evidence"] = json.loads(item.pop("evidence_json") or "[]")
+        except (json.JSONDecodeError, TypeError):
+            item["evidence"] = []
+        out.append(item)
+    return out

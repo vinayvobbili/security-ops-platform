@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
 from collections import Counter
 from datetime import datetime, timedelta, timezone
@@ -398,6 +399,225 @@ def _load_backtest_summary() -> Optional[dict[str, Any]]:
         return None
 
 
+_CAMPAIGN_WINDOWS = (7, 14, 30)
+_TRENDS_WINDOWS = (7, 30, 90)
+_SEV_COLOR = {"SEV-1": "red", "SEV-2": "amber", "SEV-3": "blue", "SEV-4": "muted"}
+
+# Role key → (display name, emoji) for the trends table + interrogation cards.
+ROLE_META = {
+    "sentinel":      ("Sentinel (Tier 1)", "🛰️"),
+    "tier2":         ("Tier 2 Analyst",    "🔍"),
+    "ir_lead":       ("IR Lead",           "🚨"),
+    "threat_intel":  ("Threat Intel",      "🌐"),
+    "threat_hunter": ("Threat Hunter",     "🔭"),
+    "soc_manager":   ("SOC Manager",       "🛰️"),
+    "detection_eng": ("Detection Engineer", "🔧"),
+}
+
+
+def _short(v: Any, limit: int = 220) -> str:
+    """Flatten + truncate a recorded field value for compact display."""
+    if isinstance(v, (list, tuple)):
+        v = ", ".join(str(x) for x in v)
+    elif isinstance(v, dict):
+        v = ", ".join(f"{k}={val}" for k, val in v.items())
+    s = str(v)
+    return s if len(s) <= limit else s[:limit] + "…"
+
+
+def _fmt_alerted(raw: Any) -> str:
+    """ISO alert timestamp → short Eastern display, or '' when absent."""
+    dt = _parse_iso(raw)
+    return dt.astimezone(EASTERN).strftime("%m/%d %I:%M %p") if dt else ""
+
+
+def _campaign_radar(window_days: int) -> dict[str, Any]:
+    """Cross-incident campaign signal for the radar panel.
+
+    Clusters worked cases that share strong indicators (actor / named campaign /
+    hash / domain / ip / cve) over the window, then folds in the persisted
+    ``campaign_alerts`` dedup state so each cluster shows whether it's been
+    alerted before and when. Read-only — the same primitive the Campaign Detector
+    alerts on, made durable and visible instead of an ephemeral Webex card.
+
+    Degrades gracefully: if the case-memory store doesn't exist yet (SIAB hasn't
+    indexed anything), returns ``available=False`` so the panel shows a hint.
+    """
+    try:
+        from src.components.soc_in_box import case_memory as cm
+        clusters_raw = cm.find_campaign_clusters(window_days=float(window_days),
+                                                 min_cases=2)
+        known = {a["campaign_id"]: a for a in cm.list_campaign_alerts(limit=200)}
+        # Distinguish "quiet (cases indexed, none clustering)" from "nothing
+        # indexed yet (backfill needed)" so the empty state gives the right hint.
+        conn = cm._connect()
+        indexed_cases = conn.execute("SELECT COUNT(*) FROM case_index").fetchone()[0]
+        conn.close()
+    except Exception as exc:
+        logger.warning("soc_in_a_box: campaign radar failed: %s", exc)
+        return {"available": False, "window_days": window_days, "error": str(exc),
+                "clusters": [], "kpis": {}, "history_total": 0, "indexed_cases": 0}
+
+    clusters: list[dict[str, Any]] = []
+    all_tickets: set[str] = set()
+    for c in clusters_raw:
+        cid = c["campaign_id"]
+        prior = known.get(cid)
+        prior_count = int(prior.get("case_count", 0)) if prior else 0
+        members = c.get("member_tickets", [])
+        all_tickets.update(members)
+        shared = c.get("shared_indicators", [])
+        clusters.append({
+            "campaign_id": cid,
+            "short_id": cid[:10],
+            "case_count": c.get("case_count", len(members)),
+            "member_tickets": members[:8],
+            "member_overflow": max(0, len(members) - 8),
+            "shared": shared[:6],
+            "shared_overflow": max(0, len(shared) - 6),
+            "likely_actor": c.get("likely_actor") or "",
+            "campaigns": c.get("campaigns", []),
+            "severity_hint": c.get("severity_hint") or "",
+            "severity_color": _SEV_COLOR.get(c.get("severity_hint") or "", "muted"),
+            "verdict_mix": c.get("verdict_mix", {}),
+            "known": prior is not None,
+            "is_new": prior is None,
+            "grew": prior is not None and c.get("case_count", 0) > prior_count,
+            "first_alerted": _fmt_alerted(prior.get("first_alerted_at")) if prior else "",
+            "last_alerted": _fmt_alerted(prior.get("last_alerted_at")) if prior else "",
+        })
+
+    kpis = {
+        "active": len(clusters),
+        "tickets": len(all_tickets),
+        "named": sum(1 for c in clusters if c["likely_actor"] or c["campaigns"]),
+        "new": sum(1 for c in clusters if c["is_new"]),
+    }
+    return {
+        "available": True, "window_days": window_days, "error": None,
+        "clusters": clusters, "kpis": kpis, "history_total": len(known),
+        "indexed_cases": indexed_cases,
+    }
+
+
+def _trends(window_days: int) -> dict[str, Any]:
+    """Outcome + quality rollup from the case-memory layer (case index +
+    ``verdicts.sqlite`` + HITL decisions) over the window.
+
+    Deterministic — complements the live per-agent telemetry (which is raw bus
+    volume) with cumulative *outcome quality*: decision accuracy vs. ground
+    truth, per-role cost, the human-approval bottleneck, and which indicators
+    keep recurring. Degrades to ``available=False`` if the store isn't there yet.
+    """
+    try:
+        from src.components.soc_in_box import case_memory as cm
+        s = cm.compute_trends(window_days=float(window_days))
+    except Exception as exc:
+        logger.warning("soc_in_a_box: trends failed: %s", exc)
+        return {"available": False, "window_days": window_days, "error": str(exc),
+                "worked_cases": 0}
+
+    per_role: list[dict[str, Any]] = []
+    total_tokens = 0
+    for role, d in (s.get("per_role") or {}).items():
+        name, emoji = ROLE_META.get(role, (role, "🤖"))
+        total_tokens += int(d.get("total_tokens") or 0)
+        per_role.append({"role": role, "name": name, "emoji": emoji, **d})
+    per_role.sort(key=lambda r: r.get("verdicts", 0), reverse=True)
+
+    recurring: list[dict[str, Any]] = []
+    for etype, items in (s.get("recurring_entities") or {}).items():
+        for it in items:
+            recurring.append({"type": etype, "value": it.get("value"),
+                              "cases": it.get("cases", 0)})
+    recurring.sort(key=lambda r: r["cases"], reverse=True)
+
+    hitl = s.get("hitl_decisions") or {}
+    approved = int(hitl.get("approved", 0))
+    rejected = int(hitl.get("rejected", 0))
+    decided = approved + rejected
+    acc = s.get("decision_accuracy_vs_truth")
+
+    return {
+        "available": True, "window_days": window_days, "error": None,
+        "worked_cases": s.get("worked_cases", 0),
+        "verdict_mix": s.get("verdict_mix") or {},
+        "severity_mix": s.get("severity_mix") or {},
+        "disposition_mix": s.get("disposition_mix") or {},
+        "top_actors": s.get("top_actors") or {},
+        "per_role": per_role,
+        "recurring": recurring[:10],
+        "total_tokens": total_tokens,
+        "hitl": {"approved": approved, "rejected": rejected, "decided": decided,
+                 "approval_pct": _pct(approved, decided)},
+        "accuracy_pct": (round(acc * 100, 1) if acc is not None else None),
+        "ground_truth_labeled": s.get("ground_truth_labeled", 0),
+    }
+
+
+def _interrogation(raw: str) -> dict[str, Any]:
+    """Recorded reasoning trace for one ticket — the "why did the agents decide
+    what they did" receipts, read straight from the durable record (audit
+    timeline + verdicts + HITL). No live re-investigation, no LLM: it surfaces
+    what actually happened, cited per role. ``queried=False`` when no ticket was
+    submitted; ``found=False`` when the ticket is unknown to the bus.
+    """
+    tid = (raw or "").strip().lstrip("#").strip()
+    if not tid:
+        return {"queried": False, "ticket_id": ""}
+    try:
+        from src.components.soc_in_box import case_memory as cm
+        trace = cm.get_case_reasoning(tid)
+    except Exception as exc:
+        logger.warning("soc_in_a_box: interrogation failed: %s", exc)
+        return {"queried": True, "ticket_id": tid, "found": False, "error": str(exc)}
+    if not trace.get("found"):
+        return {"queried": True, "ticket_id": tid, "found": False, "error": None}
+
+    timeline: list[dict[str, Any]] = []
+    for step in trace.get("timeline") or []:
+        et = step.get("event_type") or ""
+        label, bucket = EVENT_LABELS.get(et, (et or "event", "—"))
+        fields = [(k, _short(v)) for k, v in (step.get("fields") or {}).items()]
+        timeline.append({
+            "when": _fmt_alerted(step.get("timestamp")) or "—",
+            "role": step.get("role") or "—",
+            "label": label, "bucket": bucket, "fields": fields,
+        })
+
+    verdicts: list[dict[str, Any]] = []
+    for v in trace.get("verdicts") or []:
+        role = v.get("role") or ""
+        name, emoji = ROLE_META.get(role, (role, "🤖"))
+        verdicts.append({
+            "role": role, "name": name, "emoji": emoji,
+            "verdict": v.get("verdict") or "—",
+            "confidence": v.get("confidence"),
+            "reason": v.get("reason") or "",
+            "evidence": v.get("evidence") or [],
+            "tool_calls": v.get("tool_calls_made", 0),
+            "shadow": bool(v.get("shadow_mode")),
+        })
+
+    hitl: list[dict[str, Any]] = []
+    for h in trace.get("hitl") or []:
+        hitl.append({
+            "proposed_by": h.get("proposed_by") or "—",
+            "description": h.get("description") or h.get("kind") or "—",
+            "kind": h.get("kind") or "",
+            "decision": h.get("latest_decision") or "pending",
+            "decided_by": h.get("latest_decided_by") or "",
+            "reason": h.get("latest_reason") or "",
+        })
+
+    return {
+        "queried": True, "ticket_id": tid, "found": True, "error": None,
+        "final_verdict": trace.get("final_verdict") or "",
+        "summary": trace.get("summary") or "",
+        "timeline": timeline, "verdicts": verdicts, "hitl": hitl,
+    }
+
+
 def _pending_hitl_count() -> int:
     try:
         from src.components.soc_in_box import hitl_store
@@ -433,6 +653,37 @@ def display_landing():
     if stats_window_hours not in (24, 168, 720):
         stats_window_hours = 168
     stats = _compute_stats(stats_window_hours)
+
+    # Campaign Radar window selector: 7 / 14 / 30 days
+    try:
+        campaign_window = int(request.args.get("campaign_window") or "14")
+    except ValueError:
+        campaign_window = 14
+    if campaign_window not in _CAMPAIGN_WINDOWS:
+        campaign_window = 14
+    radar = _campaign_radar(campaign_window)
+
+    # Outcome Trends window selector: 7 / 30 / 90 days
+    try:
+        trends_window = int(request.args.get("trends_window") or "30")
+    except ValueError:
+        trends_window = 30
+    if trends_window not in _TRENDS_WINDOWS:
+        trends_window = 30
+    trends = _trends(trends_window)
+
+    # Case Interrogation — recorded reasoning trace for a submitted ticket
+    interrogate = (request.args.get("interrogate") or "").strip()
+    interrogation = _interrogation(interrogate)
+
+    # Agent augmentation status — whether the case-memory layer is actually
+    # changing agent behavior. Read the SAME env flags the agents gate on
+    # (== "1"); the web app shares the worktree .env, so this is faithful.
+    augmentation = {
+        "case_recall": os.getenv("SIAB_CASE_RECALL", "") == "1",
+        "sop_awareness": os.getenv("SIAB_SOP_AWARENESS", "") == "1",
+    }
+    augmentation["any_on"] = augmentation["case_recall"] or augmentation["sop_awareness"]
 
     # Optional banner from a redirect after Fire / Cleanup actions
     banner = None
@@ -470,6 +721,13 @@ def display_landing():
         scenarios=["cobalt_strike", "ransomware_precursor"],
         stats=stats,
         stats_window_hours=stats_window_hours,
+        radar=radar,
+        campaign_window=campaign_window,
+        trends=trends,
+        trends_window=trends_window,
+        interrogate=interrogate,
+        interrogation=interrogation,
+        augmentation=augmentation,
         backtest=backtest,
     )
 

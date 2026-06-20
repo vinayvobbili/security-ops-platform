@@ -279,10 +279,177 @@ body::before {
 .sib-backtest-empty code { background:rgba(120,160,255,0.12); color:var(--soc-cyan); padding:1px 6px;
   border-radius:4px; font-family:var(--soc-mono); font-size:0.78rem; }
 
+/* ---------- Campaign Radar ---------- */
+.sib-radar-head { display:flex; flex-wrap:wrap; align-items:baseline; gap:14px; margin:40px 0 14px; }
+.sib-radar-head h2 { margin:0; font-family:var(--soc-disp); font-size:1.15rem; font-weight:600; color:#fff; }
+.sib-radar-head .hint { font-size:0.83rem; color:var(--soc-dim); flex:1; }
+.sib-radar-head .window-pills { display:inline-flex; gap:6px; }
+.sib-radar-head .window-pills a { padding:6px 13px; border-radius:999px; font-family:var(--soc-mono);
+  font-size:0.76rem; text-decoration:none; color:var(--soc-dim); background:rgba(120,160,255,0.08);
+  border:1px solid var(--soc-line); transition:all .15s; }
+.sib-radar-head .window-pills a.active { background:linear-gradient(135deg,var(--soc-violet),#7b5bff);
+  color:#fff; border-color:transparent; }
+.sib-radar-head .window-pills a:hover:not(.active) { background:rgba(176,139,255,0.18); color:#fff; }
+
+.sib-radar-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:16px; }
+.sib-radar-kpis .kpi { background:linear-gradient(135deg, rgba(176,139,255,0.10), rgba(91,141,255,0.05));
+  border:1px solid var(--soc-line); border-radius:12px; padding:13px; text-align:center; }
+.sib-radar-kpis .kpi-label { font-family:var(--soc-mono); font-size:0.66rem; color:var(--soc-dim);
+  text-transform:uppercase; letter-spacing:.06em; margin-bottom:5px; }
+.sib-radar-kpis .kpi-value { font-family:var(--soc-disp); font-size:1.8rem; font-weight:700; color:#fff; }
+.sib-radar-kpis .kpi-value.zero { color:var(--soc-faint); }
+
+.sib-radar-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(330px,1fr)); gap:14px; }
+.sib-camp { background:var(--soc-panel); border:1px solid var(--soc-line); border-left:3px solid var(--soc-violet);
+  border-radius:13px; padding:15px 16px; backdrop-filter:blur(10px); }
+.sib-camp.new { border-left-color:var(--soc-amber); }
+.sib-camp-head { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:9px; }
+.sib-camp-head .chip { font-size:1.05rem; }
+.sib-camp-head .cid { font-family:var(--soc-mono); font-size:0.8rem; color:var(--soc-cyan); }
+.sib-camp-head .spacer { flex:1; }
+.sib-pill { font-family:var(--soc-mono); font-size:0.64rem; text-transform:uppercase; letter-spacing:.05em;
+  padding:3px 8px; border-radius:999px; font-weight:600; }
+.sib-pill.sev-red { background:rgba(255,107,125,0.18); color:var(--soc-red); }
+.sib-pill.sev-amber { background:rgba(255,193,77,0.18); color:var(--soc-amber); }
+.sib-pill.sev-blue { background:rgba(91,141,255,0.18); color:var(--soc-blue); }
+.sib-pill.sev-muted { background:rgba(120,160,255,0.10); color:var(--soc-dim); }
+.sib-pill.new { background:linear-gradient(135deg,var(--soc-amber),#ff9f4d); color:#1a1000; }
+.sib-pill.grew { background:rgba(55,224,160,0.16); color:var(--soc-emerald); }
+.sib-camp-actor { font-family:var(--soc-body); font-size:0.92rem; color:#fff; margin-bottom:10px; }
+.sib-camp-actor .lead { color:var(--soc-violet); font-weight:600; }
+.sib-camp-actor .muted { color:var(--soc-faint); }
+.sib-camp-label { font-family:var(--soc-mono); font-size:0.62rem; text-transform:uppercase; letter-spacing:.06em;
+  color:var(--soc-faint); margin:9px 0 5px; }
+.sib-ind { display:flex; flex-wrap:wrap; gap:5px; }
+.sib-ind .ind { font-family:var(--soc-mono); font-size:0.72rem; background:rgba(120,160,255,0.08);
+  border:1px solid var(--soc-line); border-radius:7px; padding:3px 8px; color:var(--soc-text); }
+.sib-ind .ind .t { color:var(--soc-faint); }
+.sib-ind .ind .n { color:var(--soc-emerald); }
+.sib-ind .more { font-size:0.72rem; color:var(--soc-faint); align-self:center; }
+.sib-tix { display:flex; flex-wrap:wrap; gap:5px; }
+.sib-tix code { font-family:var(--soc-mono); font-size:0.72rem; background:rgba(120,160,255,0.10);
+  color:var(--soc-cyan); border-radius:5px; padding:2px 6px; }
+.sib-tix .more { font-size:0.72rem; color:var(--soc-faint); align-self:center; }
+.sib-camp-foot { display:flex; justify-content:space-between; gap:8px; margin-top:11px; padding-top:9px;
+  border-top:1px solid var(--soc-line); font-size:0.74rem; color:var(--soc-dim); }
+.sib-camp-foot strong { color:#fff; }
+.sib-radar-empty { background:var(--soc-panel); border:1px dashed var(--soc-line-2); border-radius:13px;
+  padding:18px; margin:8px 0 6px; font-size:0.89rem; color:var(--soc-dim); }
+.sib-radar-empty strong { color:#fff; }
+.sib-radar-empty code { background:rgba(120,160,255,0.12); color:var(--soc-cyan); padding:1px 6px;
+  border-radius:4px; font-family:var(--soc-mono); font-size:0.78rem; }
+.sib-radar-method { margin:12px 0 4px; font-size:0.82rem; color:var(--soc-dim); }
+.sib-radar-method summary { cursor:pointer; color:var(--soc-violet); font-family:var(--soc-mono);
+  font-size:0.74rem; text-transform:uppercase; letter-spacing:.05em; }
+.sib-radar-method p { margin:9px 0 0; line-height:1.5; }
+
+/* ---------- Trends + Interrogation (case-memory rollups) ---------- */
+.sib-cm-head { display:flex; flex-wrap:wrap; align-items:baseline; gap:14px; margin:40px 0 14px; }
+.sib-cm-head h2 { margin:0; font-family:var(--soc-disp); font-size:1.15rem; font-weight:600; color:#fff; }
+.sib-cm-head .hint { font-size:0.83rem; color:var(--soc-dim); flex:1; }
+.sib-cm-head .window-pills { display:inline-flex; gap:6px; }
+.sib-cm-head .window-pills a { padding:6px 13px; border-radius:999px; font-family:var(--soc-mono);
+  font-size:0.76rem; text-decoration:none; color:var(--soc-dim); background:rgba(120,160,255,0.08);
+  border:1px solid var(--soc-line); transition:all .15s; }
+.sib-cm-head .window-pills a.active { background:linear-gradient(135deg,var(--soc-emerald),#1fb37a);
+  color:#04130c; border-color:transparent; }
+.sib-cm-head .window-pills a:hover:not(.active) { background:rgba(55,224,160,0.18); color:#fff; }
+
+.sib-trends-mix { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px; margin-top:14px; }
+.sib-trends-mix .box { background:var(--soc-panel-2); border:1px solid var(--soc-line); border-radius:12px; padding:13px 15px; }
+.sib-trends-mix .box h4 { margin:0 0 9px; font-family:var(--soc-mono); font-size:0.68rem; text-transform:uppercase;
+  letter-spacing:.08em; color:var(--soc-dim); font-weight:600; }
+.sib-chips { display:flex; flex-wrap:wrap; gap:6px; }
+.sib-chips .kv { font-family:var(--soc-mono); font-size:0.74rem; background:rgba(120,160,255,0.08);
+  border:1px solid var(--soc-line); border-radius:7px; padding:3px 9px; color:var(--soc-text); }
+.sib-chips .kv b { color:var(--soc-emerald); margin-left:5px; }
+.sib-chips .kv .t { color:var(--soc-faint); margin-right:5px; }
+.sib-chips.empty-chips { color:var(--soc-faint); font-size:0.82rem; }
+
+.sib-interro-form { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:4px 0 14px; }
+.sib-interro-form input[type=text] { flex:0 0 230px; padding:10px 14px; border-radius:10px;
+  border:1px solid var(--soc-line-2); background:var(--soc-panel-2); color:var(--soc-text);
+  font-family:var(--soc-mono); font-size:0.9rem; }
+.sib-interro-form input[type=text]:focus { outline:none; border-color:var(--soc-cyan);
+  box-shadow:0 0 0 3px rgba(52,227,240,0.15); }
+.sib-interro-form button { background:linear-gradient(135deg,var(--soc-cyan),var(--soc-blue)); color:#04121f;
+  border:none; padding:10px 22px; border-radius:10px; font-family:var(--soc-disp); font-weight:600;
+  cursor:pointer; font-size:0.9rem; transition:transform .12s ease; }
+.sib-interro-form button:hover { transform:translateY(-2px); }
+.sib-interro-form .examples { font-size:0.8rem; color:var(--soc-faint); }
+
+.sib-trace { background:var(--soc-panel); border:1px solid var(--soc-line); border-radius:14px; padding:18px 20px;
+  box-shadow:0 18px 44px rgba(0,0,0,0.42); }
+.sib-trace-top { display:flex; flex-wrap:wrap; gap:10px; align-items:baseline; margin-bottom:6px; }
+.sib-trace-top .tid { font-family:var(--soc-mono); font-size:1.05rem; color:var(--soc-cyan); }
+.sib-trace-top .verdict { font-family:var(--soc-disp); font-weight:600; color:#fff; }
+.sib-trace-summary { font-size:0.9rem; color:var(--soc-dim); line-height:1.55; margin-bottom:14px; }
+.sib-trace h3 { margin:16px 0 9px; font-family:var(--soc-mono); font-size:0.7rem; text-transform:uppercase;
+  letter-spacing:.08em; color:var(--soc-cyan); font-weight:600; }
+.sib-tl { list-style:none; margin:0; padding:0; }
+.sib-tl li { position:relative; padding:0 0 13px 20px; border-left:2px solid var(--soc-line); margin-left:6px; }
+.sib-tl li:last-child { border-left-color:transparent; padding-bottom:0; }
+.sib-tl li::before { content:''; position:absolute; left:-5px; top:3px; width:8px; height:8px;
+  border-radius:50%; background:var(--soc-cyan); box-shadow:0 0 8px rgba(52,227,240,.6); }
+.sib-tl .tl-head { display:flex; flex-wrap:wrap; gap:8px; align-items:baseline; }
+.sib-tl .tl-when { font-family:var(--soc-mono); font-size:0.72rem; color:var(--soc-faint); }
+.sib-tl .tl-role { font-family:var(--soc-disp); font-weight:600; color:#fff; font-size:0.9rem; }
+.sib-tl .tl-fields { font-size:0.8rem; color:var(--soc-dim); margin-top:3px; line-height:1.55; }
+.sib-tl .tl-fields .k { color:var(--soc-faint); font-family:var(--soc-mono); font-size:0.72rem; }
+.sib-verdict-card { background:var(--soc-panel-2); border:1px solid var(--soc-line); border-left:3px solid var(--soc-blue);
+  border-radius:11px; padding:12px 14px; margin-bottom:10px; }
+.sib-verdict-card .vc-head { display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; }
+.sib-verdict-card .vc-role { font-family:var(--soc-disp); font-weight:600; color:#fff; }
+.sib-verdict-card .vc-verdict { font-family:var(--soc-mono); font-size:0.78rem; color:var(--soc-amber); }
+.sib-verdict-card .vc-conf { margin-left:auto; font-family:var(--soc-mono); font-size:0.74rem; color:var(--soc-faint); }
+.sib-verdict-card .vc-reason { font-size:0.86rem; color:var(--soc-dim); margin-top:6px; line-height:1.55; }
+.sib-verdict-card .vc-reason strong { color:#fff; }
+.sib-verdict-card .vc-ev { font-size:0.8rem; color:var(--soc-faint); margin-top:5px; line-height:1.5; }
+.sib-verdict-card .shadow-tag { font-family:var(--soc-mono); font-size:0.62rem; text-transform:uppercase;
+  background:rgba(176,139,255,0.16); color:var(--soc-violet); padding:2px 7px; border-radius:999px; letter-spacing:.05em; }
+.sib-hitl-row { display:flex; flex-wrap:wrap; gap:8px; align-items:baseline; padding:9px 0;
+  border-bottom:1px solid var(--soc-line); font-size:0.86rem; color:var(--soc-dim); }
+.sib-hitl-row:last-child { border-bottom:none; }
+.sib-hitl-row .dec { font-family:var(--soc-mono); font-size:0.66rem; text-transform:uppercase; padding:2px 9px;
+  border-radius:999px; font-weight:600; letter-spacing:.05em; }
+.sib-hitl-row .dec.approved { background:rgba(55,224,160,0.16); color:var(--soc-emerald); }
+.sib-hitl-row .dec.rejected { background:rgba(255,107,125,0.16); color:var(--soc-red); }
+.sib-hitl-row .dec.pending { background:rgba(120,160,255,0.10); color:var(--soc-dim); }
+.sib-hitl-row strong { color:#fff; }
+.sib-hitl-row .muted { color:var(--soc-faint); }
+
+/* ---------- Augmentation status strip ---------- */
+.sib-aug { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-bottom:20px;
+  border-radius:14px; padding:13px 18px; border:1px solid var(--soc-line); border-left:3px solid var(--soc-violet);
+  background:var(--soc-panel); box-shadow:-12px 0 26px -18px rgba(176,139,255,0.6), 0 18px 44px rgba(0,0,0,0.42); }
+.sib-aug .aug-label { font-family:var(--soc-disp); font-weight:600; color:var(--soc-violet); font-size:0.98rem; }
+.sib-aug .aug-pill { font-family:var(--soc-mono); font-size:0.74rem; padding:5px 12px; border-radius:999px;
+  border:1px solid; display:inline-flex; align-items:center; gap:7px; }
+.sib-aug .aug-pill.on { background:rgba(55,224,160,0.12); color:var(--soc-emerald); border-color:rgba(55,224,160,0.4); }
+.sib-aug .aug-pill.off { background:rgba(120,160,255,0.06); color:var(--soc-faint); border-color:var(--soc-line); }
+.sib-aug .aug-pill b { font-weight:700; letter-spacing:.04em; }
+.sib-aug .aug-hint { font-size:0.8rem; color:var(--soc-dim); flex:1 1 220px; }
+
+/* ---------- Per-role accuracy cards ---------- */
+.sib-acc-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:12px; margin:4px 0; }
+.sib-acc-card { background:var(--soc-panel-2); border:1px solid var(--soc-line); border-radius:12px;
+  padding:13px 15px; text-align:center; }
+.sib-acc-card .acc-role { font-family:var(--soc-disp); font-weight:600; color:#fff; font-size:0.9rem;
+  margin-bottom:8px; display:flex; align-items:center; justify-content:center; gap:6px; }
+.sib-acc-card .acc-val { font-family:var(--soc-disp); font-size:1.7rem; font-weight:700; line-height:1; }
+.sib-acc-card .acc-val.good { color:var(--soc-emerald); text-shadow:0 0 18px rgba(55,224,160,0.35); }
+.sib-acc-card .acc-val.mid { color:var(--soc-amber); }
+.sib-acc-card .acc-val.bad { color:var(--soc-red); }
+.sib-acc-card .acc-val.none { color:var(--soc-faint); font-size:1rem; text-shadow:none; }
+.sib-acc-card .acc-sub { font-family:var(--soc-mono); font-size:0.68rem; color:var(--soc-faint); margin-top:6px; }
+
 /* ---------- staggered load-in ---------- */
 @keyframes soc-rise { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
 .sib-hero, .sib-banner, .sib-demo-bar, .sib-stats, .sib-tiles,
 .sib-stats-panel-head, .sib-tele-stats-summary, .sib-tele-grid,
+.sib-radar-head, .sib-radar-kpis, .sib-radar-grid, .sib-radar-empty,
+.sib-cm-head, .sib-trends-mix, .sib-interro-form, .sib-trace,
+.sib-aug, .sib-acc-grid,
 .sib-backtest, .sib-section, .sib-svc-grid, .sib-table-wrap {
   animation:soc-rise .5s cubic-bezier(.2,.7,.2,1) both;
 }
@@ -339,6 +506,18 @@ body::before {
     </form>
   </div>
 
+  <div class="sib-aug">
+    <span class="aug-label">🧠 Agent augmentation</span>
+    <span class="aug-pill {% if augmentation.case_recall %}on{% else %}off{% endif %}">
+      Case recall &amp; precedent <b>{% if augmentation.case_recall %}ON{% else %}OFF{% endif %}</b>
+    </span>
+    <span class="aug-pill {% if augmentation.sop_awareness %}on{% else %}off{% endif %}">
+      SOP awareness <b>{% if augmentation.sop_awareness %}ON{% else %}OFF{% endif %}</b>
+    </span>
+    <span class="aug-hint">When on, agents recall similar prior cases and follow precedent playbooks /
+      documented SOPs as they decide. Off = baseline reasoning. Env-flag gated, per environment.</span>
+  </div>
+
   <div class="sib-stats">
     <div class="sib-stat">
       <div class="sib-stat-label">Agents online</div>
@@ -387,9 +566,9 @@ body::before {
     <span class="hint">Computed live from <code>soc.audit</code>. Use for cumulative
       "what has SOC-in-a-Box done in this window" numbers.</span>
     <span class="window-pills">
-      <a href="?stats_window=24"  class="{% if stats_window_hours == 24 %}active{% endif %}">24h</a>
-      <a href="?stats_window=168" class="{% if stats_window_hours == 168 %}active{% endif %}">7d</a>
-      <a href="?stats_window=720" class="{% if stats_window_hours == 720 %}active{% endif %}">30d</a>
+      <a href="?stats_window=24&campaign_window={{ campaign_window }}&trends_window={{ trends_window }}{% if interrogate %}&interrogate={{ interrogate|urlencode }}{% endif %}"  class="{% if stats_window_hours == 24 %}active{% endif %}">24h</a>
+      <a href="?stats_window=168&campaign_window={{ campaign_window }}&trends_window={{ trends_window }}{% if interrogate %}&interrogate={{ interrogate|urlencode }}{% endif %}" class="{% if stats_window_hours == 168 %}active{% endif %}">7d</a>
+      <a href="?stats_window=720&campaign_window={{ campaign_window }}&trends_window={{ trends_window }}{% if interrogate %}&interrogate={{ interrogate|urlencode }}{% endif %}" class="{% if stats_window_hours == 720 %}active{% endif %}">30d</a>
     </span>
   </div>
 
@@ -427,6 +606,329 @@ body::before {
     </div>
     {% endfor %}
   </div>
+
+  <div class="sib-radar-head">
+    <h2>🎯 Campaign Radar</h2>
+    <span class="hint">Cases that cluster on shared infrastructure or attribution —
+      the cross-incident view no single ticket reveals.</span>
+    <span class="window-pills">
+      <a href="?stats_window={{ stats_window_hours }}&campaign_window=7&trends_window={{ trends_window }}{% if interrogate %}&interrogate={{ interrogate|urlencode }}{% endif %}"  class="{% if campaign_window == 7 %}active{% endif %}">7d</a>
+      <a href="?stats_window={{ stats_window_hours }}&campaign_window=14&trends_window={{ trends_window }}{% if interrogate %}&interrogate={{ interrogate|urlencode }}{% endif %}" class="{% if campaign_window == 14 %}active{% endif %}">14d</a>
+      <a href="?stats_window={{ stats_window_hours }}&campaign_window=30&trends_window={{ trends_window }}{% if interrogate %}&interrogate={{ interrogate|urlencode }}{% endif %}" class="{% if campaign_window == 30 %}active{% endif %}">30d</a>
+    </span>
+  </div>
+
+  {% if not radar.available or radar.indexed_cases == 0 %}
+  <div class="sib-radar-empty">
+    🎯 <strong>Campaign Radar.</strong> No worked cases indexed yet — campaigns surface
+    once the agents have run, or backfill from the audit stream with
+    <code>python -m src.components.soc_in_box.case_memory backfill</code>,
+    then refresh.
+  </div>
+  {% elif radar.clusters %}
+  <div class="sib-radar-kpis">
+    <div class="kpi">
+      <div class="kpi-label">Active campaigns</div>
+      <div class="kpi-value {% if radar.kpis.active == 0 %}zero{% endif %}">{{ radar.kpis.active }}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Tickets clustered</div>
+      <div class="kpi-value {% if radar.kpis.tickets == 0 %}zero{% endif %}">{{ radar.kpis.tickets }}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Named / attributed</div>
+      <div class="kpi-value {% if radar.kpis.named == 0 %}zero{% endif %}">{{ radar.kpis.named }}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">New this window</div>
+      <div class="kpi-value {% if radar.kpis.new == 0 %}zero{% endif %}">{{ radar.kpis.new }}</div>
+    </div>
+  </div>
+
+  <div class="sib-radar-grid">
+    {% for c in radar.clusters %}
+    <div class="sib-camp {% if c.is_new %}new{% endif %}">
+      <div class="sib-camp-head">
+        <span class="chip">{% if c.is_new %}🆕{% else %}🎯{% endif %}</span>
+        <span class="cid">{{ c.short_id }}</span>
+        <span class="spacer"></span>
+        {% if c.severity_hint %}<span class="sib-pill sev-{{ c.severity_color }}">{{ c.severity_hint }}</span>{% endif %}
+        {% if c.is_new %}<span class="sib-pill new">new</span>
+        {% elif c.grew %}<span class="sib-pill grew">grew</span>{% endif %}
+      </div>
+
+      <div class="sib-camp-actor">
+        {% if c.likely_actor %}<span class="lead">{{ c.likely_actor }}</span>{% endif %}
+        {% if c.campaigns %}{% if c.likely_actor %} · {% endif %}{{ c.campaigns|join(', ') }}{% endif %}
+        {% if not c.likely_actor and not c.campaigns %}<span class="muted">Unattributed cluster</span>{% endif %}
+        — <strong>{{ c.case_count }}</strong> linked case{{ 's' if c.case_count != 1 }}
+      </div>
+
+      <div class="sib-camp-label">Shared indicators</div>
+      <div class="sib-ind">
+        {% for s in c.shared %}
+        <span class="ind"><span class="t">{{ s.type }}</span> {{ s.value }} <span class="n">×{{ s.cases }}</span></span>
+        {% endfor %}
+        {% if c.shared_overflow %}<span class="more">+{{ c.shared_overflow }} more</span>{% endif %}
+      </div>
+
+      <div class="sib-camp-label">Member tickets</div>
+      <div class="sib-tix">
+        {% for t in c.member_tickets %}<code>#{{ t }}</code>{% endfor %}
+        {% if c.member_overflow %}<span class="more">+{{ c.member_overflow }}</span>{% endif %}
+      </div>
+
+      <div class="sib-camp-foot">
+        {% if c.known %}
+        <span>First flagged <strong>{{ c.first_alerted }}</strong></span>
+        <span>Last <strong>{{ c.last_alerted }}</strong></span>
+        {% else %}
+        <span>⚡ Not yet alerted</span>
+        <span>Detected this scan</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="sib-radar-empty">
+    🎯 <strong>No campaigns in the last {{ radar.window_days }} days.</strong>
+    Cases aren't sharing strong indicators (actor, named campaign, hash, domain, IP, or CVE)
+    right now — that's a quiet, healthy signal.
+    {% if radar.history_total %} <em>{{ radar.history_total }} campaign(s) on record from earlier windows.</em>{% endif %}
+  </div>
+  {% endif %}
+
+  <details class="sib-radar-method">
+    <summary>How does this work?</summary>
+    <p>Every worked case is indexed with its strong indicators. The radar links two
+      cases into a campaign when they share the same actor, named campaign, file hash,
+      domain, IP, or CVE — and grows the cluster transitively (A↔B, B↔C ⇒ one campaign).
+      A named-actor match counts even at two cases; otherwise a cluster needs at least
+      two. <strong>First flagged</strong> / <strong>Last</strong> come from the alert
+      ledger, so a campaign that keeps growing shows when it was first seen and most
+      recently re-flagged. Read-only — no tickets are created and no action is taken.</p>
+  </details>
+
+  <!-- ---------- Outcome Trends (case-memory rollup) ---------- -->
+  <div class="sib-cm-head">
+    <h2>📈 Outcome Trends</h2>
+    <span class="hint">Cumulative case quality from the memory layer — verdict mix,
+      decision accuracy vs. ground truth, the human-approval bottleneck, and which
+      indicators keep recurring across cases.</span>
+    <span class="window-pills">
+      <a href="?stats_window={{ stats_window_hours }}&campaign_window={{ campaign_window }}&trends_window=7{% if interrogate %}&interrogate={{ interrogate|urlencode }}{% endif %}"  class="{% if trends_window == 7 %}active{% endif %}">7d</a>
+      <a href="?stats_window={{ stats_window_hours }}&campaign_window={{ campaign_window }}&trends_window=30{% if interrogate %}&interrogate={{ interrogate|urlencode }}{% endif %}" class="{% if trends_window == 30 %}active{% endif %}">30d</a>
+      <a href="?stats_window={{ stats_window_hours }}&campaign_window={{ campaign_window }}&trends_window=90{% if interrogate %}&interrogate={{ interrogate|urlencode }}{% endif %}" class="{% if trends_window == 90 %}active{% endif %}">90d</a>
+    </span>
+  </div>
+
+  {% if not trends.available %}
+  <div class="sib-radar-empty">
+    📈 <strong>Outcome Trends.</strong> Couldn't read the case-memory store yet — it
+    fills in once the agents have worked cases, or backfill with
+    <code>python -m src.components.soc_in_box.case_memory backfill</code>.
+  </div>
+  {% elif trends.worked_cases == 0 and not trends.per_role %}
+  <div class="sib-radar-empty">
+    📈 <strong>No cases worked in the last {{ trends.window_days }} days.</strong>
+    Outcome trends appear here once SOC-in-a-Box closes cases in the window.
+  </div>
+  {% else %}
+  <div class="sib-radar-kpis">
+    <div class="kpi">
+      <div class="kpi-label">Cases worked</div>
+      <div class="kpi-value">{{ trends.worked_cases }}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Accuracy vs. truth</div>
+      <div class="kpi-value {% if trends.accuracy_pct is none %}zero{% endif %}">
+        {% if trends.accuracy_pct is not none %}{{ trends.accuracy_pct }}%{% else %}—{% endif %}
+      </div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">HITL approval rate</div>
+      <div class="kpi-value {% if trends.hitl.approval_pct is none %}zero{% endif %}">
+        {% if trends.hitl.approval_pct is not none %}{{ trends.hitl.approval_pct }}%{% else %}—{% endif %}
+      </div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">LLM tokens</div>
+      <div class="kpi-value {% if trends.total_tokens == 0 %}zero{% endif %}">{{ "{:,}".format(trends.total_tokens) }}</div>
+    </div>
+  </div>
+
+  <div class="sib-table-wrap" style="margin-bottom:4px;">
+    <table class="sib-table">
+      <thead>
+        <tr><th>Agent role</th><th>Verdicts</th><th>Avg confidence</th><th>Avg tool calls</th><th>Avg wall</th><th>Tokens</th></tr>
+      </thead>
+      <tbody>
+        {% for r in trends.per_role %}
+        <tr>
+          <td>{{ r.emoji }} {{ r.name }}</td>
+          <td><strong>{{ r.verdicts }}</strong></td>
+          <td>{{ r.avg_confidence }}</td>
+          <td>{{ r.avg_tool_calls }}</td>
+          <td>{{ r.avg_wall_s }}s</td>
+          <td class="muted">{{ "{:,}".format(r.total_tokens) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="empty">No per-role verdicts recorded in this window.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sib-camp-label" style="margin:16px 0 6px;">Per-role decision accuracy (vs. ground truth)</div>
+  {% if trends.ground_truth_labeled %}
+  <div class="sib-acc-grid">
+    {% for r in trends.per_role %}
+    <div class="sib-acc-card">
+      <div class="acc-role">{{ r.emoji }} {{ r.name }}</div>
+      {% if r.accuracy_pct is not none %}
+      <div class="acc-val {% if r.accuracy_pct >= 80 %}good{% elif r.accuracy_pct >= 50 %}mid{% else %}bad{% endif %}">{{ r.accuracy_pct }}%</div>
+      <div class="acc-sub">{{ r.gt_labeled }} labeled outcome{{ 's' if r.gt_labeled != 1 }}</div>
+      {% else %}
+      <div class="acc-val none">—</div>
+      <div class="acc-sub">no labeled outcomes</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="sib-radar-empty" style="margin:4px 0 0;">
+    🎯 <strong>No ground-truth labels in this window.</strong> Per-role accuracy fills in once
+    cases carry an analyst-confirmed outcome — e.g. after a
+    <code>python scripts/soc_in_box_backtest.py</code> run, which scores each role's verdict
+    against the historical analyst decision.
+  </div>
+  {% endif %}
+
+  <div class="sib-trends-mix">
+    <div class="box">
+      <h4>Verdict mix</h4>
+      <div class="sib-chips{% if not trends.verdict_mix %} empty-chips{% endif %}">
+        {% for k, v in trends.verdict_mix.items() %}<span class="kv">{{ k }}<b>{{ v }}</b></span>{% else %}—{% endfor %}
+      </div>
+    </div>
+    <div class="box">
+      <h4>Severity mix</h4>
+      <div class="sib-chips{% if not trends.severity_mix %} empty-chips{% endif %}">
+        {% for k, v in trends.severity_mix.items() %}<span class="kv">{{ k }}<b>{{ v }}</b></span>{% else %}—{% endfor %}
+      </div>
+    </div>
+    <div class="box">
+      <h4>Disposition mix</h4>
+      <div class="sib-chips{% if not trends.disposition_mix %} empty-chips{% endif %}">
+        {% for k, v in trends.disposition_mix.items() %}<span class="kv">{{ k }}<b>{{ v }}</b></span>{% else %}—{% endfor %}
+      </div>
+    </div>
+    <div class="box">
+      <h4>Top actors</h4>
+      <div class="sib-chips{% if not trends.top_actors %} empty-chips{% endif %}">
+        {% for k, v in trends.top_actors.items() %}<span class="kv">{{ k }}<b>{{ v }}</b></span>{% else %}none attributed{% endfor %}
+      </div>
+    </div>
+    <div class="box">
+      <h4>Recurring indicators (2+ cases)</h4>
+      <div class="sib-chips{% if not trends.recurring %} empty-chips{% endif %}">
+        {% for r in trends.recurring %}<span class="kv"><span class="t">{{ r.type }}</span>{{ r.value }}<b>×{{ r.cases }}</b></span>{% else %}none recurring{% endfor %}
+      </div>
+    </div>
+    <div class="box">
+      <h4>Human-in-the-loop</h4>
+      <div class="sib-chips">
+        <span class="kv">approved<b>{{ trends.hitl.approved }}</b></span>
+        <span class="kv">rejected<b>{{ trends.hitl.rejected }}</b></span>
+        <span class="kv">ground-truth labeled<b>{{ trends.ground_truth_labeled }}</b></span>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ---------- Case Interrogation ---------- -->
+  <div class="sib-cm-head">
+    <h2>🔎 Case Interrogation</h2>
+    <span class="hint">Pull the recorded reasoning trace for any worked ticket — who
+      decided what, why, and how the human responded. Straight from the durable
+      record; not a live re-investigation.</span>
+  </div>
+
+  <form class="sib-interro-form" method="GET" action="{{ url_for('soc_in_a_box.display_landing') }}">
+    <input type="hidden" name="stats_window" value="{{ stats_window_hours }}">
+    <input type="hidden" name="campaign_window" value="{{ campaign_window }}">
+    <input type="hidden" name="trends_window" value="{{ trends_window }}">
+    <input type="text" name="interrogate" placeholder="Ticket #, e.g. 70001" value="{{ interrogate }}">
+    <button type="submit">🔎 Trace</button>
+    <span class="examples">Tip: ask narrated follow-up "why" questions in MoneyBall (Webex).</span>
+  </form>
+
+  {% if interrogation.queried %}
+    {% if not interrogation.found %}
+    <div class="sib-radar-empty">
+      🔎 <strong>No record for #{{ interrogation.ticket_id }}.</strong>
+      {% if interrogation.error %}The lookup hit an error — check the logs.{% else %}This
+      ticket isn't on the bus — only cases SOC-in-a-Box has worked are interrogable here.{% endif %}
+    </div>
+    {% else %}
+    <div class="sib-trace">
+      <div class="sib-trace-top">
+        <span class="tid">#{{ interrogation.ticket_id }}</span>
+        {% if interrogation.final_verdict %}<span class="verdict">{{ interrogation.final_verdict }}</span>{% endif %}
+      </div>
+      {% if interrogation.summary %}<div class="sib-trace-summary">{{ interrogation.summary }}</div>{% endif %}
+
+      {% if interrogation.verdicts %}
+      <h3>Per-role decisions</h3>
+      {% for v in interrogation.verdicts %}
+      <div class="sib-verdict-card">
+        <div class="vc-head">
+          <span class="vc-role">{{ v.emoji }} {{ v.name }}</span>
+          <span class="vc-verdict">{{ v.verdict }}</span>
+          {% if v.shadow %}<span class="shadow-tag">shadow</span>{% endif %}
+          <span class="vc-conf">conf {{ v.confidence }} · {{ v.tool_calls }} tool call{{ 's' if v.tool_calls != 1 }}</span>
+        </div>
+        {% if v.reason %}<div class="vc-reason"><strong>Why:</strong> {{ v.reason }}</div>{% endif %}
+        {% if v.evidence %}<div class="vc-ev">Evidence: {{ v.evidence|join('; ') }}</div>{% endif %}
+      </div>
+      {% endfor %}
+      {% endif %}
+
+      {% if interrogation.hitl %}
+      <h3>Human-in-the-loop actions</h3>
+      {% for h in interrogation.hitl %}
+      <div class="sib-hitl-row">
+        <span class="dec {{ h.decision }}">{{ h.decision }}</span>
+        <span><strong>{{ h.proposed_by }}</strong> proposed {{ h.description }}</span>
+        {% if h.decided_by %}<span class="muted">— {{ h.decided_by }}</span>{% endif %}
+        {% if h.reason %}<span class="muted">: {{ h.reason }}</span>{% endif %}
+      </div>
+      {% endfor %}
+      {% endif %}
+
+      {% if interrogation.timeline %}
+      <h3>Decision timeline</h3>
+      <ul class="sib-tl">
+        {% for s in interrogation.timeline %}
+        <li>
+          <div class="tl-head">
+            <span class="tl-role">{{ s.role }}</span>
+            <span class="bucket {% if s.bucket == 'Tier 1' %}tier1{% elif s.bucket == 'Tier 2' %}tier2{% elif s.bucket == 'IR' %}ir{% elif s.bucket == 'TI' %}ti{% elif s.bucket == 'DetEng' %}det{% elif s.bucket == 'Hunter' %}hunter{% elif s.bucket == 'Manager' %}manager{% elif s.bucket == 'HITL' %}hitl{% elif s.bucket == 'Handoff' %}handoff{% endif %}">{{ s.label }}</span>
+            <span class="tl-when">{{ s.when }}</span>
+          </div>
+          {% if s.fields %}
+          <div class="tl-fields">
+            {% for k, val in s.fields %}<span class="k">{{ k }}:</span> {{ val }}{% if not loop.last %} · {% endif %}{% endfor %}
+          </div>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+    {% endif %}
+  {% endif %}
 
   {% if backtest %}
   <div class="sib-backtest">

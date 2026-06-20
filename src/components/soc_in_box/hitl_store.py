@@ -179,6 +179,56 @@ def record_decision(*,
     }
 
 
+def count_decisions_since(since_iso: str) -> dict[str, int]:
+    """Approve/reject decision counts at/after ``since_iso`` (ISO 8601 UTC).
+
+    Used by the case-memory trend rollup to show where human-in-the-loop
+    approval is the bottleneck.
+    """
+    conn = _connect()
+    rows = conn.execute(
+        "SELECT decision, COUNT(*) AS c FROM hitl_decisions "
+        "WHERE decided_at >= ? GROUP BY decision",
+        (since_iso,),
+    ).fetchall()
+    conn.close()
+    return {row["decision"]: row["c"] for row in rows}
+
+
+def get_actions_for_ticket(ticket_id: str) -> list[dict[str, Any]]:
+    """All proposed actions for a ticket + their latest decision, oldest first.
+
+    Used by the case-memory reasoning trace so a "why was host X contained?"
+    answer can cite who proposed it, who approved/rejected it, and when.
+    """
+    conn = _connect()
+    rows = conn.execute(
+        """SELECT a.action_id, a.ticket_id, a.proposed_by, a.kind, a.description,
+                  a.actions_summary, a.proposed_at, a.approver_role, a.approver_name,
+                  d.decision   AS latest_decision,
+                  d.decided_by AS latest_decided_by,
+                  d.decided_at AS latest_decided_at,
+                  d.reason     AS latest_reason,
+                  d.dummy      AS latest_dummy
+           FROM hitl_actions a
+           LEFT JOIN (
+               SELECT * FROM hitl_decisions WHERE decision_id IN (
+                   SELECT MAX(decision_id) FROM hitl_decisions GROUP BY action_id
+               )
+           ) d ON d.action_id = a.action_id
+           WHERE a.ticket_id = ?
+           ORDER BY a.proposed_at ASC""",
+        (ticket_id,),
+    ).fetchall()
+    conn.close()
+    out = []
+    for row in rows:
+        item = dict(row)
+        item["actions_summary"] = json.loads(item.get("actions_summary") or "[]")
+        out.append(item)
+    return out
+
+
 def list_recent(limit: int = 50) -> list[dict[str, Any]]:
     """Recent actions + their latest decision. Newest first.
 
