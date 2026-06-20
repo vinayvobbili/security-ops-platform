@@ -39,6 +39,18 @@ SOC analysts face alert fatigue and repetitive queries. **LLM-powered assistants
 
 ## Core Capabilities
 
+### SOC-in-a-Box — Multi-Agent SOC
+
+A team of specialized AI agents that work a case together over a shared event bus:
+
+- Triage, Tier-2, IR Lead, Threat Intel, Threat Hunter, Detection Eng + a SOC Manager
+- Event-sourced — every case is auditable and replayable end to end
+- Human-in-the-loop on every consequential action (containment, blocks)
+- Case memory: agents recall similar prior cases as precedent
+- Outcome trends, case interrogation, per-role accuracy, and campaign clustering
+
+[Learn more about SOC-in-a-Box →](features/soc-in-a-box)
+
 ### LLM-Powered Security Assistant
 
 An AI investigation engine using Retrieval-Augmented Generation (RAG) that can:
