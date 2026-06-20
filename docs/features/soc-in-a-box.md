@@ -14,6 +14,8 @@ One LLM wears many hats. Each agent has its own role, mandate, and voice, but
 they all reason over the same case and publish their findings to a common bus
 that the next agent picks up.
 
+> 📝 **Deep dive:** [Giving an AI SOC a Memory: Precedent, Proof, and the Campaigns No Analyst Sees](https://vinayvobbili.github.io/posts/soc-in-a-box-case-memory/) — the design story behind case memory, ground-truth accuracy, and cross-incident campaigns.
+
 ---
 
 ## Why this exists
@@ -98,4 +100,4 @@ running.
 
 ---
 
-[← Back to Features](index)
+[Read the deep-dive →](https://vinayvobbili.github.io/posts/soc-in-a-box-case-memory/) · [← Back to Features](index)
