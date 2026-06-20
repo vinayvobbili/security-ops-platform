@@ -13,7 +13,7 @@ Explore the core capabilities of the Security Operations Automation Platform.
 
 | Feature | Description |
 |---------|-------------|
-| [LLM-Powered Assistant](llm-assistant) | AI investigation engine with 38 security tools |
+| [LLM-Powered Assistant](llm-assistant) | AI investigation engine with 39 security tools |
 | [MCP Server](mcp-server) | 30 tools exposed via Model Context Protocol; public mode with per-user PATs |
 | [Self-Healing Bots](webex-bots) | 10 production chat bots (Webex + Teams) with enterprise reliability |
 | [SOC Dashboard](soc-dashboard) | Real-time metrics, dashboards, and 50+ web app pages |
@@ -22,6 +22,7 @@ Explore the core capabilities of the Security Operations Automation Platform.
 | [Vulnerability Deep Dive](vulnerability-deep-dive) | CVE → P1–P4 verdict (EPSS/KEV/pre-auth) + which apps are affected |
 | [Threat Hunt Workbench](hunt-workbench) | Paste CTI → IOC fan-out + behavioral SIEM hunts + ATT&CK coverage |
 | [Detection as Code](detection-as-code) | Sigma → lint → compile → live dry-run → review → MR (powered by `detflow`) |
+| [Advisory Triage](advisory-triage) | Advisory queue → ATT&CK + Sigma/YARA/Suricata + STIX/Navigator + blast radius → escalation (powered by `detflow`) |
 | [Customer Assurance](customer-assurance) | LLM-assisted questionnaire drafting with `.xlsx` round-trip |
 | Person-of-Interest OSINT | Streaming investigation page with HIBP, holehe, maigret, dorks + LLM commentary |
 | Self-Serve Auth + PATs | Register/login/verify, per-user PATs, admin console, role-gated routes |
@@ -35,7 +36,7 @@ Explore the core capabilities of the Security Operations Automation Platform.
 
 AI-powered investigation using RAG and LangChain:
 - Natural language security queries
-- 38 specialized investigation tools (CrowdStrike, DFIR-IRIS, TheHive, XSOAR, and more)
+- 39 specialized investigation tools (CrowdStrike, DFIR-IRIS, TheHive, XSOAR, and more)
 - Automated IOC enrichment
 - LLM-powered threat intel novelty analysis
 
@@ -118,6 +119,15 @@ Sigma → reviewed, packaged merge request:
 - Lint → LLM compile to XQL → **real read-only dry-run** on the live SIEM
 - LLM senior-engineer review with FP, ATT&CK, and catalog-overlap checks
 - Human-gated GitLab MR; built on the open-source `detflow` core
+
+### [Security Advisory Triage →](advisory-triage)
+
+A standing queue that works advisories instead of just listing them:
+- Per-advisory ATT&CK mapping + generated Sigma / YARA / Suricata rules
+- STIX 2.1 bundle and ATT&CK Navigator layer exports
+- Blast radius: app ownership, fleet posture, attack-surface exposure
+- Cross-source corroboration, campaign clustering, and one-click escalation
+- Built on the open-source `detflow` analysis core
 
 ### Person-of-Interest OSINT Tool
 

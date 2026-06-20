@@ -15,7 +15,7 @@ An enterprise-grade security operations platform that automates and orchestrates
 |--------|-------|
 | **Security Tool Integrations** | 30+ |
 | **MCP Server Tools** | 30 |
-| **LLM Investigation Tools** | 38 |
+| **LLM Investigation Tools** | 39 |
 | **Production Chat Bots** | 10 (Webex + Teams) |
 | **Web App Pages** | 50+ |
 | **n8n Automation Workflows** | 33 |
@@ -141,6 +141,33 @@ Three analyst-facing workbenches that turn raw input into a decision:
   **real dry-run on the live SIEM** → review → packaged merge request, built on
   the open-source [detflow](https://pypi.org/project/detflow/) core.
 
+### Security Advisory Triage
+
+A standing queue that turns a firehose of vendor and open-source security
+advisories into prioritized, owned work:
+
+- **Per-advisory threat analysis** — generates ATT&CK techniques, ready-to-tune
+  Sigma / YARA / Suricata rules, an audience-tuned brief, and STIX 2.1 +
+  ATT&CK Navigator layer exports, all from the advisory text + CVEs.
+- **Blast-radius capabilities** — which apps own the affected component, fleet
+  patch posture, attack-surface exposure, and cross-source corroboration.
+- **One-click escalation** — packaged tickets and notifications with leadership
+  tempo KPIs, built on top of the open-source
+  [detflow](https://pypi.org/project/detflow/) analysis core.
+
+[Learn more about Advisory Triage →](features/advisory-triage)
+
+### Deeper EDR Reach
+
+CrowdStrike coverage goes beyond detections into exposure and response:
+
+- **Spotlight** — host vulnerabilities and a CVE → affected-hosts pivot.
+- **Identity Protection** — entity risk scoring and a high-risk identity list.
+- **Quarantine** — file release / unrelease / delete actions (action paths
+  human-gated; read-only in the chat assistant).
+- **Real Time Response** — run vetted commands and scripts against a host for
+  live endpoint diagnostics.
+
 ### 30+ Security Integrations
 
 Unified API clients for the security ecosystem:
@@ -151,7 +178,8 @@ Unified API clients for the security ecosystem:
 | **SIEM** | IBM QRadar, Cortex XSIAM |
 | **SOAR** | Cortex XSOAR |
 | **Case Management** | DFIR-IRIS, TheHive |
-| **Threat Intel** | Recorded Future, VirusTotal, URLScan, AbuseIPDB, Abuse.ch, IntelX, Shodan, HIBP |
+| **Threat Intel** | Recorded Future, VirusTotal, URLScan, AbuseIPDB, Abuse.ch, IntelX, Shodan, HIBP, DomainTools |
+| **Reporting / BI** | Power BI (natural-language → dataset router, fleet posture) |
 | **BAS** | AttackIQ |
 | **SCA / Exposure** | Veracode SCA, JFrog Xray |
 | **Identity / Data** | Active Directory, Varonis |
