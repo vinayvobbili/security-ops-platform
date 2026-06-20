@@ -1,27 +1,4 @@
 # Sidebar / home navigation for the docs site.
-# Grouped to mirror docs/README.md.
-- title: Quick Start
-  items:
-    - { label: Environment Setup, url: /docs/QUICKSTART_ENV.html, icon: "⚙️", desc: "Environment setup and configuration" }
-    - { label: Managing Secrets, url: /docs/QUICKSTART_SECRETS.html, icon: "🔑", desc: "Managing secrets with encryption" }
-    - { label: Env Encryption, url: /docs/ENV_ENCRYPTION.html, icon: "🔐", desc: "Full encryption guide with audit logging" }
-- title: Deployment
-  items:
-    - { label: Deployment Checklist, url: /docs/DEPLOYMENT_CHECKLIST.html, icon: "✅", desc: "Pre-deployment checklist" }
-    - { label: Web Server Deployment, url: /docs/WEBSERVER-DEPLOYMENT-README.html, icon: "🌐", desc: "Web server deployment" }
-    - { label: SSL Verification, url: /docs/SSL_VERIFICATION_GUIDE.html, icon: "🔏", desc: "SSL/TLS configuration" }
-    - { label: Mac Migration, url: /docs/MAC_MIGRATION.html, icon: "💻", desc: "Migrating to a new Mac" }
-    - { label: Windows AI Deployment, url: /docs/MENTOR_DEPLOYMENT.html, icon: "🪟", desc: "Windows AI deployment notes" }
-- title: Bots
-  items:
-    - { label: Sleuth Executive Summary, url: /docs/SLEUTH_EXECUTIVE_SUMMARY.html, icon: "📋", desc: "Sleuth bot overview" }
-    - { label: Sleuth Usage, url: /docs/SLEUTH_USAGE.html, icon: "🤖", desc: "Sleuth bot usage guide" }
-- title: Security & Integration
-  items:
-    - { label: Audit Logging, url: /docs/AUDIT_README.html, icon: "🧾", desc: "Audit logging quick reference" }
-    - { label: Integration Guide, url: /docs/INTEGRATION_GUIDE.html, icon: "🔗", desc: "API integration guide" }
-    - { label: Detection as Code, url: /docs/DETECTION_AS_CODE.html, icon: "🛡️", desc: "Detection engineering guide" }
-    - { label: Tanium Signals Sync, url: /docs/TANIUM_SIGNALS_SYNC.html, icon: "📡", desc: "Tanium signals synchronization" }
 - title: AI Assistants
   items:
     - { label: AGENTS Guide, url: /docs/AGENTS.html, icon: "✨", desc: "Instructions for Claude Code, Gemini & other AI assistants" }
