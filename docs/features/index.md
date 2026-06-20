@@ -14,8 +14,8 @@ Explore the core capabilities of the Security Operations Automation Platform.
 | Feature | Description |
 |---------|-------------|
 | [SOC-in-a-Box](soc-in-a-box) | Multi-agent SOC over an event bus — triage → IR → hunt with human-in-the-loop, case memory, and per-role accuracy |
-| [LLM-Powered Assistant](llm-assistant) | AI investigation engine with 39 security tools |
-| [MCP Server](mcp-server) | 30 tools exposed via Model Context Protocol; public mode with per-user PATs |
+| [LLM-Powered Assistant](llm-assistant) | AI investigation engine with 40 security tools |
+| [MCP Server](mcp-server) | 31 tools exposed via Model Context Protocol; public mode with per-user PATs |
 | [Self-Healing Bots](webex-bots) | 10 production chat bots (Webex + Teams) with enterprise reliability |
 | [SOC Dashboard](soc-dashboard) | Real-time metrics, dashboards, and 50+ web app pages |
 | [30+ Integrations](integrations) | Unified security tool ecosystem |

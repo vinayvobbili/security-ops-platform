@@ -77,8 +77,8 @@ Production-grade chat bots with enterprise reliability features:
 ### Model Context Protocol (MCP) Server
 
 A standalone MCP server that exposes the full security toolbox to any
-MCP-compatible client (Claude Desktop, Cline, etc.). 30 tools spanning EDR,
-SIEM, SOAR, threat intel, ITSM, identity, and email security — all using a
+MCP-compatible client (Claude Desktop, Cline, etc.). 31 tools spanning EDR,
+SIEM, SOAR, threat intel, vulnerability management, ITSM, identity, and email security — all using a
 single uniform schema. A second `--public` mode runs a fail-closed readonly
 subset behind per-user Personal Access Tokens for team-wide access without
 sharing a service bearer.

@@ -76,6 +76,8 @@ The security assistant uses **Retrieval-Augmented Generation (RAG)** to combine 
 | Tool | Capabilities |
 |------|--------------|
 | **Tipper Analysis** | LLM-powered threat intel novelty detection against historical data |
+| **CVE Triage** | Conversational "how bad is CVE-X for us" — remediation verdict (priority, SLA, action), or live CVSS / CISA KEV / EPSS risk facts when not yet triaged |
+| **App Exposure** | Which applications are affected by a CVE or carry a given open-source package (Veracode SCA) |
 | **Remediation** | Automated playbook and runbook suggestions |
 
 ---
