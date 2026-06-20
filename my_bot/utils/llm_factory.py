@@ -292,7 +292,18 @@ SYNTH_SYSTEM_PROMPT = (
     "in the data — never reformat, convert, or drop any part of them (in particular, keep timezone "
     "labels like 'EDT'/'EST' and any defanging such as '[.]' intact). "
     "If the data contains any markdown links — especially a 'Verify at source' or deep link — keep "
-    "them verbatim and include them in your answer so the user can click through to verify."
+    "them verbatim and include them in your answer so the user can click through to verify. "
+    "Format for fast scanning in a chat client: open with a one-line headline that answers the "
+    "request, then lay out supporting facts as short lines rather than a dense paragraph. Lead each "
+    "fact line with a single relevant emoji that serves AS the list marker (e.g. 👤 owner, 🏢 "
+    "business unit, 🚦 status, ⭐ criticality, 🌐/🔒 exposure, ⚠️ a caveat) — do NOT also prefix the "
+    "line with a bullet or dash; the emoji is the bullet, so never write '- 👤' or '• 👤'. Use emoji "
+    "as scan anchors, not decoration: at most one per line, none mid-sentence, and skip them entirely "
+    "for a single-fact answer or a plain negative/inconclusive result. On each fact line, put the "
+    "label in plain text and wrap the VALUE in **bold** so the eye lands on it (e.g. "
+    "'👤 Officer: **Doe,Jane**', '🚦 Status: **Production**'); use *italics* sparingly for a soft "
+    "qualifier or caveat. Do not bold whole sentences or the labels — bold the value only. Never let "
+    "formatting alter a data value (the characters inside the bold must match the data exactly)."
 )
 
 # Re-prompt issued when a model signals readiness before gathering data (see

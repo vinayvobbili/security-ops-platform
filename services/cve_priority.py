@@ -153,9 +153,9 @@ def is_kev(cve_id: str) -> bool:
 #   * code-path reachability — is the vulnerable code actually present/exercisable
 #     here? (present-confirmed/present-conditional = reachable; pending-image =
 #     base-image OS pkg, code path unconfirmed; unknown = no presence signal).
-#   * internet exposure — is the carrying app internet-facing? (EAI
-#     ``V_APP_INFO.Internet_Facing_Indicator``; True/False, or None when we have
-#     no EAI linkage for the CVE).
+#   * internet exposure — is the carrying app internet-facing? (the
+#     application-inventory internet-facing flag; True/False, or None when we have
+#     no inventory linkage for the CVE).
 _TIER_SLA = {1: 3, 2: 30, 3: 90, 4: 180}
 
 # Code-path-only ceiling, used when the EAI internet-facing flag is unknown.

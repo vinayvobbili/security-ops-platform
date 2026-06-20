@@ -9,10 +9,10 @@ against our own CVE-triage results so the triage app can act as a
 vendor-independent backup that surfaces CVEs Prisma flagged but we have not yet
 triaged (the coverage gap).
 
-This module also overlays an EAI-enriched composite risk score on top of the
-ingested CGR findings. Each CGR CVE is joined to the cached EAI application
-inventory (``eai_app_info.db``, a snapshot of EAI prod ``dbo.V_APP_INFO``) and
-to our CVE-triage enrichment, then scored with the war-room composite model:
+This module also overlays an application-inventory-enriched composite risk score
+on top of the ingested CGR findings. Each CGR CVE is joined to a cached
+application inventory (``eai_app_info.db``, a local snapshot) and to our
+CVE-triage enrichment, then scored with the war-room composite model:
 
     composite = (KEV_listed      ? 5.0 : 0)
               + (external_facing  ? 2.5 : 0)
@@ -66,8 +66,8 @@ _DATA_SHEET = "cgr-by-vulnerabilities-cluster_"
 
 # Write the rolled-up store to the DEV worktree (data-isolated).
 VULN_DB_PATH = _REPO_ROOT / "data" / "transient" / "cgr_findings.db"
-DEFAULT_TRIAGE_DB = "/home/vinay/security-ops-platform-dev/data/transient/cve_triage_results.db"
-# Cached EAI application inventory (snapshot of EAI prod dbo.V_APP_INFO).
+DEFAULT_TRIAGE_DB = str(_REPO_ROOT / "data" / "transient" / "cve_triage_results.db")
+# Cached application inventory (a local snapshot).
 EAI_DB_PATH = _REPO_ROOT / "data" / "transient" / "eai_app_info.db"
 
 # Worst-first severity ranking. Unknown severities rank 0.
@@ -757,9 +757,9 @@ def _is_external(app: Optional[dict]) -> bool:
 def external_facing_map() -> Dict[str, bool]:
     """{CVE -> is any carrying app internet-facing per EAI}.
 
-    Joins each ``cgr_cve``'s eaiCodes to the EAI inventory and returns the real
-    ``V_APP_INFO.Internet_Facing_Indicator`` signal. A CVE is **absent** from the
-    map when none of its eaiCodes resolve to an EAI record (so callers treat it as
+    Joins each ``cgr_cve``'s app codes to the application inventory and returns the
+    internet-facing flag. A CVE is **absent** from the
+    map when none of its app codes resolve to an inventory record (so callers treat it as
     "exposure unknown", not "internal"). Returns ``{}`` if the cgr cache is absent
     — lets consumers (e.g. cve_triage.enrich_priorities) degrade gracefully to
     code-path-only reachability.
@@ -799,98 +799,21 @@ def _crit_score_num(app: Optional[dict]) -> float:
     return 5.0 if str(app.get("critical_ind") or "").strip().upper() == "Y" else 0.0
 
 
-# ----------------------- optional live EAI re-pull ------------------------- #
-# Map snapshot columns -> EAI prod dbo.V_APP_INFO source columns. The view is
-# wide (~190 cols); names below are best-effort and only used on-tunnel. Any
-# missing column degrades to '' rather than failing the whole pull.
-_V_APP_INFO_MAP = {
-    "eai_id": "EAI_Application_ID",
-    "app_name": "Application_Short_Name",
-    "app_long": "Application_Long_Name",
-    "status": "Application_Status",
-    "lob": "Line_of_Business_Name",
-    "critical_ind": "Critical_Application_Indicator",
-    "app_class": "Application_Class",
-    "internet_facing": "Internet_Facing_Indicator",
-    "accessibility": "Application_Accessibility",
-    "cloud": "Cloud_Hosted_Indicator",
-    "pii": "PII_Indicator",
-    "phi": "PHI_Indicator",
-    "crit_metal": "Criticality_Metal",
-    "crit_score": "Criticality_Score",
-    "prod_urls": "Production_URLs",
-    "cio": "CIO_Full_Name",
-    "officer": "Officer_Full_Name",
-}
-
-
+# --------------------- optional live inventory re-pull --------------------- #
 def refresh_eai_cache(eai_codes: Optional[List[str]] = None) -> dict:
-    """OPTIONAL: re-pull the EAI inventory from EAI prod into the local cache.
+    """OPTIONAL: re-pull the application inventory into the local cache.
 
-    Reads ``dbo.V_APP_INFO`` via :func:`src.utils.eai_db.connect` (env='prod'),
-    which requires the studio1 reverse tunnel + ``EAI_PROD_HOST/PORT`` env on
-    the isolated lab net. Fails gracefully (returns ``{"refreshed": 0,
-    "error": ...}``) when off-tunnel or creds are missing. Default flows READ
-    the cache; this only exists to make the snapshot reproducible.
+    The live re-pull reads an external application-inventory system over a
+    privileged, environment-specific connection and is not wired up in this
+    build — the default flows READ the cached snapshot (:func:`eai_info` /
+    :func:`load_eai_map`). Returns ``{"refreshed": 0, "error": ...}`` so callers
+    degrade gracefully.
 
-    ``eai_codes`` optionally restricts the refresh to a subset (used to top up
-    holes); ``None`` re-pulls the whole view.
+    ``eai_codes`` would optionally restrict a refresh to a subset; ``None`` is
+    the whole inventory.
     """
-    try:
-        from src.utils.eai_db import connect as eai_connect
-    except Exception as e:  # noqa: BLE001 - import may pull config that's absent
-        logger.warning("refresh_eai_cache: eai_db import failed: %s", e)
-        return {"refreshed": 0, "error": f"import: {e}"}
-
-    # Project only the columns we mirror; alias to our snapshot column names.
-    select_cols = ", ".join(
-        f"{src} AS {dst}" for dst, src in _V_APP_INFO_MAP.items()
-    )
-    sql = f"SELECT {select_cols} FROM dbo.V_APP_INFO"
-    want = {str(c).strip() for c in eai_codes} if eai_codes else None
-
-    rows: List[tuple] = []
-    try:
-        with eai_connect(env="prod", timeout=120) as cn:
-            cur = cn.cursor()
-            cur.execute(sql)
-            colnames = [d[0] for d in cur.description]
-            idx = {name: i for i, name in enumerate(colnames)}
-            for raw in cur.fetchall():
-                rec = {}
-                for dst in _EAI_COLUMNS:
-                    i = idx.get(dst)
-                    val = raw[i] if i is not None and i < len(raw) else None
-                    rec[dst] = "" if val is None else str(val).strip()
-                eid = rec.get("eai_id", "")
-                if not eid:
-                    continue
-                if want is not None and eid not in want:
-                    continue
-                rows.append(tuple(rec[c] for c in _EAI_COLUMNS))
-    except Exception as e:  # noqa: BLE001 - off-tunnel / auth / driver failures
-        logger.warning("refresh_eai_cache: EAI prod pull failed: %s", e)
-        return {"refreshed": 0, "error": str(e)}
-
-    EAI_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(EAI_DB_PATH))
-    try:
-        coldefs = ", ".join(
-            f"{c} TEXT PRIMARY KEY" if c == "eai_id" else f"{c} TEXT"
-            for c in _EAI_COLUMNS
-        )
-        conn.execute(f"CREATE TABLE IF NOT EXISTS eai_app ({coldefs})")
-        placeholders = ",".join("?" for _ in _EAI_COLUMNS)
-        conn.executemany(
-            f"INSERT OR REPLACE INTO eai_app ({', '.join(_EAI_COLUMNS)}) "
-            f"VALUES ({placeholders})",
-            rows,
-        )
-        conn.commit()
-    finally:
-        conn.close()
-    logger.info("refresh_eai_cache: refreshed %d EAI rows", len(rows))
-    return {"refreshed": len(rows), "error": None}
+    return {"refreshed": 0,
+            "error": "live inventory refresh is not configured in this build"}
 
 
 # ============================ composite scoring =========================== #
@@ -1473,7 +1396,7 @@ def _main() -> None:
     ap.add_argument("--clusters", action="store_true",
                     help="print EAI-joined cluster rollup (internet-facing first)")
     ap.add_argument("--refresh-eai", action="store_true",
-                    help="re-pull EAI inventory from EAI prod into the cache (on-tunnel)")
+                    help="re-pull the application inventory into the local cache (not configured in this build)")
     ap.add_argument("--include-exempt", action="store_true",
                     help="include TLS/CURL-exempt CVEs in --top")
     ap.add_argument("--preauth-cap", type=int, default=_PREAUTH_FETCH_CAP,

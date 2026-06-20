@@ -691,26 +691,6 @@
                 </div>
             </div>
 
-            {% set ao = capability_results.app_owners.result if capability_results.get('app_owners') else None %}
-            <div class="cap-tile">
-                <div class="cap-h"><span class="cap-ic">👤</span> App owners <span class="cap-soon-badge">EAI</span></div>
-                <div class="cap-desc">Who owns the apps this advisory affects — joins Veracode-exposed apps to the EAI inventory (LOB, criticality, CIO &amp; Officer) so you can route it.</div>
-                <button class="btn cap-run" id="cap-app_owners-btn" data-cap="app_owners">{% if ao %}Re-check{% else %}Find owners{% endif %}</button>
-                <div class="cap-result" id="cap-result-app_owners">
-                    {% if ao %}<div class="cap-res-box {{ 'exposed' if ao.exposed else 'neutral' }}">{{ ao.summary_text }}{% if ao.error %}<span class="cap-err">{{ ao.error }}</span>{% endif %}</div>{% endif %}
-                </div>
-            </div>
-
-            {% set asf = capability_results.attack_surface.result if capability_results.get('attack_surface') else None %}
-            <div class="cap-tile">
-                <div class="cap-h"><span class="cap-ic">🌐</span> Attack surface <span class="cap-soon-badge">EAI</span></div>
-                <div class="cap-desc">ASM lens — which affected apps are internet-facing, and their external production URLs to confirm on the perimeter.</div>
-                <button class="btn cap-run" id="cap-attack_surface-btn" data-cap="attack_surface">{% if asf %}Re-check{% else %}Assess surface{% endif %}</button>
-                <div class="cap-result" id="cap-result-attack_surface">
-                    {% if asf %}<div class="cap-res-box {{ 'exposed' if asf.exposed else 'clear' }}">{{ asf.summary_text }}{% if asf.error %}<span class="cap-err">{{ asf.error }}</span>{% endif %}</div>{% endif %}
-                </div>
-            </div>
-
             <a class="cap-tile cap-link {% if not capability_links.crowdstrike %}cap-disabled{% endif %}"
                {% if capability_links.crowdstrike %}href="{{ capability_links.crowdstrike }}" target="_blank" rel="noopener"{% endif %}>
                 <div class="cap-h"><span class="cap-ic">🦅</span> CrowdStrike sweep</div>

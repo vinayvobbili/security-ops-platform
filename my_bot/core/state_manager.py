@@ -144,6 +144,7 @@ from my_bot.tools.urlscan_tools import search_urlscan, scan_url_urlscan
 from my_bot.tools.shodan_tools import lookup_ip_shodan, lookup_domain_shodan
 from my_bot.tools.hibp_tools import check_email_hibp, check_domain_hibp, get_breach_info_hibp
 from my_bot.tools.poi_tools import investigate_person_of_interest
+from my_bot.tools.cve_tools import lookup_cve_triage, check_cve_app_exposure
 from my_bot.tools.security_advisory_tools import (
     search_security_advisories,
     get_security_advisory,
@@ -546,6 +547,10 @@ TOOL EFFICIENCY:
         "oe_detection": {
             "description": "Per-host endpoint forensics (accepts a HOSTNAME or an employee username): process execution timeline, network connections, and installed software. Use for incident host-sweeps — e.g. after resolving the hosts that observed an IOC, check what ran on each host and what it connected to — as well as for OE/insider-threat detection rules.",
             "tools": [oe_get_network_connections, oe_get_process_timeline, oe_get_installed_software]
+        },
+        "cve_triage": {
+            "description": "CVE vulnerability triage & exposure: our remediation verdict for a CVE (priority P1-P4, SLA, recommended action, attack layer) or live risk facts (CVSS, CISA KEV, EPSS) when not yet triaged, and which of our applications are affected by a CVE or carry a given open-source package (Veracode SCA). Use for 'how bad is CVE-X for us', 'what's our verdict/priority for CVE-X', 'do we need to patch CVE-X', 'which apps are affected by CVE-X', or 'which apps run package Y'.",
+            "tools": [lookup_cve_triage, check_cve_app_exposure]
         },
     }
 
@@ -1012,6 +1017,10 @@ Examples (router output):
 
                 # Person-of-Interest OSINT
                 investigate_person_of_interest,
+
+                # CVE triage & application exposure
+                lookup_cve_triage,
+                check_cve_app_exposure,
 
                 # Security advisories (cs-advisories): search, links, grouping,
                 # environment exposure, and team validation sign-off

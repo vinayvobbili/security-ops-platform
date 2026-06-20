@@ -66,6 +66,8 @@ from mcp_server.tools import (  # noqa: E402, F401
     staffing,
     memory,
     wiki,
+    # --- Vulnerability management ---
+    cve_triage,
     # --- Utilities ---
     web_search,
     weather,

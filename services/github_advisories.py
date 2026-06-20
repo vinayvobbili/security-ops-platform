@@ -1903,20 +1903,6 @@ def run_advisory_capability(adv: dict[str, Any], capability: str,
         except Exception as e:
             logger.error("[Advisories] Fleet posture failed: %s", e, exc_info=True)
             return {"ok": False, "error": f"Fleet posture check failed: {e}"}
-    if capability == "app_owners":
-        try:
-            from services.advisory_app_owners import app_owners
-            return {"ok": True, "result": app_owners(adv)}
-        except Exception as e:
-            logger.error("[Advisories] App-owners lookup failed: %s", e, exc_info=True)
-            return {"ok": False, "error": f"App-owners lookup failed: {e}"}
-    if capability == "attack_surface":
-        try:
-            from services.advisory_app_owners import attack_surface
-            return {"ok": True, "result": attack_surface(adv)}
-        except Exception as e:
-            logger.error("[Advisories] Attack-surface lookup failed: %s", e, exc_info=True)
-            return {"ok": False, "error": f"Attack-surface lookup failed: {e}"}
     if capability == "jfrog":
         if not cves:
             return {"ok": False, "error": "advisory has no CVE to check in JFrog Xray"}

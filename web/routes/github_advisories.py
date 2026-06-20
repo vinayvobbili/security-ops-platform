@@ -650,8 +650,6 @@ def advisory_report_pdf(key):
     capd = (caps.get("capd_scorecard") or {}).get("result") if isinstance(caps.get("capd_scorecard"), dict) else None
     qradar = (caps.get("qradar") or {}).get("result") if isinstance(caps.get("qradar"), dict) else None
     fleet = (caps.get("fleet_posture") or {}).get("result") if isinstance(caps.get("fleet_posture"), dict) else None
-    app_owners = (caps.get("app_owners") or {}).get("result") if isinstance(caps.get("app_owners"), dict) else None
-    attack_surface = (caps.get("attack_surface") or {}).get("result") if isinstance(caps.get("attack_surface"), dict) else None
     threat_analysis = (caps.get("threat_analysis") or {}).get("result") if isinstance(caps.get("threat_analysis"), dict) else None
     vc = adv.get("veracode_enrichment") if isinstance(adv.get("veracode_enrichment"), dict) else None
 
@@ -664,8 +662,6 @@ def advisory_report_pdf(key):
         "capd": capd,
         "qradar": qradar,
         "fleet_posture": fleet,
-        "app_owners": app_owners,
-        "attack_surface": attack_surface,
         "threat_analysis": threat_analysis,
         "veracode": vc,
         "veracode_apps": flatten_veracode_apps(vc),
@@ -1099,17 +1095,6 @@ def _assessment_evidence(adv: dict) -> str:
     if isinstance(fp, dict) and fp.get("summary_text") and not fp.get("error"):
         # summary_text already carries the "🛰️ Fleet posture (Power BI · …):" prefix.
         lines.append(f"**{fp['summary_text']}**" if not fp["summary_text"].startswith("**") else fp["summary_text"])
-
-    ao = (cached.get("app_owners") or {}).get("result") if isinstance(cached.get("app_owners"), dict) else None
-    if isinstance(ao, dict) and ao.get("matched") and not ao.get("error"):
-        lines.append(f"**👤 App owners:** {ao.get('summary_text') or ''}".rstrip())
-        for e in ao["matched"][:6]:
-            ext = " · 🌐 internet-facing" if e.get("internet_facing") else ""
-            lines.append(f"- _{e.get('app')}_ → {e.get('owner_label')}{ext}")
-
-    asf = (cached.get("attack_surface") or {}).get("result") if isinstance(cached.get("attack_surface"), dict) else None
-    if isinstance(asf, dict) and asf.get("external_app_count") and not asf.get("error"):
-        lines.append(f"**🌐 Attack surface (ASM):** {asf.get('summary_text') or ''}".rstrip())
 
     ta = (cached.get("threat_analysis") or {}).get("result") if isinstance(cached.get("threat_analysis"), dict) else None
     if isinstance(ta, dict) and not ta.get("error"):

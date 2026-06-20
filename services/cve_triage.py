@@ -374,6 +374,42 @@ _BATCH_COLS = (
 )
 
 
+def get_cached_triage(cve_id: str) -> Optional[Dict[str, Any]]:
+    """Return the stored triage verdict + enrichment for one CVE, or None.
+
+    Read-only join of the ``triage`` and ``enrichment`` tables for callers (the
+    chat / MCP lookup tools) that want the already-decided verdict without
+    re-running the LLM debate. None when the CVE has not been triaged yet.
+    """
+    cve_id = cve_id.upper().strip()
+    if not _RESULTS_DB.exists():
+        return None
+    conn = sqlite3.connect(f"file:{_RESULTS_DB}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    try:
+        t = conn.execute(
+            "SELECT * FROM triage WHERE cve_id = ?", (cve_id,)
+        ).fetchone()
+        if t is None:
+            return None
+        out = dict(t)
+        try:
+            e = conn.execute(
+                "SELECT epss, percentile, kev, pre_auth, priority, sla_days, "
+                "attack_layer, cvss_vector, must_act FROM enrichment WHERE cve_id = ?",
+                (cve_id,),
+            ).fetchone()
+            if e is not None:
+                out.update(dict(e))
+        except sqlite3.OperationalError:
+            pass
+        return out
+    except sqlite3.OperationalError:
+        return None
+    finally:
+        conn.close()
+
+
 def _results_conn() -> sqlite3.Connection:
     _RESULTS_DB.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(_RESULTS_DB), timeout=30)
@@ -595,8 +631,8 @@ def enrich_priorities(limit: Optional[int] = None, refresh_epss: bool = False) -
     import services.cve_org as _cveorg
     from services.cve_triage_db import _reachability
 
-    # Real EAI internet-facing flag per CVE (V_APP_INFO.Internet_Facing_Indicator),
-    # via the cgr eaiCode join. Absent for CVEs with no cgr/EAI linkage -> the
+    # Internet-facing flag per CVE from the application inventory, via the cgr
+    # app-code join. Absent for CVEs with no cgr/inventory linkage -> the
     # priority ceiling degrades to code-path-only for those. Best-effort: if cgr
     # data isn't present in this worktree, every CVE is exposure-unknown.
     try:

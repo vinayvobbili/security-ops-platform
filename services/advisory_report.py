@@ -241,30 +241,6 @@ def build_report_html(ctx: Dict[str, Any]) -> str:
         label = "Fleet posture (Power BI" + (f" &middot; {_e(fp.get('dataset'))}" if fp.get("dataset") else "") + ")"
         parts.append(_section(label, _e(fp.get("summary_text"))))
 
-    # --- App owners (EAI) ---
-    ao = ctx.get("app_owners") if isinstance(ctx.get("app_owners"), dict) else None
-    if ao and ao.get("matched") and not ao.get("error"):
-        rows = []
-        for e in ao["matched"][:15]:
-            ext = ' <b style="color:#b91c1c;">internet-facing</b>' if e.get("internet_facing") else ""
-            rows.append(
-                f'<li><b>{_e(e.get("app"))}</b>{ext}<br>'
-                f'<span style="color:#475569;font-size:8.5pt;">{_e(e.get("owner_label"))}</span></li>'
-            )
-        body = _e(ao.get("summary_text") or "") + '<ul style="margin:6px 0 0;">' + "".join(rows) + "</ul>"
-        parts.append(_section("Affected application owners (EAI)", body))
-
-    # --- Attack surface (ASM, EAI) ---
-    asf = ctx.get("attack_surface") if isinstance(ctx.get("attack_surface"), dict) else None
-    if asf and asf.get("external_app_count") and not asf.get("error"):
-        body = _e(asf.get("summary_text") or "")
-        urls = asf.get("urls") or []
-        if urls:
-            body += '<ul style="margin:6px 0 0;">' + "".join(
-                f'<li><code>{_e(u)}</code></li>' for u in urls[:15]
-            ) + "</ul>"
-        parts.append(_section("External attack surface (ASM)", body))
-
     # --- reviewer notes ---
     notes = (adv.get("notes") or "").strip()
     if notes:
