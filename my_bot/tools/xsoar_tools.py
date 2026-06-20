@@ -641,7 +641,7 @@ def attach_file_to_xsoar_ticket(ticket_id: Union[str, int], file_path: str, comm
         result = ticket_handler.upload_file_to_attachment(
             incident_id=ticket_id,
             file_path=file_path,
-            comment=comment or f"File attached via Pokedex: {os.path.basename(file_path)}"
+            comment=comment or f"File attached via Sleuth: {os.path.basename(file_path)}"
         )
 
         file_name = os.path.basename(file_path)

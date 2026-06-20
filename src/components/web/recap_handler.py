@@ -103,7 +103,7 @@ def _get_client() -> OpenAI:
     if _client is not None:
         return _client
     # m1 analysis (GLM-4.7-Flash)
-    base_url = os.environ.get("POKEDEX_LLM_BASE_URL") or os.environ.get("LLM_BASE_URL", "http://localhost:8015/v1")
+    base_url = os.environ.get("SLEUTH_LLM_BASE_URL") or os.environ.get("LLM_BASE_URL", "http://localhost:8015/v1")
     logger.info(f"Recap LLM base URL: {base_url}")
     _client = OpenAI(base_url=base_url, api_key="not-needed")
     return _client
@@ -681,7 +681,7 @@ def _notify_webex(title: str, recap_id: int, meeting_type: str, summary: dict) -
     """Post the full recap summary to the dev test Webex space, chunked under the 7k limit."""
     try:
         config = get_config()
-        token = config.webex_bot_access_token_toodles
+        token = config.webex_bot_access_token_aide
         room_id = config.webex_room_id_dev_test_space
         if not token or not room_id:
             logger.warning("Webex notification skipped — missing token or room ID")

@@ -100,8 +100,8 @@ body.dark-mode .dashboard-title { filter: drop-shadow(0 6px 14px rgba(0,0,0,0.6)
     border-radius: 50%;
 }
 
-/* Pokedex device icon for title */
-.pokedex-title-icon {
+/* Sleuth device icon for title */
+.sleuth-title-icon {
     display: inline-block;
     height: 2.5rem;
     width: auto;

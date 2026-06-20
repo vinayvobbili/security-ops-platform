@@ -71,7 +71,7 @@ def investigate_person_of_interest(
     try:
         result = run_investigation_sync(
             name=name, username=username, email=email, reason=reason,
-            requester="pokedex-tool", fast=True,
+            requester="sleuth-tool", fast=True,
         )
     except Exception as e:
         logger.error("POI investigation failed: %s", e, exc_info=True)

@@ -480,9 +480,9 @@ def _send_to_webex(markdown: str, card: dict[str, Any], room_id: str) -> Optiona
     from my_config import get_config
     from webexteamssdk import WebexTeamsAPI
     cfg = get_config()
-    token = cfg.webex_bot_access_token_pokedex
+    token = cfg.webex_bot_access_token_sleuth
     if not token:
-        logger.warning("threat_hunter: WEBEX_BOT_ACCESS_TOKEN_POKEDEX not set, skipping")
+        logger.warning("threat_hunter: WEBEX_BOT_ACCESS_TOKEN_SLEUTH not set, skipping")
         return None
     try:
         api = WebexTeamsAPI(access_token=token)

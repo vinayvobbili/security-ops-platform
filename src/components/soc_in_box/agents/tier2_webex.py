@@ -1,4 +1,4 @@
-"""Pokedex Webex card for Tier 2 escalations to the IR Lead.
+"""Sleuth Webex card for Tier 2 escalations to the IR Lead.
 
 Sent only when Tier 2's ``escalation_decision`` == ``escalate_to_ir_lead``.
 Non-escalation Tier 2 reviews stay quiet (bus event + verdict_store only)
@@ -195,16 +195,16 @@ def _render_fallback_markdown(analysis: Tier2Analysis) -> str:
 
 def send_escalation_card(analysis: Tier2Analysis,
                          triage_event: dict[str, Any]) -> Optional[str]:
-    """Send a Tier 2 escalation card to Pokedex's dev test space.
+    """Send a Tier 2 escalation card to Sleuth's dev test space.
 
     Returns the Webex message id, or None on failure.
     """
     from my_config import get_config
     from webexteamssdk import WebexTeamsAPI
     cfg = get_config()
-    token = cfg.webex_bot_access_token_pokedex
+    token = cfg.webex_bot_access_token_sleuth
     if not token:
-        logger.warning("tier2_webex: WEBEX_BOT_ACCESS_TOKEN_POKEDEX not set, skipping")
+        logger.warning("tier2_webex: WEBEX_BOT_ACCESS_TOKEN_SLEUTH not set, skipping")
         return None
     room = cfg.webex_room_id_soc_in_a_box or cfg.webex_room_id_dev_test_space
     if not room:

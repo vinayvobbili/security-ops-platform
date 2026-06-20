@@ -8,7 +8,11 @@ containment status checking, and device information retrieval.
 """
 
 import logging
+import re
+from datetime import datetime, timezone
 from typing import Optional
+from zoneinfo import ZoneInfo
+
 from langchain_core.tools import tool
 from my_bot.tools._tagging import readonly_tool, mutating_tool
 
@@ -18,6 +22,28 @@ from services.crowdstrike import CrowdStrikeClient
 # Import tool logging decorator
 from src.utils.tool_decorator import log_tool_call
 from src.utils.llm_decorators import validate_args, HOSTNAME_PATTERN
+from my_bot.utils.webex_format import defang
+
+_ET = ZoneInfo("America/New_York")
+
+
+def _fmt_cs_ts(value) -> str:
+    """Render a CrowdStrike ISO-8601 timestamp as Eastern (MM/DD/YYYY H:MM AM/PM EDT).
+
+    CrowdStrike returns last_seen as UTC ISO-8601 (e.g. '2026-06-18T17:20:02Z').
+    SOC-facing output shows Eastern; falls back to the raw value if unparseable.
+    """
+    if not value:
+        return "?"
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.astimezone(_ET)
+        hour = dt.strftime("%I").lstrip("0") or "12"
+        return dt.strftime(f"%m/%d/%Y {hour}:%M %p %Z")
+    except (ValueError, TypeError):
+        return str(value)
 
 # Lazy-initialized CrowdStrike client
 _crowdstrike_client: Optional[CrowdStrikeClient] = None
@@ -122,7 +148,7 @@ def get_device_details_cs(hostname: str) -> str:
             f"Device Details for '{hostname}':",
             f"• Device ID: {device_id}",
             f"• Status: {details.get('status', 'Unknown')}",
-            f"• Last Seen: {details.get('last_seen', 'Unknown')}",
+            f"• Last Seen: {_fmt_cs_ts(details.get('last_seen')) if details.get('last_seen') else 'Unknown'}",
             f"• OS Version: {details.get('os_version', 'Unknown')}",
             f"• Product Type: {details.get('product_type_desc', 'Unknown')}",
             f"• Chassis Type: {details.get('chassis_type_desc', 'Unknown')}",
@@ -417,6 +443,354 @@ def search_crowdstrike_detections_by_hostname(hostname: str, limit: int = 10) ->
 
 @readonly_tool
 @log_tool_call
+def search_crowdstrike_detections_by_ioc(ioc: str, ioc_type: str = "") -> str:
+    """Find which hosts observed an IOC (domain, IP, or file hash) in CrowdStrike.
+
+    USE THIS TOOL to pivot from an indicator to the affected endpoints — e.g.
+    "which hosts connected to yowgames.com?", "what machines saw this hash/IP?",
+    "resolve the hosts that had CrowdStrike detections for <domain>". This is the
+    IOC -> hosts lookup that answers "who was affected" BEFORE drilling into
+    per-host browser history or process timelines.
+
+    It queries CrowdStrike's IOC "devices ran on" index and returns the
+    hostnames (with last-seen, platform, IP) of every managed endpoint that
+    observed the indicator.
+
+    Args:
+        ioc: The indicator value — a domain (e.g. "yowgames.com"), IPv4/IPv6
+            address, or MD5/SHA1/SHA256 hash. Pass the LITERAL IOC from the
+            ticket/alert; do NOT invent a domain from a product, extension, or
+            campaign name.
+        ioc_type: Optional explicit type ('domain','ipv4','ipv6','md5','sha1',
+            'sha256'); auto-detected from the value when left blank.
+    """
+    client = _get_crowdstrike_client()
+    if not client:
+        return "Error: CrowdStrike service is not available."
+
+    ioc = ioc.strip()
+    # Normalize a pasted URL down to its host for domain IOCs.
+    if "://" in ioc:
+        ioc = ioc.split("://", 1)[1].split("/")[0]
+
+    data = client.get_devices_by_ioc(ioc, ioc_type=(ioc_type.strip() or None))
+
+    if "error" in data:
+        return f"Error: {data['error']}"
+
+    hosts = data.get("hosts", [])
+    count = data.get("device_count", 0)
+    itype = data.get("ioc_type", "unknown")
+    # Replies post to Webex — defang the malicious indicator we echo back so it
+    # can't auto-link/be clicked. Base it on the service's canonical (refanged)
+    # value so a defanged search term isn't double-defanged; host IPs stay intact.
+    ioc_disp = defang(data.get("ioc") or ioc)
+
+    # Deep link back to the source so an analyst can click through and verify
+    # these results in Falcon Advanced Event Search (pre-filled, no copy-paste).
+    # Uses the REAL (refanged) indicator — it rides in a URL the analyst clicks —
+    # as a markdown link, which the Webex defang passes leave clickable. Most
+    # valuable on the no-hosts path: lets someone confirm a *negative* at source.
+    verify_line = None
+    try:
+        from src.components.tipper_analyzer.formatters import _get_falcon_logscale_link
+        _vl = _get_falcon_logscale_link(f'"{data.get("ioc") or ioc}"', window="30d")
+        if _vl:
+            verify_line = f"🔗 Verify at source: [Open in Falcon Advanced Event Search]({_vl})"
+    except Exception:
+        verify_line = None
+
+    if not hosts:
+        msg = (
+            f"No managed CrowdStrike hosts observed IOC `{ioc_disp}` (type: {itype}). "
+            "Keep this indicator defanged in any reply.\n"
+            "Note: this is the IOC 'devices ran on' index — if the indicator is "
+            "brand new, was only seen at the proxy/network layer, or wasn't seen "
+            "on a managed endpoint, it won't appear here."
+        )
+        # Surface the index-vs-tenant gap so the LLM never reports phantom hosts.
+        if data.get("note"):
+            msg += f"\n{data['note']}"
+        if verify_line:
+            msg += f"\n{verify_line}"
+        return msg
+
+    lines = [
+        f"## CrowdStrike hosts that observed `{ioc_disp}` (type: {itype})",
+        f"**{count} device(s)** observed this indicator. "
+        f"(Keep the indicator `{ioc_disp}` defanged in your reply; host IPs are internal — leave them as-is.)",
+        "",
+        "_The timestamp on each host is its last CrowdStrike check-in — NOT when "
+        "it contacted the indicator. This index records *that* a host observed the "
+        "IOC, not *when*; use the per-host DNS/process timeline for contact times._",
+        "",
+    ]
+    for h in hosts:
+        hn = h.get("hostname") or "(unknown hostname)"
+        lines.append(
+            f"- **{hn}** — host last checked in {_fmt_cs_ts(h.get('last_seen'))} · "
+            f"{h.get('platform', '?')} · {h.get('local_ip', '?')}"
+        )
+    lines.append("")
+    lines.append(
+        "Next step: pull per-host browser history and process timelines for these hosts."
+    )
+    if verify_line:
+        lines.append(verify_line)
+    return "\n".join(lines)
+
+
+@readonly_tool
+@validate_args(hostname=HOSTNAME_PATTERN)
+@log_tool_call
+def get_crowdstrike_host_vulnerabilities(hostname: str, status: str = "open,reopen") -> str:
+    """List the Spotlight vulnerabilities exposed on a host (the per-host vuln view).
+
+    USE THIS TOOL when asked "what is this host vulnerable to?", "what CVEs are
+    open on <hostname>?", or to assess an endpoint's vulnerability posture during
+    triage. Returns vulnerabilities sorted most-severe-first with CVE, ExPRT.AI
+    rating, CVSS score, exploit status, affected product and remediation.
+
+    Args:
+        hostname: The device hostname (e.g. 'WORKSTATION01'), NOT a ticket ID.
+        status: Comma-separated Spotlight statuses to include. Defaults to open +
+            reopened; pass "" to include closed/expired too.
+    """
+    client = _get_crowdstrike_client()
+    if not client:
+        return "Error: CrowdStrike service is not available."
+
+    hostname = hostname.strip().upper()
+    data = client.get_host_vulnerabilities(hostname, status=status)
+
+    if "error" in data:
+        return f"Error: {data['error']}"
+
+    vulns = data.get("vulnerabilities", [])
+    count = data.get("count", 0)
+
+    if not vulns:
+        return (
+            f"No Spotlight vulnerabilities (status: {status or 'any'}) found for `{hostname}`. "
+            "Either the host is clean for that status filter, or it isn't reporting to Spotlight."
+        )
+
+    lines = [
+        f"## Spotlight vulnerabilities on `{hostname}`",
+        f"**{count} vulnerabilit(ies)** (status: {status or 'any'}), most severe first.",
+        "",
+    ]
+    for v in vulns[:50]:
+        cve = v.get("cve_id") or "(no CVE)"
+        rating = v.get("exprt_rating") or v.get("cve_severity") or "?"
+        score = v.get("cvss_base_score")
+        score_str = f"CVSS {score}" if score is not None else "CVSS ?"
+        exploit = v.get("exploit_status")
+        exploit_str = f" · exploit: {exploit}" if exploit else ""
+        product = v.get("product") or "?"
+        rems = v.get("remediations") or []
+        rem_str = f" · fix: {rems[0]}" if rems else ""
+        lines.append(
+            f"- **{cve}** [{rating}] {score_str}{exploit_str} · {product}{rem_str}"
+        )
+    if count > 50:
+        lines.append(f"\n…and {count - 50} more (showing top 50 by CVSS).")
+    return "\n".join(lines)
+
+
+@readonly_tool
+@log_tool_call
+def search_crowdstrike_vulns_by_cve(cve_id: str, status: str = "open,reopen") -> str:
+    """Find which hosts are exposed to a CVE in CrowdStrike Spotlight (CVE -> hosts).
+
+    USE THIS TOOL to answer "are we vulnerable to CVE-XXXX, and on which boxes?" —
+    the exposure question for advisory / vulnerability triage. Returns the affected
+    hostnames with their ExPRT.AI rating, CVSS score and exploit status.
+
+    Args:
+        cve_id: The CVE identifier, e.g. "CVE-2024-3094". Pass the literal CVE from
+            the advisory; do not invent one.
+        status: Comma-separated Spotlight statuses to include (default open +
+            reopen); pass "" to include closed/expired.
+    """
+    client = _get_crowdstrike_client()
+    if not client:
+        return "Error: CrowdStrike service is not available."
+
+    cve_id = cve_id.strip().upper()
+    data = client.search_vulnerabilities_by_cve(cve_id, status=status)
+
+    if "error" in data:
+        return f"Error: {data['error']}"
+
+    hosts = data.get("hosts", [])
+    count = data.get("host_count", 0)
+
+    if not hosts:
+        return (
+            f"No CrowdStrike hosts are reporting exposure to `{cve_id}` "
+            f"(status: {status or 'any'}). Note: this reflects Spotlight's managed-endpoint "
+            "coverage — assets without the Spotlight module won't appear."
+        )
+
+    lines = [
+        f"## Hosts exposed to `{cve_id}` in CrowdStrike Spotlight",
+        f"**{count} host(s)** currently exposed (status: {status or 'any'}).",
+        "",
+    ]
+    for h in hosts[:100]:
+        hn = h.get("hostname") or "(unknown hostname)"
+        rating = h.get("exprt_rating") or h.get("cve_severity") or "?"
+        score = h.get("cvss_base_score")
+        score_str = f"CVSS {score}" if score is not None else ""
+        exploit = h.get("exploit_status")
+        exploit_str = f" · exploit: {exploit}" if exploit else ""
+        product = h.get("product") or "?"
+        lines.append(
+            f"- **{hn}** [{rating}] {score_str}{exploit_str} · {product} · {h.get('local_ip', '?')}"
+        )
+    if count > 100:
+        lines.append(f"\n…and {count - 100} more host(s).")
+    return "\n".join(lines)
+
+
+@readonly_tool
+@log_tool_call
+def get_crowdstrike_quarantine_files(hostname: str = "", sha256: str = "", status: str = "") -> str:
+    """List the files CrowdStrike has quarantined (read-only visibility).
+
+    USE THIS TOOL to answer "what has CrowdStrike quarantined on <hostname>?",
+    "is this hash quarantined anywhere?", or to review quarantined files during
+    triage. Returns the file hash, host, original path, owning user and state.
+
+    This is READ-ONLY. Releasing or deleting a quarantined file is a human-gated
+    response action performed via the MCP tool / console, not by this agent.
+
+    Args:
+        hostname: Optional device hostname to scope to.
+        sha256: Optional file hash to scope to.
+        status: Optional state filter ('quarantined', 'released', 'deleted').
+    """
+    client = _get_crowdstrike_client()
+    if not client:
+        return "Error: CrowdStrike service is not available."
+
+    hn = hostname.strip().upper() if hostname.strip() else None
+    data = client.query_quarantine_files(
+        hostname=hn,
+        sha256=(sha256.strip() or None),
+        status=(status.strip() or None),
+    )
+
+    if "error" in data:
+        return f"Error: {data['error']}"
+
+    files = data.get("files", [])
+    count = data.get("count", 0)
+
+    scope = hn or sha256.strip() or status.strip() or "the tenant"
+    if not files:
+        return f"No quarantined files found for {scope}."
+
+    lines = [
+        f"## CrowdStrike quarantined files ({scope})",
+        f"**{count} file(s)** quarantined.",
+        "",
+    ]
+    for f in files[:50]:
+        paths = f.get("paths") or []
+        path_str = paths[0] if paths else "(unknown path)"
+        lines.append(
+            f"- **{f.get('sha256', '?')[:16]}…** [{f.get('state', '?')}] on "
+            f"{f.get('hostname', '?')} · {f.get('username', '?')} · {path_str}"
+        )
+    if count > 50:
+        lines.append(f"\n…and {count - 50} more.")
+    lines.append("")
+    lines.append("To release (false positive) or delete one of these, use the gated quarantine action — not this read-only view.")
+    return "\n".join(lines)
+
+
+@readonly_tool
+@log_tool_call
+def get_crowdstrike_identity_risk(name: str) -> str:
+    """Look up Falcon Identity Protection risk for a user/entity by display name.
+
+    USE THIS TOOL to answer "what's the identity risk for <person>?", "is this
+    account risky?", or to pull the identity-risk picture during user-centric
+    investigations. Returns the risk score, severity and the contributing risk
+    factors (e.g. stale account, weak/duplicate password, attack-path exposure).
+
+    Args:
+        name: The entity's display name, e.g. "Jane Doe". Pass the actual
+            account/person name, not a hostname or ticket ID.
+    """
+    client = _get_crowdstrike_client()
+    if not client:
+        return "Error: CrowdStrike service is not available."
+
+    data = client.get_identity_entity_risk(name.strip())
+    if "error" in data:
+        return f"Error: {data['error']}"
+
+    entities = data.get("entities", [])
+    if not entities:
+        return f"No Identity Protection entity found matching `{name}`."
+
+    lines = [f"## Identity Protection risk for `{name}`", ""]
+    for e in entities[:10]:
+        emails = ", ".join(e.get("emails", [])) or "—"
+        lines.append(
+            f"- **{e.get('name', '?')}** ({e.get('type', '?')}) · "
+            f"risk {e.get('risk_score', '?')} [{e.get('risk_severity', '?')}] · {emails}"
+        )
+        for rf in (e.get("risk_factors") or [])[:8]:
+            lines.append(f"    - risk factor: {rf.get('type', '?')} [{rf.get('severity', '?')}]")
+    return "\n".join(lines)
+
+
+@readonly_tool
+@log_tool_call
+def get_crowdstrike_high_risk_identities(min_severity: str = "HIGH") -> str:
+    """List the highest-risk identities in CrowdStrike Identity Protection.
+
+    USE THIS TOOL to answer "who are our riskiest identities/users right now?" —
+    the prioritized identity watchlist for threat hunting. Returns entities
+    sorted by risk score with their contributing risk factors.
+
+    Args:
+        min_severity: Lowest severity to include ('LOW','MEDIUM','HIGH').
+            Defaults to HIGH (most urgent only).
+    """
+    client = _get_crowdstrike_client()
+    if not client:
+        return "Error: CrowdStrike service is not available."
+
+    data = client.get_high_risk_identities(min_severity=min_severity.strip().upper() or "HIGH")
+    if "error" in data:
+        return f"Error: {data['error']}"
+
+    entities = data.get("entities", [])
+    sev = data.get("min_severity", "HIGH")
+    if not entities:
+        return f"No identities at or above {sev} risk severity found."
+
+    lines = [
+        f"## Highest-risk identities (≥ {sev} severity)",
+        f"**{data.get('count', 0)}** entit(ies), riskiest first.",
+        "",
+    ]
+    for e in entities[:50]:
+        factors = ", ".join(rf.get("type", "?") for rf in (e.get("risk_factors") or [])[:4]) or "—"
+        lines.append(
+            f"- **{e.get('name', '?')}** ({e.get('type', '?')}) · "
+            f"risk {e.get('risk_score', '?')} [{e.get('risk_severity', '?')}] · factors: {factors}"
+        )
+    return "\n".join(lines)
+
+
+@readonly_tool
+@log_tool_call
 def get_crowdstrike_incidents(limit: int = 10, status: str = "") -> str:
     """Get recent incidents from CrowdStrike Falcon platform.
 
@@ -535,6 +909,105 @@ def get_and_clear_generated_file_path():
     path = _last_generated_file_path
     _last_generated_file_path = None
     return path
+
+
+@mutating_tool
+@validate_args(hostname=HOSTNAME_PATTERN)
+@log_tool_call
+def run_endpoint_command(hostname: str, command: str, timeout: int = 120) -> str:
+    """Run an ad-hoc diagnostic command on a live endpoint via CrowdStrike RTR.
+
+    USE THIS TOOL for live host/network diagnostics on a specific Windows host:
+    traceroute (e.g. 'tracert -d 8.8.8.8'), 'ipconfig /all', 'route print',
+    'netstat -ano', 'ping', 'arp -a', or a short PowerShell one-liner. The command
+    runs in PowerShell on the host and the raw text output is returned.
+
+    This is a high-privilege action — it executes a command on a live endpoint — so
+    it is restricted to administrators and every attempt is audited. The host must
+    be online.
+
+    Args:
+        hostname: Target Windows host (e.g. 'US2XB6W64'). Must be online.
+        command: Command to run (PowerShell/native), e.g. 'tracert -d -h 20 -w 1000 8.8.8.8'.
+        timeout: Max seconds to wait for completion (default 120).
+    """
+    from services.crowdstrike_rtr import run_rtr_raw_command
+    hostname = hostname.strip().upper()
+    result = run_rtr_raw_command(hostname, command, timeout=timeout)
+    if not result.get("success"):
+        return f"❌ RTR command failed on **{hostname}**: {result.get('error') or 'unknown error'}"
+    out = (result.get("output") or "").strip() or "(no output)"
+    return f"✅ `{command}` on **{hostname}** via CrowdStrike RTR:\n\n```\n{out}\n```"
+
+
+# Allowlisted read-only endpoint diagnostics. The caller picks a diagnostic by
+# name and (where relevant) a target; the actual command is constructed HERE,
+# server-side — the caller never supplies a free-text command, which is what
+# makes this safe to expose without the admin gate that run_endpoint_command
+# needs. Each runs as a fixed native Windows command via RTR runscript (so we get
+# real `ipconfig /all` / `netstat -ano` output, unlike the RTR base-tier
+# reimplementations which take no args). {target} is filled only with a validated
+# host/IP, so nothing the caller supplies can change the command shape.
+_ENDPOINT_DIAGNOSTICS = {
+    "ipconfig": {"cmd": "ipconfig /all", "target": False},
+    "netstat":  {"cmd": "netstat -ano", "target": False},
+    "tasklist": {"cmd": "tasklist", "target": False},
+    "route":    {"cmd": "route print", "target": False},
+    "arp":      {"cmd": "arp -a", "target": False},
+    "getmac":   {"cmd": "getmac /v", "target": False},
+    "tracert":  {"cmd": "tracert -d -h 20 -w 1000 {target}", "target": True},
+    "ping":     {"cmd": "ping -n 4 {target}", "target": True},
+    "nslookup": {"cmd": "nslookup {target}", "target": True},
+}
+
+# IPv4 / hostname / FQDN only. No spaces or shell metacharacters can pass this,
+# so a validated target is safe to substitute into a command template.
+_DIAG_TARGET_RE = re.compile(r"^[A-Za-z0-9._-]{1,253}$")
+
+
+@readonly_tool
+@validate_args(hostname=HOSTNAME_PATTERN)
+@log_tool_call
+def run_endpoint_diagnostic(hostname: str, diagnostic: str, target: str = "") -> str:
+    """Run a safe, read-only network diagnostic on a live endpoint via CrowdStrike RTR.
+
+    USE THIS for live host/network diagnostics that do NOT need an arbitrary
+    command: ipconfig, netstat, tasklist, route, arp, getmac, tracert, ping,
+    nslookup. The command is fixed server-side — you only choose which diagnostic
+    to run and (for tracert/ping/nslookup) a target host or IP. This is read-only
+    and open to any analyst. For an arbitrary ad-hoc command, use
+    run_endpoint_command (which is admin-only).
+
+    Args:
+        hostname: Windows host to run the diagnostic ON (e.g. 'US2XB6W64'). Must be online.
+        diagnostic: One of: ipconfig, netstat, tasklist, route, arp, getmac, tracert, ping, nslookup.
+        target: Destination host/IP for tracert/ping/nslookup (e.g. '8.8.8.8'). Ignored otherwise.
+    """
+    diag = (diagnostic or "").strip().lower()
+    spec = _ENDPOINT_DIAGNOSTICS.get(diag)
+    if not spec:
+        allowed = ", ".join(sorted(_ENDPOINT_DIAGNOSTICS))
+        return f"❌ Unknown diagnostic '{diagnostic}'. Choose one of: {allowed}."
+
+    hostname = hostname.strip().upper()
+    target = (target or "").strip()
+
+    if spec["target"]:
+        if not target:
+            return f"❌ The '{diag}' diagnostic needs a target host or IP (e.g. '8.8.8.8')."
+        if not _DIAG_TARGET_RE.match(target):
+            return f"❌ Invalid target '{target}'. Use a plain hostname or IP (letters, digits, dot, hyphen only)."
+        command = spec["cmd"].format(target=target)
+    else:
+        command = spec["cmd"]
+
+    from services.crowdstrike_rtr import run_rtr_raw_command
+    result = run_rtr_raw_command(hostname, command)
+
+    if not result.get("success"):
+        return f"❌ Diagnostic `{diag}` failed on **{hostname}**: {result.get('error') or 'unknown error'}"
+    out = (result.get("output") or "").strip() or "(no output)"
+    return f"✅ `{command}` on **{hostname}** via CrowdStrike RTR:\n\n```\n{out}\n```"
 
 
 @readonly_tool

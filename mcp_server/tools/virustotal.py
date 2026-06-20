@@ -3,6 +3,7 @@
 import logging
 
 from mcp_server.server import mcp
+from my_bot.utils.verify_links import attach_verify, virustotal_line
 
 logger = logging.getLogger(__name__)
 
@@ -21,28 +22,28 @@ def _get_client():
 def virustotal_lookup_ip(ip_address: str) -> dict:
     """Get VirusTotal reputation and analysis for an IP address."""
     client = _get_client()
-    return client.lookup_ip(ip_address)
+    return attach_verify(client.lookup_ip(ip_address), virustotal_line(ip_address, "ip"))
 
 
 @mcp.tool(tags={"readonly"})
 def virustotal_lookup_domain(domain: str) -> dict:
     """Get VirusTotal reputation and analysis for a domain."""
     client = _get_client()
-    return client.lookup_domain(domain)
+    return attach_verify(client.lookup_domain(domain), virustotal_line(domain, "domain"))
 
 
 @mcp.tool(tags={"readonly"})
 def virustotal_lookup_url(url: str) -> dict:
     """Get VirusTotal reputation and analysis for a URL."""
     client = _get_client()
-    return client.lookup_url(url)
+    return attach_verify(client.lookup_url(url), virustotal_line(url, "url"))
 
 
 @mcp.tool(tags={"readonly"})
 def virustotal_lookup_hash(file_hash: str) -> dict:
     """Get VirusTotal analysis for a file hash (MD5/SHA1/SHA256)."""
     client = _get_client()
-    return client.lookup_hash(file_hash)
+    return attach_verify(client.lookup_hash(file_hash), virustotal_line(file_hash, "hash"))
 
 
 @mcp.tool(tags={"readonly"})

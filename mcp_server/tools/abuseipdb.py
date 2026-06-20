@@ -3,6 +3,7 @@
 import logging
 
 from mcp_server.server import mcp
+from my_bot.utils.verify_links import attach_verify, abuseipdb_line
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,8 @@ def abuseipdb_check_ip(ip_address: str) -> dict:
         ip_address: IPv4 or IPv6 address to check
     """
     client = _get_client()
-    return client.check_ip(ip_address.strip())
+    ip_address = ip_address.strip()
+    return attach_verify(client.check_ip(ip_address), abuseipdb_line(ip_address))
 
 
 @mcp.tool(tags={"readonly"})

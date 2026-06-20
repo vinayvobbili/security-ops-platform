@@ -6,8 +6,8 @@ them as relevance probabilities.
 
 This is the app-agnostic reranker used by every IR RAG path that opts in via
 `my_bot.document.document_processor.rerank_documents`. First consumer is the
-Customer Assurance drafting flow; other RAG apps (Pokedex ticket search,
-Win.AI code search, docs_library, detection rules catalog) can opt in with
+Customer Assurance drafting flow; other RAG apps (Sleuth ticket search,
+Mentor code search, docs_library, detection rules catalog) can opt in with
 a one-line call at their retrieval site.
 
 Runs on studio1 (was mac-m3 until 2026-05-07) hosting the BGE-reranker-v2-m3

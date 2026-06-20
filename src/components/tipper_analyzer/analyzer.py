@@ -1252,7 +1252,7 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
 
         logger.info("Generating novelty analysis with LLM...")
         if not self.llm:
-            raise RuntimeError("LLM not initialized. Ensure Pokedex state manager is running.")
+            raise RuntimeError("LLM not initialized. Ensure Sleuth state manager is running.")
 
         start_time = time.time()
 
@@ -1716,7 +1716,7 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
                             kwargs = {"roomId": tipper_room, "markdown": webex_md}
                             if parent_id:
                                 kwargs["parentId"] = parent_id
-                            WebexAPI(access_token=config.webex_bot_access_token_pokedex).messages.create(**kwargs)
+                            WebexAPI(access_token=config.webex_bot_access_token_sleuth).messages.create(**kwargs)
                             logger.info(
                                 f"[exposure] Sent to tipper analysis room "
                                 f"(reply={'yes' if parent_id else 'no'})"
@@ -1778,7 +1778,7 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
                 from webexpythonsdk import WebexAPI
                 from .webex_retry import send_with_retry
                 webex_md = linkify_work_items_markdown(display_output)
-                webex = WebexAPI(access_token=_cfg.webex_bot_access_token_pokedex)
+                webex = WebexAPI(access_token=_cfg.webex_bot_access_token_sleuth)
                 msg = send_with_retry(webex, tipper_room, webex_md)
                 parent_msg_id = getattr(msg, "id", None)
                 logger.info(f"Sent analysis to tipper analysis room (msg_id={parent_msg_id})")
@@ -1818,7 +1818,7 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
                         config = get_config()
                         azdo_url = f"https://dev.azure.com/{config.azdo_org}/{config.azdo_de_project}/_workitems/edit/{tipper_id}"
                         msg = format_hunt_results_for_webex(hunt_result, tipper_id, azdo_url)
-                        webex = WebexAPI(access_token=config.webex_bot_access_token_pokedex)
+                        webex = WebexAPI(access_token=config.webex_bot_access_token_sleuth)
                         webex.messages.create(roomId=room_id, markdown=msg)
                         logger.info(f"[bg] Sent hunt summary to Webex for #{tipper_id}")
                     except Exception as wx_err:
@@ -1852,7 +1852,7 @@ Focus on the narrative analysis. IOC overlaps are computed separately and will s
                         config = get_config()
                         azdo_url = f"https://dev.azure.com/{config.azdo_org}/{config.azdo_de_project}/_workitems/edit/{tipper_id}"
                         msg = format_behavioral_hunt_for_webex(th_result, tipper_id, azdo_url)
-                        WebexAPI(access_token=config.webex_bot_access_token_pokedex).messages.create(
+                        WebexAPI(access_token=config.webex_bot_access_token_sleuth).messages.create(
                             roomId=room_id, markdown=msg)
                         logger.info(f"[bg] Sent threat-hunt summary to Webex for #{tipper_id}")
                     except Exception as wx_err:

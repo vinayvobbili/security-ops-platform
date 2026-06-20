@@ -41,7 +41,7 @@ def notify_dev_space(issue_key: str, subject: str, detail: str = "") -> bool:
 
         config = get_config()
         room_id = getattr(config, "webex_room_id_dev_test_space", None)
-        token = getattr(config, "webex_bot_access_token_pokedex", None)
+        token = getattr(config, "webex_bot_access_token_sleuth", None)
         if not room_id or not token:
             logger.warning(
                 "[exposure-alert] No dev-test-space room or bot token configured; "

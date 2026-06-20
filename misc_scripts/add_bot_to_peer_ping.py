@@ -37,16 +37,16 @@ def main():
 
     # Step 1: Show current topology
     print("📊 Current Topology:")
-    print("   the notification service → the alert triage service → Money_Ball → the notification service ⟲")
-    print("   msoar → the notification service (spoke)")
+    print("   the notification service → the alert triage service → Oracle → the notification service ⟲")
+    print("   orchestrator → the notification service (spoke)")
     print()
 
     # Step 2: Ask where to insert
     print("❓ Where should we insert the new bot?")
     print()
     print("Options:")
-    print("  1. Insert into main ring between Money_Ball and the notification service")
-    print("     Result: ...Money_Ball → NewBot → the notification service...")
+    print("  1. Insert into main ring between Oracle and the notification service")
+    print("     Result: ...Oracle → NewBot → the notification service...")
     print()
     print("  2. Insert into main ring between the notification service and the alert triage service")
     print("     Result: ...the notification service → NewBot → the alert triage service...")
@@ -93,13 +93,13 @@ def main():
     print(f"        initialization_func=lambda bot: {new_bot_name}_initialization_with_tracking(bot, resilient_runner),")
 
     if choice == "1":
-        target = "toodles"
-        predecessor = "money_ball"
+        target = "aide"
+        predecessor = "oracle"
     elif choice == "2":
-        target = "barnacles"
-        predecessor = "toodles"
+        target = "relay"
+        predecessor = "aide"
     else:
-        target = "toodles"
+        target = "aide"
         predecessor = None
 
     print(f"        peer_bot_email=config.webex_bot_email_{target},  # {new_bot_pascal} → {target.title()}")
@@ -124,7 +124,7 @@ def main():
         print("RESULT:")
         print("-" * 60)
         if choice == "1":
-            print("   ...Money_Ball → NewBot → the notification service...")
+            print("   ...Oracle → NewBot → the notification service...")
         else:
             print("   ...the notification service → NewBot → the orchestration service...")
     else:

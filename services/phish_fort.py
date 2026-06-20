@@ -562,7 +562,7 @@ def fetch_and_report_incidents(room_id: str = None) -> None:
 def _notify_domain_monitoring_room(message: str) -> bool:
     """Post a takedown notification to the Domain Monitoring Webex room.
 
-    Uses the Toodles bot (the same bot that posts the daily domain-monitoring
+    Uses the Aide bot (the same bot that posts the daily domain-monitoring
     summary, so it is already a member of that room). Off-prod the notification
     is routed to the dev test space so the dev twin can be exercised without
     putting test traffic in the real Domain Monitoring room.
@@ -575,7 +575,7 @@ def _notify_domain_monitoring_room(message: str) -> bool:
         logger.warning("No Webex room configured; skipping takedown notification")
         return False
     try:
-        notify_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_toodles)
+        notify_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_aide)
         notify_api.messages.create(roomId=room_id, markdown=message)
         logger.info("Posted takedown notification to Domain Monitoring room")
         return True

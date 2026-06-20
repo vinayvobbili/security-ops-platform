@@ -71,6 +71,11 @@ class IncidentResponseState(TypedDict):
     # QRadar correlation
     qradar_events: Optional[str]
 
+    # Web-proxy access for domain IOCs: referrer ("how directed") + downloads
+    web_access: Optional[str]
+    # Per-host process/execution activity
+    host_execution: Optional[str]
+
     # Synthesized outputs
     executive_summary: Optional[str]
     severity_assessment: Optional[str]

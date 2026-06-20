@@ -100,6 +100,27 @@ def inject_public_config():
     return {'config': PUBLIC_CONFIG}
 
 
+@app.template_filter('et')
+def _jinja_et(value):
+    """Format a UTC/ISO timestamp (or datetime) as US/Eastern for display:
+    ``MM/DD/YYYY H:MM AM/PM EDT``. User-facing times are always shown in ET."""
+    from datetime import datetime, timezone
+    import pytz
+    if value in (None, ""):
+        return ""
+    dt = value
+    if isinstance(value, str):
+        try:
+            dt = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        except ValueError:
+            return value
+    if not isinstance(dt, datetime):
+        return str(value)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(pytz.timezone("US/Eastern")).strftime("%m/%d/%Y %-I:%M %p %Z")
+
+
 @app.context_processor
 def inject_current_user():
     """Expose the logged-in browser user — and a capability check — to every
@@ -293,14 +314,14 @@ def main():
 
     # Initialize Pokédex bot components
     try:
-        if os.environ.get('SKIP_POKEDEX_WARMUP', '').lower() == 'true':
-            print("⏭️ Skipping Pokedex initialization (SKIP_POKEDEX_WARMUP=true)")
+        if os.environ.get('SKIP_SLEUTH_WARMUP', '').lower() == 'true':
+            print("⏭️ Skipping Sleuth initialization (SKIP_SLEUTH_WARMUP=true)")
         else:
-            print("🤖 Initializing Pokedex chat components...")
+            print("🤖 Initializing Sleuth chat components...")
             from my_bot.core.my_model import initialize_model_and_agent
             from my_bot.core.state_manager import get_state_manager
             if initialize_model_and_agent():
-                print("✅ Pokedex chat components initialized!")
+                print("✅ Sleuth chat components initialized!")
 
                 print("🔥 Warming up LLM (this will load the model into memory)...")
                 state_manager = get_state_manager()
@@ -309,9 +330,9 @@ def main():
                 else:
                     print("⚠️ LLM warmup skipped or failed - model will load on first request")
             else:
-                print("⚠️ Pokedex chat initialization failed - chat endpoint will return errors")
+                print("⚠️ Sleuth chat initialization failed - chat endpoint will return errors")
     except Exception as exc:
-        print(f"⚠️ Failed to initialize Pokedex chat: {exc}")
+        print(f"⚠️ Failed to initialize Sleuth chat: {exc}")
         print("   Chat endpoint will be available but may return errors")
 
     charts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'static/charts'))

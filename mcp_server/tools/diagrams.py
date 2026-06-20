@@ -16,7 +16,7 @@ MAX_MERMAID_SOURCE_CHARS = 8000
 
 # ---------------------------------------------------------------------------
 # Visual theme — injected into every Mermaid source.
-# Pastel Material Design palette with dark text. Matches Pokedex diagrams.
+# Pastel Material Design palette with dark text. Matches Sleuth diagrams.
 # ---------------------------------------------------------------------------
 THEME_INIT = (
     '%%{init: {"theme":"base",'
@@ -235,7 +235,7 @@ def render_diagram(
         from webexpythonsdk import WebexAPI
 
         config = get_config()
-        webex_api = WebexAPI(access_token=config.webex_bot_access_token_barnacles)
+        webex_api = WebexAPI(access_token=config.webex_bot_access_token_relay)
 
         kwargs = {
             "roomId": room_id,

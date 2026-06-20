@@ -1,0 +1,29 @@
+[Unit]
+Description=Log Viewer - the case orchestrator
+After=network-online.target ir-orchestrator.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=user
+Group=user
+WorkingDirectory=/home/user/IR
+EnvironmentFile=/home/user/IR/.env
+
+# Kill any orphan process using this port before starting
+ExecStartPre=-/bin/bash -c 'fuser -k 8033/tcp 2>/dev/null || true'
+
+# Start log viewer for the case orchestrator bot
+ExecStart=/home/user/IR/.venv/bin/python deployment/log_viewer.py --port 8033 --title "the case orchestrator Bot" --file /home/user/IR/logs/orchestrator.log
+
+Restart=on-failure
+KillMode=mixed
+TimeoutStopSec=10
+RestartSec=10
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ir-log-viewer-orchestrator
+
+[Install]
+WantedBy=multi-user.target

@@ -59,7 +59,7 @@ export function updateTable() {
                     break;
                 case 'number':
                     if (columnId === 'id') {
-                        td.innerHTML = `<a href="https://msoar.crtx.us.paloaltonetworks.com/Custom/caseinfoid/${value}" target="_blank" style="color: #0046ad; text-decoration: underline;">${value}</a>`;
+                        td.innerHTML = `<a href="https://orchestrator.crtx.us.paloaltonetworks.com/Custom/caseinfoid/${value}" target="_blank" style="color: #0046ad; text-decoration: underline;">${value}</a>`;
                     } else if (columnId === 'severity') {
                         const severity = SEVERITY_MAP[value] || 'Unknown';
                         td.innerHTML = `<span class="severity-${severity.toLowerCase()}">${severity}</span>`;

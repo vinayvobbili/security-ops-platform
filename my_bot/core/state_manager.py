@@ -21,7 +21,12 @@ import openai
 from langchain_core.language_models import BaseChatModel
 from langchain_core.embeddings import Embeddings
 
-from my_bot.utils.llm_factory import create_llm, create_router_llm, create_embeddings, extract_token_metrics
+from my_bot.utils.llm_factory import (
+    create_llm, create_router_llm, create_embeddings, extract_token_metrics,
+    SYNTH_ENABLED, SYNTH_MARKER, SYNTH_DIRECTIVE, synthesize_final_answer,
+    SYNTH_GATHER_FIRST_NUDGE, is_premature_synth_marker, ensure_verify_links,
+    synthesize_or_request_more, SYNTH_NEED_NUDGE,
+)
 
 # Connection errors worth retrying (transient network / server resets)
 _RETRYABLE_ERRORS = (openai.APIConnectionError, ConnectionResetError, ConnectionError)
@@ -76,12 +81,57 @@ def _strip_thinking(text: str) -> str:
     return text.strip()
 
 
+# First-person intent to USE A TOOL ("let me search", "I need to identify",
+# "I'll look up …") immediately followed (within the clause) by a tool-style
+# action verb. The verb requirement is what keeps benign closers like "let me
+# know" out — those have no investigative verb after the lead-in.
+_UNFULFILLED_INTENT_RE = re.compile(
+    r"\b(let me|let's|i'?ll|i will|i'?m going to|i am going to|i need to|"
+    r"i should|i have to|next,?\s+i|now\s+i'?ll|first,?\s+i)\b[^.?!\n]{0,60}?\b"
+    r"(search|check|look\s+up|look\s+at|query|run|pull|fetch|retrieve|gather|"
+    r"investigate|examine|find|identify|review|analyze|analyse|get|use|call|"
+    r"lookup|enumerate|collect)\b",
+    re.IGNORECASE,
+)
+
+
+def _looks_like_unfulfilled_intent(content: str) -> bool:
+    """True when the model narrated a plan to call a tool but emitted no tool call.
+
+    GLM (and other local models) sometimes return prose like "I need to identify
+    the affected hosts. Let me search CrowdStrike…" WITHOUT the accompanying
+    structured tool call. The agentic loop treats any tool-call-less response as
+    final, so that planning narration leaks out as the answer. Detecting it lets
+    the loop nudge the model to actually call the tool (or give a real answer).
+
+    Kept deliberately tight: short-to-medium text containing a first-person
+    intent-to-act phrase. A genuine final answer is usually longer and/or lacks
+    the "let me <verb>" construction.
+    """
+    if not content:
+        return False
+    stripped = _strip_thinking(content).strip()
+    if not stripped:
+        # Pure <think> block with no actual answer — also unfulfilled.
+        return bool(content.strip())
+    # Very long outputs are almost always real synthesized answers, even if they
+    # happen to contain a planning sentence. Only treat short/medium prose as
+    # suspect preamble.
+    if len(stripped) > 1200:
+        return False
+    return bool(_UNFULFILLED_INTENT_RE.search(stripped))
+
+
 from my_bot.document.document_processor import DocumentProcessor
 from my_bot.tools.crowdstrike_tools import (
     get_device_containment_status, get_device_online_status, get_device_details_cs,
     get_crowdstrike_detections, get_crowdstrike_detection_details,
-    search_crowdstrike_detections_by_hostname, get_crowdstrike_incidents,
-    get_crowdstrike_incident_details
+    search_crowdstrike_detections_by_hostname, search_crowdstrike_detections_by_ioc,
+    get_crowdstrike_incidents, get_crowdstrike_incident_details, collect_browser_history,
+    get_crowdstrike_host_vulnerabilities, search_crowdstrike_vulns_by_cve,
+    get_crowdstrike_quarantine_files,
+    get_crowdstrike_identity_risk, get_crowdstrike_high_risk_identities,
+    run_endpoint_command, run_endpoint_diagnostic
 )
 from my_bot.tools.staffing_tools import get_current_shift_info, get_current_staffing
 # from my_bot.tools.metrics_tools import get_bot_metrics, get_bot_metrics_summary  # Commented out to reduce context
@@ -94,10 +144,19 @@ from my_bot.tools.urlscan_tools import search_urlscan, scan_url_urlscan
 from my_bot.tools.shodan_tools import lookup_ip_shodan, lookup_domain_shodan
 from my_bot.tools.hibp_tools import check_email_hibp, check_domain_hibp, get_breach_info_hibp
 from my_bot.tools.poi_tools import investigate_person_of_interest
+from my_bot.tools.security_advisory_tools import (
+    search_security_advisories,
+    get_security_advisory,
+    get_advisory_package_links,
+    group_advisory_packages,
+    check_advisory_environment_exposure,
+    set_advisory_team_signoff,
+    bulk_clear_advisory_group,
+)
 from my_bot.tools.intelx_tools import search_intelx, search_darkweb_intelx
 from my_bot.tools.abusech_tools import check_domain_abusech, check_ip_abusech
 from my_bot.tools.tanium_tools import lookup_endpoint_tanium, search_endpoints_tanium, list_tanium_instances
-from my_bot.tools.qradar_tools import search_qradar_by_ip, search_qradar_by_domain, get_qradar_offense, list_qradar_offenses, run_qradar_aql_query, nl_to_aql_query
+from my_bot.tools.qradar_tools import search_qradar_by_ip, search_qradar_by_domain, get_qradar_offense, list_qradar_offenses, run_qradar_aql_query, nl_to_aql_query, investigate_web_access
 from my_bot.tools.xsiam_tools import list_xsiam_incidents, get_xsiam_incident, update_xsiam_incident, list_xsiam_alerts, get_xsiam_endpoint_by_hostname, get_xsiam_endpoint_by_ip
 # XQL tools below disabled to preserve Cortex query token budget — re-enable by uncommenting.
 # from my_bot.tools.xsiam_tools import xsiam_xql_proxy_user, xsiam_xql_endpoint_processes, xsiam_xql_network_by_ip
@@ -126,12 +185,6 @@ from my_bot.tools.varonis_tools import get_varonis_user_alerts, get_varonis_data
 from my_bot.tools.active_directory_tools import get_ad_user, get_ad_computer
 from my_bot.tools.block_url_tools import request_url_block
 from my_bot.tools.diagram_tools import generate_diagram
-from my_bot.tools.proxy_tools import (
-    lookup_proxy_url, lookup_proxy_urls, get_proxy_sandbox_report,
-    get_proxy_url_categories, get_proxy_blocklist,
-    add_url_to_proxy_blocklist, remove_url_from_proxy_blocklist,
-    search_proxy_users,
-)
 from my_bot.tools.attackiq_tools import (
     attackiq_list_templates, attackiq_create_assessment,
     attackiq_run_assessment, attackiq_get_results,
@@ -145,6 +198,30 @@ from my_config import get_config
 
 # from my_bot.tools.network_monitoring_tools import get_network_activity, get_network_summary_tool  # Commented out to reduce context
 
+
+# Dumb runaway backstop on how many categories the router may keep. This is NOT
+# a classifier — the router LLM decides the right set; this only stops a wildly
+# over-selecting roll from binding every tool schema into m1's context (which
+# bloats prefill + generation on every loop and tanks latency). Keeping the
+# router's selection lean is the prompt's job (see ROUTER_PROMPT_TEMPLATE), not
+# a hand-coded query heuristic.
+_MAX_ROUTER_CATEGORIES = 8
+
+# When the cap is exceeded, keep these categories preferentially (lower number =
+# higher priority) so the ticket -> affected-hosts -> activity chain stays intact.
+# Anything unlisted falls to priority 99 and is dropped first.
+_CATEGORY_PRIORITY = {
+    "xsoar": 0,         # the ticket itself — always anchor the investigation
+    "crowdstrike": 1,   # endpoint detections / containment
+    "oe_detection": 2,  # per-host process / network / software activity
+    "qradar": 3,        # SIEM + web-proxy (referrer / downloads)
+    "xsiam": 4,
+    "virustotal": 5,
+    "recorded_future": 6,
+    "proxy": 7,
+    "urlscan": 8,
+    "abuseipdb": 9,
+}
 
 # Sentinel prefix for tools that produce a complete, user-ready response.
 # When the agentic loop sees this prefix in a tool result, it strips it and
@@ -200,8 +277,27 @@ class SecurityBotStateManager:
     # Agentic loop tool-call limits (subclasses can override)
     MAX_ITERATIONS = 5         # Safety limit on LLM round-trips
     MAX_PER_TOOL_CALLS = 2     # Max times any single tool can be called
+    # Host-sweep tools legitimately fan out one call per host during an
+    # incident (e.g. collect browser history / process timeline / network
+    # connections across every host that observed an IOC). The global cap of 2
+    # would truncate a 10+ host sweep to two hosts, so these get a high cap.
+    MAX_PER_TOOL_CALLS_OVERRIDES = {
+        "collect_browser_history": 25,
+        "oe_get_process_timeline": 25,
+        "oe_get_network_connections": 25,
+        "oe_get_installed_software": 25,
+        "investigate_web_access": 5,
+    }
     MAX_SEARCH_CALLS = 3       # Hard cap on search invocations per query
+    MAX_NARRATION_NUDGES = 1   # Times we re-prompt when the model narrates a
+                               # tool plan without emitting the actual tool call
     TOOL_RESULT_MAX_CHARS = 8000  # Truncation limit for tool results
+
+    # Offload the final, non-tool answer to a dedicated synthesis pass to dodge m1 contention.
+    # Per-subclass opt-out: bots routed off
+    # m1, or with a distinct persona the generic SOC synth prompt would flatten
+    # (e.g. Mentor's tutor voice), set this False to keep composing on their own LLM.
+    SYNTHESIS_ENABLED = True
 
     # System prompt for the security operations assistant
     SYSTEM_PROMPT = """You are an expert Security Operations Center (SOC) assistant. You combine deep technical expertise with genuine helpfulness to support SOC analysts and security engineers.
@@ -283,6 +379,7 @@ PLATFORM NAME ROBUSTNESS:
 - Treat obvious typos and shortenings as the canonical term and proceed without asking for clarification: "XIM"/"XSIM"/"X-SIAM" → XSIAM; "XOAR"/"XOR" (in a ticket/case context) → XSOAR; "CS"/"Falcon"/"CrwdStrk" → CrowdStrike; "VT" → VirusTotal; "AD" → Active Directory.
 
 RESPONSE STYLE: Use markdown formatting. Lead with the answer, keep it scannable - analysts are busy.
+- DEFANG SUSPECT INDICATORS: when you name a malicious or suspected-malicious domain, URL, or IP in your prose (an IOC under investigation, a phishing/C2/malware host), write it defanged — yowgames[.]com, hxxps://bad[.]site/path, 198[.]51[.]100[.]7 — so it isn't clickable. Do NOT defang internal Active Directory / corporate infra domains (e.g. pmli.corp, alico.corp, the-company.com) or hostnames — those are assets, not indicators.
 - When discussing nation-state or geopolitical cyber threats, always name specific threat actors and APT groups (e.g., MuddyWater, APT33, Charming Kitten) so analysts know exactly what to hunt for.
 - When the user asks you to draw, diagram, visualize, or "show a picture of" an attack flow, process, architecture, or sequence of events, call generate_diagram with valid Mermaid source (use `flowchart LR`/`flowchart TD` for chains and processes, `sequenceDiagram` for message exchanges). Always pass a meaningful `title` — the tool uses it as the label of an outer thick-bordered container that wraps the whole flowchart. Do NOT wrap the source in code fences and do NOT write your own `%%{init}%%` block or `classDef` lines — the tool injects a pastel brand theme and pre-defines the classes. For flowcharts, ALWAYS color nodes semantically with the tool's classDef library: `:::attacker` (red, threat actors), `:::defender` (green, control mechanisms like DMARC/SPF/DKIM/EDR), `:::system` (indigo, internal endpoints/mailboxes), `:::external` (cyan, third-party hops), `:::decision` (amber, gates/checks IN the main flow), `:::blocked` (red, rejected/failed states), `:::success` (green, clean outcomes), `:::asset` (slate, neutral data/messages). PUT AN EMOJI AT THE START OF EVERY NODE LABEL — Kroki has Noto Color Emoji installed, so use 🦹 attacker / 🛡️ control / 🌐 external / 📧 email / 📮 mail server / 📥 mailbox / 🖥️ endpoint / 🔐 auth / ⚠️ warning / 🚫 blocked / ❌ failure / ✅ success / 🔍 check / 📨 notification / 🔥 firewall / 🏢 corp / ☁️ cloud / 💾 data.
 - LAYOUT RULES for flowcharts (CRITICAL — read carefully):
@@ -301,11 +398,15 @@ TOOL EFFICIENCY:
     # lightweight router prompt) and its tool list (for stage 2 dynamic binding).
     TOOL_CATEGORIES = {
         "crowdstrike": {
-            "description": "CrowdStrike Falcon EDR: host/hostname/machine/device details, containment status, online status, detections, incidents — use for ANY query about a specific host or endpoint",
+            "description": "CrowdStrike Falcon EDR: host/hostname/machine/device details, containment status, online status, detections, incidents — use for ANY query about a specific host or endpoint. To pivot from an IOC (domain/IP/hash) to the HOSTS that observed it (e.g. 'which hosts connected to yowgames.com', 'resolve the hosts with detections for <domain>'), use search_crowdstrike_detections_by_ioc. Once you have the affected hostnames, sweep each one for per-host evidence: collect_browser_history (RTR — how the user reached the site, downloads), oe_get_process_timeline (what ran on the host) and oe_get_network_connections (what it connected to). Do NOT claim per-host browser history or process timelines are unavailable — these tools provide them; call them. For vulnerability/CVE exposure use Spotlight: get_crowdstrike_host_vulnerabilities (what CVEs are open on a host) and search_crowdstrike_vulns_by_cve (which hosts are exposed to a given CVE). To see what files CrowdStrike has quarantined (on a host, by hash, or by state) use get_crowdstrike_quarantine_files (read-only; releasing/deleting a quarantined file is a human-gated action, not done by this agent). For identity risk use Identity Protection: get_crowdstrike_identity_risk (risk score + risk factors for a user/entity by name) and get_crowdstrike_high_risk_identities (the riskiest identities in the tenant right now). For a live host/network diagnostic on a specific online host — traceroute (tracert), ipconfig, route print, netstat, tasklist, arp, getmac, ping, nslookup — use run_endpoint_diagnostic (fixed read-only command built server-side; you pick the diagnostic and, for tracert/ping/nslookup, a target IP/host; open to any analyst, audited). Only use run_endpoint_command for an ARBITRARY ad-hoc command not covered by run_endpoint_diagnostic (it runs a free-text command via RTR and is admin-only, audited).",
             "tools": [get_device_containment_status, get_device_online_status, get_device_details_cs,
                       get_crowdstrike_detections, get_crowdstrike_detection_details,
-                      search_crowdstrike_detections_by_hostname, get_crowdstrike_incidents,
-                      get_crowdstrike_incident_details]
+                      search_crowdstrike_detections_by_ioc, search_crowdstrike_detections_by_hostname,
+                      get_crowdstrike_incidents, get_crowdstrike_incident_details, collect_browser_history,
+                      get_crowdstrike_host_vulnerabilities, search_crowdstrike_vulns_by_cve,
+                      get_crowdstrike_quarantine_files,
+                      get_crowdstrike_identity_risk, get_crowdstrike_high_risk_identities,
+                      run_endpoint_command, run_endpoint_diagnostic]
         },
         "xsoar": {
             "description": "Cortex XSOAR: ticket details by ID, search tickets by hostname/host/machine, check whether a host/user/IP is in Approved Security Testing entries (Red Team / pentest / lab), executive summaries, triage (triage handles its own enrichment — no other categories needed for triage requests), QA reviews, add notes/attachments, remediation suggestions",
@@ -344,8 +445,8 @@ TOOL EFFICIENCY:
             "tools": [lookup_endpoint_tanium, search_endpoints_tanium, list_tanium_instances]
         },
         "qradar": {
-            "description": "QRadar SIEM: ANY English question about SIEM events (top N, traffic volume, top domains, blocked sites, sign-ins, threats, host activity, etc.) MUST go to nl_to_aql_query — it picks the right log source and generates schema-aware AQL. Use run_qradar_aql_query ONLY when the user pastes literal AQL. Other tools: search by IP/domain, list/get offenses.",
-            "tools": [nl_to_aql_query, search_qradar_by_ip, search_qradar_by_domain,
+            "description": "QRadar SIEM: ANY English question about SIEM events (top N, traffic volume, top domains, blocked sites, sign-ins, threats, host activity, etc.) MUST go to nl_to_aql_query — it picks the right log source and generates schema-aware AQL. For 'how/why did users connect to this website', 'how was the user directed here (referrer)', or 'what did they download from the site' use investigate_web_access. Use run_qradar_aql_query ONLY when the user pastes literal AQL. Other tools: search by IP/domain, list/get offenses.",
+            "tools": [nl_to_aql_query, investigate_web_access, search_qradar_by_ip, search_qradar_by_domain,
                       get_qradar_offense, list_qradar_offenses, run_qradar_aql_query]
         },
         "xsiam": {
@@ -433,13 +534,6 @@ TOOL EFFICIENCY:
             "description": "Diagram generation: render Mermaid flowcharts/sequence diagrams as PNG and post to the current Webex room — e.g. 'draw the attack flow', 'visualize this incident', 'make a sequence diagram of the SMTP exchange'",
             "tools": [generate_diagram]
         },
-        "proxy": {
-            "description": "the corporate proxy: URL/domain reputation lookups, sandbox file analysis, blocklist management, and user search",
-            "tools": [lookup_proxy_url, lookup_proxy_urls, get_proxy_sandbox_report,
-                      get_proxy_url_categories, get_proxy_blocklist,
-                      add_url_to_proxy_blocklist, remove_url_from_proxy_blocklist,
-                      search_proxy_users]
-        },
         "hibp": {
             "description": "Have I Been Pwned: check if an email address or domain appears in known data breach databases",
             "tools": [check_email_hibp, check_domain_hibp, get_breach_info_hibp]
@@ -450,12 +544,12 @@ TOOL EFFICIENCY:
                       attackiq_run_assessment, attackiq_get_results]
         },
         "oe_detection": {
-            "description": "OE detection: investigate employee network activity, process history, and installed software for insider threat detection rules",
+            "description": "Per-host endpoint forensics (accepts a HOSTNAME or an employee username): process execution timeline, network connections, and installed software. Use for incident host-sweeps — e.g. after resolving the hosts that observed an IOC, check what ran on each host and what it connected to — as well as for OE/insider-threat detection rules.",
             "tools": [oe_get_network_connections, oe_get_process_timeline, oe_get_installed_software]
         },
     }
 
-    # Tools allowed on the unauth /pokedex playground are derived from tags
+    # Tools allowed on the unauth /sleuth playground are derived from tags
     # (see PUBLIC_TOOL_ALLOWLIST below): any LangChain tool decorated with
     # @readonly_tool, minus the small WEB_DENYLIST below. Fail-closed —
     # untagged tools never reach the playground.
@@ -479,11 +573,22 @@ TOOL EFFICIENCY:
         # the war-room call 400s, and recovery leaks <tool_call> text.
         "get_ad_user", "get_ad_computer",
         "get_varonis_user_alerts", "get_varonis_data_activity",
+        # RTR runs a live script ON the endpoint (stages + downloads browser
+        # DBs). An active operation on a real host — never from the anon
+        # playground; authenticated agent only.
+        "collect_browser_history",
+        # RTR ad-hoc command execution on a live endpoint — admin-only + audited
+        # (see sleuth_rbac). Highest blast radius; never from the playground.
+        "run_endpoint_command",
+        # RTR read-only diagnostic (server-built command). Open to any analyst,
+        # but still an active op on a real host — authenticated agent only, like
+        # collect_browser_history; never from the anon playground.
+        "run_endpoint_diagnostic",
     }
 
     @property
     def PUBLIC_TOOL_ALLOWLIST(self) -> set:
-        """Names of tools allowed on the public /pokedex playground.
+        """Names of tools allowed on the public /sleuth playground.
 
         Derived at access time: every currently-registered tool tagged
         "readonly" minus WEB_DENYLIST. A tool without "readonly" in its
@@ -511,7 +616,8 @@ AVAILABLE TOOL CATEGORIES:
 RULES:
 - Select ONLY the categories actually needed — be MINIMAL (usually 1-3)
 - For "triage <ticket_id>" requests, select ONLY ["xsoar"] — the triage tool handles all enrichment internally
-- For IOC investigations (IP, domain, hash), select the 1-2 relevant threat intel categories
+- For a bare indicator lookup (e.g. "which hosts ran <domain>", "who connected to <ip>", "any detections for <hash>"), select ONLY the single category that answers it (usually ["crowdstrike"]). Do NOT add ticket, SIEM, web-proxy, or extra intel categories unless the user explicitly asks to investigate, build a timeline, or trace what was downloaded/run.
+- For a reputation question about an indicator ("is <domain> malicious?"), select the 1-2 relevant threat intel categories — not endpoint/SIEM.
 - NEVER select more than 5 categories. If you think you need more, you're over-selecting.
 - If unsure whether tools are needed, prefer selecting categories over an empty list
 - ALWAYS route to tools for: weather, staffing/shift, contacts/escalation, ticket/incident lookups, memory/recall (anything the team may have saved — personal facts, preferences, procedures, notes), local_docs (runbooks, GDnR guides, response procedures, "how do we handle X" questions), and any query requiring live or real-time data. NEVER emit an empty array for these — you do not have access to real-time data, only the tools do.
@@ -536,6 +642,11 @@ Examples (router output):
   User: "what about his email address?"                    → {{"categories": ["memory", "contacts"]}}
   User: "and her manager?"                                 → {{"categories": ["memory", "contacts"]}}
   User: "who is the EMEA on-call?"                         → {{"categories": ["memory", "contacts", "staffing"]}}
+  User: "which hosts ran yowgames.com?"                    → {{"categories": ["crowdstrike"]}}
+  User: "who connected to 45.83.122.10?"                    → {{"categories": ["crowdstrike"]}}
+  User: "any CrowdStrike detections for this hash?"         → {{"categories": ["crowdstrike"]}}
+  User: "is evil-domain.com malicious?"                     → {{"categories": ["virustotal", "recorded_future"]}}
+  User: "how did the user reach yowgames.com and what did they download?" → {{"categories": ["xsoar", "crowdstrike", "oe_detection", "qradar"]}}
   User: "is RTL032 compromised?"                           → {{"categories": ["xsoar", "crowdstrike"]}}
   User: "what's your verdict on workstation K327JV23JG?"   → {{"categories": ["xsoar", "crowdstrike"]}}
   User: "assess the system RTL032"                         → {{"categories": ["xsoar", "crowdstrike"]}}
@@ -604,9 +715,21 @@ Examples (router output):
                 # Router named categories but none are registered (e.g. RAG not loaded).
                 # Treat as malformed so the caller can fall back to the full tool set.
                 return None
-            if len(valid) > 5:
-                logging.warning(f"Router over-selected {len(valid)} categories, capping to 5: {valid}")
-                valid = valid[:5]
+            if len(valid) > _MAX_ROUTER_CATEGORIES:
+                # Priority-order before truncating so investigative categories
+                # (ticket -> hosts -> activity) survive instead of being dropped
+                # by arbitrary LLM ordering. Stable sort keeps original order
+                # within the same priority tier.
+                valid = sorted(
+                    valid,
+                    key=lambda c: _CATEGORY_PRIORITY.get(c, 99),
+                )
+                dropped = valid[_MAX_ROUTER_CATEGORIES:]
+                valid = valid[:_MAX_ROUTER_CATEGORIES]
+                logging.warning(
+                    f"Router over-selected, capping to {_MAX_ROUTER_CATEGORIES}: "
+                    f"kept {valid}, dropped {dropped}"
+                )
             return valid
 
         text = content.strip()
@@ -666,7 +789,7 @@ Examples (router output):
             categories: router-selected category keys.
             name_allowlist: optional set of tool names. When provided, only
                 tools whose .name is in the set are returned. Used by the
-                public /pokedex playground (PUBLIC_TOOL_ALLOWLIST). Default
+                public /sleuth playground (PUBLIC_TOOL_ALLOWLIST). Default
                 None preserves the unfiltered behavior used by Webex bots.
         """
         tools = []
@@ -844,8 +967,12 @@ Examples (router output):
                 get_crowdstrike_detections,
                 get_crowdstrike_detection_details,
                 search_crowdstrike_detections_by_hostname,
+                search_crowdstrike_detections_by_ioc,
                 get_crowdstrike_incidents,
                 get_crowdstrike_incident_details,
+                collect_browser_history,
+                run_endpoint_command,
+                run_endpoint_diagnostic,
 
                 # Staffing tools
                 get_current_shift_info,
@@ -886,6 +1013,16 @@ Examples (router output):
                 # Person-of-Interest OSINT
                 investigate_person_of_interest,
 
+                # Security advisories (cs-advisories): search, links, grouping,
+                # environment exposure, and team validation sign-off
+                search_security_advisories,
+                get_security_advisory,
+                get_advisory_package_links,
+                group_advisory_packages,
+                check_advisory_environment_exposure,
+                set_advisory_team_signoff,
+                bulk_clear_advisory_group,
+
                 # IntelligenceX tools
                 search_intelx,
                 search_darkweb_intelx,
@@ -902,6 +1039,7 @@ Examples (router output):
                 # QRadar tools — nl_to_aql_query first; raw run_qradar_aql_query last
                 # so the LLM defaults to the smart wrapper for English questions.
                 nl_to_aql_query,
+                investigate_web_access,
                 search_qradar_by_ip,
                 search_qradar_by_domain,
                 get_qradar_offense,
@@ -1002,16 +1140,6 @@ Examples (router output):
                 # Diagram generation tool
                 generate_diagram,
 
-                # the corporate proxy tools
-                lookup_proxy_url,
-                lookup_proxy_urls,
-                get_proxy_sandbox_report,
-                get_proxy_url_categories,
-                get_proxy_blocklist,
-                add_url_to_proxy_blocklist,
-                remove_url_from_proxy_blocklist,
-                search_proxy_users,
-
                 # AttackIQ BAS tools
                 attackiq_list_templates,
                 attackiq_create_assessment,
@@ -1070,8 +1198,11 @@ Examples (router output):
                     'first_token_time': 0.0}
 
         try:
+            sys_prompt = self._get_system_prompt()
+            if SYNTH_ENABLED and self.SYNTHESIS_ENABLED:
+                sys_prompt += SYNTH_DIRECTIVE
             messages = [
-                {"role": "system", "content": self._get_system_prompt()},
+                {"role": "system", "content": sys_prompt},
                 {"role": "user", "content": query}
             ]
 
@@ -1104,8 +1235,14 @@ Examples (router output):
                 consecutive_empty_searches = 0  # Track repeated "no results" from search
                 search_call_count = 0  # Hard limit on search tool invocations
                 consecutive_empty_memory = 0  # Track repeated "no results" from memory
+                narration_nudges = 0  # Times we re-prompted a tool-plan-without-call
+                premature_marker_nudges = 0  # Times we re-prompted a ready-marker-with-no-data
+                synthesized_content = None  # synthesis-composed answer (handoff after a tool round)
+                synth_used = False  # True once the answer was composed in the synthesis pass (off m1)
+                synth_need_cycles = 0  # Times the synthesizer requested another tool round
                 tool_call_counts: dict[str, int] = {}  # Per-tool call counter
                 MAX_PER_TOOL_CALLS = self.MAX_PER_TOOL_CALLS
+                MAX_PER_TOOL_CALLS_OVERRIDES = self.MAX_PER_TOOL_CALLS_OVERRIDES
 
                 while iteration < max_iterations:
                     iteration += 1
@@ -1186,8 +1323,63 @@ Examples (router output):
                         if iteration == 1:
                             first_token_time = call_elapsed
 
-                    # If no tool calls, we're done
+                    # If no tool calls, we're normally done — the response
+                    # content is the final answer. BUT local models sometimes
+                    # narrate an intent to call a tool ("Let me search…", "I
+                    # need to identify…") WITHOUT emitting the structured tool
+                    # call. Surfacing that planning text as the answer leaves the
+                    # user with a stalled "I'm about to…" non-answer. When we
+                    # detect that pattern and still have budget, nudge the model
+                    # to either call the tool for real or give a true final
+                    # answer, instead of breaking.
                     if not hasattr(response, 'tool_calls') or not response.tool_calls:
+                        if (
+                            narration_nudges < self.MAX_NARRATION_NUDGES
+                            and iteration < max_iterations
+                            and _looks_like_unfulfilled_intent(getattr(response, 'content', ''))
+                        ):
+                            narration_nudges += 1
+                            logging.warning(
+                                f"Model narrated a tool plan without calling a tool "
+                                f"(nudge {narration_nudges}/{self.MAX_NARRATION_NUDGES}); "
+                                f"re-prompting for a real tool call or final answer"
+                            )
+                            messages.append({"role": "assistant", "content": response.content})
+                            messages.append({
+                                "role": "user",
+                                "content": (
+                                    "You described what you were going to do (e.g. searching or "
+                                    "looking something up) but did NOT actually call a tool. "
+                                    "Do not narrate your plan. If you still need information, call "
+                                    "the appropriate tool NOW. If you already have everything you "
+                                    "need, write your complete final answer for the user."
+                                ),
+                            })
+                            continue
+
+                        # Premature readiness: the model signaled it's ready to
+                        # answer without gathering data, though tools were bound.
+                        # Synthesizing now composes an answer from ZERO data (e.g.
+                        # a false "no hosts found" for a live IOC). The decision +
+                        # nudge are shared in llm_factory so every bot's loop
+                        # recovers identically; only the continue is loop-local.
+                        if (
+                            SYNTH_ENABLED and self.SYNTHESIS_ENABLED
+                            and premature_marker_nudges < self.MAX_NARRATION_NUDGES
+                            and iteration < max_iterations
+                            and is_premature_synth_marker(
+                                getattr(response, 'content', ''), bool(tools), bool(tools_used)
+                            )
+                        ):
+                            premature_marker_nudges += 1
+                            logging.warning(
+                                "Model signaled readiness without calling any tool "
+                                f"(nudge {premature_marker_nudges}/{self.MAX_NARRATION_NUDGES}); "
+                                "re-prompting to gather data first"
+                            )
+                            messages.append({"role": "assistant", "content": getattr(response, 'content', '') or ""})
+                            messages.append({"role": "user", "content": SYNTH_GATHER_FIRST_NUDGE})
+                            continue
                         break
 
                     # Add the AI message with tool calls to conversation
@@ -1213,16 +1405,19 @@ Examples (router output):
                         tool_id = tool_call['id']
                         logging.info(f"Executing tool: {tool_name}")
 
-                        # Enforce per-tool call limit to prevent any tool from looping
+                        # Enforce per-tool call limit to prevent any tool from
+                        # looping. Host-sweep tools get a higher cap so a
+                        # multi-host incident isn't truncated to two hosts.
+                        tool_limit = MAX_PER_TOOL_CALLS_OVERRIDES.get(tool_name, MAX_PER_TOOL_CALLS)
                         tool_call_counts[tool_name] = tool_call_counts.get(tool_name, 0) + 1
-                        if tool_call_counts[tool_name] > MAX_PER_TOOL_CALLS:
+                        if tool_call_counts[tool_name] > tool_limit:
                             logging.warning(
                                 f"{tool_name} call #{tool_call_counts[tool_name]} blocked "
-                                f"(limit: {MAX_PER_TOOL_CALLS})"
+                                f"(limit: {tool_limit})"
                             )
                             return {
                                 "role": "tool",
-                                "content": f"You have already called {tool_name} {MAX_PER_TOOL_CALLS} times. "
+                                "content": f"You have already called {tool_name} {tool_limit} times. "
                                            "Do NOT call this tool again. "
                                            "Provide your answer using the information already gathered.",
                                 "tool_call_id": tool_id
@@ -1240,6 +1435,14 @@ Examples (router output):
                                                "Do NOT call search again.",
                                     "tool_call_id": tool_id
                                 }
+
+                        # RBAC: gate destructive tools (block / live BAS / delete /
+                        # case-close) on the requesting Webex user's capability before
+                        # running. Denied -> short-circuit; every attempt is audited.
+                        from my_bot.auth.sleuth_rbac import guard_tool_call
+                        _denied = guard_tool_call(tool_name, tool_args)
+                        if _denied is not None:
+                            return {"role": "tool", "content": _denied, "tool_call_id": tool_id}
 
                         if tool_name in tool_map:
                             try:
@@ -1327,6 +1530,41 @@ Examples (router output):
                         response = _FinalResponse()
                         break
 
+                    # SYNTHESIS HANDOFF: tools for this round have executed (results
+                    # in `messages`). Instead of bouncing the whole context back to m1
+                    # just to detect "done" — the dominant cost under m1 contention, and
+                    # a step m1 follows only inconsistently — compose the answer in the synthesis pass
+                    # now. If the synthesizer judges the data insufficient for a multi-step query it
+                    # returns a NEED, and we nudge m1 for exactly the missing piece (one
+                    # more tool round) rather than guessing. Reliable (no dependence on
+                    # an m1 marker) and deterministic (synthesis always runs).
+                    if SYNTH_ENABLED and self.SYNTHESIS_ENABLED:
+                        try:
+                            sc, sm, need = synthesize_or_request_more(query, messages)
+                            total_output_tokens += sm.get("output_tokens", 0)
+                            total_generation_time += sm.get("generation_time", 0.0)
+                            if need and synth_need_cycles < self.MAX_NARRATION_NUDGES and iteration < max_iterations:
+                                synth_need_cycles += 1
+                                logging.info(f"Synthesizer requested more data ({synth_need_cycles}): {need}")
+                                messages.append({"role": "user", "content": SYNTH_NEED_NUDGE.format(need=need)})
+                                continue
+                            if need:
+                                # Can't honor another round (capped / last iteration) —
+                                # force an answer from what we have, don't loop or stall.
+                                logging.info("Synthesizer requested more but budget exhausted — composing with data on hand")
+                                sc, sm = synthesize_final_answer(query, messages)
+                                total_output_tokens += sm.get("output_tokens", 0)
+                                total_generation_time += sm.get("generation_time", 0.0)
+                            if sc and sc.strip():
+                                synthesized_content = sc
+                                synth_used = True
+                                logging.info("✅ Answer composed in the synthesis pass (off m1) — no second m1 round-trip")
+                                break
+                            # the synthesizer gave nothing usable → fall through to another m1 round
+                            # (it has the tool results) as the safety net.
+                        except Exception as e:
+                            logging.warning(f"Synthesis handoff failed ({e}); falling back to m1")
+
                 # If max iterations exhausted and last response was a tool call (empty
                 # content), do one final LLM call without tools to force a text answer.
                 if response and (not response.content or len(response.content.strip()) == 0):
@@ -1357,6 +1595,36 @@ Examples (router output):
                         logging.error(f"LLM returned empty content after {iteration} iteration(s)!")
                         logging.error(f"Response object: {response}")
 
+                # Final answer. Common path: the synthesis handoff already composed
+                # it in-loop (synthesized_content). Otherwise it's m1's own content —
+                # a no-tool/greeting answer, or the fallback when synthesis was disabled or
+                # failed; in that last case try a terminal synthesis compose if m1 left only
+                # a marker/empty (never worse than the all-m1 baseline).
+                if synthesized_content is not None:
+                    final_content = synthesized_content
+                else:
+                    final_content = _strip_thinking(response.content) if response else "Error: No response generated"
+                    if SYNTH_ENABLED and self.SYNTHESIS_ENABLED and response is not None:
+                        raw = (response.content or "").strip()
+                        if (SYNTH_MARKER in raw) or raw == "":
+                            try:
+                                sc, sm = synthesize_final_answer(query, messages)
+                                if sc and sc.strip():
+                                    final_content = sc
+                                    total_output_tokens += sm.get("output_tokens", 0)
+                                    total_generation_time += sm.get("generation_time", 0.0)
+                                    synth_used = True
+                                    logging.info("✅ Final answer synthesized in the dedicated pass (off m1)")
+                            except Exception as e:
+                                logging.warning(f"Synthesis failed ({e}); using m1 answer")
+                final_content = final_content.replace(SYNTH_MARKER, "").strip()
+                # Guarantee any tool-emitted "Verify at source" deep link survives,
+                # whether m1 prose or the dedicated pass composed the answer (either may
+                # summarize it away). Deterministic carry-forward from tool outputs.
+                final_content = ensure_verify_links(final_content, messages)
+                if not final_content:
+                    final_content = "I gathered the data but couldn't compose a response. Please try again."
+
                 # Calculate tokens per second and return
                 tokens_per_sec = total_output_tokens / total_generation_time if total_generation_time > 0 else 0.0
 
@@ -1369,7 +1637,7 @@ Examples (router output):
                     )
 
                 return {
-                    'content': _strip_thinking(response.content) if response else "Error: No response generated",
+                    'content': final_content,
                     'input_tokens': total_input_tokens,
                     'output_tokens': total_output_tokens,
                     'total_tokens': total_input_tokens + total_output_tokens,
@@ -1378,7 +1646,8 @@ Examples (router output):
                     'tokens_per_sec': tokens_per_sec,
                     'first_token_time': first_token_time,
                     'iterations': iteration,
-                    'tools_used': tools_used
+                    'tools_used': tools_used,
+                    'synth_used': synth_used
                 }
 
             # Run the agentic loop in a thread with a hard wall-clock timeout.
@@ -1462,7 +1731,7 @@ Examples (router output):
             query: The user query.
             progress_callback: Optional callable invoked once after the router
                 stage with ``categories=<list[str] | None>``. Used by callers
-                (e.g. Pokedex) to swap their rotating "thinking" message pool to
+                (e.g. Sleuth) to swap their rotating "thinking" message pool to
                 category-specific copy as soon as the router decides. Pass
                 ``categories=None`` for fallback paths so the UI can stay
                 generic. The callback must not raise — it is wrapped in a
@@ -1760,6 +2029,12 @@ Examples (router output):
                 tool_args = tool_call.get('args', {})
                 tool_id = tool_call['id']
 
+                # RBAC: gate destructive tools on the requesting user's capability.
+                from my_bot.auth.sleuth_rbac import guard_tool_call
+                _denied = guard_tool_call(tool_name, tool_args)
+                if _denied is not None:
+                    return {"role": "tool", "content": _denied, "tool_call_id": tool_id}
+
                 if tool_name in tool_map:
                     try:
                         tool_result = tool_map[tool_name].invoke(tool_args)
@@ -1848,7 +2123,7 @@ Examples (router output):
                                     name_allowlist: set):
         """Public-playground stream: per-request LLM, allowlisted tools, no router.
 
-        Used by /api/pokedex-chat-stream when running on behalf of an unauth
+        Used by /api/sleuth-chat-stream when running on behalf of an unauth
         public client. Differences from execute_query_stream:
           - No router stage: all PUBLIC_TOOL_ALLOWLIST tools are bound directly.
           - Per-request LLM (base_url/model/temperature override) so the caller
@@ -1952,6 +2227,13 @@ Examples (router output):
                 name = tool_call['name']
                 args = tool_call.get('args', {})
                 tid = tool_call['id']
+                # RBAC: defense-in-depth. Destructive tools are readonly-filtered off
+                # this public endpoint upstream; if one ever slips through it has no
+                # authenticated identity here, so the guard fails closed (denies).
+                from my_bot.auth.sleuth_rbac import guard_tool_call
+                _denied = guard_tool_call(name, args)
+                if _denied is not None:
+                    return {"role": "tool", "content": _denied, "tool_call_id": tid}
                 if name in tool_map:
                     tool = tool_map[name]
                     args = _fix_args_for_public(tool, args)
@@ -2113,36 +2395,60 @@ Examples (router output):
             return False
 
     def fast_warmup(self) -> bool:
-        """Fast warmup — send a lightweight probe to verify LLM connectivity."""
+        """Fast warmup — send a lightweight probe to verify LLM connectivity.
+
+        Tries m1 first, falls back to studio1 if m1 is unreachable, so the bot
+        stays usable on whichever endpoint is up.
+        """
         if not self.llm:
             return False
 
         try:
             logging.info("Performing fast warmup probe...")
+            cfg = self.model_config
 
-            import httpx
-            base_url = self.model_config.m1_analysis_base_url
+            def _probe(endpoints, payload, label):
+                import httpx
+                last_err = None
+                for base_url, model, api_key in endpoints:
+                    if not base_url:
+                        continue
+                    headers = {}
+                    if api_key:
+                        headers["Authorization"] = f"Bearer {api_key}"
+                    body = {**payload, "model": model}
+                    try:
+                        resp = httpx.post(f"{base_url}/chat/completions", json=body, headers=headers, timeout=60)
+                        resp.raise_for_status()
+                        logging.info(f"{label} warmed up via {base_url}: {model}")
+                        return True
+                    except Exception as e:
+                        logging.warning(f"{label} warmup at {base_url} failed: {e}; trying next endpoint")
+                        last_err = e
+                if last_err:
+                    raise last_err
+                return False
 
-            # Warm up main LLM
-            warmup_payload = {
-                "model": self.model_config.llm_model_name,
-                "messages": [{"role": "user", "content": "hi"}],
-                "max_tokens": 1,
-            }
-            resp = httpx.post(f"{base_url}/chat/completions", json=warmup_payload, timeout=60)
-            resp.raise_for_status()
-            logging.info(f"Main LLM warmed up: {self.model_config.llm_model_name}")
+            main_payload = {"messages": [{"role": "user", "content": "hi"}], "max_tokens": 1}
+            _probe(
+                [
+                    (cfg.m1_analysis_base_url, cfg.llm_model_name, None),
+                    (getattr(cfg, "studio1_qwen_base_url", ""), "qwen3-coder-30b-a3b", getattr(cfg, "embeds_api_key", "")),
+                ],
+                main_payload,
+                "Main LLM",
+            )
 
-            # Warm up router LLM if configured on a separate endpoint
-            if self.router_llm and self.model_config.m1_router_base_url != self.model_config.m1_analysis_base_url:
-                router_payload = {
-                    "model": self.model_config.router_model_name,
-                    "messages": [{"role": "user", "content": "hi"}],
-                    "max_tokens": 1,
-                }
-                resp = httpx.post(f"{self.model_config.m1_router_base_url}/chat/completions", json=router_payload, timeout=60)
-                resp.raise_for_status()
-                logging.info(f"Router LLM warmed up: {self.model_config.router_model_name}")
+            if self.router_llm and cfg.m1_router_base_url != cfg.m1_analysis_base_url:
+                router_payload = {"messages": [{"role": "user", "content": "hi"}], "max_tokens": 1}
+                _probe(
+                    [
+                        (cfg.m1_router_base_url, cfg.router_model_name, None),
+                        (getattr(cfg, "studio1_router_base_url", ""), "qwen3-4b-instruct", getattr(cfg, "embeds_api_key", "")),
+                    ],
+                    router_payload,
+                    "Router LLM",
+                )
 
             logging.info("Fast warmup completed - models responding")
             return True
@@ -2170,7 +2476,7 @@ def get_state_manager() -> SecurityBotStateManager:
     """Get global state manager instance (singleton).
 
     If CLAUDE_API_KEY is set, returns a ClaudeStateManager that routes
-    Pokedex queries through the Claude API.  Otherwise, falls back to
+    Sleuth queries through the Claude API.  Otherwise, falls back to
     the Ollama-based SecurityBotStateManager.
 
     The scheduler (ir-scheduler.service) never sets CLAUDE_API_KEY, so
@@ -2184,7 +2490,7 @@ def get_state_manager() -> SecurityBotStateManager:
             try:
                 from my_bot.core.claude_state_manager import ClaudeStateManager
                 _state_manager = ClaudeStateManager()
-                logging.info("Using Claude API backend for Pokedex")
+                logging.info("Using Claude API backend for Sleuth")
             except ImportError as e:
                 logging.warning(f"Claude backend unavailable ({e}), falling back to Ollama")
                 _state_manager = SecurityBotStateManager()

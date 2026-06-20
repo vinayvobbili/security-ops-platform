@@ -19,18 +19,18 @@ import hashlib
 def _is_network_logging_enabled() -> bool:
     """Check if network logging is enabled via configuration"""
     try:
-        # Try to import the configuration from the main pokedex bot
+        # Try to import the configuration from the main sleuth bot
         import sys
         from pathlib import Path
         
-        # Add webex_bots to path to access pokedex configuration
+        # Add webex_bots to path to access sleuth configuration
         webex_bots_path = Path(__file__).parent.parent.parent / "webex_bots"
         if str(webex_bots_path) not in sys.path:
             sys.path.append(str(webex_bots_path))
         
         # Import the configuration switch
-        import pokedex
-        return getattr(pokedex, 'SHOULD_LOG_NETWORK_TRAFFIC', True)
+        import sleuth
+        return getattr(sleuth, 'SHOULD_LOG_NETWORK_TRAFFIC', True)
         
     except Exception as e:
         # If we can't access the config, default to enabled but log the issue
@@ -40,7 +40,7 @@ def _is_network_logging_enabled() -> bool:
 class NetworkLogger:
     """CSV logger for network traffic monitoring"""
     
-    def __init__(self, log_file: str = "data/logs/pokedex_network_traffic.csv"):
+    def __init__(self, log_file: str = "data/logs/sleuth_network_traffic.csv"):
         """Initialize network logger with CSV file"""
         self.log_file = log_file
         self._ensure_log_directory()

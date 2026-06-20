@@ -120,7 +120,7 @@ def get_region_wise_ticket_counts() -> str:
         return "Unable to generate region-wise ticket counts"
 
 # Webex API client
-webex_api = WebexAPI(config.webex_bot_access_token_moneyball, disable_ssl_verify=True, single_request_timeout=180)
+webex_api = WebexAPI(config.webex_bot_access_token_oracle, disable_ssl_verify=True, single_request_timeout=180)
 
 # Production list handler
 prod_list_handler = ListHandler(XsoarEnvironment.PROD)

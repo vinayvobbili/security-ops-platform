@@ -1,4 +1,4 @@
-"""Chat routes: Pokedex AI chat, Toodles chat, page-context chat widget."""
+"""Chat routes: Sleuth AI chat, Aide chat, page-context chat widget."""
 
 import datetime as _dt
 import json
@@ -9,7 +9,7 @@ import requests
 from flask import Blueprint, Response, jsonify, render_template, request, session, current_app
 
 from src.utils.logging_utils import log_web_activity, get_client_ip
-from src.components.web import pokedex_handler, toodles_handler, approved_testing_handler
+from src.components.web import sleuth_handler, aide_handler, approved_testing_handler
 from src.components.web import page_chat_handler
 from src.utils import bot_logs_db
 from web.auth import helpers as auth_helpers
@@ -22,7 +22,7 @@ from web.extensions import limiter
 # doesn't need a code change. Endpoints accept a 'model' key from clients;
 # resolution happens server-side so a client can never point us at an
 # arbitrary base_url. The dropdown options on the playground page are
-# also built from this registry via /api/pokedex-models.
+# also built from this registry via /api/sleuth-models.
 #
 # studio1 vllm-mlx instances (8003, 8004) share a single --api-key; we
 # reuse `embeds_api_key` for the Qwen entry rather than carrying a
@@ -102,15 +102,15 @@ def _get_dp_llm():
         _dp_llm = create_llm(temperature=0.1)
     return _dp_llm
 
-# Lazy imports for Pokedex components
-POKEDEX_AVAILABLE = True
+# Lazy imports for Sleuth components
+SLEUTH_AVAILABLE = True
 
 try:
     from my_bot.core.my_model import ask, ask_stream
     from my_bot.core.state_manager import get_state_manager
 except Exception as e:
-    logger.warning(f"Pokedex components unavailable: {e}")
-    POKEDEX_AVAILABLE = False
+    logger.warning(f"Sleuth components unavailable: {e}")
+    SLEUTH_AVAILABLE = False
 
     def ask(*_args, **_kwargs):
         return "Model not available in this environment"
@@ -122,22 +122,22 @@ except Exception as e:
         return None
 
 
-# --- Pokedex Chat ---
+# --- Sleuth Chat ---
 
-@chat_bp.route('/pokedex')
+@chat_bp.route('/sleuth')
 @auth_helpers.admin_required
 @log_web_activity
-def pokedex_chat():
-    """Pokedex AI chat interface"""
-    return render_template('pokedex_chat.html')
+def sleuth_chat():
+    """Sleuth AI chat interface"""
+    return render_template('sleuth_chat.html')
 
 
-@chat_bp.route('/pokedex-demo')
+@chat_bp.route('/sleuth-demo')
 @auth_helpers.admin_required
 @log_web_activity
-def pokedex_demo():
-    """Guided demo page showcasing Pokedex capabilities."""
-    return render_template('pokedex_demo.html')
+def sleuth_demo():
+    """Guided demo page showcasing Sleuth capabilities."""
+    return render_template('sleuth_demo.html')
 
 
 # Cache fixtures for 5 min so repeat clicks don't hammer the APIs.
@@ -145,7 +145,7 @@ _PKX_DEMO_FIXTURES_CACHE: dict = {'ts': 0.0, 'payload': None}
 _PKX_DEMO_FIXTURES_TTL_S = 300
 
 
-def _refresh_pokedex_demo_fixtures() -> dict:
+def _refresh_sleuth_demo_fixtures() -> dict:
     """Pull a recent XSOAR ticket (with hostname) and a recent ServiceNow INC.
 
     Returns a dict with `fixtures` (the values), `sources` (where each came from),
@@ -218,10 +218,10 @@ def _refresh_pokedex_demo_fixtures() -> dict:
     }
 
 
-@chat_bp.route('/api/pokedex-demo/fixtures')
+@chat_bp.route('/api/sleuth-demo/fixtures')
 @auth_helpers.admin_required
 @log_web_activity
-def api_pokedex_demo_fixtures():
+def api_sleuth_demo_fixtures():
     """Return fresh placeholder values for the demo script (host, XSOAR ticket, SN INC).
 
     Cached server-side for ~5 minutes; pass ?force=1 to bypass.
@@ -232,17 +232,17 @@ def api_pokedex_demo_fixtures():
     ts = _PKX_DEMO_FIXTURES_CACHE.get('ts', 0.0)
     if cached and not force and (_t.time() - ts) < _PKX_DEMO_FIXTURES_TTL_S:
         return jsonify({**cached, 'cached': True, 'age_s': round(_t.time() - ts, 1)})
-    payload = _refresh_pokedex_demo_fixtures()
+    payload = _refresh_sleuth_demo_fixtures()
     _PKX_DEMO_FIXTURES_CACHE['ts'] = _t.time()
     _PKX_DEMO_FIXTURES_CACHE['payload'] = payload
     return jsonify({**payload, 'cached': False, 'age_s': 0.0})
 
 
-@chat_bp.route('/api/pokedex-demo/infra-check')
+@chat_bp.route('/api/sleuth-demo/infra-check')
 @auth_helpers.admin_required
 @log_web_activity
-def api_pokedex_demo_infra_check():
-    """Pre-demo readiness probe. Verifies Pokedex bot + critical LLM endpoints + demo fixtures.
+def api_sleuth_demo_infra_check():
+    """Pre-demo readiness probe. Verifies Sleuth bot + critical LLM endpoints + demo fixtures.
 
     Calls into the local bot_status_api (port 8040) for service/LLM state and runs the demo
     fixture refresh inline so the presenter knows whether XSOAR + ServiceNow IDs are live.
@@ -254,13 +254,13 @@ def api_pokedex_demo_infra_check():
     BOT_STATUS_BASE = 'http://localhost:8040'
     checks: list[dict] = []
 
-    # 1+2. Pokedex bot + Mac host health in parallel (both are bot_status_api calls).
+    # 1+2. Sleuth bot + Mac host health in parallel (both are bot_status_api calls).
     # Mac host status is the prerequisite for the m1/studio1 LLM probes — if the
     # host is down, the TCP tunnel binding on lab-vm is stale and a probe will
     # hang for the full timeout. Short-circuit instead.
     def _get_bot():
         try:
-            return _rq.get(f'{BOT_STATUS_BASE}/api/status/pokedex', timeout=3)
+            return _rq.get(f'{BOT_STATUS_BASE}/api/status/sleuth', timeout=3)
         except Exception as e:
             return e
 
@@ -276,9 +276,9 @@ def api_pokedex_demo_infra_check():
         bot_resp = bot_f.result()
         macs_resp = macs_f.result()
 
-    # Pokedex bot row
+    # Sleuth bot row
     if isinstance(bot_resp, Exception):
-        checks.append({'key': 'pokedex-bot', 'label': 'Pokedex bot (Webex)', 'ok': False,
+        checks.append({'key': 'sleuth-bot', 'label': 'Sleuth bot (Webex)', 'ok': False,
                        'detail': f'bot-status-api unreachable: {str(bot_resp)[:80]}'})
     elif bot_resp.ok:
         d = bot_resp.json().get('bot', {}) or {}
@@ -290,9 +290,9 @@ def api_pokedex_demo_infra_check():
         if d.get('memory_mb') is not None:
             extras.append(f"Mem {int(d['memory_mb'])}MB")
         detail = status + ((' · ' + ' · '.join(extras)) if (ok and extras) else '')
-        checks.append({'key': 'pokedex-bot', 'label': 'Pokedex bot (Webex)', 'ok': ok, 'detail': detail})
+        checks.append({'key': 'sleuth-bot', 'label': 'Sleuth bot (Webex)', 'ok': ok, 'detail': detail})
     else:
-        checks.append({'key': 'pokedex-bot', 'label': 'Pokedex bot (Webex)', 'ok': False,
+        checks.append({'key': 'sleuth-bot', 'label': 'Sleuth bot (Webex)', 'ok': False,
                        'detail': f'bot-status-api HTTP {bot_resp.status_code}'})
 
     # Parse mac host status
@@ -378,7 +378,7 @@ def api_pokedex_demo_infra_check():
         if cached and (__t.time() - ts) < _PKX_DEMO_FIXTURES_TTL_S:
             payload = cached
         else:
-            payload = _refresh_pokedex_demo_fixtures()
+            payload = _refresh_sleuth_demo_fixtures()
             _PKX_DEMO_FIXTURES_CACHE['ts'] = __t.time()
             _PKX_DEMO_FIXTURES_CACHE['payload'] = payload
         fixtures = payload.get('fixtures', {}) or {}
@@ -407,20 +407,20 @@ def api_pokedex_demo_infra_check():
     })
 
 
-@chat_bp.route('/api/pokedex-status')
+@chat_bp.route('/api/sleuth-status')
 @auth_helpers.admin_required
 @limiter.limit("30 per minute")
 @log_web_activity
-def api_pokedex_status():
+def api_sleuth_status():
     """Health check endpoint for Pokédex chat availability"""
-    status = pokedex_handler.check_pokedex_status(get_state_manager)
+    status = sleuth_handler.check_sleuth_status(get_state_manager)
     return jsonify(status)
 
 
-@chat_bp.route('/api/pokedex-models')
+@chat_bp.route('/api/sleuth-models')
 @auth_helpers.admin_required
 @limiter.limit("30 per minute")
-def api_pokedex_models():
+def api_sleuth_models():
     """Return the configured backends for the playground model dropdown.
     Backends without a base_url in config are filtered out."""
     models = [
@@ -431,12 +431,12 @@ def api_pokedex_models():
     return jsonify({"models": models, "default": _DEFAULT_PUBLIC_MODEL})
 
 
-@chat_bp.route('/api/pokedex-chat', methods=['POST'])
+@chat_bp.route('/api/sleuth-chat', methods=['POST'])
 @auth_helpers.admin_required
 @limiter.limit("10 per minute")
 @log_web_activity
-def api_pokedex_chat():
-    """API endpoint for Pokedex chat messages"""
+def api_sleuth_chat():
+    """API endpoint for Sleuth chat messages"""
     try:
         data = request.get_json()
         user_message = data.get('message', '').strip()
@@ -451,7 +451,7 @@ def api_pokedex_chat():
         if not session_id:
             return jsonify({'success': False, 'error': 'Session ID is required'}), 400
 
-        response_text = pokedex_handler.handle_pokedex_chat(
+        response_text = sleuth_handler.handle_sleuth_chat(
             user_message,
             session_id,
             get_client_ip(),
@@ -461,11 +461,11 @@ def api_pokedex_chat():
         return jsonify({'success': True, 'response': response_text})
 
     except Exception as exc:
-        logger.error(f"Error in Pokedex chat API: {exc}", exc_info=True)
+        logger.error(f"Error in Sleuth chat API: {exc}", exc_info=True)
         return jsonify({'success': False, 'error': 'Failed to get response from AI. Please try again.'}), 500
 
 
-def _pokedex_rate_limit_exempt() -> bool:
+def _sleuth_rate_limit_exempt() -> bool:
     """Skip the 5/min rate limit for the recording orchestrator.
 
     Gated on two conditions that together can only be met by something
@@ -479,11 +479,11 @@ def _pokedex_rate_limit_exempt() -> bool:
     return bool(auth_helpers.is_admin())
 
 
-@chat_bp.route('/api/pokedex-chat-stream', methods=['POST'])
+@chat_bp.route('/api/sleuth-chat-stream', methods=['POST'])
 @auth_helpers.admin_required
-@limiter.limit("5 per minute; 100 per day", exempt_when=_pokedex_rate_limit_exempt)
+@limiter.limit("5 per minute; 100 per day", exempt_when=_sleuth_rate_limit_exempt)
 @log_web_activity
-def api_pokedex_chat_stream():
+def api_sleuth_chat_stream():
     """Public-playground streaming endpoint.
 
     Reads `message`, `session_id`, optional `model` ('glm'|'qwen'),
@@ -517,7 +517,7 @@ def api_pokedex_chat_stream():
         user_ip = get_client_ip()
         state_manager = get_state_manager()
         if state_manager is None:
-            return jsonify({'success': False, 'error': 'Pokedex backend unavailable'}), 503
+            return jsonify({'success': False, 'error': 'Sleuth backend unavailable'}), 503
 
         llm_overrides = {
             "base_url": base_url,
@@ -529,7 +529,7 @@ def api_pokedex_chat_stream():
         allowlist = state_manager.PUBLIC_TOOL_ALLOWLIST
 
         logger.info(
-            f"Pokedex public stream: ip={user_ip} model={model_key} "
+            f"Sleuth public stream: ip={user_ip} model={model_key} "
             f"temp={temperature} chars={len(user_message)}"
         )
 
@@ -606,56 +606,56 @@ def api_pokedex_chat_stream():
         )
 
     except Exception as exc:
-        logger.error(f"Error in Pokedex streaming chat API: {exc}", exc_info=True)
+        logger.error(f"Error in Sleuth streaming chat API: {exc}", exc_info=True)
         return jsonify({'success': False, 'error': 'An unexpected error occurred. Please try again.'}), 500
 
 
-# --- Toodles Chat ---
+# --- Aide Chat ---
 
-@chat_bp.route('/toodles')
+@chat_bp.route('/aide')
 @auth_helpers.admin_required
 @log_web_activity
-def toodles_chat():
-    """Toodles chat interface — admin-gated."""
-    return render_template('toodles_chat.html')
+def aide_chat():
+    """Aide chat interface — admin-gated."""
+    return render_template('aide_chat.html')
 
 
-@chat_bp.route('/api/toodles/login', methods=['POST'])
+@chat_bp.route('/api/aide/login', methods=['POST'])
 @auth_helpers.admin_required
 @limiter.limit("5 per minute")
 @log_web_activity
-def api_toodles_login():
-    """API endpoint for Toodles authentication"""
+def api_aide_login():
+    """API endpoint for Aide authentication"""
     try:
         data = request.get_json()
         password = data.get('password', '').strip()
         email = data.get('email', '').strip()
 
-        success, error = toodles_handler.authenticate_toodles(password, CONFIG.toodles_password)
+        success, error = aide_handler.authenticate_aide(password, CONFIG.aide_password)
 
         if success:
-            session['toodles_authenticated'] = True
-            session['toodles_user_email'] = email
+            session['aide_authenticated'] = True
+            session['aide_user_email'] = email
             session.permanent = True
             return jsonify({'success': True, 'message': 'Authentication successful'})
         else:
             return jsonify({'success': False, 'error': error}), 401
 
     except Exception as exc:
-        logger.error(f"Error in Toodles login: {exc}", exc_info=True)
+        logger.error(f"Error in Aide login: {exc}", exc_info=True)
         return jsonify({'success': False, 'error': 'An internal error occurred'}), 500
 
 
-@chat_bp.route('/api/toodles/logout', methods=['POST'])
+@chat_bp.route('/api/aide/logout', methods=['POST'])
 @auth_helpers.admin_required
 @log_web_activity
-def api_toodles_logout():
-    """API endpoint to logout from Toodles"""
-    session.pop('toodles_authenticated', None)
+def api_aide_logout():
+    """API endpoint to logout from Aide"""
+    session.pop('aide_authenticated', None)
     return jsonify({'success': True, 'message': 'Logged out successfully'})
 
 
-@chat_bp.route('/api/toodles/create-x-ticket', methods=['POST'])
+@chat_bp.route('/api/aide/create-x-ticket', methods=['POST'])
 @auth_helpers.admin_required
 @log_web_activity
 def api_create_x_ticket():
@@ -670,7 +670,7 @@ def api_create_x_ticket():
         if not title or not details or not detection_source:
             return jsonify({'success': False, 'error': 'All fields are required'}), 400
 
-        message = toodles_handler.create_x_ticket(
+        message = aide_handler.create_x_ticket(
             title,
             details,
             detection_source,
@@ -687,7 +687,7 @@ def api_create_x_ticket():
         return jsonify({'success': False, 'error': 'An internal error occurred'}), 500
 
 
-@chat_bp.route('/api/toodles/approved-testing', methods=['POST'])
+@chat_bp.route('/api/aide/approved-testing', methods=['POST'])
 @auth_helpers.admin_required
 @log_web_activity
 def api_approved_testing():
@@ -696,7 +696,7 @@ def api_approved_testing():
         data = request.get_json()
 
         try:
-            message = approved_testing_handler.submit_toodles_approved_testing(
+            message = approved_testing_handler.submit_aide_approved_testing(
                 data,
                 prod_list_handler,
                 CONFIG.team_name,
@@ -713,7 +713,7 @@ def api_approved_testing():
         return jsonify({'success': False, 'error': 'An internal error occurred'}), 500
 
 
-@chat_bp.route('/api/toodles/ioc-hunt', methods=['POST'])
+@chat_bp.route('/api/aide/ioc-hunt', methods=['POST'])
 @auth_helpers.admin_required
 @log_web_activity
 def api_ioc_hunt():
@@ -727,7 +727,7 @@ def api_ioc_hunt():
         if not ioc_title or not iocs:
             return jsonify({'success': False, 'error': 'All fields are required'}), 400
 
-        message = toodles_handler.create_ioc_hunt(
+        message = aide_handler.create_ioc_hunt(
             ioc_title,
             iocs,
             user_email,
@@ -743,7 +743,7 @@ def api_ioc_hunt():
         return jsonify({'success': False, 'error': 'An internal error occurred'}), 500
 
 
-@chat_bp.route('/api/toodles/threat-hunt', methods=['POST'])
+@chat_bp.route('/api/aide/threat-hunt', methods=['POST'])
 @auth_helpers.admin_required
 @log_web_activity
 def api_threat_hunt():
@@ -757,7 +757,7 @@ def api_threat_hunt():
         if not threat_title or not threat_description:
             return jsonify({'success': False, 'error': 'All fields are required'}), 400
 
-        message = toodles_handler.create_threat_hunt(
+        message = aide_handler.create_threat_hunt(
             threat_title,
             threat_description,
             user_email,
@@ -773,13 +773,13 @@ def api_threat_hunt():
         return jsonify({'success': False, 'error': 'An internal error occurred'}), 500
 
 
-@chat_bp.route('/api/toodles/oncall', methods=['GET'])
+@chat_bp.route('/api/aide/oncall', methods=['GET'])
 @auth_helpers.admin_required
 @log_web_activity
 def api_oncall():
     """API endpoint to get on-call information"""
     try:
-        on_call_person = toodles_handler.get_oncall_info()
+        on_call_person = aide_handler.get_oncall_info()
         return jsonify({'success': True, 'data': on_call_person})
 
     except Exception as exc:

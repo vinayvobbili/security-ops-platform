@@ -7,7 +7,7 @@ Type=simple
 User=user
 WorkingDirectory=/home/user/pub/IR
 Environment="PATH=/home/user/pub/IR/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-Environment="SKIP_POKEDEX_WARMUP=true"
+Environment="SKIP_SLEUTH_WARMUP=true"
 ExecStart=/home/user/pub/IR/.venv/bin/python /home/user/pub/IR/web/web_server.py
 Restart=always
 RestartSec=10

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>the security assistant bot AI Assistant</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='icons/favicon.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
+    {% block extra_css %}
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/sleuth_chat.css') }}">{% endblock %}
+</head>
+<body>
+{% import 'title_macros.html' as titles %}
+{% set page_title = titles.build_title('the security assistant bot - AI powered SOC assistant','<div class="pokeball-title-icon"></div>','<img src="' + url_for('static', filename='images/sleuth.png') + '" alt="the security assistant bot" class="sleuth-title-icon">') %}
+{% include 'top_bar.html' %}
+
+{% block content %}
+    <button class="clear-chat-button" id="clearChatButton">
+        <span class="button-icon">🗑️</span>
+        <span class="button-text">Clear Chat</span>
+    </button>
+
+    <div class="chat-container">
+        <!-- Status Banner -->
+        <div id="statusBanner" class="status-banner">
+            <div id="statusMessage">Checking connection...</div>
+            <div id="statusDetails" class="status-banner-details"></div>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+            <div class="message assistant">
+                <div class="message-content">
+                    <strong>Welcome to the security assistant bot!</strong> 🎉<br><br>
+                    I'm your intelligent assistant, ready to help with security operations, threat hunting, and general questions.
+                    <br><br>How can I assist you today?
+                </div>
+            </div>
+        </div>
+
+        <div class="chat-input-container">
+            <div class="chat-input-wrapper">
+                <label for="messageInput" class="sr-only">Chat message</label>
+                <input
+                        type="text"
+                        id="messageInput"
+                        placeholder="Ask me anything..."
+                        autocomplete="off"
+                        aria-label="Chat message input"
+                >
+                <button id="sendButton">Send 🚀</button>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+<!-- Common JavaScript for burger menu and audio -->
+<script src="{{ url_for('static', filename='js/common.js') }}"></script>
+{% block extra_js %}
+    <script src="{{ url_for('static', filename='js/sleuth_chat.js') }}"></script>{% endblock %}
+{% if config.watermark_author %}<div style="position:fixed;bottom:8px;right:16px;font-size:11px;color:rgba(0,0,0,0.25);font-style:italic;pointer-events:none;z-index:9999;">By {{ config.watermark_author }}</div>{% endif %}
+</body>
+</html>

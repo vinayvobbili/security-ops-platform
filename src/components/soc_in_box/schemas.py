@@ -247,7 +247,7 @@ class ThreatIntelReport(BusEvent):
     indicators (IPs, domains, hashes, host/user) through threat-intel
     sources (VirusTotal, RecordedFuture, abuse.ch, intelx, urlscan, MITRE
     ATT&CK) and produces actor attribution + campaign context + MITRE
-    technique mapping. The report posts a separate Pokedex Webex card
+    technique mapping. The report posts a separate Sleuth Webex card
     AFTER the IR Lead's card and writes a second war-room note to the
     XSOAR ticket so the IR responder has attribution + plan side-by-side.
 

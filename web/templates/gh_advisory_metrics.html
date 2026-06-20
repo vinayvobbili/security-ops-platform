@@ -1,0 +1,271 @@
+{% extends 'base_layout.html' %}
+
+{% block page_title_plain %}Advisory Metrics{% endblock %}
+
+{% set page_title_text = 'Advisory Metrics' %}
+{% set page_title_left_icon = '📊' %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/gh_advisory.css') }}">
+<style>
+  .gham-wrap{max-width:1280px;margin:0 auto;padding:0 18px 60px;}
+  .gham-hero{margin:8px 0 4px;padding:22px 26px;border-radius:18px;color:#fff;
+    background:linear-gradient(135deg,#0046AD 0%,#0073C6 50%,#00A651 100%);
+    box-shadow:0 12px 30px rgba(0,70,173,.22);}
+  .gham-hero h2{margin:0 0 6px;font-size:26px;letter-spacing:-.02em;}
+  .gham-hero p{margin:0;opacity:.94;max-width:780px;line-height:1.5;}
+  .gham-hero .gham-stamp{display:inline-block;margin-top:10px;font-size:12px;
+    background:rgba(255,255,255,.18);padding:3px 10px;border-radius:999px;}
+
+  .gham-bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:16px 0 4px;}
+  .gham-link{display:inline-flex;align-items:center;gap:7px;text-decoration:none;
+    font-weight:600;font-size:13.5px;color:#0046AD;background:#fff;border:1px solid #d7deeb;
+    border-radius:999px;padding:8px 15px;transition:transform .12s,box-shadow .12s,border-color .12s;}
+  .gham-link:hover{transform:translateY(-2px);box-shadow:0 8px 18px rgba(16,24,40,.12);border-color:#0046AD;}
+  .gham-link.primary{background:linear-gradient(135deg,#0046AD,#00A651);color:#fff;border-color:transparent;}
+
+  /* KPI stat cards */
+  .gham-kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:13px;margin:16px 0 8px;}
+  .gham-kpi{position:relative;overflow:hidden;padding:16px 16px 14px;border-radius:15px;background:#fff;
+    border:1px solid #e6e9ef;box-shadow:0 1px 3px rgba(16,24,40,.05);}
+  .gham-kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;
+    background:linear-gradient(180deg,var(--c1,#0046AD),var(--c2,#00A651));}
+  .gham-kpi .ic{font-size:20px;}
+  .gham-kpi .n{font-size:30px;font-weight:800;color:#0a2540;letter-spacing:-.02em;line-height:1.05;}
+  .gham-kpi .l{font-size:12px;color:#5b6b82;font-weight:600;text-transform:uppercase;letter-spacing:.04em;}
+  .gham-kpi.k-total{--c1:#0046AD;--c2:#0073C6;}
+  .gham-kpi.k-open{--c1:#b45309;--c2:#f59e0b;}
+  .gham-kpi.k-esc{--c1:#7c3aed;--c2:#a855f7;}
+  .gham-kpi.k-kev{--c1:#b91c1c;--c2:#ef4444;}
+  .gham-kpi.k-crit{--c1:#be123c;--c2:#fb7185;}
+  .gham-kpi.k-arch{--c1:#475569;--c2:#94a3b8;}
+
+  .gham-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;}
+  .gham-card{background:#fff;border:1px solid #e6e9ef;border-radius:16px;padding:16px 18px 10px;
+    box-shadow:0 2px 8px rgba(16,24,40,.05);}
+  .gham-card.full{grid-column:1 / -1;}
+  .gham-card h3{margin:0 0 4px;font-size:15.5px;color:#0a2540;display:flex;align-items:center;gap:8px;}
+  .gham-card .sub{font-size:12px;color:#71809a;margin:0 0 8px;}
+  .gham-chart{width:100%;height:300px;}
+  .gham-chart.tall{height:340px;}
+  .gham-empty{color:#8a97ac;font-size:13px;padding:30px 0;text-align:center;}
+
+  /* sign-off coverage mini-bars */
+  .gham-team{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid #eef1f6;}
+  .gham-team:first-of-type{border-top:none;}
+  .gham-team .tl{flex:0 0 200px;font-size:13px;font-weight:600;color:#0a2540;}
+  .gham-team .tb{flex:1;height:13px;border-radius:7px;overflow:hidden;display:flex;background:#eef1f6;}
+  .gham-team .seg-clear{background:#16a34a;}
+  .gham-team .seg-nc{background:#ef4444;}
+  .gham-team .seg-pend{background:#cbd5e1;}
+  .gham-team .tc{flex:0 0 120px;text-align:right;font-size:12px;color:#5b6b82;}
+
+  /* methodology modal reuses gha-info-* from gh_advisory.css */
+
+  /* thick multi-stop page scrollbar */
+  body::-webkit-scrollbar{width:16px;}
+  body::-webkit-scrollbar-thumb{border-radius:8px;border:3px solid transparent;background-clip:content-box;
+    background-color:#0046AD;background-image:linear-gradient(180deg,#0046AD,#0073C6,#00A651);}
+  body::-webkit-scrollbar-track{background:#eef2f8;}
+
+  /* dark mode */
+  body.dark-mode .gham-kpi,body.dark-mode .gham-card{background:#161b22;border-color:#30363d;
+    box-shadow:0 2px 10px rgba(0,0,0,.4);}
+  body.dark-mode .gham-kpi .n,body.dark-mode .gham-card h3{color:#e6edf3;}
+  body.dark-mode .gham-kpi .l{color:#8b98a9;}
+  body.dark-mode .gham-card .sub,body.dark-mode .gham-team .tc{color:#8b98a9;}
+  body.dark-mode .gham-team .tl{color:#e6edf3;}
+  body.dark-mode .gham-team,body.dark-mode .gham-team .tb{border-color:#30363d;}
+  body.dark-mode .gham-team .tb{background:#21262d;}
+  body.dark-mode .gham-link{background:#161b22;color:#58a6ff;border-color:#30363d;}
+  body.dark-mode .gham-link.primary{background:linear-gradient(135deg,#0046AD,#00A651);color:#fff;}
+  body.dark-mode .gham-empty{color:#8b98a9;}
+  body.dark-mode body::-webkit-scrollbar-track{background:#0d1117;}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="gham-wrap">
+  <div class="gham-bar">
+    <a class="gham-link primary" href="{{ url_for('github_advisories.advisory_list') }}">← Back to advisory queue</a>
+    <button class="gham-link" onclick="document.getElementById('ghaInfoModal').style.display='flex'">✦ How are these computed?</button>
+    <a class="gham-link" href="{{ url_for('github_advisories.advisory_metrics_json') }}" target="_blank" rel="noopener">🔌 JSON feed (for BI)</a>
+    <a class="gham-link" href="{{ url_for('github_advisories.advisory_export_csv') }}">⬇️ Export CSV</a>
+  </div>
+
+  <div class="gham-hero">
+    <h2>📊 Advisory Metrics</h2>
+    <p>Aggregate analytics over the Cyber Security Advisories queue — volume, severity &amp; source mix, team validation coverage, environment exposure, and operating tempo. The same numbers are available as a live JSON feed for BI tools.</p>
+    <span class="gham-stamp">Snapshot {{ metrics.generated_at }} · point a dashboard at the JSON feed for always-fresh data</span>
+  </div>
+
+  {% set h = metrics.headline %}
+  <div class="gham-kpis">
+    <div class="gham-kpi k-total"><div class="ic">📋</div><div class="n">{{ h.total }}</div><div class="l">Live queue</div></div>
+    <div class="gham-kpi k-open"><div class="ic">🟠</div><div class="n">{{ h.open }}</div><div class="l">Open</div></div>
+    <div class="gham-kpi k-esc"><div class="ic">📣</div><div class="n">{{ h.escalated }}</div><div class="l">Escalated</div></div>
+    <div class="gham-kpi k-kev"><div class="ic">🎯</div><div class="n">{{ h.kev }}</div><div class="l">Known-exploited</div></div>
+    <div class="gham-kpi k-crit"><div class="ic">🔥</div><div class="n">{{ h.critical }}</div><div class="l">Critical</div></div>
+    <div class="gham-kpi k-arch"><div class="ic">🗄️</div><div class="n">{{ h.archived }}</div><div class="l">Archived</div></div>
+  </div>
+
+  {% set t = metrics.tempo %}
+  <div class="gham-kpis" style="grid-template-columns:repeat(4,1fr);">
+    <div class="gham-kpi k-total"><div class="ic">⏱️</div><div class="n">{{ t.mtt_triage_h if t.mtt_triage_h is not none else '—' }}{% if t.mtt_triage_h is not none %}<span style="font-size:14px;">h</span>{% endif %}</div><div class="l">Median time to pick up</div></div>
+    <div class="gham-kpi k-esc"><div class="ic">📨</div><div class="n">{{ t.mtt_notify_h if t.mtt_notify_h is not none else '—' }}{% if t.mtt_notify_h is not none %}<span style="font-size:14px;">h</span>{% endif %}</div><div class="l">Median time to notify</div></div>
+    <div class="gham-kpi k-open"><div class="ic">📤</div><div class="n">{{ t.notified_rate }}<span style="font-size:14px;">%</span></div><div class="l">Escalated rate</div></div>
+    <div class="gham-kpi k-crit"><div class="ic">⚠️</div><div class="n">{{ t.exposure_confirmed_pct if t.exposure_confirmed_pct is not none else '—' }}{% if t.exposure_confirmed_pct is not none %}<span style="font-size:14px;">%</span>{% endif %}</div><div class="l">Exposure-confirmed</div></div>
+  </div>
+
+  <div class="gham-card full" style="margin-top:16px;">
+    <h3>📈 Intake vs escalation</h3>
+    <p class="sub">New advisories landing each day vs. those escalated to the assessment team — last 30 days.</p>
+    <div id="ch-throughput" class="gham-chart tall"></div>
+  </div>
+
+  <div class="gham-grid">
+    <div class="gham-card"><h3>🎚️ Severity mix</h3><div id="ch-sev" class="gham-chart"></div></div>
+    <div class="gham-card"><h3>📡 By source</h3><div id="ch-src" class="gham-chart"></div></div>
+    <div class="gham-card"><h3>🚦 Triage status</h3><div id="ch-status" class="gham-chart"></div></div>
+    <div class="gham-card"><h3>📦 Top ecosystems</h3><div id="ch-eco" class="gham-chart"></div></div>
+  </div>
+
+  <div class="gham-grid">
+    <div class="gham-card">
+      <h3>✅ Team validation coverage</h3>
+      <p class="sub">{{ metrics.signoff.fully_cleared }} of {{ metrics.signoff.total }} advisories cleared by every team.</p>
+      <div id="signoff-bars">
+        {% for tm in metrics.signoff.teams %}
+        {% set tot = (tm['clear'] + tm['not_clear'] + tm['pending']) or metrics.signoff.total or 1 %}
+        <div class="gham-team">
+          <div class="tl">{{ tm['emoji'] }} {{ tm['label'] }}</div>
+          <div class="tb" title="{{ tm['clear'] }} clear · {{ tm['not_clear'] }} not clear · {{ tm['pending'] }} pending">
+            <div class="seg-clear" style="width:{{ (tm['clear'] / tot * 100) }}%;"></div>
+            <div class="seg-nc" style="width:{{ (tm['not_clear'] / tot * 100) }}%;"></div>
+            <div class="seg-pend" style="width:{{ (tm['pending'] / tot * 100) }}%;"></div>
+          </div>
+          <div class="tc">{{ tm['clear'] }} clear</div>
+        </div>
+        {% else %}
+        <div class="gham-empty">No teams configured.</div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="gham-card">
+      <h3>🛡️ Environment exposure (Veracode SCA)</h3>
+      <p class="sub">Of advisories checked against our software inventory, how many actually carry an affected component.</p>
+      <div id="ch-exposure" class="gham-chart"></div>
+    </div>
+  </div>
+</div>
+
+<!-- How are these computed? Modal (reuses gha-info-* styling) -->
+<div class="gha-info-backdrop" id="ghaInfoModal" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+  <div class="gha-info-modal" onclick="event.stopPropagation()">
+    <div class="gha-info-header">
+      <h3>How are these metrics computed?</h3>
+      <button class="gha-info-close" onclick="document.getElementById('ghaInfoModal').style.display='none'">&times;</button>
+    </div>
+    <div class="gha-info-body">
+      <div class="gha-info-section">
+        <div class="gha-info-icon">🗃️</div>
+        <div><h4>One backend, one feed</h4>
+          <p>Everything here is aggregated from the advisory database that powers the queue. The exact same payload is served at <strong>/api/cs-advisories/metrics.json</strong> — point Power BI, Grafana, or any BI tool at it for an always-fresh feed instead of a screenshot.</p></div>
+      </div>
+      <div class="gha-info-section">
+        <div class="gha-info-icon">📋</div>
+        <div><h4>Scope</h4>
+          <p>All counts are over the <strong>live queue</strong> (archived and baseline rows excluded), except the Archived KPI. Severity, source, status and ecosystem are simple group-bys.</p></div>
+      </div>
+      <div class="gha-info-section">
+        <div class="gha-info-icon">⏱️</div>
+        <div><h4>Operating tempo</h4>
+          <p><strong>Time to pick up</strong> = median hours from first-seen to a triager taking ownership. <strong>Time to notify</strong> = median hours from first-seen to escalation. <strong>Escalated rate</strong> = share of the queue escalated. Medians, so a single slow item doesn't skew them.</p></div>
+      </div>
+      <div class="gha-info-section">
+        <div class="gha-info-icon">🛡️</div>
+        <div><h4>Exposure-confirmed</h4>
+          <p>Of advisories with a Veracode SCA result, the share that actually carry an affected component in our environment. A miss means no open SCA finding references the package — strong, but not absolute proof of absence from every SBOM.</p></div>
+      </div>
+      <div class="gha-info-section">
+        <div class="gha-info-icon">✅</div>
+        <div><h4>Team validation coverage</h4>
+          <p>Per validating team: how many advisories they've marked clear / not-clear / still pending. <strong>Fully cleared</strong> = every enabled team has signed off clear.</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+<script>
+(function(){
+  var M = {{ metrics | tojson }};
+  var dark = document.body.classList.contains('dark-mode');
+  var FONT = dark ? '#c9d1d9' : '#3a4a63';
+  var GRID = dark ? '#30363d' : '#eaeef4';
+  var BLUE='#0046AD', GREEN='#00A651', AMBER='#f59e0b', RED='#ef4444', PURPLE='#a855f7', SLATE='#94a3b8', CYAN='#0073C6';
+
+  function base(extra){
+    return Object.assign({
+      paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+      font:{color:FONT, family:'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', size:12},
+      margin:{l:46,r:16,t:10,b:40}, showlegend:false
+    }, extra||{});
+  }
+  var CFG = {displayModeBar:false, responsive:true};
+  function empty(id){ document.getElementById(id).innerHTML='<div class="gham-empty">No data yet.</div>'; }
+  function keys(o){ return Object.keys(o||{}); }
+
+  // throughput line
+  (function(){
+    var d = M.throughput||[];
+    if(!d.length) return empty('ch-throughput');
+    var x = d.map(function(p){return p.date;});
+    Plotly.newPlot('ch-throughput', [
+      {x:x, y:d.map(function(p){return p.new;}), name:'New', type:'scatter', mode:'lines',
+       line:{color:BLUE,width:3,shape:'spline'}, fill:'tozeroy', fillcolor:'rgba(0,70,173,.10)'},
+      {x:x, y:d.map(function(p){return p.reported;}), name:'Escalated', type:'scatter', mode:'lines',
+       line:{color:GREEN,width:3,shape:'spline'}}
+    ], base({showlegend:true, legend:{orientation:'h',y:1.12,x:0},
+       xaxis:{gridcolor:GRID,tickfont:{size:10}}, yaxis:{gridcolor:GRID,rangemode:'tozero'}}), CFG);
+  })();
+
+  function barH(id, obj, color){
+    var k = keys(obj); if(!k.length) return empty(id);
+    k.sort(function(a,b){return obj[a]-obj[b];});
+    Plotly.newPlot(id, [{x:k.map(function(s){return obj[s];}), y:k, type:'bar', orientation:'h',
+      marker:{color:color}, text:k.map(function(s){return obj[s];}), textposition:'auto'}],
+      base({xaxis:{gridcolor:GRID}, yaxis:{automargin:true}, margin:{l:120,r:16,t:10,b:30}}), CFG);
+  }
+  barH('ch-src', M.by_source, CYAN);
+  barH('ch-status', M.by_status, PURPLE);
+
+  // severity donut with semantic colors
+  (function(){
+    var o = M.by_severity, k = keys(o); if(!k.length) return empty('ch-sev');
+    var cmap = {critical:RED, malicious:'#b45309', known_exploited:'#be123c', high:AMBER, moderate:'#eab308', low:GREEN};
+    Plotly.newPlot('ch-sev', [{labels:k, values:k.map(function(s){return o[s];}), type:'pie', hole:.55,
+      marker:{colors:k.map(function(s){return cmap[s]||SLATE;})}, textinfo:'label+value', sort:false}],
+      base({showlegend:true, legend:{orientation:'h',y:-.12}, margin:{l:10,r:10,t:10,b:20}}), CFG);
+  })();
+
+  // ecosystem bar
+  (function(){
+    var d = M.by_ecosystem||[]; if(!d.length) return empty('ch-eco');
+    d = d.slice().reverse();
+    Plotly.newPlot('ch-eco', [{x:d.map(function(p){return p.count;}), y:d.map(function(p){return p.ecosystem;}),
+      type:'bar', orientation:'h', marker:{color:GREEN}, text:d.map(function(p){return p.count;}), textposition:'auto'}],
+      base({xaxis:{gridcolor:GRID}, yaxis:{automargin:true}, margin:{l:110,r:16,t:10,b:30}}), CFG);
+  })();
+
+  // exposure donut
+  (function(){
+    var e = M.exposure||{}; var checked = e.checked||0;
+    if(!checked) return empty('ch-exposure');
+    Plotly.newPlot('ch-exposure', [{labels:['Exposed','Clear'], values:[e.exposed||0, e.clear||0], type:'pie', hole:.55,
+      marker:{colors:[RED, GREEN]}, textinfo:'label+value', sort:false}],
+      base({showlegend:true, legend:{orientation:'h',y:-.12}, margin:{l:10,r:10,t:10,b:20}}), CFG);
+  })();
+})();
+</script>
+{% endblock %}

@@ -15,7 +15,7 @@ For each escalated ticket the IR Lead:
    eradication / recovery actions, stakeholder notifications, bridge yes/no,
    runbook pointer.
 4. Publishes an ``IRPlan`` event to ``soc.cases`` (always) and sends a
-   Pokedex Webex card to the dev test space.
+   Sleuth Webex card to the dev test space.
 
 v1 is **plan-only** — the agent recommends actions but never executes them.
 That stays consistent with the project-wide write policy (read-only against

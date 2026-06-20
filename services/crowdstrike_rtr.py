@@ -230,6 +230,98 @@ def run_rtr_script(hostname: str, cloud_script_name: str, command_line: str = ""
         return {"success": False, "output": "", "error": str(e)}
 
 
+def run_rtr_raw_command(hostname: str, raw_script: str, timeout: int = 120) -> dict:
+    """Run an ad-hoc inline RTR script on a host and return its output.
+
+    Unlike run_rtr_script (which executes a pre-uploaded CloudFile), this sends
+    the script body inline via ``runscript -Raw``, so one-off diagnostics
+    (tracert, ipconfig, netstat, a short PowerShell snippet) can be run without
+    first uploading a cloud script. Intended for read-only/diagnostic commands.
+
+    Args:
+        hostname: Target hostname (must be online).
+        raw_script: Script/command body to run inline (PowerShell on Windows).
+            Must not contain a triple-backtick (the -Raw delimiter).
+        timeout: Max seconds to wait for completion (default 120).
+
+    Returns:
+        dict with 'success', 'output', and 'error' keys.
+    """
+    if not hostname:
+        return {"success": False, "output": "", "error": "No hostname provided"}
+    if not raw_script or not raw_script.strip():
+        return {"success": False, "output": "", "error": "No script provided"}
+    if "```" in raw_script:
+        return {"success": False, "output": "", "error": "raw_script may not contain a triple-backtick"}
+
+    device_id = cs_client.get_device_id(hostname.strip().upper())
+    if not device_id:
+        return {"success": False, "output": "", "error": f"Hostname '{hostname}' not found in CrowdStrike"}
+
+    # RTR requires the device online (no queue_offline for live diagnostics).
+    online_state = falcon_hosts.get_online_state(ids=device_id)
+    if online_state.get('status_code') == 200:
+        resources = online_state.get('body', {}).get('resources', [])
+        if resources and resources[0].get('state') == 'offline':
+            return {"success": False, "output": "", "error": f"Device '{hostname}' is offline. RTR requires the device to be online."}
+
+    session_result = falcon_rtr.init_session(device_id=device_id)
+    if session_result.get('status_code') != 201:
+        errs = session_result.get('body', {}).get('errors', [])
+        return {"success": False, "output": "", "error": f"Failed to create RTR session: {errs}"}
+    session_id = session_result['body']['resources'][0]['session_id']
+
+    try:
+        cmd_string = f"runscript -Raw=```{raw_script}```"
+        exec_resp = falcon_rtr_admin.execute_admin_command(
+            session_id=session_id,
+            base_command="runscript",
+            command_string=cmd_string,
+        )
+        if exec_resp.get('status_code') not in (200, 201):
+            errs = exec_resp.get('body', {}).get('errors', [])
+            return {"success": False, "output": "", "error": f"Failed to execute: {errs}"}
+        cloud_request_id = exec_resp['body']['resources'][0]['cloud_request_id']
+
+        # Poll for completion (mirror execute_command's sequence paging).
+        deadline = time.time() + timeout
+        all_stdout = ""
+        all_stderr = ""
+        sequence_id = 0
+        complete = False
+        while time.time() < deadline:
+            status = falcon_rtr_admin.check_admin_command_status(
+                cloud_request_id=cloud_request_id, sequence_id=sequence_id)
+            if status.get('status_code') != 200:
+                time.sleep(2)
+                continue
+            res = status.get('body', {}).get('resources', [])
+            if res:
+                stdout = res[0].get('stdout', '') or ""
+                stderr = res[0].get('stderr', '') or ""
+                complete = res[0].get('complete', False)
+                all_stdout += stdout
+                all_stderr += stderr
+                if complete:
+                    break
+                if stdout:
+                    sequence_id += 1
+            time.sleep(2)
+
+        output = all_stdout or all_stderr
+        if not complete and not output:
+            return {"success": False, "output": "", "error": f"Command did not complete within {timeout}s"}
+        return {"success": True, "output": output, "error": all_stderr if all_stdout else ""}
+    except Exception as e:
+        logger.error(f"RTR raw command failed: {e}")
+        return {"success": False, "output": "", "error": str(e)}
+    finally:
+        try:
+            falcon_rtr.delete_session(session_id=session_id)
+        except Exception:
+            pass
+
+
 def upload_script(script_name):
     # use RTR admin to upload the script_content
     file_name = f'../data/scripts/{script_name}.ps1'

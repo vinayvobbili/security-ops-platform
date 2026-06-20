@@ -4,6 +4,7 @@ import logging
 from typing import Optional
 
 from mcp_server.server import mcp
+from my_bot.utils.verify_links import attach_verify, qradar_line
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +81,8 @@ def qradar_search_by_ip(
         max_results: Max events to return
     """
     client = _get_client()
-    return client.search_events_by_ip(ip_address, hours=hours, max_results=max_results)
+    result = client.search_events_by_ip(ip_address, hours=hours, max_results=max_results)
+    return attach_verify(result, qradar_line(result.get("aql") if isinstance(result, dict) else None))
 
 
 @mcp.tool(tags={"readonly"})
@@ -95,7 +97,8 @@ def qradar_search_by_domain(
         max_results: Max events
     """
     client = _get_client()
-    return client.search_events_by_domain(domain, hours=hours, max_results=max_results)
+    result = client.search_events_by_domain(domain, hours=hours, max_results=max_results)
+    return attach_verify(result, qradar_line(result.get("aql") if isinstance(result, dict) else None))
 
 
 @mcp.tool(tags={"readonly"})

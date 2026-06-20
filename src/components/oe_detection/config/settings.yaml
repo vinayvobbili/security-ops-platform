@@ -145,7 +145,7 @@ alerts:
     enabled: true
     webhook_url: "${WEBEX_WEBHOOK_URL}"
     room_id: "${WEBEX_ROOM_ID_DEV_TEST_SPACE}"
-    bot_token: "${WEBEX_BOT_ACCESS_TOKEN_POKEDEX}"
+    bot_token: "${WEBEX_BOT_ACCESS_TOKEN_SLEUTH}"
     min_level: "high"
 
   email:

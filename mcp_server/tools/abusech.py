@@ -7,6 +7,7 @@ All sources are free — no API key required.
 import logging
 
 from mcp_server.server import mcp
+from my_bot.utils.verify_links import attach_verify, threatfox_line
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ def abusech_check_domain(domain: str) -> dict:
         domain: Domain to check (e.g. 'suspicious-domain.com')
     """
     client = _get_client()
-    return client.check_domain_all(domain)
+    return attach_verify(client.check_domain_all(domain), threatfox_line(domain))
 
 
 @mcp.tool(tags={"readonly"})
@@ -48,4 +49,4 @@ def abusech_check_ip(ip_address: str) -> dict:
         ip_address: IPv4 address to check
     """
     client = _get_client()
-    return client.check_ip_all(ip_address)
+    return attach_verify(client.check_ip_all(ip_address), threatfox_line(ip_address))

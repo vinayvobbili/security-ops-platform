@@ -54,29 +54,29 @@ def get_config(bot_name: str | None = None):
             company_name = web_domain.split('.')[0].title()
 
     return Config(
-        webex_bot_access_token_moneyball=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_MONEYBALL"),
+        webex_bot_access_token_oracle=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_ORACLE"),
         webex_bot_access_token_soar=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_SOAR"),
         webex_bot_access_token_dev_xsoar=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_DEV_XSOAR"),
-        webex_bot_access_token_toodles=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_TOODLES"),
+        webex_bot_access_token_aide=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_AIDE"),
         webex_bot_access_token_jarvis=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_JARVIS"),
         webex_bot_access_token_tars=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_TARS"),
         webex_bot_access_token_case=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_CASE"),
-        webex_bot_access_token_barnacles=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_BARNACLES"),
+        webex_bot_access_token_relay=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_RELAY"),
         webex_bot_access_token_hal9000=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_HAL9000"),
-        webex_bot_access_token_pokedex=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_POKEDEX"),
+        webex_bot_access_token_sleuth=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_SLEUTH"),
         webex_bot_access_token_pinger=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_PINGER"),
-        webex_bot_access_token_winai=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_WINAI"),
-        webex_bot_email_pokedex=os.environ.get("WEBEX_BOT_EMAIL_POKEDEX"),
+        webex_bot_access_token_mentor=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_MENTOR"),
+        webex_bot_email_sleuth=os.environ.get("WEBEX_BOT_EMAIL_SLEUTH"),
         webex_bot_email_hal9000=os.environ.get("WEBEX_BOT_EMAIL_HAL9000"),
-        webex_bot_email_toodles=os.environ.get("WEBEX_BOT_EMAIL_TOODLES"),
+        webex_bot_email_aide=os.environ.get("WEBEX_BOT_EMAIL_AIDE"),
         webex_bot_email_jarvis=os.environ.get("WEBEX_BOT_EMAIL_JARVIS"),
         webex_bot_email_tars=os.environ.get("WEBEX_BOT_EMAIL_TARS"),
         webex_bot_email_case=os.environ.get("WEBEX_BOT_EMAIL_CASE"),
-        webex_bot_email_barnacles=os.environ.get("WEBEX_BOT_EMAIL_BARNACLES"),
-        webex_bot_email_money_ball=os.environ.get("WEBEX_BOT_EMAIL_MONEY_BALL"),
-        webex_bot_email_msoar=os.environ.get("WEBEX_BOT_EMAIL_MSOAR"),
+        webex_bot_email_relay=os.environ.get("WEBEX_BOT_EMAIL_RELAY"),
+        webex_bot_email_oracle=os.environ.get("WEBEX_BOT_EMAIL_ORACLE"),
+        webex_bot_email_orchestrator=os.environ.get("WEBEX_BOT_EMAIL_ORCHESTRATOR"),
         webex_bot_email_pinger=os.environ.get("WEBEX_BOT_EMAIL_PINGER"),
-        webex_bot_email_winai=os.environ.get("WEBEX_BOT_EMAIL_WINAI"),
+        webex_bot_email_mentor=os.environ.get("WEBEX_BOT_EMAIL_MENTOR"),
         webex_room_id_aging_tickets=os.environ.get("WEBEX_ROOM_ID_AGING_TICKETS"),
         webex_room_id_dev_test_space=os.environ.get("WEBEX_ROOM_ID_DEV_TEST_SPACE"),
         webex_room_id_soc_shift_updates=os.environ.get("WEBEX_ROOM_ID_SOC_SHIFT_UPDATES"),
@@ -111,11 +111,11 @@ def get_config(bot_name: str | None = None):
         xsoar_dev_auth_key=os.environ.get("XSOAR_DEV_AUTH_KEY"),
         xsoar_dev_auth_id=os.environ.get("XSOAR_DEV_AUTH_ID"),
         xsoar_lists_filename=os.environ.get("XSOAR_LISTS_FILENAME"),
-        barnacles_approved_users=os.environ.get("BARNACLES_APPROVED_USERS"),
+        relay_approved_users=os.environ.get("RELAY_APPROVED_USERS"),
         team_name=os.environ.get("TEAM_NAME"),
         company_name=company_name,  # Derived from MY_WEB_DOMAIN if not explicitly set
         claude_api_key=os.environ.get("CLAUDE_API_KEY"),
-        barnacles_claude_api_key=os.environ.get("BARNACLES_CLAUDE_API_KEY"),
+        relay_claude_api_key=os.environ.get("RELAY_CLAUDE_API_KEY"),
         claude_model=os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6"),
         llm_model=os.environ.get("LLM_MODEL"),
         router_model=os.environ.get("ROUTER_MODEL", os.environ.get("LLM_MODEL")),
@@ -128,9 +128,6 @@ def get_config(bot_name: str | None = None):
         studio1_qwen_base_url=_env_with_prefix(bot_name, "STUDIO1_QWEN_BASE_URL", ""),
         studio1_router_base_url=_env_with_prefix(bot_name, "STUDIO1_ROUTER_BASE_URL", ""),
         local_llm_public_url=os.environ.get("LOCAL_LLM_PUBLIC_URL", ""),
-        data_security_upload_token=os.environ.get("DATA_SECURITY_UPLOAD_TOKEN"),
-        scanner_upload_token=os.environ.get("SCANNER_UPLOAD_TOKEN"),
-        anthony_upload_token=os.environ.get("ANTHONY_UPLOAD_TOKEN"),
         mcp_server_url=os.environ.get("MCP_SERVER_URL", "http://127.0.0.1:8200/mcp"),
         mcp_api_key=os.environ.get("MCP_API_KEY"),
         azdo_org=os.environ.get("AZDO_ORGANIZATION"),
@@ -213,21 +210,16 @@ def get_config(bot_name: str | None = None):
         palo_alto_host=os.environ.get("PALO_ALTO_HOST"),
         palo_alto_api_key=os.environ.get("PALO_ALTO_API_KEY"),
         open_weather_map_api_key=os.environ.get("OPEN_WEATHER_MAP_API_KEY"),
+        environment=os.environ.get("ENVIRONMENT", "production").strip().lower(),
         web_server_debug_mode_on=str(os.environ.get("WEB_SERVER_DEBUG_MODE_ON", "False")).lower() == "true",
         web_server_port=int(os.environ.get("WEB_SERVER_PORT", "8080")),
         ring_tagging_safety_window_minutes=int(os.environ.get("RING_TAGGING_SAFETY_WINDOW_MINUTES", "60")),
         web_server_url=os.environ.get("WEB_SERVER_BASE_URL"),
-        # Microsoft Teams Toodles Bot configuration (from Azure Bot Service)
-        teams_toodles_app_id=os.environ.get("TEAMS_TOODLES_APP_ID"),
-        teams_toodles_app_password=os.environ.get("TEAMS_TOODLES_APP_PASSWORD"),
-        teams_toodles_tenant_id=os.environ.get("TEAMS_TOODLES_TENANT_ID"),
-        toodles_password=os.environ.get("TOODLES_PASSWORD"),
-        ticket_cannon_password=os.environ.get("TICKET_CANNON_PASSWORD"),
-        contacts_edit_password=os.environ.get("CONTACTS_EDIT_PASSWORD"),
-        docs_edit_password=os.environ.get("DOCS_EDIT_PASSWORD"),
-        wiki_edit_password=os.environ.get("WIKI_EDIT_PASSWORD"),
-        favorites_edit_password=os.environ.get("FAVORITES_EDIT_PASSWORD"),
-        scan_s3_password=os.environ.get("SCAN_S3_PASSWORD"),
+        # Microsoft Teams Aide Bot configuration (from Azure Bot Service)
+        teams_aide_app_id=os.environ.get("TEAMS_AIDE_APP_ID"),
+        teams_aide_app_password=os.environ.get("TEAMS_AIDE_APP_PASSWORD"),
+        teams_aide_tenant_id=os.environ.get("TEAMS_AIDE_TENANT_ID"),
+        aide_password=os.environ.get("AIDE_PASSWORD"),
         corp_proxy=os.environ.get("CORP_PROXY"),
         flask_secret_key=os.environ.get("FLASK_SECRET_KEY"),
         analyst_hourly_cost=int(os.environ.get("ANALYST_HOURLY_COST", "20")),
@@ -235,16 +227,29 @@ def get_config(bot_name: str | None = None):
         logs_viewer_url=os.environ.get("LOGS_VIEWER_URL"),
         virustotal_api_key=os.environ.get("VIRUSTOTAL_API_KEY"),
         github_token=os.environ.get("GITHUB_TOKEN"),
+        appsec_team_email=os.environ.get("APPSEC_TEAM_EMAIL"),
+        appsec_team_email_cc=os.environ.get("APPSEC_TEAM_EMAIL_CC"),
+        github_advisories_token=os.environ.get("GITHUB_ADVISORIES_TOKEN"),
+        package_compromise_teams_channel=os.environ.get("PACKAGE_COMPROMISE_TEAMS_CHANNEL"),
+        package_compromise_teams_team=os.environ.get("PACKAGE_COMPROMISE_TEAMS_TEAM"),
         hibp_api_key=os.environ.get("HIBP_API_KEY"),
         shodan_api_key=os.environ.get("SHODAN_API_KEY"),
+        shodan_org=os.environ.get("SHODAN_ORG"),
+        shodan_net=os.environ.get("SHODAN_NET"),
+        censys_api_key=os.environ.get("CENSYS_API_KEY"),
+        censys_org_id=os.environ.get("CENSYS_ORG_ID"),
         nvd_api_key=os.environ.get("NVD_API_KEY"),
         abuseipdb_api_key=os.environ.get("ABUSEIPDB_API_KEY"),
+        domaintools_api_username=os.environ.get("DOMAINTOOLS_API_USERNAME"),
+        domaintools_api_key=os.environ.get("DOMAINTOOLS_API_KEY"),
         intelx_api_key=os.environ.get("INTELLIGENCE_X_API_KEY"),
         intelx_api_base_url=os.environ.get("INTELLIGENCE_X_API_BASE_URL"),
         recorded_future_api_key=os.environ.get("RECORDED_FUTURE_API_KEY"),
         recorded_future_api_base_url=os.environ.get("RECORDED_FUTURE_API_BASE_URL"),
         attackiq_api_key=os.environ.get("ATTACKIQ_API_KEY"),
         attackiq_base_url=os.environ.get("ATTACKIQ_BASE_URL"),
+        attackiq_test_asset_group_id=os.environ.get("ATTACKIQ_TEST_ASSET_GROUP_ID"),
+        attackiq_test_asset_group_id_linux=os.environ.get("ATTACKIQ_TEST_ASSET_GROUP_ID_LINUX"),
         urlscan_api_key=os.environ.get("URLSCAN_API_KEY"),
         qradar_api_url=os.environ.get("QRADAR_API_URL"),
         qradar_api_key=os.environ.get("QRADAR_API_KEY"),
@@ -253,6 +258,13 @@ def get_config(bot_name: str | None = None):
         xsiam_prod_api_key=os.environ.get("XSIAM_PROD_API_KEY"),
         xsiam_prod_api_base_url=os.environ.get("XSIAM_PROD_API_BASE_URL"),
         xsiam_prod_ui_base_url=os.environ.get("XSIAM_PROD_UI_BASE_URL"),
+        veracode_client_id=os.environ.get("VERACODE_CLIENT_ID"),
+        veracode_client_secret=os.environ.get("VERACODE_CLIENT_SECRET"),
+        veracode_api_base_url=os.environ.get("VERACODE_API_BASE_URL", "https://api.veracode.com"),
+        veracode_token_url=os.environ.get("VERACODE_TOKEN_URL"),
+        jfrog_api_url=os.environ.get("JFROG_API_URL"),
+        jfrog_token_id=os.environ.get("JFROG_TOKEN_ID"),
+        jfrog_token=os.environ.get("JFROG_TOKEN"),
         vectra_api_base_url=os.environ.get("VECTRA_API_BASE_URL"),
         vectra_client_id=os.environ.get("VECTRA_API_CLIENT_ID"),
         vectra_api_key=os.environ.get("VECTRA_API_KEY"),
@@ -282,27 +294,27 @@ def get_config(bot_name: str | None = None):
 @dataclass
 class Config:
     """Configuration settings for the application."""
-    webex_bot_access_token_moneyball: Optional[str] = None
+    webex_bot_access_token_oracle: Optional[str] = None
     webex_bot_access_token_soar: Optional[str] = None
     webex_bot_access_token_dev_xsoar: Optional[str] = None
-    webex_bot_access_token_toodles: Optional[str] = None
+    webex_bot_access_token_aide: Optional[str] = None
     webex_bot_access_token_jarvis: Optional[str] = None
     webex_bot_access_token_tars: Optional[str] = None
     webex_bot_access_token_case: Optional[str] = None
-    webex_bot_access_token_barnacles: Optional[str] = None
+    webex_bot_access_token_relay: Optional[str] = None
     webex_bot_access_token_hal9000: Optional[str] = None
-    webex_bot_access_token_pokedex: Optional[str] = None
+    webex_bot_access_token_sleuth: Optional[str] = None
     webex_bot_access_token_pinger: Optional[str] = None
-    webex_bot_access_token_winai: Optional[str] = None
-    webex_bot_email_pokedex: Optional[str] = None
+    webex_bot_access_token_mentor: Optional[str] = None
+    webex_bot_email_sleuth: Optional[str] = None
     webex_bot_email_hal9000: Optional[str] = None
-    webex_bot_email_toodles: Optional[str] = None
+    webex_bot_email_aide: Optional[str] = None
     webex_bot_email_jarvis: Optional[str] = None
-    webex_bot_email_barnacles: Optional[str] = None
-    webex_bot_email_money_ball: Optional[str] = None
-    webex_bot_email_msoar: Optional[str] = None
+    webex_bot_email_relay: Optional[str] = None
+    webex_bot_email_oracle: Optional[str] = None
+    webex_bot_email_orchestrator: Optional[str] = None
     webex_bot_email_pinger: Optional[str] = None
-    webex_bot_email_winai: Optional[str] = None
+    webex_bot_email_mentor: Optional[str] = None
     webex_bot_email_tars: Optional[str] = None
     webex_bot_email_case: Optional[str] = None
     webex_room_id_aging_tickets: Optional[str] = None
@@ -342,7 +354,7 @@ class Config:
     team_name: Optional[str] = None
     company_name: Optional[str] = None
     claude_api_key: Optional[str] = None
-    barnacles_claude_api_key: Optional[str] = None
+    relay_claude_api_key: Optional[str] = None
     claude_model: Optional[str] = None
     llm_model: Optional[str] = None
     router_model: Optional[str] = None
@@ -355,12 +367,9 @@ class Config:
     studio1_qwen_base_url: Optional[str] = None
     studio1_router_base_url: Optional[str] = None
     local_llm_public_url: Optional[str] = None
-    data_security_upload_token: Optional[str] = None
-    scanner_upload_token: Optional[str] = None
-    anthony_upload_token: Optional[str] = None
     mcp_server_url: Optional[str] = None
     mcp_api_key: Optional[str] = None
-    barnacles_approved_users: Optional[str] = None
+    relay_approved_users: Optional[str] = None
     azdo_org: Optional[str] = None
     azdo_de_project: Optional[str] = None
     azdo_re_project: Optional[str] = None
@@ -440,21 +449,21 @@ class Config:
     palo_alto_host: Optional[str] = None
     palo_alto_api_key: Optional[str] = None
     open_weather_map_api_key: Optional[str] = None
+    # Deployment environment, from the ENVIRONMENT env var. "production" on the
+    # prod worktree (~/security-ops-platform), "dev" on the dev twin (~/security-ops-platform-dev). Defaults to
+    # "production" when unset so an un-migrated instance never silently behaves
+    # as dev (e.g. suppressing real escalations). Use the is_production helper
+    # rather than comparing the string at call sites.
+    environment: str = "production"
     web_server_debug_mode_on: bool = False
     web_server_port: Optional[int] = None
     ring_tagging_safety_window_minutes: int = 60
     web_server_url: Optional[str] = None
-    # Microsoft Teams Toodles Bot configuration (from Azure Bot Service)
-    teams_toodles_app_id: Optional[str] = None
-    teams_toodles_app_password: Optional[str] = None
-    teams_toodles_tenant_id: Optional[str] = None
-    toodles_password: Optional[str] = None
-    ticket_cannon_password: Optional[str] = None
-    contacts_edit_password: Optional[str] = None
-    docs_edit_password: Optional[str] = None
-    wiki_edit_password: Optional[str] = None
-    favorites_edit_password: Optional[str] = None
-    scan_s3_password: Optional[str] = None
+    # Microsoft Teams Aide Bot configuration (from Azure Bot Service)
+    teams_aide_app_id: Optional[str] = None
+    teams_aide_app_password: Optional[str] = None
+    teams_aide_tenant_id: Optional[str] = None
+    aide_password: Optional[str] = None
     corp_proxy: Optional[str] = None
     analyst_hourly_cost: int = 20
     flask_secret_key: Optional[str] = None
@@ -462,16 +471,34 @@ class Config:
     logs_viewer_url: Optional[str] = None
     virustotal_api_key: Optional[str] = None
     github_token: Optional[str] = None
+    appsec_team_email: Optional[str] = None
+    appsec_team_email_cc: Optional[str] = None
+    github_advisories_token: Optional[str] = None
+    package_compromise_teams_channel: Optional[str] = None
+    package_compromise_teams_team: Optional[str] = None
     hibp_api_key: Optional[str] = None
     shodan_api_key: Optional[str] = None
+    shodan_org: Optional[str] = None
+    shodan_net: Optional[str] = None
+    censys_api_key: Optional[str] = None
+    censys_org_id: Optional[str] = None
     nvd_api_key: Optional[str] = None
     abuseipdb_api_key: Optional[str] = None
+    domaintools_api_username: Optional[str] = None
+    domaintools_api_key: Optional[str] = None
     intelx_api_key: Optional[str] = None
     intelx_api_base_url: Optional[str] = None
     recorded_future_api_key: Optional[str] = None
     recorded_future_api_base_url: Optional[str] = None
     attackiq_api_key: Optional[str] = None
     attackiq_base_url: Optional[str] = None
+    # UUID of an operator-designated AttackIQ asset group that contains exactly
+    # ONE test asset. The gated single-scenario run binds to this group so the
+    # blast radius can never exceed one host. Unset => in-app runs are refused.
+    # This is the Windows/default group; the Linux-platform run uses the _linux
+    # group below (each must itself contain exactly one asset).
+    attackiq_test_asset_group_id: Optional[str] = None
+    attackiq_test_asset_group_id_linux: Optional[str] = None
     urlscan_api_key: Optional[str] = None
     qradar_api_url: Optional[str] = None
     qradar_api_key: Optional[str] = None
@@ -480,6 +507,17 @@ class Config:
     xsiam_prod_api_key: Optional[str] = None
     xsiam_prod_api_base_url: Optional[str] = None
     xsiam_prod_ui_base_url: Optional[str] = None
+    veracode_client_id: Optional[str] = None
+    veracode_client_secret: Optional[str] = None
+    veracode_api_base_url: str = "https://api.veracode.com"
+    veracode_token_url: Optional[str] = None
+    # JFrog Platform (Artifactory + Xray). jfrog_api_url is the platform base
+    # (e.g. https://jfrog-artifactory.the-company.com); Artifactory lives under
+    # /artifactory and Xray under /xray. Auth is a scoped access token used as
+    # a Bearer token; jfrog_token_id is its identifier (for reference/revocation).
+    jfrog_api_url: Optional[str] = None
+    jfrog_token_id: Optional[str] = None
+    jfrog_token: Optional[str] = None
     vectra_api_base_url: Optional[str] = None
     vectra_client_id: Optional[str] = None
     vectra_api_key: Optional[str] = None
@@ -503,3 +541,10 @@ class Config:
     power_bi_dataset_id: Optional[str] = None
     power_bi_cert_path: Optional[str] = None
     power_bi_cert_thumbprint: Optional[str] = None
+
+    @property
+    def is_production(self) -> bool:
+        """True on the prod deployment. Biased toward prod: only an explicit
+        non-prod ENVIRONMENT (e.g. 'dev') flips this off, so a missing/typo'd
+        value keeps full production behavior rather than silently going dev."""
+        return (self.environment or "production").strip().lower() in ("production", "prod")

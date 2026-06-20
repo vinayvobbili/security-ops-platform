@@ -5,11 +5,11 @@ service runs it through the same gates a real detection-content CI/CD pipeline
 would, then packages it as a GitLab merge request for the detection repo:
 
   1. Lint & schema-validate the Sigma rule (deterministic).
-  2. Compile it to an XSIAM XQL correlation query (GPT-4.1, with a
+  2. Compile it to an XSIAM XQL correlation query (the LLM, with a
      deterministic best-effort floor if the model is unavailable).
   3. Dry-run that XQL against the live XSIAM tenant — read-only, bounded
      window — to prove it parses and to surface a hit count (real CI gate).
-  4. Detection-engineering review (the LLM gateway): quality, false-positive risk,
+  4. Detection-engineering review (the LLM): quality, false-positive risk,
      ATT&CK mapping, overlap with rules already in the catalog, improvements.
   5. Package the GitLab artifacts: the rule file, the compiled XQL, a
      `.gitlab-ci.yml`, and an MR description.
@@ -25,7 +25,7 @@ English, catalog overlap, and the senior-engineer review — are delegated to th
 ``detflow`` OSS package (extracted from this very workbench) so the two don't
 drift; the XSIAM-specific compile, the live-tenant dry-run, and the GitLab
 packaging stay here. The LLM tier is injected via :func:`_detflow_model` so
-detflow runs on the LLM gateway (GPT-4.1 + m1 fallback), not its own env config.
+detflow runs on our own LLM tier, not its own env config.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 _DB = Path(__file__).resolve().parent.parent / "data" / "detection_pipeline.db"
 _RULES_CACHE_DIR = Path(__file__).resolve().parent.parent / "data" / "rules_cache"
 
-# Two bounded the LLM gateway calls + a tenant round-trip per run; keep concurrency low.
+# Two bounded LLM calls + a tenant round-trip per run; keep concurrency low.
 _MAX_CONCURRENT = 2
 _slots = threading.BoundedSemaphore(_MAX_CONCURRENT)
 
@@ -421,6 +421,11 @@ def _run_job(job_id: str) -> None:
         if job.get("run_dry_run"):
             st.set("test", status="running", phase="Dry-running on XSIAM (read-only)")
             dry = _dry_run(compiled["xql"])
+            # Finalize the stage from the dry-run result — without this the stage
+            # row stays stuck on "running" in the UI even though the result is
+            # recorded in compiled["dry_run"].
+            st.set("test", status=dry["status"], summary=dry.get("summary", ""),
+                   details=dry.get("details", []))
         else:
             dry = {"status": "skip",
                    "summary": "Live tenant dry-run not requested — skipped (no Cortex compute spent).",
@@ -610,7 +615,7 @@ def draft_sigma_from_text(description: str) -> dict:
     """Draft a Sigma rule from a plain-English description of the behavior.
 
     This is the optional front door: an analyst describes what to detect and
-    the LLM gateway drafts a Sigma rule, which then drops into the same pipeline. The
+    The LLM drafts a Sigma rule, which then drops into the same pipeline. The
     draft is a STARTING POINT — lint/compile/review still validate it.
     Returns {"sigma": "<yaml>", "notes": [...]} or {"error": "..."}.
     """
@@ -624,7 +629,7 @@ def draft_sigma_from_text(description: str) -> dict:
 
 def _draft(description: str, fmt: str, thread_prefix: str,
            unusable_msg: str, fallback_hint: str) -> dict:
-    """Draft a detection via ``detflow.draft`` on the LLM tier, under the same
+    """Draft a detection via ``detflow.draft`` on our LLM tier, under the same
     bounded-timeout guard the worker uses elsewhere. Returns ``{"rule", "notes"}``
     on success or ``{"error": ...}``."""
     description = (description or "").strip()
@@ -682,24 +687,24 @@ def _extract_json(text: str) -> Optional[dict]:
         return None
 
 
-def _llm():
-    """GPT-4.1 (non-tool drafting tier) with m1-GLM fallback; thinking off so
+def _synth_llm():
+    """Local LLM (non-tool drafting tier) with fallback; thinking off so
     the GLM fallback never leaks reasoning tokens into the JSON."""
     from my_bot.utils.llm_factory import create_llm
-    return create_llm(temperature=0.15,
+    return create_llm(timeout=90, temperature=0.15,
                             extra_body={"chat_template_kwargs": {"enable_thinking": False}})
 
 
 def _detflow_model():
-    """Wrap the LLM gateway chat model as a detflow ``DetectionModel`` so detflow's
-    drafting/review run on the same GPT-4.1 (+ m1 fallback) tier the rest of the
+    """Wrap our chat model as a detflow ``DetectionModel`` so detflow's
+    drafting/review run on the same LLM tier the rest of the
     workbench uses. detflow never reads ``DETFLOW_LLM_*`` here — we always inject
     this so it can't silently fall back to an unconfigured environment model."""
-    return detflow.LangChainModel(_llm(), name="llm")
+    return detflow.LangChainModel(_synth_llm(), name="llm")
 
 
 def _llm_invoke_json(prompt: str, attempts: int = 2) -> Optional[dict]:
-    llm = _llm()
+    llm = _synth_llm()
     for i in range(attempts):
         try:
             result = llm.invoke(prompt)
@@ -727,8 +732,21 @@ def _llm_compile(parsed: dict, rule_source: str) -> Optional[dict]:
         "    | fields agent_hostname, action_process_image_command_line, actor_effective_username\n"
         "    | limit 100\n\n"
         "Rules:\n"
-        "- Pick the most appropriate XSIAM dataset (e.g. xdr_data for endpoint/process "
-        "telemetry) for the Sigma logsource.\n"
+        "- Pick the most appropriate XSIAM dataset for the Sigma logsource. On THIS "
+        "tenant endpoint telemetry — process, file, registry AND network-connection "
+        "events — all live in the `xdr_data` dataset, distinguished by `event_type` "
+        "(ENUM.PROCESS / ENUM.FILE / ENUM.NETWORK / ENUM.REGISTRY). There is NO "
+        "separate `xdr_network`/`xdr_process` dataset — defaulting to those will fail "
+        "to run. For a network_connection logsource use `dataset = xdr_data` with "
+        "`event_type = ENUM.NETWORK` and the action_* network fields "
+        "(action_local_ip, action_remote_ip, action_local_port, action_remote_port). "
+        "For an INBOUND connection the host is the LOCAL side: its listening port is "
+        "`action_local_port` and its own NIC IP is `action_local_ip`. Express direction "
+        "as `action_network_direction = \"INBOUND\"` (a STRING value — NOT an ENUM, and "
+        "there is no action_network_is_inbound field).\n"
+        "- CIDR membership: use `incidr(<ip_field>, \"x.x.x.x/n\")` — ONE call per CIDR, "
+        "OR'd together and wrapped in `not (...)` to exclude a set. There is NO "
+        "`in_cidr`, `cidrmatch`, or list form — `field in_cidr (\"a\", \"b\")` will fail.\n"
         "- Map Sigma fields to the closest XSIAM/XDR field names; if unsure, choose the "
         "best canonical XDR field and record it as an assumption.\n"
         "- Use ONLY valid XQL operators. XQL has NO startswith/endswith. Translate:\n"
@@ -925,7 +943,7 @@ def _catalog_overlap(parsed: dict, techniques: Optional[List[str]] = None) -> Li
 
 def _review(parsed: dict, rule_source: str, compiled: dict, dry: dict, overlaps: List[dict],
             source_type: str = "sigma") -> dict:
-    """Senior-engineer review via ``detflow.review`` on the LLM tier, with the
+    """Senior-engineer review via ``detflow.review`` on our LLM tier, with the
     compiled XQL + live dry-run folded in as context and the catalog passed so
     detflow flags duplicate coverage. Returns the worker's review dict; falls to
     a deterministic floor on timeout / model failure (detflow never raises, but

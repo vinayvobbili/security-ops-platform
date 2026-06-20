@@ -31,7 +31,7 @@ DATA_DIR = '../../data'
 RULE_ABBR_FILE = os.path.join(DATA_DIR, 'rule_name_abbreviations.json')
 
 # Initialize Webex API
-webex = WebexAPI(access_token=CONFIG.webex_bot_access_token_moneyball)
+webex = WebexAPI(access_token=CONFIG.webex_bot_access_token_oracle)
 
 # Load rule name abbreviations
 root_directory = Path(__file__).parent.parent.parent

@@ -75,35 +75,35 @@ def _get_cpu_utilization():
 
 # Bot configuration mapping bot name to process pattern
 BOTS = {
-    'pokedex': {
-        'name': 'Pokedex',
+    'sleuth': {
+        'name': 'Sleuth',
         'emoji': '🔮',
-        'process_pattern': 'webex_bots/pokedex',
-        'start_script': 'startup_scripts/start_pokedex.sh',
+        'process_pattern': 'webex_bots/sleuth',
+        'start_script': 'startup_scripts/start_sleuth.sh',
         'log_port': 8042,
-        'systemd_service': 'ir-pokedex.service',
+        'systemd_service': 'ir-sleuth.service',
     },
-    'toodles': {
-        'name': 'Toodles',
+    'aide': {
+        'name': 'Aide',
         'emoji': '🎯',
-        'process_pattern': 'webex_bots/toodles',
-        'start_script': 'startup_scripts/start_toodles.sh',
+        'process_pattern': 'webex_bots/aide',
+        'start_script': 'startup_scripts/start_aide.sh',
         'log_port': 8032,
-        'systemd_service': 'ir-toodles.service',
+        'systemd_service': 'ir-aide.service',
     },
-    'msoar': {
-        'name': 'MSOAR',
+    'orchestrator': {
+        'name': 'ORCHESTRATOR',
         'emoji': '🤖',
-        'process_pattern': 'webex_bots/msoar',
-        'start_script': 'startup_scripts/start_msoar.sh',
+        'process_pattern': 'webex_bots/orchestrator',
+        'start_script': 'startup_scripts/start_orchestrator.sh',
         'log_port': 8033,
-        'systemd_service': 'ir-msoar.service',
+        'systemd_service': 'ir-orchestrator.service',
     },
-    'moneyball': {
-        'name': 'MoneyBall',
+    'oracle': {
+        'name': 'Oracle',
         'emoji': '💰',
-        'process_pattern': 'webex_bots/money_ball',
-        'start_script': 'startup_scripts/start_money_ball.sh',
+        'process_pattern': 'webex_bots/oracle',
+        'start_script': 'startup_scripts/start_oracle.sh',
         'log_port': 8034,
         'systemd_service': 'ir-money-ball.service',
     },
@@ -115,13 +115,13 @@ BOTS = {
         'log_port': 8035,
         'systemd_service': 'ir-jarvis.service',
     },
-    'barnacles': {
-        'name': 'Barnacles',
+    'relay': {
+        'name': 'Relay',
         'emoji': '⚓',
-        'process_pattern': 'webex_bots/barnacles',
-        'start_script': 'startup_scripts/start_barnacles.sh',
+        'process_pattern': 'webex_bots/relay',
+        'start_script': 'startup_scripts/start_relay.sh',
         'log_port': 8036,
-        'systemd_service': 'ir-barnacles.service',
+        'systemd_service': 'ir-relay.service',
     },
     'tars': {
         'name': 'TARS',
@@ -169,10 +169,10 @@ BOTS = {
         'log_port': 8046,
         'systemd_service': 'de-scheduler.service'
     },
-    'winai': {
-        'name': 'Win.AI',
+    'mentor': {
+        'name': 'Mentor',
         'emoji': '📚',
-        'process_pattern': 'webex_bots/win_ai',
+        'process_pattern': 'webex_bots/mentor',
         'log_port': 8043,
         'systemd_service': 'win-ai.service'
     },
@@ -219,7 +219,7 @@ BOTS = {
 
 LLM_ENDPOINTS = [
     # Analysis / tool-calling: mac-m1 is the ONLY analysis LLM in the fleet.
-    # Powers Pokedex, Win.AI, and any caller that needs tools.
+    # Powers Sleuth, Mentor, and any caller that needs tools.
     {'key': 'm1-analysis', 'label': 'M1 Analysis',   'port': 8015, 'model_size': '30 GB', 'remote': 'M1:8000'},
     {'key': 'm1-router',   'label': 'M1 Router',     'port': 8016, 'model_size': '4.3 GB', 'remote': 'M1:8001'},
     # Embeddings, reranker, transcription, TTS: all on studio1 since 2026-05-07.

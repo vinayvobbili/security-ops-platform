@@ -40,10 +40,12 @@ DEPLOY_SIDECAR = 'deploy.sidecar'        # build / activate / roll back / delete
 SEND_EXTERNAL = 'send.external'          # email · Teams · Webex · open a GitLab MR · create a ticket
 DATA_DESTRUCTIVE = 'data.destructive'    # delete · reset · clear persistent data
 RUN_BAS = 'run.bas'                      # fire a live AttackIQ breach-and-attack scenario at a real asset
+ENFORCE_BLOCK = 'enforce.block'          # block/unblock a URL or domain (URL block, the corporate proxy blocklist) via Sleuth
 CA_MANAGE = 'ca.manage'                  # draft/approve/edit answers + manage the KB on Customer Assurance
 MANAGE_SILENCER = 'manage.silencer'      # create / activate / deactivate a Ticket Cannon Silencer or Noise Suppressor
 RUN_DRYRUN = 'run.dryrun'                # fire a live XSIAM XQL dry-run (burns Cortex compute units)
 MANAGE_DOMAIN_MONITORING_WATCHLIST = 'manage.domain_monitoring_watchlist'  # add / remove domains on the Domain Monitoring lists
+RUN_RTR = 'run.rtr'                      # run an ad-hoc command on a live endpoint via CrowdStrike RTR (arbitrary on-host execution)
 
 # Human-readable descriptions, surfaced on the 403 page and the admin UI.
 CAPABILITIES: dict[str, str] = {
@@ -51,10 +53,12 @@ CAPABILITIES: dict[str, str] = {
     SEND_EXTERNAL: 'Send out of the platform — email, Teams/Webex, open a merge request, or create a ticket',
     DATA_DESTRUCTIVE: 'Delete, reset, or clear stored data',
     RUN_BAS: 'Execute a live AttackIQ breach-and-attack scenario against a real asset',
+    ENFORCE_BLOCK: 'Block or unblock a URL/domain (URL block, the corporate proxy blocklist) from the Sleuth bot',
     CA_MANAGE: 'Draft, approve, edit, and export answers and manage the knowledge base on Customer Assurance',
     MANAGE_SILENCER: 'Create or toggle a Ticket Cannon Silencer / Noise Suppressor (auto-closes matching tickets)',
     RUN_DRYRUN: 'Run a live XSIAM XQL dry-run on the Detection-as-Code pipeline (consumes Cortex compute units)',
     MANAGE_DOMAIN_MONITORING_WATCHLIST: 'Add or remove domains on the Domain Monitoring monitored list and RF watchlist',
+    RUN_RTR: 'Run an ad-hoc command on a live endpoint via CrowdStrike RTR (traceroute, ipconfig, etc.)',
 }
 
 ALL_CAPABILITIES: frozenset[str] = frozenset(CAPABILITIES)
@@ -68,10 +72,14 @@ VIEWER_ROLE = 'viewer'
 # `viewer` and any custom free-text role) get NO capabilities. `admin` is
 # special-cased to the full set in capabilities_for_role() and need not appear.
 #
-# data.destructive is intentionally NOT in any default role — deleting/
-# resetting stored data is admin-only by default. Grant it to an individual
-# on request via a per-user grant (users.extra_capabilities / the /admin-users
-# capability toggle), no role change or admin promotion needed.
+# data.destructive, run.bas, enforce.block, and run.rtr are intentionally NOT in
+# any default role — deleting/resetting stored data, firing live BAS, blocking
+# URLs/domains, and running an ad-hoc command on a live endpoint via CrowdStrike
+# RTR are admin-only by default (these also gate the matching destructive Sleuth
+# bot tools; see my_bot/auth/sleuth_rbac.py). run.rtr is the highest blast radius
+# of the set (arbitrary on-host execution) and is kept admin-only — grant it to an
+# individual only on deliberate request via a per-user grant (users.extra_capabilities
+# / the /admin-users capability toggle), no role change or admin promotion needed.
 #
 # 'Customer Assurance Analyst' is a title-case key on purpose: it's a custom,
 # admin-assigned role (held by the CA team), so the stored role string IS the
@@ -90,32 +98,60 @@ ROLE_CAPABILITIES: dict[str, frozenset[str]] = {
 }
 
 
-# Per-sidecar owners — single source of truth. A listed email may deploy /
-# activate / roll back / delete THAT sidecar (and only that one) without holding
-# the global ``deploy.sidecar`` capability, on the principle that the vendor who
-# owns a box should be able to ship it anytime. Ownership only ever ADDS access;
-# engineers/admins with the global capability are unaffected.
+# Known vendor sidecars: deploy-portal key -> human label. This is the catalog
+# the /admin-users ownership editor renders and the allowlist of keys an admin
+# may assign an owner to. Keep it in sync with the ``sidecar='<key>'`` args on
+# the @require_capability decorators in each sidecar route module.
+SIDECAR_CATALOG: dict[str, str] = {
+    'aj_threat_hunting':   'AJ Threat Hunting',
+    'ai_drt':              'AI DRT',
+    'cyber_simulator':     'Cyber Simulator',
+    'db_config':           'Database Config',
+    'db_security':         'Database Security',
+    'dspm':                'DSPM',
+    'exposed_api_scanner': 'Exposed API Scanner',
+    'snr':                 'Signal to Noise (SNR)',
+    'tipper_automation':   'Tipper Automation',
+    'zero_hour':           'Zero Hour',
+}
+
+# Per-sidecar owners — BOOTSTRAP SEED ONLY. The live source of truth is the
+# DB-backed ``sidecar_owners`` table (admin-editable on /admin-users, no deploy
+# needed). This dict is used exactly once: to populate that table the first time
+# the schema is created (see web/auth/db._seed_sidecar_owners). After that,
+# edits happen in the DB; changing this dict will NOT affect an existing
+# deployment. New installs bootstrap from here, so keep it roughly current.
 #
-# Owners must be registered, verified users (the email is matched against the
-# logged-in account). If an owner has not signed up yet, leave them out here and
-# add them once they register — that is a one-line change and touches no route.
-SIDECAR_OWNERS: dict[str, tuple[str, ...]] = {
+# A listed email may deploy / activate / roll back / delete THAT sidecar (and
+# only that one) without holding the global ``deploy.sidecar`` capability, on the
+# principle that the vendor who owns a box should be able to ship it anytime.
+# Ownership only ever ADDS access; engineers/admins with the global capability
+# are unaffected. Owners must be registered, verified users (the email is
+# matched against the logged-in account).
+SIDECAR_OWNERS_SEED: dict[str, tuple[str, ...]] = {
     'aj_threat_hunting':   ('<redacted-email>',),
     'ai_drt':              ('<redacted-email>',),
     'dspm':                ('<redacted-email>',),
     'db_config':           ('<redacted-email>',),
     'db_security':         ('<redacted-email>',),
     'exposed_api_scanner': ('<redacted-email>',),
-    # Pending owner registration before we grant ownership:
-    #   'snr':                ('<vendor — not yet registered>',),
-    #   'tipper_automation':  ('<anthony — not yet registered>',),
-    # Owner not yet identified: 'cyber_simulator', 'zero_hour'
+    'snr':                 ('<redacted-email>',),
 }
 
 
 def sidecar_owners(key: str) -> tuple[str, ...]:
-    """Owner emails for a sidecar key (empty tuple if none set)."""
-    return SIDECAR_OWNERS.get(key, ())
+    """Owner emails for a sidecar key (empty tuple if none).
+
+    Reads the DB-backed ``sidecar_owners`` table — the live, admin-editable
+    source of truth. Falls back to the in-code seed only if the DB read fails,
+    so a transient DB hiccup can't silently strip a vendor's access mid-deploy.
+    """
+    from . import db  # local import: db lazily imports rbac when seeding
+    try:
+        return db.sidecar_owner_emails(key)
+    except Exception:
+        log.exception('[RBAC] sidecar_owners DB read failed for %r; using seed', key)
+        return SIDECAR_OWNERS_SEED.get(key, ())
 
 
 def parse_capabilities(raw: str | None) -> frozenset[str]:
@@ -175,7 +211,8 @@ def require_capability(*caps: str, owner_emails=(), sidecar=None):
     read the actor without a second lookup.
 
     Ownership exception: pass ``sidecar='<key>'`` to let that sidecar's owner(s)
-    (from SIDECAR_OWNERS) pass even without the global capability — so a vendor
+    (from the DB-backed sidecar_owners table) pass even without the global
+    capability — so a vendor
     can deploy / roll back *their own* sidecar without being handed
     ``deploy.sidecar`` over every other sidecar on the box. ``owner_emails`` adds
     one-off owners inline. The capability still works for engineers/admins;

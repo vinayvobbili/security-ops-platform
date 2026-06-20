@@ -236,7 +236,7 @@ def generate_story_body(stats: dict) -> str:
     risky_list = "<ul>" + "".join(risky_items) + "</ul>" if risky_items else "<p>None flagged</p>"
 
     return f"""
-<h2>📊 Weekly Ticket Pattern Analysis (Pokedex)</h2>
+<h2>📊 Weekly Ticket Pattern Analysis (Sleuth)</h2>
 
 <p><b>Period:</b> {stats['period']} &nbsp;|&nbsp; <b>Total Tickets:</b> {stats['total_tickets']}</p>
 
@@ -307,7 +307,7 @@ def run():
         item_type="User Story",
         description=body,
         project="rea",
-        submitter="Pokedex Automation",
+        submitter="Sleuth Automation",
         parent_url=config.azdo_rea_parent_url,
         iteration=config.azdo_rea_iteration,
         assignee=assignee,

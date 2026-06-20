@@ -173,7 +173,7 @@ def alert_change():
         from webexpythonsdk import WebexAPI
 
         config = get_config()
-        webex_api = WebexAPI(access_token=config.webex_bot_access_token_toodles)
+        webex_api = WebexAPI(access_token=config.webex_bot_access_token_aide)
 
         today = date.today()
         days_until_monday = (7 - today.weekday()) % 7
@@ -224,7 +224,7 @@ def announce_change(room_id: Optional[str] = None):
             logger.error("No room_id for announce_change")
             return
 
-        webex_api = WebexAPI(access_token=config.webex_bot_access_token_toodles)
+        webex_api = WebexAPI(access_token=config.webex_bot_access_token_aide)
         on_call = get_on_call_person()
 
         if not on_call or "name" not in on_call:

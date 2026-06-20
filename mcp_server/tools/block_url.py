@@ -1,6 +1,6 @@
 """URL blocking tools via XSOAR.
 
-For MCP/Barnacles, confirmation is handled conversationally by Claude —
+For MCP/Relay, confirmation is handled conversationally by Claude —
 no Webex card needed. The tool creates the ticket directly.
 """
 

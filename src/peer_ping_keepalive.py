@@ -34,11 +34,11 @@ _ping_config_error_notified: set = set()
 # List of all bots to ping
 # PingBot pings all production bots to keep NAT paths active
 BOTS_TO_PING = [
-    ("the notification service", CONFIG.webex_bot_email_toodles),
-    ("the case orchestrator", CONFIG.webex_bot_email_msoar),
-    ("MoneyBall", CONFIG.webex_bot_email_money_ball),
-    ("the alert triage service", CONFIG.webex_bot_email_barnacles),
-    ("the security assistant bot", CONFIG.webex_bot_email_pokedex),
+    ("the notification service", CONFIG.webex_bot_email_aide),
+    ("the case orchestrator", CONFIG.webex_bot_email_orchestrator),
+    ("Oracle", CONFIG.webex_bot_email_oracle),
+    ("the alert triage service", CONFIG.webex_bot_email_relay),
+    ("the security assistant bot", CONFIG.webex_bot_email_sleuth),
 ]
 
 

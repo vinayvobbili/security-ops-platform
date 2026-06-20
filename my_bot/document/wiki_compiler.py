@@ -54,7 +54,7 @@ def _get_client() -> OpenAI:
         return _client
     base_url = (
         os.environ.get("WIKI_LLM_BASE_URL")
-        or os.environ.get("POKEDEX_LLM_BASE_URL")
+        or os.environ.get("SLEUTH_LLM_BASE_URL")
         or os.environ.get("LLM_BASE_URL", "http://localhost:8015/v1")  # m1 analysis (GLM-4.7-Flash)
     )
     logger.info(f"Wiki compiler LLM base URL: {base_url}")

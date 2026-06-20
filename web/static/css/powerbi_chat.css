@@ -47,6 +47,63 @@ body {
     transition: border-color 0.2s; width: 100%; box-sizing: border-box;
 }
 .pbi-sidebar-search:focus { border-color: #0046ad; }
+
+/* ── Auto-route pill ── */
+.pbi-auto-item {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    text-align: left; padding: 9px 11px; border-radius: 10px; cursor: pointer;
+    border: 1.5px solid transparent;
+    background: linear-gradient(135deg, rgba(0,70,173,0.10) 0%, rgba(0,166,81,0.12) 100%);
+    color: #0046ad; transition: all 0.15s; box-sizing: border-box;
+}
+.pbi-auto-item:hover {
+    border-color: #00a651;
+    background: linear-gradient(135deg, rgba(0,70,173,0.16) 0%, rgba(0,166,81,0.18) 100%);
+}
+.pbi-auto-item.active {
+    background: linear-gradient(135deg, #0046ad 0%, #00a651 100%);
+    color: #fff; box-shadow: 0 3px 10px rgba(0,70,173,0.35); border-color: transparent;
+}
+.pbi-auto-emoji { font-size: 1.25rem; line-height: 1; }
+.pbi-auto-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.pbi-auto-title { font-weight: 800; font-size: 0.82rem; letter-spacing: 0.02em; }
+.pbi-auto-sub { font-size: 0.66rem; opacity: 0.85; font-weight: 500; }
+.pbi-auto-item.active .pbi-auto-sub { opacity: 0.92; }
+
+/* Routing note bubble inside chat */
+.pbi-route-note {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    margin: 4px 0 10px; padding: 8px 12px; border-radius: 10px;
+    background: linear-gradient(135deg, rgba(0,70,173,0.08) 0%, rgba(0,166,81,0.10) 100%);
+    border-left: 3px solid #00a651; font-size: 0.8rem; color: #1e293b;
+}
+.pbi-route-note .pbi-route-ds { font-weight: 800; color: #0046ad; }
+.pbi-route-note .pbi-route-conf {
+    font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.04em; padding: 1px 7px; border-radius: 10px;
+}
+.pbi-route-conf.high { background: #dcfce7; color: #15803d; }
+.pbi-route-conf.medium { background: #fef9c3; color: #a16207; }
+.pbi-route-conf.low { background: #fee2e2; color: #b91c1c; }
+.pbi-route-note .pbi-route-reason { color: #475569; flex-basis: 100%; font-size: 0.74rem; }
+.pbi-route-alts { display: flex; flex-wrap: wrap; gap: 6px; flex-basis: 100%; align-items: center; }
+.pbi-route-alts-label { font-size: 0.7rem; color: #64748b; }
+.pbi-route-alt {
+    font-size: 0.72rem; font-weight: 600; color: #0046ad; cursor: pointer;
+    background: #fff; border: 1px solid #c5cae9; border-radius: 12px; padding: 2px 9px;
+    transition: all 0.15s;
+}
+.pbi-route-alt:hover { background: #0046ad; color: #fff; border-color: #0046ad; }
+body.dark-mode .pbi-auto-item {
+    color: #93b5ff;
+    background: linear-gradient(135deg, rgba(0,70,173,0.22) 0%, rgba(0,166,81,0.20) 100%);
+}
+body.dark-mode .pbi-auto-item.active { color: #fff; }
+body.dark-mode .pbi-route-note { color: #e2e8f0; background: rgba(0,70,173,0.18); }
+body.dark-mode .pbi-route-note .pbi-route-ds { color: #93b5ff; }
+body.dark-mode .pbi-route-note .pbi-route-reason { color: #cbd5e1; }
+body.dark-mode .pbi-route-alt { background: #1e293b; color: #93b5ff; border-color: #334155; }
+body.dark-mode .pbi-route-alt:hover { background: #0046ad; color: #fff; }
 .pbi-sidebar-label {
     font-size: 0.7rem; font-weight: 700; color: #64748b;
     text-transform: uppercase; letter-spacing: 0.05em;

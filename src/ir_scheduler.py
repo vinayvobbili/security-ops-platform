@@ -76,8 +76,8 @@ def _get_webex_api():
     if _webex_api is None:
         try:
             from webexpythonsdk import WebexAPI
-            if config.webex_bot_access_token_pokedex:
-                _webex_api = WebexAPI(access_token=config.webex_bot_access_token_pokedex)
+            if config.webex_bot_access_token_sleuth:
+                _webex_api = WebexAPI(access_token=config.webex_bot_access_token_sleuth)
         except Exception as e:
             logger.warning(f"Failed to initialize Webex API: {e}")
     return _webex_api
@@ -403,8 +403,8 @@ def main() -> None:
     def _run_deferred_rtr():
         from webexpythonsdk import WebexAPI
         from src.deferred_rtr import process_pending
-        toodles_api = WebexAPI(access_token=config.webex_bot_access_token_toodles)
-        process_pending(toodles_api)
+        aide_api = WebexAPI(access_token=config.webex_bot_access_token_aide)
+        process_pending(aide_api)
     schedule.every(15).minutes.do(lambda: safe_run(_run_deferred_rtr, name="deferred_rtr", timeout=600))
 
     # Tipper replay sweep — re-queries CS for in-flight tipper IOC hashes

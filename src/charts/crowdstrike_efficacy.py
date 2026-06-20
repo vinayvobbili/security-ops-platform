@@ -30,7 +30,7 @@ ROOT_DIRECTORY = Path(__file__).parent.parent.parent
 DATE_FORMAT = '%m-%d-%Y'
 TIMESTAMP_FORMAT = '%m/%d/%Y %I:%M %p %Z'
 
-webex = WebexAPI(access_token=CONFIG.webex_bot_access_token_moneyball)
+webex = WebexAPI(access_token=CONFIG.webex_bot_access_token_oracle)
 
 
 def process_tickets(tickets: List[Dict[str, Any]]) -> pd.DataFrame:

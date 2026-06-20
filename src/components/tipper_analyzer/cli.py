@@ -78,7 +78,7 @@ def analyze_recent_tippers(hours_back: int = 1, room_id: str = _config.webex_roo
             ensure_llm_initialized()
             n = flush_retry_queue(
                 TipperAnalyzer(), room_id,
-                WebexAPI(access_token=config.webex_bot_access_token_pokedex),
+                WebexAPI(access_token=config.webex_bot_access_token_sleuth),
             )
             if n:
                 logger.info(f"[Tipper Analysis] Re-sent {n} previously-failed analysis card(s)")
@@ -157,7 +157,7 @@ def analyze_recent_tippers(hours_back: int = 1, room_id: str = _config.webex_roo
 
     # Initialize analyzer and Webex API
     analyzer = TipperAnalyzer()
-    webex_api = WebexAPI(access_token=config.webex_bot_access_token_pokedex)
+    webex_api = WebexAPI(access_token=config.webex_bot_access_token_sleuth)
 
     if not room_id:
         logger.error("No Webex room_id configured for tipper analysis")

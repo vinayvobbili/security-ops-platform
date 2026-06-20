@@ -265,7 +265,7 @@ def add_comment(
     # Webex audit notification — same channel as the intake submission lifecycle.
     base_url = CONFIG.web_server_url
     view_url = f"{base_url}/ai-intake-submissions/{submission_id}#comments"
-    access_token = CONFIG.webex_bot_access_token_toodles
+    access_token = CONFIG.webex_bot_access_token_aide
     room_id = CONFIG.webex_room_id_gs_ai
     if access_token and room_id:
         try:
@@ -367,7 +367,7 @@ def update_submission(
     base_url = CONFIG.web_server_url
     view_url = f"{base_url}/ai-intake-submissions/{submission_id}"
     new_docs_str = ", ".join(saved_files) if saved_files else "(no new files)"
-    access_token = CONFIG.webex_bot_access_token_toodles
+    access_token = CONFIG.webex_bot_access_token_aide
     room_id = CONFIG.webex_room_id_gs_ai
     if access_token and room_id:
         try:
@@ -644,8 +644,8 @@ def handle_ai_intake_submission(
         "content": adaptive_card,
     }]
 
-    # Send to GS AI Enablement Webex space via Toodles
-    access_token = CONFIG.webex_bot_access_token_toodles
+    # Send to GS AI Enablement Webex space via Aide
+    access_token = CONFIG.webex_bot_access_token_aide
     room_id = CONFIG.webex_room_id_gs_ai
 
     if access_token and room_id:

@@ -1,4 +1,4 @@
-"""Navigation and options cards for Toodles bot.
+"""Navigation and options cards for Aide bot.
 
 Uses Action.Submit buttons instead of Action.ShowCard to keep the card
 under Webex's size limit. Each button triggers the corresponding command

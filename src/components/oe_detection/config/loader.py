@@ -61,10 +61,10 @@ def load_oe_config(settings_path: str | Path | None = None) -> dict:
 
         # Inject Webex bot token if not already set via env var
         alerts_webex = config.get("alerts", {}).get("webex", {})
-        if not os.environ.get("WEBEX_BOT_ACCESS_TOKEN_POKEDEX"):
-            bot_token = getattr(ir_config, "webex_bot_access_token_pokedex", "")
+        if not os.environ.get("WEBEX_BOT_ACCESS_TOKEN_SLEUTH"):
+            bot_token = getattr(ir_config, "webex_bot_access_token_sleuth", "")
             if bot_token:
-                os.environ["WEBEX_BOT_ACCESS_TOKEN_POKEDEX"] = bot_token
+                os.environ["WEBEX_BOT_ACCESS_TOKEN_SLEUTH"] = bot_token
                 logger.debug("Injected Webex bot token from IR config")
     except Exception as e:
         logger.debug(f"Could not merge IR config (standalone mode): {e}")

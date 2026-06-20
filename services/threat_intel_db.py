@@ -294,6 +294,30 @@ def init_db():
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_aiq_ts_scenario ON attackiq_technique_scenarios(scenario_id)")
 
+        # Resolution-attempt ledger for the reverse index. attackiq_technique_scenarios
+        # only stores rows for techniques that map to >=1 scenario, so a no-coverage
+        # technique would otherwise be re-resolved against the (3s rate-limited) API
+        # every night forever. Record every attempt here — including empty ones — so
+        # the nightly index job can skip anything resolved recently and stay inside
+        # its time budget (556 techniques * ~6s would blow a 30-min window).
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS attackiq_technique_attempts (
+                technique_id TEXT PRIMARY KEY,
+                attempted_at TEXT DEFAULT (datetime('now')),
+                scenario_count INTEGER DEFAULT 0
+            )
+        """)
+        # One-time backfill: techniques that already have fresh mappings in the
+        # reverse index don't need re-resolving, so seed their attempt timestamps
+        # from refreshed_at. Idempotent (INSERT OR IGNORE), so it only ever fills
+        # the ledger's initial gap, not subsequent runs.
+        cursor.execute("""
+            INSERT OR IGNORE INTO attackiq_technique_attempts (technique_id, attempted_at, scenario_count)
+            SELECT technique_id, MAX(refreshed_at), COUNT(*)
+            FROM attackiq_technique_scenarios
+            GROUP BY technique_id
+        """)
+
         # Migration: add procedure_text column if missing
         cursor.execute("PRAGMA table_info(tipper_mitre_techniques)")
         columns = {r['name'] for r in cursor.fetchall()}
@@ -503,6 +527,31 @@ def upsert_technique_scenarios(technique_id: str, scenario_ids: list):
         )
 
 
+def record_technique_attempt(technique_id: str, scenario_count: int):
+    """Stamp a resolution attempt for one technique (even a zero-scenario one)."""
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO attackiq_technique_attempts (technique_id, attempted_at, scenario_count)
+               VALUES (?, datetime('now'), ?)
+               ON CONFLICT(technique_id) DO UPDATE SET
+                   attempted_at = datetime('now'),
+                   scenario_count = excluded.scenario_count""",
+            (technique_id, scenario_count),
+        )
+
+
+def get_recently_attempted_techniques(max_age_days: int) -> set:
+    """Return technique IDs resolved against AttackIQ within max_age_days."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT technique_id FROM attackiq_technique_attempts "
+            "WHERE attempted_at >= datetime('now', ?)",
+            (f'-{int(max_age_days)} days',),
+        )
+        return {r['technique_id'] for r in cursor.fetchall()}
+
+
 def get_technique_validation_status() -> dict:
     """Roll up polled BAS results into a per-technique validation verdict.
 
@@ -545,12 +594,23 @@ def get_technique_validation_status() -> dict:
         return out
 
 
-def refresh_technique_scenario_index(max_techniques: int = None) -> dict:
+def refresh_technique_scenario_index(max_techniques: int = None,
+                                     max_age_days: int = 14,
+                                     per_run_limit: int = 250) -> dict:
     """Rebuild the technique->scenario reverse index for techniques that
     actually appear on the matrix (present in tipper_mitre_techniques).
 
-    Rate-limited (the client sleeps 3s/request), so this is a scheduler job,
-    not a request-path call. Returns {techniques, scenarios}.
+    Incremental: AttackIQ's technique->scenario library is near-static, but the
+    matrix now carries 556 distinct techniques and the client sleeps 3s/request
+    (~6s/technique with the sub-technique parent fallback) — re-resolving all of
+    them from scratch is ~55 min and blows the scheduler's 30-min budget every
+    night. So each run skips techniques resolved within max_age_days and caps
+    itself at per_run_limit; a cold start drains over a few nights, then steady
+    state is just the handful of newly-seen techniques. Pass max_techniques to
+    force an explicit (still skip-filtered) slice.
+
+    Rate-limited, so this is a scheduler job, not a request-path call.
+    Returns {techniques, scenarios, skipped, remaining}.
     """
     from services.attackiq import AttackIQClient
     aq = AttackIQClient()
@@ -560,18 +620,33 @@ def refresh_technique_scenario_index(max_techniques: int = None) -> dict:
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT DISTINCT technique_id FROM tipper_mitre_techniques")
-        techniques = [r['technique_id'] for r in cursor.fetchall()]
-    if max_techniques:
-        techniques = techniques[:max_techniques]
+        all_techniques = [r['technique_id'] for r in cursor.fetchall()]
+
+    recent = get_recently_attempted_techniques(max_age_days)
+    stale = [t for t in all_techniques if t not in recent]
+    skipped = len(all_techniques) - len(stale)
+
+    cap = max_techniques if max_techniques else per_run_limit
+    techniques = stale[:cap]
+    remaining = len(stale) - len(techniques)
+
+    if not techniques:
+        logger.info(f"AttackIQ technique index: nothing stale "
+                    f"({skipped} fresh within {max_age_days}d, {len(all_techniques)} total)")
+        return {'techniques': 0, 'scenarios': 0, 'skipped': skipped, 'remaining': 0}
 
     mapped = aq.get_scenario_uuids_for_techniques(techniques)
     total_scenarios = 0
     for tech_id, scenario_ids in mapped.items():
         upsert_technique_scenarios(tech_id, scenario_ids)
+        record_technique_attempt(tech_id, len(scenario_ids))
         total_scenarios += len(scenario_ids)
 
-    logger.info(f"AttackIQ technique index: {len(techniques)} techniques, {total_scenarios} scenario links")
-    return {'techniques': len(techniques), 'scenarios': total_scenarios}
+    logger.info(f"AttackIQ technique index: resolved {len(techniques)} techniques, "
+                f"{total_scenarios} scenario links ({skipped} skipped as fresh, "
+                f"{remaining} stale remaining for next run)")
+    return {'techniques': len(techniques), 'scenarios': total_scenarios,
+            'skipped': skipped, 'remaining': remaining}
 
 
 def refresh_attackiq_results(max_pages: int = 20) -> dict:

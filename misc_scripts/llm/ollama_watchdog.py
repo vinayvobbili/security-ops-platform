@@ -45,7 +45,7 @@ THROTTLE_CONSEC = 3        # consecutive throttled checks before alerting
 LLM_MODEL = os.environ["OLLAMA_LLM_MODEL"]
 EMBEDDING_MODEL = os.environ["OLLAMA_EMBEDDING_MODEL"]
 
-WEBEX_BOT_TOKEN = os.getenv("WEBEX_BOT_ACCESS_TOKEN_MONEYBALL", "")
+WEBEX_BOT_TOKEN = os.getenv("WEBEX_BOT_ACCESS_TOKEN_ORACLE", "")
 WEBEX_ROOM_ID = os.getenv("WEBEX_ROOM_ID_DEV_TEST_SPACE", "")
 
 # --- Logging ---

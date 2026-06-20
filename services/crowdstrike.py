@@ -16,7 +16,10 @@ import pandas as pd
 import requests
 from rich.progress import track
 
-from falconpy import Hosts, OAuth2, Incidents, Alerts, IOC, Intel
+from falconpy import (
+    Hosts, OAuth2, Incidents, Alerts, IOC, Iocs, Intel,
+    SpotlightVulnerabilities, Quarantine, IdentityProtection,
+)
 from my_config import get_config
 from src.utils.http_utils import get_session
 
@@ -593,6 +596,574 @@ class CrowdStrikeClient:
         except Exception as e:
             logger.error(f"Error searching IOC {ioc_value}: {e}")
             return {"error": str(e)}
+
+    @staticmethod
+    def _refang(value: str) -> str:
+        """Normalize a defanged indicator back to its live value.
+
+        Analysts routinely paste defanged IOCs (``yowgames[.]com``,
+        ``hxxps://...``, ``1[.]2[.]3[.]4``, ``user[at]evil[.]com``).
+        CrowdStrike's IOC index matches the real value, so undo the common
+        defang conventions before looking it up — otherwise a perfectly valid
+        indicator silently resolves to zero hosts.
+        """
+        import re
+        v = (value or "").strip().strip("\"'")
+        # protocol obfuscation: hXXp(s) -> http(s)
+        v = re.sub(r"h[xX]{2}p", "http", v)
+        # bracketed/parenthesized/spelled-out separators -> real chars
+        v = re.sub(r"[\[\(\{]\s*://\s*[\]\)\}]", "://", v)
+        v = re.sub(r"[\[\(\{]\s*(?:\.|dot)\s*[\]\)\}]", ".", v, flags=re.IGNORECASE)
+        v = re.sub(r"[\[\(\{]\s*(?::|colon)\s*[\]\)\}]", ":", v, flags=re.IGNORECASE)
+        v = re.sub(r"[\[\(\{]\s*(?:@|at)\s*[\]\)\}]", "@", v, flags=re.IGNORECASE)
+        v = re.sub(r"\s+dot\s+", ".", v, flags=re.IGNORECASE)
+        # an IOC->host pivot wants the bare host: drop any leading scheme + trailing path
+        v = re.sub(r"^[a-zA-Z][a-zA-Z0-9+.\-]*://", "", v)
+        v = v.split("/", 1)[0]
+        return v.strip().strip(".")
+
+    @staticmethod
+    def _detect_ioc_type(value: str) -> Optional[str]:
+        """Infer the CrowdStrike IOC type from the raw indicator value.
+
+        Returns one of the types `Iocs.devices_ran_on` accepts
+        (sha256/sha1/md5/ipv4/ipv6/domain), or None if it can't tell.
+        """
+        import re
+        v = (value or "").strip()
+        if re.fullmatch(r"[a-fA-F0-9]{64}", v):
+            return "sha256"
+        if re.fullmatch(r"[a-fA-F0-9]{40}", v):
+            return "sha1"
+        if re.fullmatch(r"[a-fA-F0-9]{32}", v):
+            return "md5"
+        if re.fullmatch(r"\d{1,3}(\.\d{1,3}){3}", v):
+            return "ipv4"
+        if ":" in v and not v.endswith(":"):  # IPv6 (domains never contain ':')
+            return "ipv6"
+        if "." in v and re.search(r"[a-zA-Z]", v):
+            return "domain"
+        return None
+
+    def _resolve_device_ids(self, device_ids: List[str]) -> List[Dict[str, Any]]:
+        """Resolve CrowdStrike device IDs to hostname + key host facts.
+
+        Tolerates partial resolution: IDs that no longer map to a managed host in
+        this tenant are skipped. CrowdStrike returns HTTP 200 with the resolvable
+        hosts in `resources` and a per-ID 404 in `errors` for the rest; when none
+        resolve the whole call comes back 404 with an empty `resources`. Either
+        way we parse whatever `resources` carries and return only real hosts —
+        callers compare the resolved count against the requested count to detect a
+        wholesale miss (e.g. globally-common hashes whose references aren't ours).
+        """
+        hosts: List[Dict[str, Any]] = []
+        resp = self.hosts_client.get_device_details_v2(ids=device_ids[:100])
+        status = resp.get("status_code")
+        if status not in (200, 404):
+            logger.warning(f"[_resolve_device_ids] get_device_details_v2 returned HTTP {status}: "
+                           f"{resp.get('body', {}).get('errors')}")
+        for d in resp.get("body", {}).get("resources", []) or []:
+            hosts.append({
+                "device_id": d.get("device_id"),
+                "hostname": d.get("hostname"),
+                "last_seen": d.get("last_seen"),
+                "platform": d.get("platform_name"),
+                "local_ip": d.get("local_ip"),
+                "machine_domain": d.get("machine_domain"),
+            })
+        return hosts
+
+    # ------------------------------------------------------------------ #
+    # Spotlight — vulnerability management (host exposure + CVE pivot)    #
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def _summarize_vuln(v: Dict[str, Any]) -> Dict[str, Any]:
+        """Trim a Spotlight vulnerability entity down to the fields analysts need.
+
+        The raw entity carries large nested cve/host_info/remediation blocks;
+        this keeps the host, CVE rating/score, exploit status, affected product
+        and remediation actions — what a SOC analyst actually reads.
+        """
+        cve = v.get("cve", {}) or {}
+        host = v.get("host_info", {}) or {}
+        apps = v.get("apps", []) or []
+        product = apps[0].get("product_name_version") if apps else None
+
+        # Remediation entities arrive under the "remediation" facet as
+        # {"ids": [...], "entities": [{"action": "..."}]}.
+        rem = v.get("remediation", {}) or {}
+        rem_entities = rem.get("entities", []) if isinstance(rem, dict) else []
+        actions = [r.get("action") for r in rem_entities if r.get("action")]
+
+        return {
+            "vulnerability_id": v.get("id"),
+            "status": v.get("status"),
+            "cve_id": cve.get("id"),
+            "cve_severity": cve.get("severity"),
+            "exprt_rating": cve.get("exprt_rating"),          # CrowdStrike's ExPRT.AI rating
+            "cvss_base_score": cve.get("base_score"),
+            "exploit_status": cve.get("exploit_status"),
+            "exploitability_score": cve.get("exploitability_score"),
+            "hostname": host.get("hostname"),
+            "local_ip": host.get("local_ip"),
+            "platform": host.get("platform_name"),
+            "os_version": host.get("os_version"),
+            "product": product,
+            "first_seen": v.get("created_timestamp"),
+            "updated": v.get("updated_timestamp"),
+            "remediations": actions,
+        }
+
+    def get_host_vulnerabilities(
+        self, hostname: str, status: str = "open,reopen", limit: int = 100
+    ) -> Dict[str, Any]:
+        """List Spotlight vulnerabilities for a single host.
+
+        Answers "what is exposed on this endpoint?" — the per-host view a SOC
+        analyst needs when triaging a box. Returns vulnerabilities sorted by
+        CVSS base score (most severe first).
+
+        Args:
+            hostname: The device hostname (Spotlight host_info.hostname).
+            status: Comma-separated Spotlight statuses to include. Defaults to
+                open vulns plus reopened ones; pass "" for every status.
+            limit: Max vulnerabilities to return (Spotlight caps at 5000).
+
+        Returns:
+            Dict with 'hostname', 'count', 'vulnerabilities' (summarized) and the
+            'fql_query' used, or 'error'.
+        """
+        hostname = (hostname or "").strip()
+        if not hostname:
+            return {"error": "Empty hostname"}
+
+        clauses = [f"host_info.hostname:'{hostname}'"]
+        if status:
+            statuses = ",".join(f"'{s.strip()}'" for s in status.split(",") if s.strip())
+            if statuses:
+                clauses.append(f"status:[{statuses}]")
+        filter_str = "+".join(clauses)
+
+        try:
+            spotlight = SpotlightVulnerabilities(auth_object=self.auth, timeout=30)
+            resp = spotlight.query_vulnerabilities_combined(
+                filter=filter_str,
+                limit=min(max(1, limit), 5000),
+                sort="updated_timestamp|desc",
+                facet=["cve", "host_info", "remediation"],
+            )
+            if resp.get("status_code") != 200:
+                errors = resp.get("body", {}).get("errors", [])
+                return {"error": f"Spotlight query failed: {errors}", "fql_query": filter_str}
+
+            resources = resp.get("body", {}).get("resources", []) or []
+            vulns = [self._summarize_vuln(v) for v in resources]
+            # Most severe first — Spotlight can't sort by score server-side.
+            vulns.sort(key=lambda x: (x.get("cvss_base_score") or 0), reverse=True)
+            return {
+                "hostname": hostname,
+                "count": len(vulns),
+                "vulnerabilities": vulns,
+                "fql_query": filter_str,
+            }
+        except Exception as e:
+            logger.error(f"Error in get_host_vulnerabilities({hostname}): {e}")
+            return {"error": str(e), "fql_query": filter_str}
+
+    def search_vulnerabilities_by_cve(
+        self, cve_id: str, status: str = "open,reopen", limit: int = 500
+    ) -> Dict[str, Any]:
+        """Find which hosts are exposed to a given CVE (the CVE -> hosts pivot).
+
+        Answers "are we vulnerable to CVE-XXXX, and on which boxes?" — the
+        exposure question for advisory/vuln triage. Complements the IOC->hosts
+        pivot but for vulnerabilities rather than indicators.
+
+        Args:
+            cve_id: The CVE identifier, e.g. "CVE-2024-3094". Case-insensitive.
+            status: Comma-separated Spotlight statuses to include (default open
+                + reopen). Pass "" for every status.
+            limit: Max vulnerability records to return.
+
+        Returns:
+            Dict with 'cve_id', 'host_count', 'hosts' (each summarized vuln) and
+            the 'fql_query' used, or 'error'.
+        """
+        cve_id = (cve_id or "").strip().upper()
+        if not cve_id:
+            return {"error": "Empty CVE id"}
+
+        clauses = [f"cve.id:'{cve_id}'"]
+        if status:
+            statuses = ",".join(f"'{s.strip()}'" for s in status.split(",") if s.strip())
+            if statuses:
+                clauses.append(f"status:[{statuses}]")
+        filter_str = "+".join(clauses)
+
+        try:
+            spotlight = SpotlightVulnerabilities(auth_object=self.auth, timeout=30)
+            resp = spotlight.query_vulnerabilities_combined(
+                filter=filter_str,
+                limit=min(max(1, limit), 5000),
+                sort="updated_timestamp|desc",
+                facet=["cve", "host_info", "remediation"],
+            )
+            if resp.get("status_code") != 200:
+                errors = resp.get("body", {}).get("errors", [])
+                return {"error": f"Spotlight query failed: {errors}", "fql_query": filter_str}
+
+            resources = resp.get("body", {}).get("resources", []) or []
+            hosts = [self._summarize_vuln(v) for v in resources]
+            # De-dup to one row per host (a host can carry the CVE on >1 product).
+            seen, unique = set(), []
+            for h in hosts:
+                key = h.get("hostname")
+                if key and key in seen:
+                    continue
+                seen.add(key)
+                unique.append(h)
+            return {
+                "cve_id": cve_id,
+                "host_count": len(unique),
+                "hosts": unique,
+                "fql_query": filter_str,
+            }
+        except Exception as e:
+            logger.error(f"Error in search_vulnerabilities_by_cve({cve_id}): {e}")
+            return {"error": str(e), "fql_query": filter_str}
+
+    # ------------------------------------------------------------------ #
+    # Quarantine — quarantined-file triage + release/unrelease/delete    #
+    # ------------------------------------------------------------------ #
+
+    QUARANTINE_ACTIONS = ("release", "unrelease", "delete")
+
+    @staticmethod
+    def _summarize_quarantine_file(f: Dict[str, Any]) -> Dict[str, Any]:
+        """Trim a quarantined-file record to the fields an analyst triages on."""
+        paths = f.get("paths", []) or []
+        return {
+            "id": f.get("id"),
+            "sha256": f.get("sha256"),
+            "state": f.get("state"),                       # quarantined / released / deleted
+            "hostname": f.get("hostname"),
+            "username": f.get("username"),
+            "paths": [p.get("path") for p in paths if p.get("path")],
+            "detect_ids": f.get("detect_ids", []),
+            "date_created": f.get("date_created"),
+            "date_updated": f.get("date_updated"),
+        }
+
+    def query_quarantine_files(
+        self,
+        hostname: Optional[str] = None,
+        sha256: Optional[str] = None,
+        status: Optional[str] = None,
+        limit: int = 100,
+    ) -> Dict[str, Any]:
+        """List quarantined files, optionally scoped to a host / hash / status.
+
+        Answers "what has CrowdStrike quarantined on this box?" — the read view a
+        SOC analyst needs before deciding to release a false positive or delete a
+        confirmed-malicious file. Returns summarized file metadata (resolved from
+        IDs in one follow-up call).
+
+        Args:
+            hostname: Filter to a single device hostname.
+            sha256: Filter to a specific file hash (matched via the q phrase search).
+            status: Filter by state (e.g. 'quarantined', 'released', 'deleted').
+            limit: Max files to return.
+
+        Returns:
+            Dict with 'count', 'files' (summarized) and the 'fql_query' used, or 'error'.
+        """
+        clauses = []
+        if hostname:
+            clauses.append(f"device.hostname:'{hostname.strip()}'")
+        if status:
+            clauses.append(f"status:'{status.strip()}'")
+        filter_str = "+".join(clauses) if clauses else "*"
+
+        try:
+            q_client = Quarantine(auth_object=self.auth, timeout=30)
+            kwargs: Dict[str, Any] = {
+                "filter": filter_str,
+                "limit": min(max(1, limit), 5000),
+                "sort": "date_created|desc",
+            }
+            if sha256:
+                kwargs["q"] = sha256.strip()
+            resp = q_client.query_quarantine_files(**kwargs)
+            if resp.get("status_code") != 200:
+                errors = resp.get("body", {}).get("errors", [])
+                return {"error": f"Quarantine query failed: {errors}", "fql_query": filter_str}
+
+            file_ids = resp.get("body", {}).get("resources", []) or []
+            if not file_ids:
+                return {"count": 0, "files": [], "fql_query": filter_str}
+
+            details = q_client.get_quarantine_files(ids=file_ids[:100])
+            if details.get("status_code") != 200:
+                errors = details.get("body", {}).get("errors", [])
+                return {"error": f"Quarantine detail fetch failed: {errors}", "fql_query": filter_str}
+
+            files = [self._summarize_quarantine_file(f)
+                     for f in details.get("body", {}).get("resources", []) or []]
+            return {"count": len(file_ids), "files": files, "fql_query": filter_str}
+        except Exception as e:
+            logger.error(f"Error in query_quarantine_files: {e}")
+            return {"error": str(e), "fql_query": filter_str}
+
+    def get_quarantine_file_details(self, ids: List[str]) -> Dict[str, Any]:
+        """Fetch full metadata for specific quarantined-file IDs."""
+        if not ids:
+            return {"error": "No quarantine file IDs provided"}
+        try:
+            q_client = Quarantine(auth_object=self.auth, timeout=30)
+            resp = q_client.get_quarantine_files(ids=ids[:100])
+            if resp.get("status_code") != 200:
+                errors = resp.get("body", {}).get("errors", [])
+                return {"error": f"Quarantine detail fetch failed: {errors}"}
+            files = [self._summarize_quarantine_file(f)
+                     for f in resp.get("body", {}).get("resources", []) or []]
+            return {"count": len(files), "files": files}
+        except Exception as e:
+            logger.error(f"Error in get_quarantine_file_details: {e}")
+            return {"error": str(e)}
+
+    def update_quarantine_files(
+        self, action: str, ids: List[str], comment: str = ""
+    ) -> Dict[str, Any]:
+        """Apply a containment action to quarantined files — the response action.
+
+        release   -> restore the file to its original location (false positive).
+        unrelease -> re-quarantine a previously released file.
+        delete    -> permanently remove the quarantined file (irreversible).
+
+        This MUTATES endpoint state. The client must be built with a credential
+        profile that carries the 'Quarantine: Write' scope.
+
+        Args:
+            action: One of 'release', 'unrelease', 'delete'.
+            ids: Quarantine file IDs to act on.
+            comment: Audit comment recorded alongside the action.
+
+        Returns:
+            Dict with 'action', 'ids', 'status_code', 'ok', plus 'errors' on failure.
+        """
+        action = (action or "").strip().lower()
+        if action not in self.QUARANTINE_ACTIONS:
+            return {"error": f"Invalid action '{action}'. "
+                             f"Must be one of {', '.join(self.QUARANTINE_ACTIONS)}."}
+        if not ids:
+            return {"error": "No quarantine file IDs provided"}
+
+        try:
+            q_client = Quarantine(auth_object=self.auth, timeout=30)
+            resp = q_client.update_quarantined_detects_by_id(
+                action=action, ids=ids, comment=comment or f"{action} via IR/Sleuth"
+            )
+            status_code = resp.get("status_code")
+            if status_code == 200:
+                return {"action": action, "ids": ids, "status_code": 200, "ok": True}
+            errors = resp.get("body", {}).get("errors", [])
+            return {"action": action, "ids": ids, "status_code": status_code,
+                    "ok": False, "errors": errors}
+        except Exception as e:
+            logger.error(f"Error in update_quarantine_files({action}): {e}")
+            return {"action": action, "ids": ids, "ok": False, "error": str(e)}
+
+    # ------------------------------------------------------------------ #
+    # Identity Protection — entity risk investigation (GraphQL)          #
+    # ------------------------------------------------------------------ #
+
+    # Falcon Identity Protection risk severities, weakest -> strongest.
+    IDP_SEVERITIES = ["LOW", "MEDIUM", "HIGH"]
+
+    def _run_idp_graphql(self, query: str):
+        """Execute an Identity Protection GraphQL query.
+
+        Returns (data, None) on success or (None, error_message) on failure —
+        the IDP API is GraphQL, so a 200 can still carry an 'errors' array.
+        """
+        idp = IdentityProtection(auth_object=self.auth, timeout=30)
+        resp = idp.graphql(body={"query": query})
+        status = resp.get("status_code")
+        body = resp.get("body", {}) or {}
+        if status != 200:
+            return None, f"Identity Protection query failed (HTTP {status}): {body.get('errors')}"
+        if body.get("errors"):
+            return None, f"Identity Protection GraphQL errors: {body.get('errors')}"
+        return body.get("data", {}) or {}, None
+
+    @staticmethod
+    def _summarize_idp_entity(node: Dict[str, Any]) -> Dict[str, Any]:
+        """Trim an Identity Protection entity node to the risk fields analysts read."""
+        factors = node.get("riskFactors", []) or []
+        return {
+            "entity_id": node.get("entityId"),
+            "name": node.get("primaryDisplayName"),
+            "secondary_name": node.get("secondaryDisplayName"),
+            "type": node.get("type"),
+            "risk_score": node.get("riskScore"),
+            "risk_severity": node.get("riskScoreSeverity"),
+            "emails": node.get("emailAddresses", []) or [],
+            "risk_factors": [
+                {"type": f.get("type"), "severity": f.get("severity")}
+                for f in factors
+            ],
+        }
+
+    # Shared node selection — kept identical across queries so the summarizer
+    # always sees the same fields. emailAddresses lives on UserEntity only.
+    _IDP_NODE_FIELDS = (
+        "entityId primaryDisplayName secondaryDisplayName type "
+        "riskScore riskScoreSeverity riskFactors { type severity } "
+        "... on UserEntity { emailAddresses }"
+    )
+
+    def get_identity_entity_risk(
+        self, name: str, limit: int = 10
+    ) -> Dict[str, Any]:
+        """Look up Falcon Identity Protection risk for an entity by display name.
+
+        Answers "what's the identity risk on this user/account?" — risk score,
+        severity and the contributing risk factors (e.g. stale account, weak
+        password, attack-path exposure). Searches by primary display name and
+        returns the riskiest matches first.
+
+        Args:
+            name: The entity's display name (user or endpoint), e.g. "Jane Doe".
+            limit: Max matching entities to return.
+
+        Returns:
+            Dict with 'query', 'count', 'entities' (summarized), or 'error'.
+        """
+        name = (name or "").strip()
+        if not name:
+            return {"error": "Empty entity name"}
+
+        import json
+        gql = f"""
+        query {{
+          entities(primaryDisplayNames: [{json.dumps(name)}],
+                   first: {min(max(1, limit), 100)},
+                   sortKey: RISK_SCORE, sortOrder: DESCENDING, archived: false) {{
+            nodes {{ {self._IDP_NODE_FIELDS} }}
+          }}
+        }}
+        """
+        data, err = self._run_idp_graphql(gql)
+        if err:
+            return {"error": err, "query": name}
+        nodes = (data.get("entities", {}) or {}).get("nodes", []) or []
+        entities = [self._summarize_idp_entity(n) for n in nodes]
+        return {"query": name, "count": len(entities), "entities": entities}
+
+    def get_high_risk_identities(
+        self, min_severity: str = "HIGH", limit: int = 20
+    ) -> Dict[str, Any]:
+        """List the highest-risk identity entities in the tenant right now.
+
+        Answers "who are our riskiest identities?" — the prioritized identity
+        watchlist for a threat hunter / identity-focused analyst.
+
+        Args:
+            min_severity: Lowest severity to include ('LOW','MEDIUM','HIGH').
+                Defaults to HIGH (most urgent only).
+            limit: Max entities to return.
+
+        Returns:
+            Dict with 'min_severity', 'count', 'entities' (summarized), or 'error'.
+        """
+        min_severity = (min_severity or "HIGH").strip().upper()
+        if min_severity not in self.IDP_SEVERITIES:
+            return {"error": f"Invalid severity '{min_severity}'. "
+                             f"Must be one of {', '.join(self.IDP_SEVERITIES)}."}
+        # Include the requested severity and everything above it.
+        idx = self.IDP_SEVERITIES.index(min_severity)
+        severities = ", ".join(self.IDP_SEVERITIES[idx:])
+
+        gql = f"""
+        query {{
+          entities(riskScoreSeverities: [{severities}],
+                   first: {min(max(1, limit), 100)},
+                   sortKey: RISK_SCORE, sortOrder: DESCENDING, archived: false) {{
+            nodes {{ {self._IDP_NODE_FIELDS} }}
+          }}
+        }}
+        """
+        data, err = self._run_idp_graphql(gql)
+        if err:
+            return {"error": err, "min_severity": min_severity}
+        nodes = (data.get("entities", {}) or {}).get("nodes", []) or []
+        entities = [self._summarize_idp_entity(n) for n in nodes]
+        return {"min_severity": min_severity, "count": len(entities), "entities": entities}
+
+    def get_devices_by_ioc(self, ioc_value: str, ioc_type: Optional[str] = None) -> Dict[str, Any]:
+        """Find the endpoints that observed an IOC (domain / IP / file hash).
+
+        Uses CrowdStrike's IOC "devices ran on" index — given an indicator
+        value it returns the device IDs that have seen it — then resolves those
+        IDs to hostnames. This is the IOC -> affected-hosts pivot, e.g. "which
+        hosts connected to yowgames.com?" or "what machines executed this hash?".
+
+        Args:
+            ioc_value: The indicator value — a domain, IPv4/IPv6 address, or
+                MD5/SHA1/SHA256 hash.
+            ioc_type: Optional explicit type ('domain','ipv4','ipv6','md5',
+                'sha1','sha256'). Auto-detected from the value when omitted.
+
+        Returns:
+            Dict with 'ioc', 'ioc_type', 'device_count' (managed hosts actually
+            resolved), 'references_returned' (raw device references the IOC index
+            returned), 'hosts' (each: hostname, device_id, last_seen, platform,
+            local_ip, machine_domain), and a 'note' when references came back but
+            none map to a managed host — or 'error'.
+        """
+        ioc_value = self._refang(ioc_value)
+        if not ioc_value:
+            return {"error": "Empty IOC value"}
+        ioc_type = ioc_type or self._detect_ioc_type(ioc_value)
+        if not ioc_type:
+            return {"error": f"Could not determine IOC type for '{ioc_value}'. "
+                             "Pass ioc_type explicitly (domain/ipv4/ipv6/md5/sha1/sha256)."}
+        try:
+            iocs_client = Iocs(auth_object=self.auth, timeout=30)
+            resp = iocs_client.devices_ran_on(type=ioc_type, value=ioc_value, limit=100)
+            if resp.get("status_code") != 200:
+                return {"error": f"IOC device search failed: {resp.get('body', {}).get('errors')}",
+                        "ioc": ioc_value, "ioc_type": ioc_type}
+            device_ids = resp.get("body", {}).get("resources", [])
+            if not device_ids:
+                return {"ioc": ioc_value, "ioc_type": ioc_type, "device_count": 0,
+                        "references_returned": 0, "hosts": []}
+            hosts = self._resolve_device_ids(device_ids)
+            result = {
+                "ioc": ioc_value,
+                "ioc_type": ioc_type,
+                "device_count": len(hosts),                 # managed hosts actually resolved
+                "references_returned": len(device_ids),     # raw refs the IOC index returned
+                "hosts": hosts,
+            }
+            # Guard against the misleading "N references, 0 hostnames" result: the
+            # IOC index can return device references that don't map to any managed
+            # host in this tenant (globally-common/benign hashes, stale refs).
+            # Report that plainly rather than implying N affected hosts.
+            if device_ids and not hosts:
+                result["note"] = (
+                    f"CrowdStrike's IOC index returned {len(device_ids)} device "
+                    "reference(s) for this indicator, but none resolve to a "
+                    "currently-managed host in this tenant. This is expected for "
+                    "globally-common or benign hashes and for stale references, "
+                    "and means there is no confirmed managed-host hit — not that "
+                    "those hosts are affected."
+                )
+            return result
+        except Exception as e:
+            logger.error(f"Error in get_devices_by_ioc({ioc_value}): {e}")
+            return {"error": str(e), "ioc": ioc_value, "ioc_type": ioc_type}
 
     def search_detections_by_ip(self, ip: str, hours: int = 168) -> Dict[str, Any]:
         """Search for detections/alerts involving an IP address.

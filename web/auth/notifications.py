@@ -4,7 +4,7 @@ When a PAT is used from a new client IP, ping the admin's Webex space so
 the human operator can decide whether to revoke. The PAT owner is NOT
 emailed — alerts go to the operator only.
 
-Routed via the Toodles bot token (same one used by oncall notifications)
+Routed via the Aide bot token (same one used by oncall notifications)
 because the alert is operator-facing. Target room defaults to the dev test
 space; override via WEBEX_ROOM_ID_PAT_SHARING_ALERTS.
 """
@@ -40,9 +40,9 @@ def _send_webex_blocking(markdown: str, room_id: str) -> None:
         from my_config import get_config
         from webexpythonsdk import WebexAPI
         cfg = get_config()
-        token = getattr(cfg, 'webex_bot_access_token_toodles', None)
+        token = getattr(cfg, 'webex_bot_access_token_aide', None)
         if not token:
-            log.warning('PAT-sharing alert dropped: no toodles bot token')
+            log.warning('PAT-sharing alert dropped: no aide bot token')
             return
         WebexAPI(access_token=token).messages.create(roomId=room_id, markdown=markdown)
     except Exception:

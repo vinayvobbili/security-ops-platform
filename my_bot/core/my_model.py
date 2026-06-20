@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 # malformed block) after its final answer when the chat template hasn't been
 # fully compiled — vllm-mlx's `qwen3_coder` parser only strips well-formed
 # `<tool_call>...</tool_call>` pairs, so the leak reaches the user. See the
-# matching note in `win_ai_state_manager.py:241`.
+# matching note in `mentor_state_manager.py:241`.
 _LEAKED_TOOL_CALL_TAIL_RE = re.compile(r"\s*<tool_call>.*\Z", re.DOTALL)
 _LEAKED_TOOL_CALL_CLOSE_RE = re.compile(r"</tool_call>")
 
@@ -93,7 +93,7 @@ def get_help_response() -> str:
     Returns:
         str: Formatted help message for Webex
     """
-    return """## 📟 Pokedex
+    return """## 📟 Sleuth
 
 ### ⚡ Commands
 
@@ -317,6 +317,13 @@ def handle_falcon_command(query: str, room_id: str = None) -> dict:
             get_crowdstrike_incidents,
             get_crowdstrike_incident_details,
             collect_browser_history,
+            get_crowdstrike_host_vulnerabilities,
+            search_crowdstrike_vulns_by_cve,
+            get_crowdstrike_quarantine_files,
+            get_crowdstrike_identity_risk,
+            get_crowdstrike_high_risk_identities,
+            run_endpoint_command,
+            run_endpoint_diagnostic,
             get_and_clear_generated_file_path
         )
 
@@ -329,7 +336,14 @@ def handle_falcon_command(query: str, room_id: str = None) -> dict:
             search_crowdstrike_detections_by_hostname,
             get_crowdstrike_incidents,
             get_crowdstrike_incident_details,
-            collect_browser_history
+            collect_browser_history,
+            get_crowdstrike_host_vulnerabilities,
+            search_crowdstrike_vulns_by_cve,
+            get_crowdstrike_quarantine_files,
+            get_crowdstrike_identity_risk,
+            get_crowdstrike_high_risk_identities,
+            run_endpoint_command,
+            run_endpoint_diagnostic
         ]
 
         # Build a tool lookup by name
@@ -446,7 +460,7 @@ def run_health_tests_command() -> str:
 
     except Exception as e:
         logging.error(f"Failed to run health tests: {e}")
-        return f"❌ **Health Test Error**\\n\\nFailed to execute health tests: {str(e)}\\n\\n💡 **Manual run**: `python pokedex_bot/tests/system_health_tests.py`"
+        return f"❌ **Health Test Error**\\n\\nFailed to execute health tests: {str(e)}\\n\\n💡 **Manual run**: `python sleuth_bot/tests/system_health_tests.py`"
 
 
 def initialize_model_and_agent():
@@ -521,9 +535,9 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default", p
         original_query = query
 
         # Remove bot name mentions from anywhere in the message (common in group chats)
-        bot_names = ['DnR_Pokedex', 'Pokedex', 'pokedex', 'dnr_pokedex',
+        bot_names = ['DnR_Sleuth', 'Sleuth', 'sleuth', 'dnr_sleuth',
                      'HAL9000', 'hal9000', 'Jarvis', 'jarvis',
-                     'Toodles', 'toodles', 'Barnacles', 'barnacles']
+                     'Aide', 'aide', 'Relay', 'relay']
 
         # Remove all bot name mentions from anywhere in the message
         removed_names = []
@@ -548,7 +562,7 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default", p
         # Get session manager for context
         state_manager = get_state_manager()
         if state_manager and not state_manager.is_initialized:
-            logging.info("Lazy-initializing Pokedex components on first request...")
+            logging.info("Lazy-initializing Sleuth components on first request...")
             if not state_manager.initialize_all_components():
                 logging.error("Lazy initialization failed.")
                 return _metrics("❌ Bot not ready. Initialization failed — check Ollama connectivity.")
@@ -720,9 +734,9 @@ def ask_stream(user_message: str, user_id: str = "default", room_id: str = "defa
         query = user_message.strip()
 
         # Remove bot name mentions
-        bot_names = ['DnR_Pokedex', 'Pokedex', 'pokedex', 'dnr_pokedex',
+        bot_names = ['DnR_Sleuth', 'Sleuth', 'sleuth', 'dnr_sleuth',
                      'HAL9000', 'hal9000', 'Jarvis', 'jarvis',
-                     'Toodles', 'toodles', 'Barnacles', 'barnacles']
+                     'Aide', 'aide', 'Relay', 'relay']
 
         for bot_name in bot_names:
             if bot_name.lower() in query.lower():
@@ -740,7 +754,7 @@ def ask_stream(user_message: str, user_id: str = "default", room_id: str = "defa
         # Get state manager
         state_manager = get_state_manager()
         if state_manager and not state_manager.is_initialized:
-            logging.info("Lazy-initializing Pokedex components on first request (stream)...")
+            logging.info("Lazy-initializing Sleuth components on first request (stream)...")
             if not state_manager.initialize_all_components():
                 logging.error("Lazy initialization failed.")
                 yield "❌ Bot not ready. Initialization failed — check Ollama connectivity."

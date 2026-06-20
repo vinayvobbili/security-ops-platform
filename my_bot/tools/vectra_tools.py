@@ -430,7 +430,7 @@ def get_prioritized_vectra_entities(limit: int = 10) -> str:
 # =============================================================================
 # SAMPLE TEST PROMPTS
 # =============================================================================
-# Use these prompts to test Vectra tools via the Pokedex bot:
+# Use these prompts to test Vectra tools via the Sleuth bot:
 #
 # --- Detection Tools ---
 #

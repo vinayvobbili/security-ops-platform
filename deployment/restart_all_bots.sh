@@ -4,7 +4,7 @@
 
 set -e
 
-BOTS=("toodles" "barnacles" "money_ball" "msoar" "jarvais")
+BOTS=("aide" "relay" "oracle" "orchestrator" "jarvais")
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 

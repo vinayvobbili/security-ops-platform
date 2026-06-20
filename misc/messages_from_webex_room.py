@@ -41,7 +41,7 @@ def main():
     Example usage of get_messages_from_room to retrieve and print messages.
     """
     config = get_config()
-    bot_access_token = config.webex_bot_access_token_moneyball
+    bot_access_token = config.webex_bot_access_token_oracle
 
     # Get the room ID from the CONFIG
     room_id_to_query = config.webex_room_id_dev_test_space

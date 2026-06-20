@@ -440,15 +440,15 @@ def render_adaptive_card(stats: WindowStats, narrative: str) -> dict[str, Any]:
 def send_to_webex(markdown: str, card: dict[str, Any], room_id: str) -> Optional[str]:
     """Send Adaptive Card (with Markdown fallback text) via WebexTeamsAPI.
 
-    Uses the **Pokedex** bot identity — SOC-in-a-Box agents all speak as Pokedex
+    Uses the **Sleuth** bot identity — SOC-in-a-Box agents all speak as Sleuth
     so the user-facing voice stays consistent. Returns Webex message id.
     """
     from my_config import get_config
     from webexteamssdk import WebexTeamsAPI
     cfg = get_config()
-    token = cfg.webex_bot_access_token_pokedex
+    token = cfg.webex_bot_access_token_sleuth
     if not token:
-        logger.warning("soc_manager: WEBEX_BOT_ACCESS_TOKEN_POKEDEX not set, skipping send")
+        logger.warning("soc_manager: WEBEX_BOT_ACCESS_TOKEN_SLEUTH not set, skipping send")
         return None
     attachment = {
         "contentType": "application/vnd.microsoft.card.adaptive",

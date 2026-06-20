@@ -3,6 +3,7 @@
 import logging
 
 from mcp_server.server import mcp
+from my_bot.utils.verify_links import attach_verify, urlscan_line
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ def urlscan_search(domain: str, size: int = 10) -> dict:
         size: Number of results to return (default 10)
     """
     client = _get_client()
-    return client.search_domain(domain, size=size)
+    return attach_verify(client.search_domain(domain, size=size), urlscan_line(domain))
 
 
 @mcp.tool(tags={"mutating"})

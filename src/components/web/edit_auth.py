@@ -21,7 +21,7 @@ def notify_edit_async(page: str, action: str, detail: str = "") -> None:
             room_id = config.webex_room_id_dev_test_space
             if not room_id:
                 return
-            webex_api = WebexAPI(access_token=config.webex_bot_access_token_toodles)
+            webex_api = WebexAPI(access_token=config.webex_bot_access_token_aide)
             msg = f"**[Web Edit — {page}]** {action}"
             if detail:
                 msg += f"\n> {detail}"

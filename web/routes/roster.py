@@ -31,7 +31,7 @@ def _notify_roster_change(message: str):
             from webexpythonsdk import WebexAPI
 
             config = get_config()
-            webex_api = WebexAPI(access_token=config.webex_bot_access_token_toodles)
+            webex_api = WebexAPI(access_token=config.webex_bot_access_token_aide)
             for room_id in [config.webex_room_id_dev_test_space]:
                 if not room_id:
                     continue
@@ -56,7 +56,7 @@ def _notify_new_schedule(message: str):
             room_id = config.webex_room_id_threatcon_collab
             if not room_id:
                 return
-            webex_api = WebexAPI(access_token=config.webex_bot_access_token_toodles)
+            webex_api = WebexAPI(access_token=config.webex_bot_access_token_aide)
             webex_api.messages.create(roomId=room_id, markdown=message)
         except Exception as e:
             logger.error(f"ThreatCon roster notification error: {e}", exc_info=True)

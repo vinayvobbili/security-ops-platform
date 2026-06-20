@@ -4,6 +4,9 @@ This package provides reusable base classes for Webex bot commands,
 reducing boilerplate and ensuring consistency across command implementations.
 """
 
-from .toodles_command import NotificationCommand, CardOnlyCommand
+from .aide_command import NotificationCommand, CardOnlyCommand
 
-__all__ = ['NotificationCommand', 'CardOnlyCommand']
+# Alias: command modules subclass AideCommand as their logging-enabled base.
+AideCommand = NotificationCommand
+
+__all__ = ['NotificationCommand', 'CardOnlyCommand', 'AideCommand']

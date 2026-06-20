@@ -24,7 +24,7 @@ def complete_playbook_task(
         dict: API response JSON
     """
     config = get_config()
-    url = 'https://api-msoardev.crtx.us.paloaltonetworks.com/xsoar/public/v1/inv-playbook/task/complete'
+    url = 'https://api-orchestratordev.crtx.us.paloaltonetworks.com/xsoar/public/v1/inv-playbook/task/complete'
 
     # Using exact format from API documentation with manual multipart/form-data boundary
     payload = (

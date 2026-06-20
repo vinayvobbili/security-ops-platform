@@ -70,8 +70,8 @@ def _get_webex_api():
     if _webex_api is None:
         try:
             from webexpythonsdk import WebexAPI
-            if config.webex_bot_access_token_pokedex:
-                _webex_api = WebexAPI(access_token=config.webex_bot_access_token_pokedex)
+            if config.webex_bot_access_token_sleuth:
+                _webex_api = WebexAPI(access_token=config.webex_bot_access_token_sleuth)
         except Exception as e:
             logger.warning(f"Failed to initialize Webex API: {e}")
     return _webex_api
@@ -285,7 +285,7 @@ def main() -> None:
     )
 
     # GitHub critical Security Advisory monitor — hourly poll of reviewed+critical
-    # advisories; Webex digest (Toodles) + AppSec email on new, dedup'd advisories.
+    # advisories; Webex digest (Aide) + AppSec email on new, dedup'd advisories.
     logger.info("Scheduling GitHub critical advisory monitor (hourly at :00)...")
     schedule.every().hour.at(':00').do(
         lambda: safe_run(
@@ -354,7 +354,7 @@ def main() -> None:
                 logger.warning(f"[Tipper Analysis] Failed to save last-run state: {e}")
 
         from src.utils.webex_utils import get_room_name
-        room_name = get_room_name(tipper_analysis_room, config.webex_bot_access_token_pokedex) or "Unknown"
+        room_name = get_room_name(tipper_analysis_room, config.webex_bot_access_token_sleuth) or "Unknown"
         logger.info(f"Tipper analysis will send to room: {room_name}")
 
         schedule_business_hours(

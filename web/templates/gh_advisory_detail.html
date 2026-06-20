@@ -44,13 +44,198 @@
   .ai-steps{margin:4px 0 0;padding-left:20px;}
   .ai-steps li{margin:4px 0;}
   .ai-disclaimer{font-size:11px;color:#8b949e;font-style:italic;margin-top:8px;}
+  /* Ownership bar */
+  .gha-owner-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0 4px;padding:9px 14px;
+    border-radius:12px;background:linear-gradient(135deg,rgba(0,70,173,.08),rgba(0,166,81,.08));
+    border:1px solid rgba(0,70,173,.15);animation:ghaFade .35s ease;}
+  .gha-owner-bar .owner-state{font-size:13.5px;color:#24292e;}
+  .gha-owner-bar .owner-state b{color:#0046AD;}
+  .gha-owner-bar .btn{margin-left:0;}
+  .btn-assign{background:linear-gradient(135deg,#0046AD,#00A651);color:#fff;border:none;}
+  .btn-assign:hover{filter:brightness(1.07);transform:translateY(-1px);}
+  .btn-release{background:#fff1f0;color:#cf222e;border:1px solid #ffcdc8;}
+  @keyframes ghaFade{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:translateY(0);}}
+  body.dark-mode .gha-owner-bar{background:linear-gradient(135deg,rgba(0,70,173,.22),rgba(0,166,81,.18));border-color:rgba(120,160,255,.25);}
+  body.dark-mode .gha-owner-bar .owner-state{color:#e6edf3;}
+  body.dark-mode .gha-owner-bar .owner-state b{color:#79b8ff;}
+  body.dark-mode .btn-release{background:#3a1d1d;color:#ff9b95;border-color:#5a2a2a;}
+  /* Discussion thread */
+  .gha-discussion h3::after{content:" ";}
+  .gha-comments{display:flex;flex-direction:column;gap:10px;margin:6px 0 14px;}
+  .gha-comment{padding:10px 13px;border-radius:12px;background:#f6f8fa;border:1px solid #eaecef;
+    border-left:3px solid #0046AD;}
+  .gha-comment-head{display:flex;justify-content:space-between;gap:10px;align-items:baseline;margin-bottom:4px;}
+  .gha-comment-head .ca{font-weight:700;font-size:13px;color:#0046AD;}
+  .gha-comment-head .ct{font-size:11px;color:#8b949e;}
+  .gha-comment-body{font-size:13.5px;color:#24292e;white-space:pre-wrap;word-break:break-word;}
+  .gha-comment-new{animation:ghaCommentIn .4s ease;}
+  @keyframes ghaCommentIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+  .gha-comments-empty{font-size:13px;color:#8b949e;font-style:italic;padding:6px 2px;}
+  .gha-comment-form textarea{width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid #d0d7de;
+    border-radius:9px;font-size:13.5px;resize:vertical;margin-bottom:8px;}
+  .btn-comment{background:linear-gradient(135deg,#0046AD,#00A651);color:#fff;border:none;}
+  .btn-comment:hover{filter:brightness(1.07);transform:translateY(-1px);}
+  body.dark-mode .gha-comment{background:#161b22;border-color:#30363d;border-left-color:#388bfd;}
+  body.dark-mode .gha-comment-head .ca{color:#79b8ff;}
+  body.dark-mode .gha-comment-body{color:#e6edf3;}
+  body.dark-mode .gha-comment-form textarea{background:#0d1117;border-color:#30363d;color:#e6edf3;}
+  /* Capabilities */
+  .gha-capabilities .cap-sub{font-size:13px;color:#57606a;margin:2px 0 12px;}
+  .cap-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;}
+  .cap-tile{display:flex;flex-direction:column;gap:6px;padding:13px 14px;border-radius:14px;text-decoration:none;
+    background:linear-gradient(135deg,rgba(0,70,173,.05),rgba(0,166,81,.05));border:1px solid #e6e9ee;
+    transition:transform .15s,box-shadow .15s,border-color .15s;}
+  a.cap-tile:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,70,173,.15);border-color:#0046AD;}
+  .cap-h{font-weight:700;font-size:14px;color:#24292e;display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+  .cap-ic{font-size:17px;}
+  .cap-desc{font-size:12.5px;color:#57606a;line-height:1.45;flex:1;}
+  .cap-cta{font-size:12.5px;font-weight:700;color:#0046AD;margin-top:2px;}
+  .cap-run{align-self:flex-start;background:linear-gradient(135deg,#0046AD,#00A651);color:#fff;border:none;margin-top:2px;}
+  .cap-run:hover{filter:brightness(1.07);}
+  .cap-disabled{opacity:.55;pointer-events:none;}
+  .cap-soon{background:repeating-linear-gradient(135deg,rgba(130,80,223,.06),rgba(130,80,223,.06) 10px,rgba(130,80,223,.11) 10px,rgba(130,80,223,.11) 20px);border-style:dashed;border-color:#d7c4f5;}
+  .cap-soon .cap-cta{color:#8250df;}
+  .cap-soon-badge{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#fff;
+    background:linear-gradient(135deg,#8250df,#0046AD);padding:2px 8px;border-radius:999px;animation:capPulse 2s ease-in-out infinite;}
+  @keyframes capPulse{0%,100%{opacity:1;}50%{opacity:.6;}}
+  .cap-res-box{margin-top:8px;font-size:12.5px;padding:8px 10px;border-radius:9px;background:#f6f8fa;border-left:3px solid #57606a;white-space:pre-wrap;}
+  .cap-res-box.exposed{background:#fff5f5;border-left-color:#cf222e;color:#86181d;}
+  .cap-res-box.clear{background:#e9f7ef;border-left-color:#1a7f37;color:#1a4731;}
+  .cap-res-box.neutral{background:#eef3fb;border-left-color:#0046AD;color:#0a2540;}
+  body.dark-mode .cap-res-box.neutral{background:#11203a;color:#9ec5ff;}
+  .cap-err{display:block;margin-top:4px;color:#9a6700;font-style:italic;}
+  .gha-corrob-banner{display:flex;gap:12px;align-items:flex-start;margin:12px 0;padding:12px 16px;border-radius:12px;
+    background:linear-gradient(135deg,#fff8e6,#fff0c4);border:1px solid #f0c75e;}
+  body.dark-mode .gha-corrob-banner{background:linear-gradient(135deg,rgba(191,135,0,.18),rgba(154,103,0,.14));border-color:rgba(240,199,94,.3);}
+  .gha-corrob-ic{font-size:20px;line-height:1.2;}
+  .gha-corrob-body{font-size:13px;color:#5c4a00;line-height:1.5;}
+  body.dark-mode .gha-corrob-body{color:#f0d493;}
+  .gha-corrob-peers{margin-top:6px;display:flex;flex-wrap:wrap;gap:8px;}
+  .gha-corrob-peer{font-size:12px;font-weight:700;color:#0046AD;text-decoration:none;background:#fff;border:1px solid #f0c75e;
+    border-radius:999px;padding:2px 10px;}
+  .gha-corrob-peer:hover{background:#0046AD;color:#fff;border-color:#0046AD;}
+  body.dark-mode .gha-corrob-peer{background:#161b22;color:#79b8ff;border-color:#30363d;}
+  .gha-assess{margin:12px 0;padding:13px 16px;border-radius:12px;background:linear-gradient(135deg,#eef4ff,#eafaf1);border:1px solid #cfe0f5;}
+  body.dark-mode .gha-assess{background:linear-gradient(135deg,rgba(0,70,173,.16),rgba(0,166,81,.12));border-color:#30363d;}
+  .gha-assess-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
+  .gha-assess-title{font-size:14px;font-weight:800;color:#0a2540;}
+  body.dark-mode .gha-assess-title{color:#e6edf3;}
+  .assess-meta{font-size:12px;color:#64748b;}
+  .gha-assess-controls{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;}
+  .assess-btn{font-size:12.5px;font-weight:700;padding:5px 12px;border-radius:999px;cursor:pointer;
+    border:1.5px solid #c5cae9;background:#fff;color:#334155;transition:all .15s;}
+  .assess-btn:hover{border-color:#0046AD;color:#0046AD;}
+  .assess-btn.active,.assess-badge{color:#fff;border-color:transparent;}
+  .assess-btn.a-assessing.active,.assess-badge.a-assessing{background:#bf8700;}
+  .assess-btn.a-no_exposure.active,.assess-badge.a-no_exposure{background:#1a7f37;}
+  .assess-btn.a-remediating.active,.assess-badge.a-remediating{background:#0046AD;}
+  .assess-btn.a-closed.active,.assess-badge.a-closed{background:#57606a;}
+  .assess-badge{display:inline-block;font-size:12px;font-weight:800;padding:2px 10px;border-radius:999px;}
+  .assess-clear{font-weight:600;color:#8b949e;}
+  .gha-assess-note{width:100%;box-sizing:border-box;font-size:12.5px;padding:7px 10px;border-radius:8px;
+    border:1.5px solid #c5cae9;background:#fff;color:#1e293b;resize:vertical;}
+  body.dark-mode .gha-assess-note,body.dark-mode .assess-btn{background:#161b22;color:#e2e8f0;border-color:#30363d;}
+  body.dark-mode .cap-tile{background:linear-gradient(135deg,rgba(0,70,173,.16),rgba(0,166,81,.12));border-color:#30363d;}
+  body.dark-mode .cap-h{color:#e6edf3;}
+  body.dark-mode .cap-desc{color:#9da7b3;}
+  body.dark-mode .cap-cta{color:#79b8ff;}
+  body.dark-mode .cap-res-box{background:#161b22;color:#c9d1d9;}
+  body.dark-mode .cap-res-box.exposed{background:#3a1d1d;color:#ff9b95;}
+  body.dark-mode .cap-res-box.clear{background:#12261a;color:#7ee2a8;}
+  /* CAPD Scorecard */
+  .gha-scorecard{position:relative;overflow:hidden;}
+  .gha-scorecard::before{content:"";position:absolute;inset:0;background:
+    radial-gradient(900px 200px at 100% -40%,rgba(0,166,81,.10),transparent 60%),
+    radial-gradient(700px 200px at -10% 120%,rgba(0,70,173,.10),transparent 60%);pointer-events:none;}
+  .capd-top{display:flex;gap:22px;align-items:center;flex-wrap:wrap;margin:6px 0 14px;position:relative;}
+  .capd-gauge{--v:0;--c:#0046AD;width:118px;height:118px;border-radius:50%;flex:0 0 auto;
+    background:conic-gradient(var(--c) calc(var(--v)*1%),#e6e9ee 0);
+    display:grid;place-items:center;transition:--v 1s ease;animation:capdspin .9s ease;}
+  @property --v{syntax:'<number>';inherits:false;initial-value:0;}
+  @keyframes capdspin{from{transform:rotate(-8deg) scale(.9);opacity:.4;}to{transform:none;opacity:1;}}
+  .capd-gauge .inner{width:90px;height:90px;border-radius:50%;background:#fff;display:grid;place-items:center;
+    box-shadow:inset 0 1px 6px rgba(0,0,0,.08);}
+  body.dark-mode .capd-gauge .inner{background:#0d1117;}
+  .capd-gauge .num{font-size:30px;font-weight:800;line-height:1;color:#0a2540;}
+  body.dark-mode .capd-gauge .num{color:#e6edf3;}
+  .capd-gauge .of{font-size:11px;color:#8b949e;margin-top:2px;}
+  .capd-headline{flex:1;min-width:240px;}
+  .capd-band{display:inline-block;font-size:15px;font-weight:800;letter-spacing:.03em;
+    padding:6px 16px;border-radius:999px;color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.14);}
+  .capd-band.declare{background:linear-gradient(135deg,#cf222e,#a40e26);}
+  .capd-band.monitor{background:linear-gradient(135deg,#bf8700,#9a6700);}
+  .capd-band.none{background:linear-gradient(135deg,#1a7f37,#116329);}
+  .capd-verdict{font-size:13.5px;line-height:1.5;margin:10px 0 0;color:#30363d;}
+  body.dark-mode .capd-verdict{color:#c9d1d9;}
+  .capd-override{margin:10px 0 0;padding:9px 12px;border-radius:9px;font-size:12.5px;font-weight:600;
+    background:#fff8e6;border-left:4px solid #bf8700;color:#7a5200;}
+  body.dark-mode .capd-override{background:#2b2410;color:#f0c674;}
+  .capd-cats{display:flex;flex-direction:column;gap:7px;margin:4px 0 2px;position:relative;}
+  .capd-cat{display:grid;grid-template-columns:170px 90px 1fr;gap:12px;align-items:center;
+    padding:8px 10px;border-radius:9px;background:#f6f8fa;animation:capdrow .4s ease both;}
+  body.dark-mode .capd-cat{background:#161b22;}
+  @keyframes capdrow{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+  .capd-cat .cl{font-size:12.5px;font-weight:700;color:#24292f;}
+  body.dark-mode .capd-cat .cl{color:#e6edf3;}
+  .capd-cat .cl small{display:block;font-weight:500;color:#8b949e;font-size:10.5px;margin-top:1px;}
+  .capd-bar{height:9px;border-radius:999px;background:#e6e9ee;overflow:hidden;}
+  body.dark-mode .capd-bar{background:#30363d;}
+  .capd-bar i{display:block;height:100%;border-radius:999px;transition:width .8s ease;}
+  .capd-bar i.s0{background:#8b949e;}.capd-bar i.s1{background:#1a7f37;}
+  .capd-bar i.s2{background:#bf8700;}.capd-bar i.s3{background:#e36209;}.capd-bar i.s4{background:#cf222e;}
+  .capd-ev{font-size:12px;color:#57606a;line-height:1.4;}
+  body.dark-mode .capd-ev{color:#9aa5b1;}
+  .capd-ev .src{display:inline-block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;
+    color:#0046AD;background:#e8f0fe;border-radius:5px;padding:1px 6px;margin-left:6px;}
+  body.dark-mode .capd-ev .src{background:#10243f;color:#79b8ff;}
+  .capd-cat.insuff{opacity:.62;}
+  .capd-cat.insuff .cl{color:#8b949e;}
+  /* FAQ */
+  .gha-faq .faq-list{display:flex;flex-direction:column;gap:8px;margin:8px 0 12px;}
+  .faq-item{border:1px solid #e6e9ee;border-radius:10px;padding:2px 12px;background:#fafbfc;
+    transition:border-color .15s,box-shadow .15s;}
+  .faq-item[open]{border-color:#0046AD;box-shadow:0 4px 14px rgba(0,70,173,.1);}
+  .faq-item summary{cursor:pointer;font-weight:600;font-size:13.5px;color:#0a2540;padding:9px 4px;list-style:none;}
+  .faq-item summary::marker,.faq-item summary::-webkit-details-marker{display:none;}
+  .faq-item summary::before{content:"❓ ";}
+  .faq-item[open] summary::before{content:"✅ ";}
+  .faq-a{font-size:13.5px;color:#24292e;white-space:pre-wrap;padding:0 4px 11px;animation:ghaFade .3s ease;}
+  .faq-empty{font-size:12.5px;color:#8b949e;font-style:italic;margin-top:8px;}
+  /* Download report */
+  .gha-report-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:18px 0 6px;}
+  .btn-report-dl{background:linear-gradient(135deg,#0046AD,#00A651);color:#fff;border:none;font-weight:700;
+    padding:11px 20px;border-radius:11px;text-decoration:none;display:inline-block;
+    box-shadow:0 4px 14px rgba(0,70,173,.22);transition:transform .15s,filter .15s;}
+  .btn-report-dl:hover{transform:translateY(-2px);filter:brightness(1.07);}
+  .report-hint{font-size:12px;color:#8b949e;}
+  .btn-xsoar{background:linear-gradient(135deg,#6d28d9,#9333ea);color:#fff;border:none;font-weight:600;text-decoration:none;}
+  .btn-xsoar:hover{filter:brightness(1.08);}
+  a.btn-xsoar{display:inline-block;}
+  /* Notify modal */
+  .gha-notify-draft{width:100%;min-height:240px;resize:vertical;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    padding:12px 14px;border:1px solid #d0d7de;border-radius:10px;background:#fff;color:#1b2330;}
+  body.dark-mode .gha-notify-draft{background:#0d1117;border-color:#30363d;color:#e6edf3;}
+  .gha-notify-hint{font-size:12.5px;color:#6b7686;margin:0 0 12px;}
+  .gha-notify-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:14px;}
+  .gha-notify-cancel{background:#eef1f6;color:#42505f;border:none;}
+  body.dark-mode .gha-notify-cancel{background:#21262d;color:#adbac7;}
+  .owner-locked{opacity:.5;cursor:not-allowed;}
+  .gha-owner-note{font-size:12.5px;color:#9a6700;background:#fff8c5;border:1px solid #eed888;border-radius:8px;
+    padding:7px 11px;margin-top:8px;display:none;}
+  body.dark-mode .gha-owner-note{color:#e3b341;background:#2d2a16;border-color:#544d24;}
+  body.dark-mode .faq-item{background:#161b22;border-color:#30363d;}
+  body.dark-mode .faq-item summary{color:#e6edf3;}
+  body.dark-mode .faq-a{color:#c9d1d9;}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="gha-container gha-detail" data-key="{{ adv.source_id }}">
-    <div class="gha-header-strip">
+    <div class="gha-header-strip" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
         <a class="gha-back" href="/cs-advisories">← All advisories</a>
+        <button class="gha-info-btn" onclick="document.getElementById('ghaInfoModal').style.display='flex'" title="How does this work?">
+            <span class="gha-info-btn-icon">✦</span> How does this work?
+        </button>
     </div>
 
     <div class="gha-head">
@@ -58,7 +243,96 @@
             <span class="gha-src src-fam-{{ src_fam }}">{{ adv.source_label }}</span></h1>
         <span class="gha-badge b-{{ adv.status }}" id="status-badge">{{ adv.status.replace('_', ' ') }}</span>
     </div>
+
+    <div class="gha-owner-bar" id="owner-bar">
+        <span class="owner-state" id="owner-state">
+            {% if adv.owner %}👤 Owned by <b>{{ adv.owner }}</b>{% else %}🫥 Unassigned{% endif %}
+        </span>
+        {% set is_mine = current_user and adv.owner and adv.owner == current_user.email %}
+        <button class="btn btn-assign" id="btn-assign" {% if is_mine %}style="display:none;"{% endif %}>
+            🙋 {% if adv.owner %}Take over{% else %}Assign to me{% endif %}
+        </button>
+        <button class="btn btn-release" id="btn-release" {% if not is_mine %}style="display:none;"{% endif %}>↩️ Release</button>
+    </div>
     <div class="gha-summary">{{ adv.summary or '(no summary)' }}</div>
+
+    {% if corroboration %}
+    <div class="gha-corrob-banner">
+        <span class="gha-corrob-ic">🔗</span>
+        <div class="gha-corrob-body">
+            <strong>Corroborated across {{ corroboration.source_count }} sources.</strong>
+            Independently reported by {{ corroboration.sources|join(', ') }}{% if corroboration.via %} — matched on {{ corroboration.via|join(', ') }}{% endif %}.
+            <div class="gha-corrob-peers">
+                {% for p in corroboration.peers %}<a class="gha-corrob-peer" href="/cs-advisories/{{ p.source_id }}">{{ p.label }}: {{ p.source_id }} ↗</a>{% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if signoff_teams %}
+    <style>
+        .signoff{background:linear-gradient(135deg,rgba(0,70,173,.06),rgba(0,166,81,.06));border:1px solid #d7e3f4;border-radius:14px;padding:16px 18px;margin:14px 0;}
+        body.dark-mode .signoff{background:linear-gradient(135deg,rgba(0,70,173,.16),rgba(0,166,81,.14));border-color:#334155;}
+        .signoff-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+        .signoff-title{font-weight:800;font-size:1.05rem;}
+        .signoff-prog{font-size:.82rem;font-weight:700;padding:3px 11px;border-radius:999px;background:linear-gradient(135deg,#0046AD,#00A651);color:#fff;}
+        .signoff-hint{font-size:.84rem;color:#64748b;margin:0 0 12px;}
+        body.dark-mode .signoff-hint{color:#94a3b8;}
+        .signoff-row{display:grid;grid-template-columns:minmax(180px,1.2fr) auto 2fr;gap:12px;align-items:start;padding:11px 0;border-top:1px solid #e6eef9;}
+        body.dark-mode .signoff-row{border-top-color:#2b3a55;}
+        .signoff-team{display:flex;flex-direction:column;gap:3px;}
+        .signoff-team-name{font-weight:700;}
+        .signoff-stamp{font-size:.74rem;color:#64748b;}
+        body.dark-mode .signoff-stamp{color:#94a3b8;}
+        .signoff-btns{display:flex;gap:6px;}
+        .signoff-btn{font-size:.82rem;font-weight:700;cursor:pointer;padding:5px 12px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;color:#334155;white-space:nowrap;}
+        .signoff-btn.clear.active{background:#00A651;border-color:#00A651;color:#fff;}
+        .signoff-btn.not_clear.active{background:#e8590c;border-color:#e8590c;color:#fff;}
+        body.dark-mode .signoff-btn{background:#0f172a;color:#cbd5e1;border-color:#475569;}
+        .signoff-note{width:100%;resize:vertical;border:1px solid #cbd5e1;border-radius:8px;padding:6px 9px;font:inherit;font-size:.86rem;}
+        body.dark-mode .signoff-note{background:#0f172a;color:#e2e8f0;border-color:#475569;}
+    </style>
+    <div class="signoff" id="signoff" data-key="{{ adv.source_id }}">
+        <div class="signoff-head">
+            <span class="signoff-title">✅ Team validation sign-off</span>
+            <span class="signoff-prog" id="signoff-prog">{{ team_signoffs.values()|selectattr('status','equalto','clear')|list|length }} of {{ signoff_teams|length }} teams cleared</span>
+        </div>
+        <p class="signoff-hint">Each team that has to validate this threat marks whether it's clear. Any signed-in user can record a team's status and note.</p>
+        {% for t in signoff_teams %}
+        {% set so = team_signoffs.get(t.team) %}
+        <div class="signoff-row" data-team="{{ t.team }}">
+            <div class="signoff-team">
+                <span class="signoff-team-name">{{ t.emoji }} {{ t.label }}</span>
+                <span class="signoff-stamp">{% if so and so.updated_by %}{{ signoff_statuses[so.status].emoji }} {{ signoff_statuses[so.status].label }} · {{ so.updated_by }}{% if so.updated_at %} · {{ so.updated_at[:10] }}{% endif %}{% else %}Pending — not yet validated{% endif %}</span>
+            </div>
+            <div class="signoff-btns">
+                <button type="button" class="signoff-btn clear{% if so and so.status == 'clear' %} active{% endif %}" data-status="clear">✅ Clear</button>
+                <button type="button" class="signoff-btn not_clear{% if so and so.status == 'not_clear' %} active{% endif %}" data-status="not_clear">⚠️ Not clear</button>
+            </div>
+            <textarea class="signoff-note" rows="1" placeholder="Optional note (what was checked, exposure, ticket #)…">{{ so.note if so else '' }}</textarea>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="gha-assess" id="gha-assess">
+        <div class="gha-assess-head">
+            <span class="gha-assess-title">🧑‍🔬 Assessment status</span>
+            <span class="gha-assess-current" id="assess-current">
+                {% if adv.assessment_status and adv.assessment_status in assessment_statuses %}
+                <span class="assess-badge a-{{ adv.assessment_status }}">{{ assessment_statuses[adv.assessment_status].emoji }} {{ assessment_statuses[adv.assessment_status].label }}</span>
+                <span class="assess-meta">by {{ adv.assessment_by }}{% if adv.assessment_at %} · {{ adv.assessment_at[:10] }}{% endif %}</span>
+                {% else %}<span class="assess-meta">Not started — the assessment team can flag progress here.</span>{% endif %}
+            </span>
+        </div>
+        <div class="gha-assess-controls">
+            {% for k, v in assessment_statuses.items() %}
+            <button class="assess-btn a-{{ k }}{% if adv.assessment_status == k %} active{% endif %}" data-status="{{ k }}">{{ v.emoji }} {{ v.label }}</button>
+            {% endfor %}
+            <button class="assess-btn assess-clear" data-status="">Clear</button>
+        </div>
+        <textarea id="assess-note" class="gha-assess-note" rows="2" placeholder="Optional note for the SOC (what you found, ETA, ticket #)…">{{ adv.assessment_note or '' }}</textarea>
+    </div>
 
     <div class="gha-card">
         <h3>Details</h3>
@@ -89,6 +363,43 @@
     </div>
     {% endif %}
 
+    {% if package_links %}
+    <style>
+        .pkglinks{display:flex;flex-direction:column;gap:8px;}
+        .pkglink{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 12px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;}
+        .pkglink-eco{font-size:.72rem;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:3px 9px;border-radius:999px;background:linear-gradient(135deg,#0046AD,#00A651);color:#fff;}
+        .pkglink-name{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92rem;color:#0f172a;word-break:break-all;flex:1 1 auto;}
+        .pkglink-btn{font-size:.82rem;font-weight:600;text-decoration:none;padding:4px 11px;border-radius:8px;border:1px solid #0046AD;color:#0046AD;background:#fff;white-space:nowrap;}
+        .pkglink-btn:hover{background:#0046AD;color:#fff;}
+        .pkglink-btn.repo{border-color:#1f2937;color:#1f2937;}
+        .pkglink-btn.repo:hover{background:#1f2937;color:#fff;}
+        .pkglinks-hint{font-size:.86rem;color:#64748b;margin:0 0 12px;}
+        .pkglinks-copy{font-size:.82rem;font-weight:600;cursor:pointer;padding:5px 12px;border-radius:8px;border:1px solid #00A651;color:#00A651;background:#fff;margin-top:10px;}
+        .pkglinks-copy:hover{background:#00A651;color:#fff;}
+        body.dark-mode .pkglink{background:#1e293b;border-color:#334155;}
+        body.dark-mode .pkglink-name{color:#e2e8f0;}
+        body.dark-mode .pkglink-btn{background:#0f172a;color:#7aa2f7;border-color:#3b5bdb;}
+        body.dark-mode .pkglink-btn:hover{background:#3b5bdb;color:#fff;}
+        body.dark-mode .pkglink-btn.repo{color:#cbd5e1;border-color:#475569;}
+        body.dark-mode .pkglinks-hint{color:#94a3b8;}
+    </style>
+    <div class="gha-card">
+        <h3>📦 Package links</h3>
+        <p class="pkglinks-hint">Direct links to each vulnerable package — for the OSS Governance team to pivot from and tie to RPT for blocking.</p>
+        <div class="pkglinks">
+            {% for p in package_links %}
+            <div class="pkglink">
+                {% if p.ecosystem %}<span class="pkglink-eco">{{ p.ecosystem }}</span>{% endif %}
+                <span class="pkglink-name" data-pkg-url="{{ p.registry_url }}">{{ p.name }}</span>
+                {% if p.registry_url %}<a class="pkglink-btn" href="{{ p.registry_url }}" target="_blank" rel="noopener">Registry ↗</a>{% endif %}
+                {% if p.repo_url %}<a class="pkglink-btn repo" href="{{ p.repo_url }}" target="_blank" rel="noopener">GitHub repo ↗</a>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        <button type="button" class="pkglinks-copy" id="pkglinks-copy">⧉ Copy all package URLs</button>
+    </div>
+    {% endif %}
+
     {% if adv.description %}
     <div class="gha-card">
         <h3>Description</h3>
@@ -106,7 +417,7 @@
     {% endif %}
 
     <div class="gha-card ai-card">
-        <h3>✦ AI assessment <span class="ai-sub">m1 → s1</span></h3>
+        <h3>✦ AI assessment <span class="ai-sub">MetIQ</span></h3>
         {% set ai = adv.ai_assessment %}
         {% set has_intel = ai and (ai.iocs or ai.ttps or ai.threat_actors or ai.next_steps) %}
         <div id="ai-body" {% if not ai %}style="display:none;"{% endif %}>
@@ -163,13 +474,13 @@
                 <div class="ai-disclaimer">AI-extracted from the advisory text — verify indicators before acting on them.</div>
             </div>
 
-            <div class="ai-meta" id="ai-meta">{% if ai %}Generated by {{ ai.model }}{% if ai.generated_at %} · {{ ai.generated_at[:16].replace('T',' ') }} UTC{% endif %}{% endif %}</div>
+            <div class="ai-meta" id="ai-meta">{% if ai %}Generated by {{ 'Heuristic' if ai.model == 'heuristic' else 'MetIQ' }}{% if ai.generated_at %} · {{ ai.generated_at|et }}{% endif %}{% endif %}</div>
         </div>
         <div class="ai-actions">
             <button class="btn" id="btn-ai">✦ {% if ai %}Regenerate{% else %}Generate AI assessment{% endif %}</button>
             <button class="btn btn-ai-use" id="btn-ai-use" {% if not ai %}style="display:none;"{% endif %}>Use suggested note ↓</button>
         </div>
-        <div id="ai-empty" class="ai-empty" {% if ai %}style="display:none;"{% endif %}>Ask the local LLM to assess our likely exposure, extract IOCs/TTPs, and recommend an action.</div>
+        <div id="ai-empty" class="ai-empty" {% if ai %}style="display:none;"{% endif %}>Ask MetIQ to assess our likely exposure, extract IOCs/TTPs, and recommend an action.</div>
     </div>
 
     {% if veracode_cves or veracode_packages %}
@@ -215,6 +526,263 @@
     </div>
     {% endif %}
 
+    {% set sc = capability_results.capd_scorecard.result if capability_results.get('capd_scorecard') else None %}
+    <div class="gha-card gha-scorecard">
+        <h3>🧭 CAPD Scorecard</h3>
+        <p class="cap-sub">A grounded <em>“do we declare a CAPD?”</em> verdict — scored from EPSS, CISA KEV, CVSS, our software exposure (Veracode/JFrog), active-threat intel, and patch availability. No worst-case guessing.</p>
+        {% if sc %}<script type="application/json" id="capd-initial">{{ sc|tojson }}</script>{% endif %}
+        <div id="capd-body" {% if not sc %}style="display:none;"{% endif %}></div>
+        <div id="capd-empty" class="ai-empty" {% if sc %}style="display:none;"{% endif %}>No scorecard yet — compute a grounded CAPD verdict from the signals we already pull.</div>
+        <div class="ai-actions">
+            <button class="btn cap-run-capd" id="btn-capd">🧭 {% if sc %}Recompute scorecard{% else %}Compute CAPD Scorecard{% endif %}</button>
+        </div>
+    </div>
+
+    {% set ta = capability_results.threat_analysis.result if capability_results.get('threat_analysis') else None %}
+    <style>
+      .ta-card .cap-sub{margin-top:-4px;}
+      .ta-badges{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 4px;}
+      .ta-badge{padding:4px 11px;border-radius:999px;font-size:.78rem;font-weight:700;color:#fff;letter-spacing:.02em;}
+      .ta-sev-critical{background:#cf222e;} .ta-sev-high{background:#d1242f;} .ta-sev-medium{background:#bf8700;}
+      .ta-sev-low{background:#1a7f37;} .ta-sev-informational,.ta-sev{background:#57606a;}
+      .ta-tlp{background:linear-gradient(135deg,#0046AD,#00A651);} .ta-conf{background:#475569;}
+      .ta-overview{margin:10px 0;color:#1f2937;line-height:1.5;}
+      .ta-section-h{font-weight:800;color:#0046AD;margin:16px 0 8px;font-size:.96rem;}
+      .ta-brief p{margin:6px 0;line-height:1.55;color:#24292f;}
+      .ta-brief .lead{font-weight:700;color:#0f172a;}
+      .ta-actions-list{margin:6px 0 0;padding-left:20px;} .ta-actions-list li{margin:4px 0;line-height:1.5;}
+      .ta-techs{display:flex;flex-direction:column;gap:7px;}
+      .ta-tech{display:flex;gap:10px;align-items:flex-start;padding:9px 12px;border-radius:11px;
+        background:linear-gradient(135deg,rgba(0,70,173,.07),rgba(0,166,81,.06));border:1px solid #e3e8ef;}
+      .ta-tech .tid{font-weight:800;color:#0046AD;white-space:nowrap;}
+      .ta-tech .tmeta{flex:1;} .ta-tech .tname{font-weight:600;}
+      .ta-tech .ttac{font-size:.78rem;color:#57606a;} .ta-tech .tev{font-size:.82rem;color:#374151;margin-top:2px;}
+      .ta-tech .tconf{font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px;background:#eef2f7;color:#475569;height:fit-content;}
+      .ta-rule{border:1px solid #e3e8ef;border-radius:12px;margin:9px 0;overflow:hidden;}
+      .ta-rule-h{display:flex;align-items:center;gap:9px;padding:8px 12px;background:#f6f8fa;flex-wrap:wrap;}
+      .ta-rule-type{font-size:.7rem;font-weight:800;text-transform:uppercase;padding:2px 8px;border-radius:6px;color:#fff;background:#6e40c9;}
+      .ta-rt-sigma{background:#0046AD;} .ta-rt-yara{background:#9a6700;} .ta-rt-suricata{background:#bc4c00;}
+      .ta-rule-name{font-weight:700;color:#24292f;} .ta-rule-tech{font-size:.74rem;color:#57606a;}
+      .ta-rule-desc{font-size:.82rem;color:#57606a;flex-basis:100%;}
+      .ta-rule pre{margin:0;padding:11px 13px;background:#0d1117;color:#e6edf3;font-size:.8rem;overflow-x:auto;white-space:pre;}
+      .ta-copy{margin-left:auto;font-size:.72rem;padding:3px 9px;border-radius:7px;border:1px solid #d0d7de;background:#fff;cursor:pointer;color:#0046AD;font-weight:700;}
+      .ta-copy:hover{background:#0046AD;color:#fff;}
+      .ta-meta{font-size:.74rem;color:#8b949e;margin-top:12px;}
+      .ta-exports{display:flex;flex-wrap:wrap;gap:9px;}
+      .ta-export-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:10px;
+        text-decoration:none;font-weight:700;font-size:.85rem;color:#0046AD;border:1px solid #d0d7de;
+        background:linear-gradient(135deg,rgba(0,70,173,.06),rgba(0,166,81,.05));transition:all .15s;}
+      .ta-export-btn:hover{background:linear-gradient(135deg,#0046AD,#00A651);color:#fff;border-color:#0046AD;transform:translateY(-1px);}
+      body.dark-mode .ta-export-btn{color:#58a6ff;border-color:#30363d;background:linear-gradient(135deg,rgba(0,70,173,.18),rgba(0,166,81,.12));}
+      body.dark-mode .ta-export-btn:hover{color:#fff;}
+      .ta-controls{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+      .ta-aud-label{font-size:.82rem;font-weight:700;color:#475569;}
+      .ta-aud-select{padding:7px 11px;border-radius:9px;border:1px solid #d0d7de;background:#fff;color:#24292f;font-size:.85rem;font-weight:600;cursor:pointer;}
+      .ta-lint{font-size:.7rem;font-weight:800;padding:2px 8px;border-radius:6px;}
+      .ta-lint-ok{background:#dafbe1;color:#1a7f37;} .ta-lint-warn{background:#fff8c5;color:#9a6700;} .ta-lint-err{background:#ffebe9;color:#cf222e;}
+      .ta-lint-detail{font-size:.76rem;color:#9a6700;flex-basis:100%;margin-top:-2px;}
+      body.dark-mode .ta-aud-select{background:#21262d;border-color:#30363d;color:#e6edf3;}
+      body.dark-mode .ta-aud-label{color:#adbac7;}
+      body.dark-mode .ta-lint-ok{background:rgba(26,127,55,.2);color:#56d364;}
+      body.dark-mode .ta-lint-warn{background:rgba(154,103,0,.25);color:#e3b341;}
+      body.dark-mode .ta-lint-err{background:rgba(207,34,46,.2);color:#ff7b72;}
+      body.dark-mode .ta-overview,body.dark-mode .ta-brief p{color:#c9d1d9;}
+      body.dark-mode .ta-brief .lead{color:#f0f6fc;}
+      body.dark-mode .ta-tech{background:linear-gradient(135deg,rgba(0,70,173,.18),rgba(0,166,81,.12));border-color:#30363d;}
+      body.dark-mode .ta-tech .tname{color:#e6edf3;} body.dark-mode .ta-tech .tev{color:#adbac7;}
+      body.dark-mode .ta-tech .tconf{background:#21262d;color:#adbac7;}
+      body.dark-mode .ta-rule{border-color:#30363d;} body.dark-mode .ta-rule-h{background:#161b22;}
+      body.dark-mode .ta-rule-name{color:#e6edf3;} body.dark-mode .ta-copy{background:#21262d;border-color:#30363d;color:#58a6ff;}
+    </style>
+    <div class="gha-card ta-card">
+        <h3>🛡️ Threat Analysis <span class="cap-soon-badge">native</span></h3>
+        <p class="cap-sub">An analyst-grade breakdown built entirely on our own stack — ATT&amp;CK technique mapping, ready-to-deploy detection rules (Sigma / YARA / Suricata), and a detection-&amp;-response intelligence brief. No external portal.</p>
+        {% if ta and not ta.error %}
+        <div class="ta-badges">
+            <span class="ta-badge ta-sev-{{ (ta.severity or 'informational')|lower }}">{{ ta.severity or '—' }}</span>
+            <span class="ta-badge ta-tlp">TLP:{{ ta.tlp or 'AMBER' }}</span>
+            {% if ta.confidence %}<span class="ta-badge ta-conf">Confidence: {{ ta.confidence }}</span>{% endif %}
+            {% if ta.threat_actor_name %}<span class="ta-badge ta-sev">Actor: {{ ta.threat_actor_name }}</span>{% endif %}
+        </div>
+        {% if ta.overview %}<p class="ta-overview">{{ ta.overview }}</p>{% endif %}
+
+        {% if ta.brief %}
+        <div class="ta-section-h">📣 Intelligence brief{% if ta.audience_label %} <span class="cap-soon-badge">{{ ta.audience_label }}</span>{% endif %}</div>
+        <div class="ta-brief">
+            {% if ta.brief.threat_action %}<p class="lead">{{ ta.brief.threat_action }}</p>{% endif %}
+            {% if ta.brief.attack_overview %}<p>{{ ta.brief.attack_overview }}</p>{% endif %}
+            {% if ta.brief.detection_focus %}<p>{{ ta.brief.detection_focus }}</p>{% endif %}
+            {% if ta.brief.recommended_actions %}
+            <ol class="ta-actions-list">{% for a in ta.brief.recommended_actions %}<li>{{ a }}</li>{% endfor %}</ol>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if ta.techniques %}
+        <div class="ta-section-h">🎯 ATT&amp;CK techniques ({{ ta.techniques|length }})</div>
+        <div class="ta-techs">
+            {% for t in ta.techniques %}
+            <div class="ta-tech">
+                <a class="tid" href="https://attack.mitre.org/techniques/{{ t.technique_id|replace('.', '/') }}/" target="_blank" rel="noopener">{{ t.technique_id }}</a>
+                <div class="tmeta">
+                    <span class="tname">{{ t.technique_name }}</span> <span class="ttac">· {{ t.tactic }}</span>
+                    {% if t.evidence %}<div class="tev">{{ t.evidence }}</div>{% endif %}
+                </div>
+                {% if t.confidence %}<span class="tconf">{{ t.confidence }}</span>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if ta.detection_rules %}
+        <div class="ta-section-h">🛠️ Generated detection rules ({{ ta.detection_rules|length }})</div>
+        {% for r in ta.detection_rules %}
+        <div class="ta-rule">
+            <div class="ta-rule-h">
+                <span class="ta-rule-type ta-rt-{{ (r.rule_type or 'sigma')|lower }}">{{ r.rule_type or 'rule' }}</span>
+                <span class="ta-rule-name">{{ r.rule_name }}</span>
+                {% if r.related_technique %}<span class="ta-rule-tech">→ {{ r.related_technique }}</span>{% endif %}
+                {% if r.lint %}<span class="ta-lint {{ 'ta-lint-ok' if r.lint.ok else ('ta-lint-err' if r.lint.status == 'error' else 'ta-lint-warn') }}" title="detflow lint">{{ '✓ lint clean' if r.lint.ok else ('✗ ' + r.lint.summary if r.lint.status == 'error' else '⚠ ' + r.lint.summary) }}</span>{% endif %}
+                <button class="ta-copy" type="button">Copy</button>
+                {% if r.description %}<span class="ta-rule-desc">{{ r.description }}</span>{% endif %}
+                {% if r.lint and r.lint.findings %}<span class="ta-lint-detail">{% for f in r.lint.findings %}{{ f.level }}: {{ f.msg }}{% if not loop.last %} · {% endif %}{% endfor %}</span>{% endif %}
+            </div>
+            <pre>{{ r.rule_content }}</pre>
+        </div>
+        {% endfor %}
+        {% endif %}
+        <div class="ta-section-h">📤 Export</div>
+        <div class="ta-exports">
+            <a class="ta-export-btn" href="/api/cs-advisories/{{ adv.source_id }}/threat-analysis/export/stix" download>🧬 STIX 2.1 bundle</a>
+            <a class="ta-export-btn" href="/api/cs-advisories/{{ adv.source_id }}/threat-analysis/export/navigator" download>🗺️ ATT&amp;CK Navigator layer</a>
+            <a class="ta-export-btn" href="/api/cs-advisories/{{ adv.source_id }}/threat-analysis/export/brief" download>📝 Brief (Markdown)</a>
+        </div>
+        <div class="ta-meta">Generated {{ ta.generated_at or '' }} · native engine (MetIQ GPT-4.1, m1 fallback). Always validate rules before deployment.</div>
+        {% elif ta and ta.error %}
+        <div class="cap-res-box neutral" id="cap-result-threat_analysis">{{ ta.error }}</div>
+        {% else %}
+        <div class="ai-empty" id="cap-result-threat_analysis">No analysis yet — generate ATT&amp;CK mappings, detection rules, and a brief for this advisory.</div>
+        {% endif %}
+        <div class="ai-actions ta-controls">
+            {% if ta_audiences %}
+            <label class="ta-aud-label" for="ta-audience">Brief for:</label>
+            <select class="ta-aud-select" id="ta-audience">
+                {% for a in ta_audiences %}
+                <option value="{{ a.key }}" {% if ta and ta.audience == a.key %}selected{% elif not ta and a.key == 'dr' %}selected{% endif %}>{{ a.label }}</option>
+                {% endfor %}
+            </select>
+            {% endif %}
+            <button class="btn cap-run-ta" id="btn-threat_analysis">🛡️ {% if ta and not ta.error %}Re-run analysis{% else %}Run Threat Analysis{% endif %}</button>
+        </div>
+    </div>
+
+    {% set jf = capability_results.jfrog.result if capability_results.get('jfrog') else None %}
+    <div class="gha-card gha-capabilities">
+        <h3>🧰 Capabilities</h3>
+        <p class="cap-sub">Run the SOC's tooling against this advisory — click whatever you need.</p>
+        <div class="cap-grid">
+
+            <div class="cap-tile">
+                <div class="cap-h"><span class="cap-ic">📦</span> JFrog Xray</div>
+                <div class="cap-desc">Which of our artifacts carry a component affected by this CVE.</div>
+                <button class="btn cap-run" id="cap-jfrog-btn" data-cap="jfrog">{% if jf %}Re-check{% else %}Run check{% endif %}</button>
+                <div class="cap-result" id="cap-result-jfrog">
+                    {% if jf %}<div class="cap-res-box {{ 'exposed' if jf.exposed else 'clear' }}">{{ jf.summary_text or 'Checked.' }}{% if jf.error %}<span class="cap-err">{{ jf.error }}</span>{% endif %}</div>{% endif %}
+                </div>
+            </div>
+
+            {% set ao = capability_results.app_owners.result if capability_results.get('app_owners') else None %}
+            <div class="cap-tile">
+                <div class="cap-h"><span class="cap-ic">👤</span> App owners <span class="cap-soon-badge">EAI</span></div>
+                <div class="cap-desc">Who owns the apps this advisory affects — joins Veracode-exposed apps to the EAI inventory (LOB, criticality, CIO &amp; Officer) so you can route it.</div>
+                <button class="btn cap-run" id="cap-app_owners-btn" data-cap="app_owners">{% if ao %}Re-check{% else %}Find owners{% endif %}</button>
+                <div class="cap-result" id="cap-result-app_owners">
+                    {% if ao %}<div class="cap-res-box {{ 'exposed' if ao.exposed else 'neutral' }}">{{ ao.summary_text }}{% if ao.error %}<span class="cap-err">{{ ao.error }}</span>{% endif %}</div>{% endif %}
+                </div>
+            </div>
+
+            {% set asf = capability_results.attack_surface.result if capability_results.get('attack_surface') else None %}
+            <div class="cap-tile">
+                <div class="cap-h"><span class="cap-ic">🌐</span> Attack surface <span class="cap-soon-badge">EAI</span></div>
+                <div class="cap-desc">ASM lens — which affected apps are internet-facing, and their external production URLs to confirm on the perimeter.</div>
+                <button class="btn cap-run" id="cap-attack_surface-btn" data-cap="attack_surface">{% if asf %}Re-check{% else %}Assess surface{% endif %}</button>
+                <div class="cap-result" id="cap-result-attack_surface">
+                    {% if asf %}<div class="cap-res-box {{ 'exposed' if asf.exposed else 'clear' }}">{{ asf.summary_text }}{% if asf.error %}<span class="cap-err">{{ asf.error }}</span>{% endif %}</div>{% endif %}
+                </div>
+            </div>
+
+            <a class="cap-tile cap-link {% if not capability_links.crowdstrike %}cap-disabled{% endif %}"
+               {% if capability_links.crowdstrike %}href="{{ capability_links.crowdstrike }}" target="_blank" rel="noopener"{% endif %}>
+                <div class="cap-h"><span class="cap-ic">🦅</span> CrowdStrike sweep</div>
+                <div class="cap-desc">Hunt Falcon across the fleet for this advisory (last 30 days).</div>
+                <span class="cap-cta">{% if capability_links.crowdstrike %}Open in Falcon →{% else %}Falcon not configured{% endif %}</span>
+            </a>
+
+            {% set qr = capability_results.qradar.result if capability_results.get('qradar') else None %}
+            <div class="cap-tile">
+                <div class="cap-h"><span class="cap-ic">📊</span> QRadar lookup</div>
+                <div class="cap-desc">SIEM-side "were we touched?" — runs an AQL pulse over this advisory's network indicators (last 1h).</div>
+                <button class="btn cap-run-async" id="cap-qradar-btn" data-cap="qradar">{% if qr %}Re-check{% else %}Run lookup{% endif %}</button>
+                <div class="cap-result" id="cap-result-qradar">
+                    {% if qr %}<div class="cap-res-box {{ 'exposed' if qr.exposed else ('clear' if 'exposed' in qr else 'neutral') }}">{{ qr.summary_text }}{% if qr.error %}<span class="cap-err">{{ qr.error }}</span>{% endif %}</div>{% endif %}
+                </div>
+            </div>
+
+            {% set fp = capability_results.fleet_posture.result if capability_results.get('fleet_posture') else None %}
+            <div class="cap-tile">
+                <div class="cap-h"><span class="cap-ic">🛰️</span> Fleet posture <span class="cap-soon-badge">Power BI</span></div>
+                <div class="cap-desc">Current fleet posture relevant to this advisory — patch compliance, OS currency, or endpoint coverage. Auto-picks the right Power BI dataset.</div>
+                <button class="btn cap-run-async" id="cap-fleet_posture-btn" data-cap="fleet_posture">{% if fp %}Re-check{% else %}Check posture{% endif %}</button>
+                <div class="cap-result" id="cap-result-fleet_posture">
+                    {% if fp %}<div class="cap-res-box neutral">{{ fp.summary_text }}{% if fp.error %}<span class="cap-err">{{ fp.error }}</span>{% endif %}</div>{% endif %}
+                </div>
+            </div>
+
+            <a class="cap-tile cap-link" href="{{ capability_links.hunt }}" target="_blank" rel="noopener">
+                <div class="cap-h"><span class="cap-ic">🎯</span> Threat Hunt</div>
+                <div class="cap-desc">Open the Hunt Workbench to run a behavioral "were we touched?" hunt.</div>
+                <span class="cap-cta">Open Hunt Workbench →</span>
+            </a>
+
+            {% set ti = capability_results.threatintel.result if capability_results.get('threatintel') else None %}
+            <div class="cap-tile">
+                <div class="cap-h"><span class="cap-ic">🛰️</span> Threat Intel</div>
+                <div class="cap-desc">Recorded Future risk score + evidence for this CVE — native, no external portal.</div>
+                <button class="btn cap-run" id="cap-threatintel-btn" data-cap="threatintel">{% if ti %}Re-check{% else %}Look up{% endif %}</button>
+                <div class="cap-result" id="cap-result-threatintel">
+                    {% if ti %}<div class="cap-res-box neutral">{{ ti.summary_text }}{% if ti.error %}<span class="cap-err">{{ ti.error }}</span>{% endif %}</div>{% endif %}
+                </div>
+            </div>
+
+            <a class="cap-tile cap-link {% if not capability_links.attackiq %}cap-disabled{% endif %}"
+               {% if capability_links.attackiq %}href="{{ capability_links.attackiq }}" target="_blank" rel="noopener"{% endif %}>
+                <div class="cap-h"><span class="cap-ic">🧪</span> AttackIQ BAS</div>
+                <div class="cap-desc">Validate detections in AttackIQ. ⚠️ Coordinate with SOC before firing TTPs.</div>
+                <span class="cap-cta">{% if capability_links.attackiq %}Open AttackIQ →{% else %}AttackIQ not configured{% endif %}</span>
+            </a>
+
+            <div class="cap-tile cap-soon">
+                <div class="cap-h"><span class="cap-ic">🌐</span> runZero <span class="cap-soon-badge">Coming soon</span></div>
+                <div class="cap-desc">External attack-surface & asset discovery — was this exposed product reachable from outside? Onboarding in progress.</div>
+                <span class="cap-cta">Awaiting access</span>
+            </div>
+
+        </div>
+    </div>
+
+    {% set faqc = capability_results.faq.result if capability_results.get('faq') else None %}
+    <div class="gha-card gha-faq">
+        <h3>❓ CAPD decision FAQ</h3>
+        <p class="cap-sub">AI answers to the questions that drive a CAPD call — grounded in this advisory's facts.</p>
+        <div id="faq-list" class="faq-list">
+            {% if faqc and faqc['items'] %}{% for it in faqc['items'] %}
+            <details class="faq-item"><summary>{{ it.q }}</summary><div class="faq-a">{{ it.a }}</div></details>
+            {% endfor %}{% endif %}
+        </div>
+        <button class="btn cap-run" id="btn-faq">{% if faqc %}↻ Regenerate answers{% else %}✨ Answer these{% endif %}</button>
+        {% if not faqc %}<div class="faq-empty" id="faq-empty">e.g. Should we declare a CAPD? · Is this easy to exploit? · Are we likely affected?</div>{% endif %}
+    </div>
+
     <div class="gha-card">
         <h3>Triage</h3>
         <textarea id="notes" placeholder="Add review notes — what this affects, exposure assessment, decision rationale…">{{ adv.notes or '' }}</textarea>
@@ -226,14 +794,147 @@
                     {% if config.is_dev %}disabled title="Teams escalation is disabled on the {{ config.environment }} instance — promote to prod to use it"{% endif %}>
                 {% if config.is_dev %}Notify disabled in {{ config.environment }}{% else %}Notify {{ teams_channel }} →{% endif %}
             </button>
+            {% if adv.xsoar_ticket_id %}
+            <a class="btn btn-xsoar" id="xsoar-ticket-link" href="{{ adv.xsoar_ticket_url or '#' }}" target="_blank" rel="noopener"
+               title="Created by {{ adv.xsoar_ticket_by }}{% if adv.xsoar_ticket_at %} on {{ adv.xsoar_ticket_at|et }}{% endif %}">
+                🎫 XSOAR #{{ adv.xsoar_ticket_id }} ↗
+            </a>
+            {% else %}
+            <button class="btn btn-xsoar" id="btn-xsoar"
+                    {% if config.is_dev %}disabled title="XSOAR ticket creation is disabled on the {{ config.environment }} instance — promote to prod to use it"{% endif %}>
+                {% if config.is_dev %}XSOAR disabled in {{ config.environment }}{% else %}🎫 Create XSOAR ticket{% endif %}
+            </button>
+            {% endif %}
+            <button class="btn btn-archive" id="btn-archive">
+                {% if adv.archived_at %}♻️ Restore from archive{% else %}🗄️ Archive{% endif %}
+            </button>
         </div>
+        <div class="gha-owner-note" id="owner-note">🔒 Only the owner can act on this advisory — click <strong>Assign to me</strong> to take it over. Anyone signed in can still join the discussion below.</div>
         <div class="gha-status-line" id="status-line">
-            {% if adv.reported_at %}Reported to Teams by {{ adv.reported_by }} on {{ adv.reported_at[:16].replace('T', ' ') }} UTC.
-            {% elif adv.reviewed_by %}Last reviewed by {{ adv.reviewed_by }}{% if adv.reviewed_at %} on {{ adv.reviewed_at[:16].replace('T', ' ') }} UTC{% endif %}.
+            {% if adv.reported_at %}Reported to Teams by {{ adv.reported_by }} on {{ adv.reported_at|et }}.
+            {% elif adv.reviewed_by %}Last reviewed by {{ adv.reviewed_by }}{% if adv.reviewed_at %} on {{ adv.reviewed_at|et }}{% endif %}.
             {% else %}Not yet reviewed.{% endif %}
         </div>
     </div>
+
+    <div class="gha-card gha-discussion">
+        <h3>💬 Discussion</h3>
+        <div class="gha-comments" id="gha-comments">
+            {% for c in comments %}
+            <div class="gha-comment">
+                <div class="gha-comment-head">
+                    <span class="ca">👤 {{ c.author or 'unknown' }}</span>
+                    <span class="ct">{{ c.created_at|et }}</span>
+                </div>
+                <div class="gha-comment-body">{{ c.body }}</div>
+            </div>
+            {% endfor %}
+            <div class="gha-comments-empty" id="gha-comments-empty" {% if comments %}style="display:none;"{% endif %}>
+                No comments yet — start the discussion. 💬
+            </div>
+        </div>
+        <div class="gha-comment-form">
+            <textarea id="comment-body" rows="3" placeholder="Add to the discussion — findings, decisions, hand-offs…"></textarea>
+            <button class="btn btn-comment" id="btn-comment">💬 Post comment</button>
+        </div>
+    </div>
+
+    <div class="gha-report-row">
+        <a class="btn btn-report-dl" href="/cs-advisories/{{ adv.source_id }}/report.pdf" target="_blank" rel="noopener">
+            📄 Download PDF report
+        </a>
+        <a class="btn btn-report-dl" href="/cs-advisories/{{ adv.source_id }}/report" target="_blank" rel="noopener"
+           style="filter:grayscale(.4);">
+            ⬇️ HTML
+        </a>
+        <span class="report-hint">Branded PDF for sharing — facts, AI assessment + IOCs/TTPs, CAPD verdict, Veracode exposure &amp; notes. HTML keeps the full FAQ &amp; discussion.</span>
+    </div>
 </div>
+<!-- How Does This Work? Modal -->
+<div class="gha-info-backdrop" id="ghaInfoModal" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+    <div class="gha-info-modal" onclick="event.stopPropagation()">
+        <div class="gha-info-header">
+            <h3>How Does an Advisory Investigation Work?</h3>
+            <button class="gha-info-close" onclick="document.getElementById('ghaInfoModal').style.display='none'">&times;</button>
+        </div>
+        <div class="gha-info-body">
+            <div class="gha-info-section">
+                <div class="gha-info-icon">🙋</div>
+                <div>
+                    <h4>1. Take ownership</h4>
+                    <p>Click <strong>Assign to me</strong> so it's clear who's driving. Unowned advisories auto-archive after 3 days — assigning keeps it in the live queue. The <strong>discussion thread</strong> at the bottom captures who said what, and when.</p>
+                </div>
+            </div>
+            <div class="gha-info-section">
+                <div class="gha-info-icon">🧭</div>
+                <div>
+                    <h4>2. Read the CAPD scorecard</h4>
+                    <p>A grounded <strong>“do we declare a CAPD?”</strong> verdict scored from data we already pull — EPSS, CISA KEV, CVSS, our software exposure (Veracode/JFrog), active-threat intel (Recorded Future), internet reachability (Shodan), and patch availability. It replaces worst-case guessing with a defensible 0–100 score and band.</p>
+                </div>
+            </div>
+            <div class="gha-info-section">
+                <div class="gha-info-icon">🧰</div>
+                <div>
+                    <h4>3. Run the capabilities you need</h4>
+                    <p>Owner-clickable checks against the SOC's tooling: <strong>JFrog/Veracode</strong> (do we ship the affected component?), <strong>Threat Intel</strong> (Recorded Future), <strong>CrowdStrike</strong> + <strong>QRadar</strong> (“were we touched?”), <strong>Hunt Workbench</strong>, and <strong>AttackIQ</strong>. Results persist on the advisory and flow into the report.</p>
+                </div>
+            </div>
+            <div class="gha-info-section">
+                <div class="gha-info-icon">❓</div>
+                <div>
+                    <h4>4. Check the FAQ &amp; ask the assistant</h4>
+                    <p>The <strong>CAPD decision FAQ</strong> answers the questions that drive the call (declare? easy to exploit? are we affected?). The chat bubble can answer anything about this advisory — exposure, packages, whether to escalate.</p>
+                </div>
+            </div>
+            <div class="gha-info-section">
+                <div class="gha-info-icon">🚦</div>
+                <div>
+                    <h4>5. Decide &amp; record</h4>
+                    <p>Capture your call in the <strong>triage notes</strong>, then either <strong>Close — not worth reporting</strong> or <strong>Notify</strong> the Package Compromise Assessment Teams channel (duplicate-safe). <strong>Download a report</strong> for a self-contained record of everything you found.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Notify Package Compromise Assessment Team modal -->
+<div class="gha-info-backdrop" id="notifyModal" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+    <div class="gha-info-modal" onclick="event.stopPropagation()">
+        <div class="gha-info-header">
+            <h3>📣 Notify {{ teams_channel }} Team</h3>
+            <button class="gha-info-close" onclick="document.getElementById('notifyModal').style.display='none'">&times;</button>
+        </div>
+        <div class="gha-info-body">
+            <p class="gha-notify-hint">Review and edit the draft below, then click <strong>Notify</strong> to post it to the
+                <strong>{{ teams_channel }}</strong> Teams channel. Sending also marks this advisory as <em>reported</em> (duplicate-safe).</p>
+            <textarea class="gha-notify-draft" id="notify-draft">{{ teams_draft }}</textarea>
+            <div class="gha-notify-actions">
+                <button class="btn gha-notify-cancel" onclick="document.getElementById('notifyModal').style.display='none'">Cancel</button>
+                <button class="btn btn-report" id="notify-send">📣 Notify</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create XSOAR ticket modal -->
+<div class="gha-info-backdrop" id="xsoarModal" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+    <div class="gha-info-modal" onclick="event.stopPropagation()">
+        <div class="gha-info-header">
+            <h3>🎫 Create XSOAR ticket</h3>
+            <button class="gha-info-close" onclick="document.getElementById('xsoarModal').style.display='none'">&times;</button>
+        </div>
+        <div class="gha-info-body">
+            <p class="gha-notify-hint">Review and edit the incident description below, then click <strong>Create ticket</strong> to
+                raise an XSOAR incident. One ticket per advisory (duplicate-safe).</p>
+            <textarea class="gha-notify-draft" id="xsoar-draft">{{ xsoar_draft }}</textarea>
+            <div class="gha-notify-actions">
+                <button class="btn gha-notify-cancel" onclick="document.getElementById('xsoarModal').style.display='none'">Cancel</button>
+                <button class="btn btn-xsoar" id="xsoar-create">🎫 Create ticket</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div id="gha-toast"></div>
 {% include '_chat_widget.html' %}
 {% endblock %}
@@ -268,6 +969,7 @@ const CHAT_CTX = {{ chat_context|tojson }};
     const btnSave = document.getElementById('btn-save');
     const toast = document.getElementById('gha-toast');
     const IS_DEV = {{ 'true' if config.is_dev else 'false' }};
+    const IS_OWNER = {{ 'true' if is_owner else 'false' }};
     let toastTimer;
 
     function showToast(msg, isErr) {
@@ -278,13 +980,41 @@ const CHAT_CTX = {{ chat_context|tojson }};
         toastTimer = setTimeout(() => toast.classList.remove('show'), 3200);
     }
 
+    // ---- assessment-team back-channel ----
+    const assessStatuses = {{ assessment_statuses|tojson }};
+    document.querySelectorAll('.assess-btn').forEach(b => b.addEventListener('click', async () => {
+        const status = b.dataset.status;
+        const note = (document.getElementById('assess-note').value || '').trim();
+        document.querySelectorAll('.assess-btn').forEach(x => x.disabled = true);
+        try {
+            const r = await fetch('/api/cs-advisories/' + ghsa + '/assessment', {
+                method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
+                body: JSON.stringify({status, note})
+            });
+            if (r.status === 401) { showToast('Please sign in — redirecting…', true); setTimeout(()=>location.href='/login?next='+encodeURIComponent(location.pathname),1100); return; }
+            const d = await r.json().catch(()=>({}));
+            if (!r.ok || d.ok === false) { showToast(d.error || 'Could not save', true); return; }
+            const adv = d.advisory || {};
+            document.querySelectorAll('.assess-btn').forEach(x => x.classList.toggle('active', !!status && x.dataset.status === status));
+            const cur = document.getElementById('assess-current');
+            if (status && assessStatuses[status]) {
+                cur.innerHTML = '<span class="assess-badge a-'+status+'">'+assessStatuses[status].emoji+' '+assessStatuses[status].label+'</span> <span class="assess-meta">by '+(adv.assessment_by||'you')+(adv.assessment_at?(' · '+adv.assessment_at.slice(0,10)):'')+'</span>';
+                showToast('Assessment status set: '+assessStatuses[status].label+' ✅');
+            } else {
+                cur.innerHTML = '<span class="assess-meta">Not started — the assessment team can flag progress here.</span>';
+                showToast('Assessment status cleared.');
+            }
+        } catch(e){ showToast('Save failed: '+e, true); }
+        finally { document.querySelectorAll('.assess-btn').forEach(x => x.disabled = false); }
+    }));
+
     function applyStatus(adv) {
         if (!adv) return;
         badge.textContent = adv.status.replace(/_/g, ' ');
         badge.className = 'gha-badge b-' + adv.status;
         const reported = adv.status === 'reported';
         // In dev the escalation button stays disabled regardless of status.
-        btnReport.disabled = IS_DEV || reported;
+        btnReport.disabled = IS_DEV || reported || !IS_OWNER;
         if (!IS_DEV) btnReport.textContent = reported ? 'Already reported ✓' : btnReport.dataset.label;
         btnClose.style.display = reported ? 'none' : '';
         btnReopen.style.display = (adv.status === 'closed_not_reported') ? '' : 'none';
@@ -298,13 +1028,29 @@ const CHAT_CTX = {{ chat_context|tojson }};
     }
     btnReport.dataset.label = btnReport.textContent;
 
-    async function post(path, label) {
+    // Owner-only actions: anyone signed in can read and join the discussion, but
+    // only the owner (or an admin) may run capabilities or change advisory state.
+    // Assign / comment stay enabled so a non-owner can take it over or chime in.
+    if (!IS_OWNER) {
+        const ownerNote = document.getElementById('owner-note');
+        if (ownerNote) ownerNote.style.display = 'block';
+        document.querySelectorAll(
+            '#btn-save, #btn-close, #btn-reopen, #btn-report, #btn-xsoar, #btn-archive, ' +
+            '#btn-ai, #btn-ai-use, #btn-veracode, #btn-capd, #btn-faq, .cap-run, .cap-run-async'
+        ).forEach(b => {
+            b.disabled = true;
+            b.classList.add('owner-locked');
+            b.title = 'Only the owner can act on this advisory — assign it to yourself first.';
+        });
+    }
+
+    async function post(path, label, extra) {
         try {
             const resp = await fetch('/api/cs-advisories/' + ghsa + path, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
-                body: JSON.stringify({ notes: notes.value }),
+                body: JSON.stringify(Object.assign({ notes: notes.value }, extra || {})),
             });
             if (resp.status === 401) {
                 showToast('Please sign in to act on advisories — redirecting…', true);
@@ -336,14 +1082,439 @@ const CHAT_CTX = {{ chat_context|tojson }};
     btnReopen.addEventListener('click', async () => {
         const d = await post('/reopen', 'Reopen'); if (d) showToast('Reopened.');
     });
+    // Notify → open the editable-draft modal (instead of a one-click send).
+    const notifyModal = document.getElementById('notifyModal');
+    const notifyDraft = document.getElementById('notify-draft');
+    const notifySend  = document.getElementById('notify-send');
+    const DRAFT0 = notifyDraft ? notifyDraft.value : '';
     btnReport.addEventListener('click', async () => {
-        if (IS_DEV) return;  // belt-and-suspenders; the button is also disabled in dev
-        if (!confirm('Escalate to the {{ teams_channel }} Teams channel? This notifies the wider team.')) return;
-        btnReport.disabled = true;
-        const d = await post('/report', 'Report');
-        if (d && d.teams_sent) showToast('Escalated to {{ teams_channel }}. ✅');
+        if (IS_DEV || btnReport.disabled) return;  // disabled in dev / for non-owners
+        notifyDraft.value = DRAFT0;                 // page-load draft, shown immediately
+        notifyModal.style.display = 'flex';
+        notifyDraft.focus();
+        // Pull a fresh draft so it reflects any CAPD/Veracode/QRadar checks run
+        // since the page loaded; fall back silently to the baked-in draft on error.
+        try {
+            const r = await fetch('/api/cs-advisories/' + ghsa + '/report-draft', { credentials: 'same-origin' });
+            if (r.ok) {
+                const d = await r.json();
+                if (d && d.ok && d.draft) notifyDraft.value = d.draft;
+            }
+        } catch (e) { /* keep DRAFT0 */ }
+    });
+    if (notifySend) notifySend.addEventListener('click', async () => {
+        const msg = (notifyDraft.value || '').trim();
+        if (!msg) { showToast('Message is empty — nothing to send.', true); return; }
+        notifySend.disabled = true;
+        const d = await post('/report', 'Notify', { message: msg });
+        notifySend.disabled = false;
+        if (d && d.teams_sent) { notifyModal.style.display = 'none'; showToast('Sent to {{ teams_channel }}. ✅'); }
         else if (d && d.warning) showToast(d.warning, true);
-        else btnReport.disabled = false;
+    });
+
+    // Create XSOAR ticket → editable-description modal.
+    const btnXsoar    = document.getElementById('btn-xsoar');
+    const xsoarModal  = document.getElementById('xsoarModal');
+    const xsoarDraft  = document.getElementById('xsoar-draft');
+    const xsoarCreate = document.getElementById('xsoar-create');
+    const XSOAR_DRAFT0 = xsoarDraft ? xsoarDraft.value : '';
+    if (btnXsoar) btnXsoar.addEventListener('click', () => {
+        if (IS_DEV || btnXsoar.disabled) return;  // disabled in dev / for non-owners
+        xsoarDraft.value = XSOAR_DRAFT0;
+        xsoarModal.style.display = 'flex';
+        xsoarDraft.focus();
+    });
+    if (xsoarCreate) xsoarCreate.addEventListener('click', async () => {
+        const desc = (xsoarDraft.value || '').trim();
+        if (!desc) { showToast('Description is empty — nothing to create.', true); return; }
+        xsoarCreate.disabled = true;
+        const d = await post('/xsoar-ticket', 'Create XSOAR ticket', { description: desc });
+        xsoarCreate.disabled = false;
+        if (d && d.ok && d.ticket_id) {
+            xsoarModal.style.display = 'none';
+            showToast('XSOAR ticket #' + d.ticket_id + ' created. 🎫');
+            // Swap the button for a link to the new ticket.
+            if (btnXsoar) {
+                const a = document.createElement('a');
+                a.className = 'btn btn-xsoar'; a.target = '_blank'; a.rel = 'noopener';
+                a.href = d.ticket_url || '#'; a.textContent = '🎫 XSOAR #' + d.ticket_id + ' ↗';
+                btnXsoar.replaceWith(a);
+            }
+        } else if (d && d.error === 'already_created') {
+            xsoarModal.style.display = 'none';
+            showToast('A ticket already exists for this advisory (#' + (d.ticket_id || '?') + ').', true);
+        } else if (d && d.warning) {
+            showToast(d.warning, true);
+        }
+    });
+
+    const btnArchive = document.getElementById('btn-archive');
+    if (btnArchive) btnArchive.addEventListener('click', async () => {
+        const restoring = btnArchive.textContent.indexOf('Restore') !== -1;
+        const d = await post(restoring ? '/unarchive' : '/archive', restoring ? 'Restore' : 'Archive');
+        if (d) {
+            showToast(restoring ? 'Restored to the live queue. ♻️' : 'Archived. 🗄️');
+            setTimeout(() => { location.href = '/cs-advisories' + (restoring ? '' : '?archived=1'); }, 850);
+        }
+    });
+
+    // ---- ownership ----
+    const ownerState = document.getElementById('owner-state');
+    const btnAssign = document.getElementById('btn-assign');
+    const btnRelease = document.getElementById('btn-release');
+    const MY_EMAIL = {{ (current_user.email if current_user else '')|tojson }};
+    function applyOwner(adv) {
+        if (!ownerState) return;
+        if (adv.owner) {
+            const mine = adv.owner === MY_EMAIL;
+            ownerState.innerHTML = '👤 Owned by <b></b>';
+            ownerState.querySelector('b').textContent = adv.owner;
+            btnAssign.style.display = mine ? 'none' : '';
+            btnAssign.textContent = '🙋 Take over';
+            btnRelease.style.display = mine ? '' : 'none';
+        } else {
+            ownerState.textContent = '🫥 Unassigned';
+            btnAssign.style.display = '';
+            btnAssign.textContent = '🙋 Assign to me';
+            btnRelease.style.display = 'none';
+        }
+    }
+    if (btnAssign) btnAssign.addEventListener('click', async () => {
+        const d = await post('/assign', 'Assign');
+        if (d) { applyOwner(d.advisory); showToast('Assigned to you. 🙋'); }
+    });
+    if (btnRelease) btnRelease.addEventListener('click', async () => {
+        const d = await post('/release', 'Release');
+        if (d) { applyOwner(d.advisory); showToast('Released. ↩️'); }
+    });
+
+    // Shared renderer for a capability result box. A result with an `exposed`
+    // flag renders red/green; otherwise neutral.
+    function renderCapResult(box, r) {
+        r = r || {};
+        const cls = ('exposed' in r) ? (r.exposed ? 'exposed' : 'clear') : 'neutral';
+        box.innerHTML = '<div class="cap-res-box"></div>';
+        const inner = box.querySelector('.cap-res-box'); inner.classList.add(cls);
+        inner.textContent = r.summary_text || 'Done.';
+        if (r.error) { const e = document.createElement('span'); e.className = 'cap-err'; e.textContent = r.error; inner.appendChild(e); }
+    }
+
+    // ---- capabilities (sync server-run: JFrog, Threat Intel) ----
+    document.querySelectorAll('.cap-run').forEach(btn => btn.addEventListener('click', async () => {
+        const cap = btn.dataset.cap;
+        if (!cap) return;  // buttons sharing the .cap-run style but with their own handler (e.g. FAQ)
+        const box = document.getElementById('cap-result-' + cap);
+        btn.disabled = true; const prev = btn.textContent; btn.textContent = '⏳ Running…';
+        try {
+            const resp = await fetch('/api/cs-advisories/' + ghsa + '/capability/' + cap, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: '{}',
+            });
+            if (resp.status === 401) {
+                showToast('Please sign in to run capabilities — redirecting…', true);
+                setTimeout(() => { location.href = '/login?next=' + encodeURIComponent(location.pathname); }, 1200);
+                return;
+            }
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || data.ok === false) { showToast(data.error || 'Check failed', true); return; }
+            renderCapResult(box, data.result || {});
+            btn.textContent = 'Re-check';
+            showToast('Done. ✅');
+        } catch (e) { showToast('Check failed: ' + e, true); }
+        finally { btn.disabled = false; if (btn.textContent === '⏳ Running…') btn.textContent = prev; }
+    }));
+
+    // ---- capabilities (async background job: QRadar) ----
+    document.querySelectorAll('.cap-run-async').forEach(btn => btn.addEventListener('click', async () => {
+        const cap = btn.dataset.cap;
+        if (!cap) return;
+        const box = document.getElementById('cap-result-' + cap);
+        btn.disabled = true; const prev = btn.textContent; btn.textContent = '⏳ Searching…';
+        const runMsg = (cap === 'fleet_posture')
+            ? 'Routing to the right Power BI dataset and pulling current fleet posture — this can take up to a minute. You can keep working; the result will appear here.'
+            : 'Running SIEM search — this can take 1–3 minutes. You can keep working; the result will appear here.';
+        box.innerHTML = '<div class="cap-res-box neutral">' + runMsg + '</div>';
+        const finish = (label) => { btn.disabled = false; btn.textContent = label; };
+        try {
+            const start = await fetch('/api/cs-advisories/' + ghsa + '/capability/' + cap + '/start', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: '{}',
+            });
+            if (start.status === 401) {
+                showToast('Please sign in to run capabilities — redirecting…', true);
+                setTimeout(() => { location.href = '/login?next=' + encodeURIComponent(location.pathname); }, 1200);
+                finish(prev); return;
+            }
+            const sd = await start.json().catch(() => ({}));
+            if (!start.ok || sd.ok === false) { showToast(sd.error || 'Could not start lookup', true); box.innerHTML = ''; finish(prev); return; }
+            // poll status — every 4s, up to ~4 minutes
+            let tries = 0;
+            const poll = async () => {
+                tries += 1;
+                try {
+                    const r = await fetch('/api/cs-advisories/' + ghsa + '/capability/' + cap + '/status', { credentials: 'same-origin' });
+                    const data = await r.json().catch(() => ({}));
+                    if (data.state === 'done') { renderCapResult(box, data.result || {}); showToast('SIEM lookup done. ✅'); finish('Re-check'); return; }
+                    if (data.state === 'error') { showToast(data.error || 'Lookup failed', true); box.innerHTML = ''; finish(prev); return; }
+                    if (tries > 60) { showToast('Lookup is taking unusually long — try again later.', true); box.innerHTML = ''; finish(prev); return; }
+                    setTimeout(poll, 4000);
+                } catch (e) { showToast('Lookup failed: ' + e, true); box.innerHTML = ''; finish(prev); }
+            };
+            setTimeout(poll, 4000);
+        } catch (e) { showToast('Lookup failed: ' + e, true); box.innerHTML = ''; finish(prev); }
+    }));
+
+    // ---- Threat Analysis (async LLM job; reload on done for the rich server render) ----
+    document.querySelectorAll('.ta-copy').forEach(btn => btn.addEventListener('click', () => {
+        const pre = btn.closest('.ta-rule')?.querySelector('pre');
+        if (!pre) return;
+        navigator.clipboard.writeText(pre.textContent || '').then(
+            () => { const p = btn.textContent; btn.textContent = 'Copied ✓'; setTimeout(() => btn.textContent = p, 1500); },
+            () => showToast('Copy failed', true));
+    }));
+    const signoff = document.getElementById('signoff');
+    if (signoff) {
+        const soKey = signoff.dataset.key;
+        const saveSignoff = async (row, status) => {
+            const team = row.dataset.team;
+            const note = row.querySelector('.signoff-note').value;
+            const res = await fetch('/api/cs-advisories/' + soKey + '/signoff', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
+                body: JSON.stringify({ team, status, note }),
+            });
+            if (res.status === 401) {
+                showToast('Please sign in to record a sign-off — redirecting…', true);
+                setTimeout(() => { location.href = '/login?next=' + encodeURIComponent(location.pathname); }, 1200);
+                return null;
+            }
+            const d = await res.json().catch(() => null);
+            if (!d || !d.ok) { showToast((d && d.error) || 'Could not save sign-off', true); return null; }
+            return d.signoffs || {};
+        };
+        const repaint = (signoffs) => {
+            let cleared = 0;
+            signoff.querySelectorAll('.signoff-row').forEach(row => {
+                const so = signoffs[row.dataset.team];
+                const status = so ? so.status : 'pending';
+                if (status === 'clear') cleared++;
+                row.querySelectorAll('.signoff-btn').forEach(b =>
+                    b.classList.toggle('active', b.dataset.status === status));
+                const stamp = row.querySelector('.signoff-stamp');
+                if (so && so.updated_by) {
+                    const em = { clear: '✅ Clear', not_clear: '⚠️ Not clear', pending: '⏳ Pending' }[status] || status;
+                    stamp.textContent = em + ' · ' + so.updated_by + (so.updated_at ? ' · ' + so.updated_at.slice(0, 10) : '');
+                } else { stamp.textContent = 'Pending — not yet validated'; }
+            });
+            const prog = document.getElementById('signoff-prog');
+            if (prog) prog.textContent = cleared + ' of ' + signoff.querySelectorAll('.signoff-row').length + ' teams cleared';
+        };
+        signoff.querySelectorAll('.signoff-btn').forEach(btn => btn.addEventListener('click', async () => {
+            const row = btn.closest('.signoff-row');
+            // Clicking the already-active state toggles back to pending.
+            const cur = btn.classList.contains('active') ? 'pending' : btn.dataset.status;
+            const signoffs = await saveSignoff(row, cur);
+            if (signoffs) repaint(signoffs);
+        }));
+        signoff.querySelectorAll('.signoff-note').forEach(note => note.addEventListener('blur', async () => {
+            const row = note.closest('.signoff-row');
+            const active = row.querySelector('.signoff-btn.active');
+            const signoffs = await saveSignoff(row, active ? active.dataset.status : 'pending');
+            if (signoffs) repaint(signoffs);
+        }));
+    }
+    const pkgCopy = document.getElementById('pkglinks-copy');
+    if (pkgCopy) pkgCopy.addEventListener('click', () => {
+        const urls = Array.from(document.querySelectorAll('.pkglink-name[data-pkg-url]'))
+            .map(el => (el.textContent.trim() + ' ' + (el.dataset.pkgUrl || '')).trim())
+            .filter(Boolean).join('\n');
+        navigator.clipboard.writeText(urls).then(
+            () => { pkgCopy.textContent = 'Copied ✓'; setTimeout(() => pkgCopy.textContent = '⧉ Copy all package URLs', 1500); },
+            () => showToast('Copy failed', true));
+    });
+    const taBtn = document.getElementById('btn-threat_analysis');
+    if (taBtn) taBtn.addEventListener('click', async () => {
+        const cap = 'threat_analysis';
+        const box = document.getElementById('cap-result-threat_analysis');
+        taBtn.disabled = true; const prev = taBtn.textContent; taBtn.textContent = '⏳ Analyzing…';
+        if (box) box.innerHTML = '<div class="cap-res-box neutral">Analyzing this advisory — mapping ATT&CK, authoring detection rules, and drafting the brief. This can take up to a minute; you can keep working.</div>';
+        const finish = (label) => { taBtn.disabled = false; taBtn.textContent = label; };
+        const audSel = document.getElementById('ta-audience');
+        const audience = audSel ? audSel.value : 'dr';
+        try {
+            const start = await fetch('/api/cs-advisories/' + ghsa + '/capability/' + cap + '/start', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
+                body: JSON.stringify({ audience }),
+            });
+            if (start.status === 401) {
+                showToast('Please sign in to run capabilities — redirecting…', true);
+                setTimeout(() => { location.href = '/login?next=' + encodeURIComponent(location.pathname); }, 1200);
+                finish(prev); return;
+            }
+            const sd = await start.json().catch(() => ({}));
+            if (!start.ok || sd.ok === false) { showToast(sd.error || 'Could not start analysis', true); finish(prev); return; }
+            let tries = 0;
+            const poll = async () => {
+                tries += 1;
+                try {
+                    const r = await fetch('/api/cs-advisories/' + ghsa + '/capability/' + cap + '/status', { credentials: 'same-origin' });
+                    const data = await r.json().catch(() => ({}));
+                    if (data.state === 'done') { showToast('Analysis ready. ✅'); location.reload(); return; }
+                    if (data.state === 'error') { showToast(data.error || 'Analysis failed', true); finish(prev); return; }
+                    if (tries > 45) { showToast('Analysis is taking unusually long — try again later.', true); finish(prev); return; }
+                    setTimeout(poll, 4000);
+                } catch (e) { showToast('Analysis failed: ' + e, true); finish(prev); }
+            };
+            setTimeout(poll, 4000);
+        } catch (e) { showToast('Analysis failed: ' + e, true); finish(prev); }
+    });
+
+    // ---- CAPD Scorecard ----
+    function renderCapd(sc) {
+        const body = document.getElementById('capd-body');
+        const empty = document.getElementById('capd-empty');
+        if (!sc || !body) return;
+        if (empty) empty.style.display = 'none';
+        const bandClass = sc.band || 'none';
+        const cats = (sc.categories || []).map((c, i) => {
+            const insuff = !c.sufficient;
+            const s = insuff ? 0 : c.score;
+            const w = insuff ? 0 : (s / 4) * 100;
+            const sub = ('weight' in c) ? `<small>weight ${c.weight}</small>` : '';
+            return `<div class="capd-cat ${insuff ? 'insuff' : ''}" style="animation-delay:${i*55}ms">
+                <div class="cl">${esc(c.label)}${sub}</div>
+                <div class="capd-bar"><i class="s${s}" style="width:0"></i></div>
+                <div class="capd-ev">${insuff ? 'Insufficient data' : esc(c.evidence)}<span class="src">${esc(c.source || '')}</span></div>
+            </div>`;
+        }).join('');
+        const ov = (sc.override && sc.override.fired)
+            ? `<div class="capd-override">⚠️ ${esc(sc.override.reason)}</div>` : '';
+        body.innerHTML = `
+            <div class="capd-top">
+                <div class="capd-gauge" style="--c:${bandClass==='declare'?'#cf222e':bandClass==='monitor'?'#bf8700':'#1a7f37'}">
+                    <div class="inner"><div><div class="num">0</div><div class="of">/ 100</div></div></div>
+                </div>
+                <div class="capd-headline">
+                    <span class="capd-band ${bandClass}">${esc(sc.band_label || '')}</span>
+                    ${sc.verdict ? `<p class="capd-verdict">${esc(sc.verdict)}</p>` : ''}
+                    ${ov}
+                </div>
+            </div>
+            <div class="capd-cats">${cats}</div>`;
+        body.style.display = '';
+        // animate the gauge fill + number + bars
+        requestAnimationFrame(() => {
+            const g = body.querySelector('.capd-gauge'); if (g) g.style.setProperty('--v', sc.score || 0);
+            body.querySelectorAll('.capd-bar i').forEach(el => {
+                const m = (el.className.match(/s(\d)/) || [])[1] || 0;
+                el.style.width = (m / 4 * 100) + '%';
+            });
+            const num = body.querySelector('.capd-gauge .num');
+            if (num) {
+                const target = sc.score || 0; const t0 = performance.now();
+                const step = (t) => { const p = Math.min(1, (t - t0) / 900);
+                    num.textContent = Math.round(target * p); if (p < 1) requestAnimationFrame(step); };
+                requestAnimationFrame(step);
+            }
+        });
+    }
+    const capdInitial = document.getElementById('capd-initial');
+    if (capdInitial) { try { renderCapd(JSON.parse(capdInitial.textContent)); } catch (e) {} }
+    const btnCapd = document.getElementById('btn-capd');
+    if (btnCapd) btnCapd.addEventListener('click', async () => {
+        btnCapd.disabled = true; const prev = btnCapd.textContent; btnCapd.textContent = '🧭 Scoring…';
+        try {
+            const resp = await fetch('/api/cs-advisories/' + ghsa + '/capability/capd_scorecard', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: '{}',
+            });
+            if (resp.status === 401) {
+                showToast('Please sign in to compute the scorecard — redirecting…', true);
+                setTimeout(() => { location.href = '/login?next=' + encodeURIComponent(location.pathname); }, 1200);
+                return;
+            }
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || data.ok === false) { showToast(data.error || 'Scorecard failed', true); return; }
+            renderCapd(data.result || {});
+            btnCapd.textContent = '🧭 Recompute scorecard';
+            showToast('CAPD scorecard ready. ✅');
+        } catch (e) { showToast('Scorecard failed: ' + e, true); }
+        finally { btnCapd.disabled = false; if (btnCapd.textContent === '🧭 Scoring…') btnCapd.textContent = prev; }
+    });
+
+    // ---- CAPD FAQ ----
+    const btnFaq = document.getElementById('btn-faq');
+    if (btnFaq) btnFaq.addEventListener('click', async () => {
+        btnFaq.disabled = true; const prev = btnFaq.textContent; btnFaq.textContent = '✨ Thinking…';
+        const empty = document.getElementById('faq-empty'); if (empty) empty.style.display = 'none';
+        try {
+            const resp = await fetch('/api/cs-advisories/' + ghsa + '/faq', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: '{}',
+            });
+            if (resp.status === 401) {
+                showToast('Please sign in — redirecting…', true);
+                setTimeout(() => { location.href = '/login?next=' + encodeURIComponent(location.pathname); }, 1200);
+                return;
+            }
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || data.ok === false) { showToast(data.error || 'FAQ failed', true); return; }
+            const list = document.getElementById('faq-list'); list.innerHTML = '';
+            (data.faq.items || []).forEach(it => {
+                const d = document.createElement('details'); d.className = 'faq-item';
+                const s = document.createElement('summary'); s.textContent = it.q;
+                const a = document.createElement('div'); a.className = 'faq-a'; a.textContent = it.a;
+                d.appendChild(s); d.appendChild(a); list.appendChild(d);
+            });
+            btnFaq.textContent = '↻ Regenerate answers';
+            showToast('Answered. ✨');
+        } catch (e) { showToast('FAQ failed: ' + e, true); }
+        finally { btnFaq.disabled = false; if (btnFaq.textContent === '✨ Thinking…') btnFaq.textContent = prev; }
+    });
+
+    // ---- discussion thread ----
+    const commentBody = document.getElementById('comment-body');
+    const btnComment = document.getElementById('btn-comment');
+    const commentsBox = document.getElementById('gha-comments');
+    const commentsEmpty = document.getElementById('gha-comments-empty');
+    function fmtET(iso) {
+        if (!iso) return '';
+        let s = String(iso).trim().replace(' ', 'T');
+        if (s.indexOf('Z') === -1 && s.indexOf('+') === -1) s += 'Z';  // stored UTC
+        const d = new Date(s);
+        if (isNaN(d.getTime())) return iso;
+        const date = d.toLocaleDateString('en-US', {timeZone: 'America/New_York', month: '2-digit', day: '2-digit', year: 'numeric'});
+        const time = d.toLocaleTimeString('en-US', {timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short'});
+        return date + ' ' + time;
+    }
+    function appendComment(c) {
+        if (commentsEmpty) commentsEmpty.style.display = 'none';
+        const wrap = document.createElement('div');
+        wrap.className = 'gha-comment gha-comment-new';
+        const head = document.createElement('div');
+        head.className = 'gha-comment-head';
+        const a = document.createElement('span'); a.className = 'ca'; a.textContent = '👤 ' + (c.author || 'unknown');
+        const t = document.createElement('span'); t.className = 'ct'; t.textContent = fmtET(c.created_at);
+        head.appendChild(a); head.appendChild(t);
+        const body = document.createElement('div');
+        body.className = 'gha-comment-body'; body.textContent = c.body;
+        wrap.appendChild(head); wrap.appendChild(body);
+        commentsBox.insertBefore(wrap, commentsEmpty);
+    }
+    if (btnComment) btnComment.addEventListener('click', async () => {
+        const text = (commentBody.value || '').trim();
+        if (!text) { showToast('Write something first.', true); return; }
+        btnComment.disabled = true;
+        try {
+            const resp = await fetch('/api/cs-advisories/' + ghsa + '/comments', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin', body: JSON.stringify({ body: text }),
+            });
+            if (resp.status === 401) {
+                showToast('Please sign in to comment — redirecting…', true);
+                setTimeout(() => { location.href = '/login?next=' + encodeURIComponent(location.pathname); }, 1200);
+                return;
+            }
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || data.ok === false) { showToast(data.error || 'Post failed', true); return; }
+            appendComment(data.comment); commentBody.value = ''; showToast('Comment posted. 💬');
+        } catch (e) { showToast('Post failed: ' + e, true); }
+        finally { btnComment.disabled = false; }
     });
 
     // ---- AI assessment ----
@@ -393,7 +1564,7 @@ const CHAT_CTX = {{ chat_context|tojson }};
         document.getElementById('ai-intel').style.display = any ? '' : 'none';
 
         document.getElementById('ai-meta').textContent =
-            'Generated by ' + (a.model || 'LLM') + (a.generated_at ? ' · ' + a.generated_at.slice(0,16).replace('T',' ') + ' UTC' : '');
+            'Generated by ' + (a.model === 'heuristic' ? 'Heuristic' : 'MetIQ') + (a.generated_at ? ' · ' + a.generated_at.slice(0,16).replace('T',' ') + ' UTC' : '');
         aiBody.style.display = ''; aiEmpty.style.display = 'none';
         btnAiUse.style.display = ''; btnAi.textContent = '✦ Regenerate';
     }

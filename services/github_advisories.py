@@ -2,7 +2,7 @@
 
 Hourly poller for newly published advisories across several supply-chain /
 vulnerability feeds. On detecting advisories not seen before it posts a Webex
-digest (Toodles bot) and emails the AppSec team. Nothing is sent when there is
+digest (Aide bot) and emails the AppSec team. Nothing is sent when there is
 nothing new.
 
 Sources are a mix of code-defined built-ins and user-added ones (managed from
@@ -39,6 +39,7 @@ import json
 import logging
 import os
 import re
+import threading
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -452,19 +453,34 @@ def _triage_rss_entry(title: str, summary: str) -> dict[str, Any]:
 
 
 def _extract_json(text: str) -> Any:
+    """Pull the first JSON value — object OR array — out of an LLM reply.
+
+    Handles both shapes: some prompts ask for an object (``{...}``), the FAQ asks
+    for an array (``[{...}, ...]``). We pick whichever bracket type opens first
+    and match it to that type's last closing bracket, falling back to the other
+    candidate if the first doesn't parse."""
     if not text:
         return None
     text = text.strip()
     if text.startswith("```"):
         text = text.split("```", 2)[1] if "```" in text[3:] else text.strip("`")
         text = text.lstrip("json").strip()
-    start, end = text.find("{"), text.rfind("}")
-    if start == -1 or end == -1:
+    candidates = []
+    obj_start, obj_end = text.find("{"), text.rfind("}")
+    if obj_start != -1 and obj_end > obj_start:
+        candidates.append((obj_start, obj_end + 1))
+    arr_start, arr_end = text.find("["), text.rfind("]")
+    if arr_start != -1 and arr_end > arr_start:
+        candidates.append((arr_start, arr_end + 1))
+    if not candidates:
         return None
-    try:
-        return json.loads(text[start:end + 1])
-    except json.JSONDecodeError:
-        return None
+    candidates.sort(key=lambda c: c[0])  # outermost value = first bracket to open
+    for start, end in candidates:
+        try:
+            return json.loads(text[start:end])
+        except json.JSONDecodeError:
+            continue
+    return None
 
 
 def _fetch_rss(source_key: str, label: str, url: str) -> list[dict[str, Any]]:
@@ -522,7 +538,7 @@ def _rss_record(source_key: str, entry: dict[str, str], verdict: dict[str, Any])
 def notify_source_request(description: str, requested_by: str = "") -> bool:
     """Ping the team on Webex that a reviewer wants a source we can't add from
     the modal (i.e. it needs a real fetcher). Returns True if the ping was sent."""
-    token = CONFIG.webex_bot_access_token_toodles
+    token = CONFIG.webex_bot_access_token_aide
     room_id = CONFIG.webex_room_id_dev_test_space
     if not token or not room_id:
         logger.warning("[Advisories] Cannot send source request — Webex not configured")
@@ -539,10 +555,35 @@ def notify_source_request(description: str, requested_by: str = "") -> bool:
 
 
 # ---------------------------------------------------------------------------
-# AI triage assist (per-advisory, m1 -> s1)
+# AI triage assist (per-advisory, local LLM with fallback)
 # ---------------------------------------------------------------------------
 def _now_z() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def _now_et() -> str:
+    """Current time in US/Eastern for display, e.g. ``06/16/2026 7:38 PM EDT``."""
+    import pytz
+    return datetime.now(pytz.timezone("US/Eastern")).strftime("%m/%d/%Y %-I:%M %p %Z")
+
+
+def fmt_et(value: Any) -> str:
+    """Format a UTC/ISO timestamp (or datetime) as US/Eastern for display:
+    ``MM/DD/YYYY H:MM AM/PM EDT``. Returns the input stringified on parse failure."""
+    import pytz
+    eastern = pytz.timezone("US/Eastern")
+    dt = value
+    if isinstance(value, str):
+        s = value.strip().replace("Z", "+00:00")
+        try:
+            dt = datetime.fromisoformat(s)
+        except ValueError:
+            return value
+    if not isinstance(dt, datetime):
+        return str(value)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(eastern).strftime("%m/%d/%Y %-I:%M %p %Z")
 
 
 def _intel_rows(items: Any, keys: tuple[str, ...], cap: int = 25) -> list[dict[str, str]]:
@@ -631,7 +672,7 @@ def generate_ai_triage(adv: dict[str, Any]) -> dict[str, Any]:
                 "ttps": _intel_rows(data.get("ttps"), ("id", "name")),
                 "threat_actors": _intel_rows(data.get("threat_actors"), ("name", "note")),
                 "next_steps": _intel_steps(data.get("next_steps")),
-                "model": "gpt-4.1",
+                "model": "llm",
                 "generated_at": _now_z(),
             }
     except Exception as e:
@@ -658,6 +699,70 @@ def generate_ai_triage(adv: dict[str, Any]) -> dict[str, Any]:
             "If present, pin or upgrade to a safe version and rotate any exposed secrets/tokens.",
         ],
         "model": "heuristic",
+        "generated_at": _now_z(),
+    }
+
+
+ADVISORY_FAQ_QUESTIONS = [
+    "Should we declare a CAPD (Clear and Present Danger) for this advisory?",
+    "Is this vulnerability easy to exploit?",
+    "Are we likely to be affected?",
+    "How urgent is remediation, and what's the realistic blast radius?",
+    "What should the advisory owner do first?",
+]
+
+
+def generate_advisory_faq(adv: dict[str, Any]) -> dict[str, Any]:
+    """Answer a fixed set of CAPD-decision questions about an advisory via the LLM,
+    grounded in the advisory facts (+ any cached AI assessment). Returns
+    ``{items: [{q, a}], model, generated_at}``."""
+    pkgs = ", ".join(adv.get("packages") or []) or "n/a"
+    ai = adv.get("ai_assessment") or {}
+    ai_line = ""
+    if isinstance(ai, dict) and ai.get("exposure"):
+        ai_line = f"\nPrior AI exposure note: {ai.get('exposure')}\nPrior recommendation: {ai.get('recommendation')}"
+    ctx = (
+        f"ID: {adv.get('source_id')}\n"
+        f"CVE: {adv.get('cve_id') or 'none'}\n"
+        f"Severity: {adv.get('severity')}\n"
+        f"Affected packages/products: {pkgs}\n\n"
+        f"Summary: {adv.get('summary')}\n\n"
+        f"Description:\n{(adv.get('description') or '')[:3000]}{ai_line}"
+    )
+    questions = "\n".join(f"{i+1}. {q}" for i, q in enumerate(ADVISORY_FAQ_QUESTIONS))
+    try:
+        from my_bot.utils.llm_factory import create_llm
+        from langchain_core.messages import HumanMessage, SystemMessage
+
+        sys = (
+            "You are a senior detection & response analyst at a large enterprise (the company), "
+            "helping the advisory owner make a CAPD (Clear and Present Danger) decision. "
+            "Answer EACH question concisely (2-4 sentences), decisively, and grounded in the "
+            "advisory facts. Where our specific exposure is unknown, say what to check rather "
+            "than assuming worst-case. For the CAPD question give a clear lean (yes/no/【needs X】) "
+            "with the reasoning.\n"
+            "Reply with ONLY a JSON array, one object per question IN ORDER: "
+            '[{"q": "<the question>", "a": "<your answer>"}].'
+        )
+        user = ctx + "\n\nQUESTIONS:\n" + questions
+        resp = create_llm().invoke([SystemMessage(content=sys), HumanMessage(content=user)])
+        text = resp.content if hasattr(resp, "content") else str(resp)
+        data = _extract_json(text)
+        items = []
+        if isinstance(data, list):
+            for row in data:
+                if isinstance(row, dict) and row.get("a"):
+                    items.append({"q": str(row.get("q") or "").strip()[:300],
+                                  "a": str(row.get("a") or "").strip()[:1500]})
+        if items:
+            return {"items": items, "model": "llm", "generated_at": _now_z()}
+    except Exception as e:
+        logger.warning("[Advisories] FAQ generation failed: %s", e)
+    # Fallback: questions with a graceful "unavailable" note so the UI still renders.
+    return {
+        "items": [{"q": q, "a": "AI answer unavailable right now — try again shortly."}
+                  for q in ADVISORY_FAQ_QUESTIONS],
+        "model": "unavailable",
         "generated_at": _now_z(),
     }
 
@@ -701,15 +806,15 @@ def _notif_fields(rec: dict[str, Any], labels: dict[str, str]) -> dict[str, str]
 # Notification channels
 # ---------------------------------------------------------------------------
 def _post_webex(fields: list[dict[str, str]], room_id: str) -> None:
-    token = CONFIG.webex_bot_access_token_toodles
+    token = CONFIG.webex_bot_access_token_aide
     if not token:
-        logger.warning("[Advisories] No Toodles bot token configured — skipping Webex")
+        logger.warning("[Advisories] No Aide bot token configured — skipping Webex")
         return
     if not room_id:
         logger.warning("[Advisories] No Webex room configured — skipping Webex")
         return
 
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    now = _now_et()
     count = len(fields)
     lines = [
         f"🚨 **{count} new security advisor{'y' if count == 1 else 'ies'}** 🔐",
@@ -727,10 +832,34 @@ def _post_webex(fields: list[dict[str, str]], room_id: str) -> None:
     logger.info("[Advisories] Posted Webex digest of %d advisory(ies)", count)
 
 
+def _digest_recipients() -> tuple[list[str], str | None]:
+    """Resolve the digest's To / Cc.
+
+    To = the AppSec team mailbox plus everyone who self-subscribed from the
+    /cs-advisories page; Cc = the configured owner (APPSEC_TEAM_EMAIL_CC).
+    Addresses are deduped case-insensitively and a Cc address is never also
+    listed in To.
+    """
+    cc = CONFIG.appsec_team_email_cc or None
+    cc_keys = {cc.strip().lower()} if cc else set()
+
+    to: list[str] = []
+    seen: set[str] = set()
+    candidates = [CONFIG.appsec_team_email] if CONFIG.appsec_team_email else []
+    candidates += db.list_subscribers()
+    for addr in candidates:
+        key = (addr or "").strip().lower()
+        if not key or key in cc_keys or key in seen:
+            continue
+        seen.add(key)
+        to.append(addr)
+    return to, cc
+
+
 def _send_email(fields: list[dict[str, str]]) -> None:
-    to = CONFIG.appsec_team_email
+    to, cc = _digest_recipients()
     if not to:
-        logger.info("[Advisories] APPSEC_TEAM_EMAIL not set — skipping email")
+        logger.info("[Advisories] No digest recipients (APPSEC_TEAM_EMAIL unset, no subscribers) — skipping email")
         return
 
     from services.xsoar_email import send_email  # lazy: pulls XSOAR client
@@ -782,8 +911,8 @@ def _send_email(fields: list[dict[str, str]]) -> None:
         "to add notes, close, or escalate to Package Compromise Assessment.</p></div>"
     )
 
-    send_email(to, subject, body, cc=CONFIG.appsec_team_email_cc, html_body=html_body)
-    logger.info("[Advisories] Emailed AppSec (%s) about %d advisory(ies)", to, count)
+    send_email(to, subject, body, cc=cc, html_body=html_body)
+    logger.info("[Advisories] Emailed %d recipient(s) (cc=%s) about %d advisory(ies)", len(to), cc or "—", count)
 
 
 # ---------------------------------------------------------------------------
@@ -819,6 +948,1007 @@ def _advisory_packages(adv: dict[str, Any]) -> list[str]:
     return sorted(names)
 
 
+# ---------------------------------------------------------------------------
+# Direct package / repo links (for OSS Governance → RPT ingestion)
+# ---------------------------------------------------------------------------
+# The advisory ``html_url`` points at the *advisory* (GHSA / OSV / NVD page), not
+# at the package itself. The OSS Governance team wants a link straight to the
+# vulnerable package so they can pivot from it and tie it to RPT for blocking.
+# We derive a canonical "view this package" registry URL per ecosystem, plus the
+# upstream GitHub repo when the advisory references one.
+_REGISTRY_URL_TEMPLATES = {
+    "npm": "https://www.npmjs.com/package/{name}",
+    "pypi": "https://pypi.org/project/{name}/",
+    "go": "https://pkg.go.dev/{name}",
+    "rubygems": "https://rubygems.org/gems/{name}",
+    "crates.io": "https://crates.io/crates/{name}",
+    "cargo": "https://crates.io/crates/{name}",
+    "nuget": "https://www.nuget.org/packages/{name}",
+    "packagist": "https://packagist.org/packages/{name}",
+    "composer": "https://packagist.org/packages/{name}",
+    "pub": "https://pub.dev/packages/{name}",
+    "hex": "https://hex.pm/packages/{name}",
+}
+
+
+def _split_package_entry(entry: str) -> tuple[str, str]:
+    """``"@mastra/core (npm)"`` → ``("@mastra/core", "npm")``; no suffix → eco ``""``."""
+    s = (entry or "").strip()
+    if s.endswith(")") and " (" in s:
+        name, _, eco = s.rpartition(" (")
+        return name.strip(), eco[:-1].strip()
+    return s, ""
+
+
+def _registry_url(name: str, ecosystem: str | None) -> str | None:
+    """Canonical package-page URL for ``name`` in ``ecosystem``, or ``None``."""
+    name = (name or "").strip()
+    eco = (ecosystem or "").strip().lower()
+    if not name:
+        return None
+    if eco == "maven":  # names are ``group:artifact``
+        group, sep, artifact = name.partition(":")
+        if sep:
+            return f"https://central.sonatype.com/artifact/{group}/{artifact}"
+        return f"https://central.sonatype.com/search?q={name}"
+    tmpl = _REGISTRY_URL_TEMPLATES.get(eco)
+    return tmpl.format(name=name) if tmpl else None
+
+
+def _github_repo_url(raw: dict[str, Any]) -> str | None:
+    """First GitHub source-repo URL referenced by the advisory, trimmed to the
+    ``github.com/<owner>/<repo>`` root (skips github.com/advisories pages)."""
+    refs = (raw or {}).get("references") or []
+    for r in refs:
+        url = (r.get("url") if isinstance(r, dict) else r) or ""
+        m = re.search(r"https?://github\.com/([^/\s]+)/([^/\s#?]+)", url)
+        if not m or m.group(1).lower() == "advisories":
+            continue
+        owner, repo = m.group(1), m.group(2).removesuffix(".git")
+        return f"https://github.com/{owner}/{repo}"
+    return None
+
+
+def advisory_package_links(adv: dict[str, Any]) -> list[dict[str, str]]:
+    """Per-package links for an advisory: ``[{name, ecosystem, registry_url, repo_url}]``.
+
+    Gives OSS Governance a direct pivot to each vulnerable package (registry page
+    + upstream repo) rather than only the advisory URL. De-duplicated by name+eco.
+    """
+    raw = adv.get("raw") or adv.get("raw_json") or {}
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except (ValueError, TypeError):
+            raw = {}
+    repo_url = _github_repo_url(raw)
+    out: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for entry in adv.get("packages") or []:
+        name, eco = _split_package_entry(str(entry))
+        eco = eco or (adv.get("ecosystem") or "")
+        key = (name, eco.lower())
+        if not name or key in seen:
+            continue
+        seen.add(key)
+        out.append({
+            "name": name,
+            "ecosystem": eco,
+            "registry_url": _registry_url(name, eco) or "",
+            "repo_url": repo_url or "",
+        })
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Package grouping + bulk environment check (clear a whole campaign at once)
+# ---------------------------------------------------------------------------
+# A supply-chain campaign drops dozens-to-hundreds of look-alike packages (e.g.
+# every package under an npm scope like @mastra). Rather than open each one, an
+# analyst searches the shared token, checks the whole set against our environment
+# in one shot, and — if none are present — clears them all at once.
+
+def package_group(query: str, advisories: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """Advisories whose affected packages match ``query`` (case-insensitive
+    substring, e.g. an npm scope ``@mastra``). Returns the de-duplicated package
+    set + member advisories so the queue can be cleared as a group."""
+    q = (query or "").strip().lower()
+    if not q:
+        return {"query": query or "", "advisory_count": 0, "package_count": 0,
+                "packages": [], "ecosystems": [], "members": []}
+    if advisories is None:
+        advisories = db.list_advisories()
+    members: list[dict[str, Any]] = []
+    pkgset: set[str] = set()
+    ecosystems: set[str] = set()
+    for a in advisories:
+        matched: list[str] = []
+        for entry in a.get("packages") or []:
+            name, eco = _split_package_entry(str(entry))
+            if q in name.lower() or q in str(entry).lower():
+                matched.append(name)
+                pkgset.add(name)
+                if eco:
+                    ecosystems.add(eco)
+        if matched:
+            members.append({
+                "source_id": a.get("source_id"),
+                "uid": a.get("uid"),
+                "packages": sorted(set(matched)),
+                "first_seen": (a.get("first_seen_at") or "")[:10],
+                "status": a.get("status"),
+            })
+    members.sort(key=lambda m: m["first_seen"])
+    return {
+        "query": query or "",
+        "advisory_count": len(members),
+        "package_count": len(pkgset),
+        "packages": sorted(pkgset),
+        "ecosystems": sorted(ecosystems),
+        "members": members,
+    }
+
+
+def group_environment_check(packages: list[str]) -> dict[str, Any]:
+    """Veracode SCA presence check across a set of package names. Compact summary
+    for the bulk-clear UI. NB: a miss is 'no open SCA finding references it', not
+    absolute proof of absence from every app's full SBOM — surfaced to the user."""
+    pkgs = sorted({p for p in (packages or []) if p})
+    if not pkgs:
+        return {"checked": False, "error": "no packages to check"}
+    try:
+        from services import veracode
+        res = veracode.component_exposure(pkgs)
+    except Exception as e:  # noqa: BLE001 — env check is best-effort
+        return {"checked": False, "error": str(e)[:200]}
+    present = sorted((res.get("packages") or {}).keys())
+    return {
+        "checked": True,
+        "configured": bool(res.get("configured")),
+        "indexing": bool(res.get("indexing")),
+        "exposed": bool(res.get("exposed")),
+        "affected_app_count": res.get("affected_app_count", 0),
+        "present_packages": present,
+        "package_count": len(pkgs),
+        "summary": res.get("summary_text") or "",
+        "error": res.get("error"),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Cross-source corroboration
+# ---------------------------------------------------------------------------
+# Each feed (GitHub Advisories, OSV npm/PyPI, CISA KEV, custom RSS, …) emits
+# independently. When the SAME CVE / alias id / package surfaces in more than one
+# feed, that is independent confirmation — a stronger signal than any single feed.
+# We compute it in-memory over the visible list (cheap) and annotate each row.
+
+def _corroboration_keys(adv: dict[str, Any]) -> set[tuple]:
+    """Identity keys an advisory can be matched on across sources: its CVE, any
+    alias id (GHSA/CVE/MAL/…), and each affected package (name+ecosystem)."""
+    keys: set[tuple] = set()
+    cve = (adv.get("cve_id") or "").strip().upper()
+    if cve:
+        keys.add(("id", cve))
+    for al in adv.get("aliases") or []:
+        if isinstance(al, str) and al.strip():
+            keys.add(("id", al.strip().upper()))
+    for entry in adv.get("packages") or []:
+        if not entry:
+            continue
+        s = str(entry)
+        name = s.split(" (")[0].strip().lower()
+        eco = ""
+        if " (" in s and s.endswith(")"):
+            eco = s[s.rfind(" (") + 2:-1].strip().lower()
+        if name:
+            keys.add(("pkg", name, eco))
+    return keys
+
+
+def compute_corroboration(advisories: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Map advisory uid -> corroboration info when the same CVE/alias/package is
+    seen in 2+ *different* sources. Returns only corroborated advisories.
+
+    Value: ``{sources: [labels...], source_count: N (incl. self), peers:
+    [{uid, source, label, source_id, via}], via: [human reasons]}``.
+    """
+    labels = source_labels_map()
+    index: dict[tuple, list[str]] = {}
+    meta: dict[str, dict[str, Any]] = {}
+    for a in advisories:
+        uid = a.get("uid") or a.get("source_id")
+        if not uid:
+            continue
+        keys = _corroboration_keys(a)
+        meta[uid] = {
+            "keys": keys,
+            "source": a.get("source"),
+            "source_id": a.get("source_id"),
+            "label": labels.get(a.get("source"), a.get("source") or "—"),
+        }
+        for k in keys:
+            index.setdefault(k, []).append(uid)
+
+    def _via_label(k: tuple) -> str:
+        if k[0] == "id":
+            return k[1]
+        return k[1] + (f" ({k[2]})" if len(k) > 2 and k[2] else "")
+
+    out: dict[str, dict[str, Any]] = {}
+    for uid, m in meta.items():
+        peers: dict[str, set] = {}
+        for k in m["keys"]:
+            for other in index.get(k, []):
+                if other == uid or meta[other]["source"] == m["source"]:
+                    continue  # cross-source only
+                peers.setdefault(other, set()).add(k)
+        if not peers:
+            continue
+        peer_list = []
+        via_all: set = set()
+        for puid, vks in peers.items():
+            pm = meta[puid]
+            via = sorted(_via_label(k) for k in vks)
+            via_all.update(via)
+            peer_list.append({
+                "uid": puid, "source": pm["source"], "label": pm["label"],
+                "source_id": pm["source_id"], "via": via,
+            })
+        peer_list.sort(key=lambda p: p["label"])
+        distinct_sources = {m["source"]} | {p["source"] for p in peer_list}
+        out[uid] = {
+            "sources": sorted({p["label"] for p in peer_list} | {m["label"]}),
+            "source_count": len(distinct_sources),
+            "peers": peer_list,
+            "via": sorted(via_all)[:6],
+        }
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Campaign clustering — group likely-related malicious-package advisories
+# ---------------------------------------------------------------------------
+# Supply-chain attacks arrive in waves: one actor publishes many typosquats in a
+# short window. Each lands as its own advisory row. Clustering them surfaces the
+# campaign instead of N look-alike rows. Heuristic + conservative: link two
+# advisories only on strong signals (shared distinctive name tokens, a shared
+# AI-extracted threat actor, or a shared IOC) within a time window.
+
+_CAMPAIGN_STOP_TOKENS = {
+    "the", "and", "for", "lib", "js", "node", "core", "api", "app", "src",
+    "test", "tests", "utils", "util", "common", "data", "client", "server",
+    "service", "services", "plugin", "module", "package", "react", "vue",
+    "python", "py", "npm", "pypi", "io", "com", "www", "dev", "new", "get",
+    "set", "v1", "v2", "v3", "x64", "x86", "win", "mac", "linux",
+}
+
+
+def _campaign_tokens(adv: dict[str, Any]) -> set[str]:
+    """Distinctive lowercase tokens from an advisory's package names."""
+    import re
+    toks: set[str] = set()
+    for entry in adv.get("packages") or []:
+        name = str(entry).split(" (")[0]
+        # strip scope (@scope/name -> name + scope), split on non-alnum
+        for part in re.split(r"[^a-z0-9]+", name.lower()):
+            if len(part) >= 3 and not part.isdigit() and part not in _CAMPAIGN_STOP_TOKENS:
+                toks.add(part)
+    return toks
+
+
+def _campaign_actors(adv: dict[str, Any]) -> set[str]:
+    ai = adv.get("ai_assessment") or {}
+    out: set[str] = set()
+    for a in (ai.get("threat_actors") or []):
+        if isinstance(a, str) and a.strip():
+            out.add(a.strip().lower())
+        elif isinstance(a, dict) and a.get("name"):
+            out.add(str(a["name"]).strip().lower())
+    return out
+
+
+def _campaign_iocs(adv: dict[str, Any]) -> set[str]:
+    ai = adv.get("ai_assessment") or {}
+    out: set[str] = set()
+    for i in (ai.get("iocs") or []):
+        if isinstance(i, dict) and i.get("value"):
+            out.add(str(i["value"]).strip().lower())
+    return out
+
+
+def compute_campaigns(advisories: list[dict[str, Any]], window_days: int = 14,
+                      min_shared_tokens: int = 2) -> list[dict[str, Any]]:
+    """Cluster likely-related malicious-package advisories. Returns a list of
+    clusters (size >= 2), largest first. Each: ``{size, sources, ecosystems,
+    common_tokens, span_days, members:[{source_id, uid, packages, first_seen}]}``."""
+    from datetime import datetime as _dt
+
+    # Only package/malware advisories participate.
+    cand = [a for a in advisories if (a.get("packages") and (
+        a.get("source", "").startswith("osv") or "malware" in (a.get("source") or "")
+        or str(a.get("source_id") or "").startswith("MAL")))]
+    n = len(cand)
+    if n < 2:
+        return []
+
+    feats = []
+    for a in cand:
+        ts = a.get("first_seen_at") or a.get("published_at") or ""
+        try:
+            d = _dt.fromisoformat(str(ts).replace("Z", "+00:00")) if ts else None
+        except ValueError:
+            d = None
+        feats.append({
+            "tokens": _campaign_tokens(a), "actors": _campaign_actors(a),
+            "iocs": _campaign_iocs(a), "when": d,
+            "eco": (a.get("ecosystem") or "").lower(), "adv": a,
+        })
+
+    parent = list(range(n))
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(x, y):
+        parent[find(x)] = find(y)
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            fi, fj = feats[i], feats[j]
+            # time window (skip the check if either date is missing)
+            if fi["when"] and fj["when"] and abs((fi["when"] - fj["when"]).days) > window_days:
+                continue
+            shared_tokens = fi["tokens"] & fj["tokens"]
+            linked = (
+                len(shared_tokens) >= min_shared_tokens
+                or bool(fi["actors"] & fj["actors"])
+                or bool(fi["iocs"] & fj["iocs"])
+            )
+            if linked:
+                union(i, j)
+
+    groups: dict[int, list[int]] = {}
+    for i in range(n):
+        groups.setdefault(find(i), []).append(i)
+
+    labels = source_labels_map()
+    clusters = []
+    for members in groups.values():
+        if len(members) < 2:
+            continue
+        advs = [feats[i]["adv"] for i in members]
+        tok_counts: dict[str, int] = {}
+        for i in members:
+            for t in feats[i]["tokens"]:
+                tok_counts[t] = tok_counts.get(t, 0) + 1
+        common = sorted([t for t, c in tok_counts.items() if c >= 2],
+                        key=lambda t: tok_counts[t], reverse=True)[:6]
+        dates = [feats[i]["when"] for i in members if feats[i]["when"]]
+        span = (max(dates) - min(dates)).days if len(dates) >= 2 else 0
+        clusters.append({
+            "size": len(members),
+            "sources": sorted({labels.get(a.get("source"), a.get("source") or "—") for a in advs}),
+            "ecosystems": sorted({(a.get("ecosystem") or "").strip() for a in advs if a.get("ecosystem")}),
+            "common_tokens": common,
+            "span_days": span,
+            "members": sorted([
+                {"source_id": a.get("source_id"), "uid": a.get("uid"),
+                 "packages": a.get("packages") or [],
+                 "first_seen": (a.get("first_seen_at") or "")[:10]}
+                for a in advs
+            ], key=lambda m: m["first_seen"]),
+        })
+    clusters.sort(key=lambda c: c["size"], reverse=True)
+    return clusters
+
+
+# ---------------------------------------------------------------------------
+# Owner-run capabilities (detail page)
+# ---------------------------------------------------------------------------
+# The detail page surfaces the SOC's existing tooling as owner-clickable
+# capabilities. JFrog runs server-side and persists its result; the heavier /
+# iframe tools are launched via deep-links pre-targeted at the advisory.
+def advisory_capability_links(adv: dict[str, Any]) -> dict[str, Any]:
+    """Deep-links to the heavier/iframe capabilities, pre-aimed at this advisory.
+    A value of None means that tool isn't configured/available."""
+    cves = _advisory_cves(adv)
+    pkgs = _advisory_packages(adv)
+    term = cves[0] if cves else (pkgs[0] if pkgs else None)
+
+    falcon = None
+    if term:
+        try:
+            from src.components.tipper_analyzer.formatters import _get_falcon_logscale_link
+            falcon = _get_falcon_logscale_link(f'"{term}"', window="30d")
+        except Exception as e:
+            logger.debug("[Advisories] Falcon deep-link unavailable: %s", e)
+
+    return {
+        # "Were we touched?" — pre-filled Falcon LogScale search for the CVE/package.
+        "crowdstrike": falcon,
+        # On-demand analyst hunt workbench (our app, paste-CTI driven).
+        "hunt": "/hunt-workbench",
+        # BAS platform — launch only; running TTPs requires SOC coordination.
+        "attackiq": CONFIG.attackiq_base_url or None,
+        # External attack-surface / asset discovery — not yet onboarded.
+        "runzero": None,
+    }
+
+
+def _summarize_rf_vuln(raw: Any, cves: list[str]) -> dict[str, Any]:
+    """Tolerantly summarize a Recorded Future SOAR enrichment response for a CVE
+    into ``{summary_text, risk_score, risk_level, rules}``. The SOAR shape varies,
+    so dig defensively and fall back to a generic message."""
+    if isinstance(raw, dict) and raw.get("error"):
+        return {"summary_text": f"Recorded Future error: {raw['error']}", "error": raw["error"]}
+    results = []
+    if isinstance(raw, dict):
+        data = raw.get("data") or raw
+        results = data.get("results") or data.get("data") or []
+    top = results[0] if isinstance(results, list) and results else None
+    if not isinstance(top, dict):
+        return {"summary_text": f"No Recorded Future intelligence returned for {', '.join(cves)}."}
+    risk = top.get("risk") or {}
+    score = risk.get("score")
+    level = risk.get("level") or risk.get("criticalityLabel")
+    rules = []
+    evidence = risk.get("evidenceDetails") or (risk.get("rule") or {}).get("evidence") or []
+    for ev in evidence:
+        if isinstance(ev, dict) and ev.get("rule"):
+            rules.append(ev["rule"])
+    if score is not None:
+        summary = f"Recorded Future risk score {score}" + (f" ({level})" if level else "")
+    else:
+        summary = "Enriched (no risk score returned)."
+    if rules:
+        summary += " — " + "; ".join(rules[:5])
+    return {"summary_text": summary, "risk_score": score, "risk_level": level, "rules": rules[:8]}
+
+
+# ---------------------------------------------------------------------------
+# CAPD scorecard — a grounded "do we declare a CAPD?" verdict
+# ---------------------------------------------------------------------------
+# Replaces the generic "assume worst-case" Sentinel email with a scored decision
+# built entirely from data we already pull: EPSS + CISA KEV (cve_priority/epss),
+# CVSS (advisory record), our software exposure (Veracode SCA + cached JFrog),
+# active-threat intel (cached Recorded Future), and patch availability. Each
+# category is graded 0–4 with a fixed weight; the weighted mean (over categories
+# we have data for) is normalized to 0–100 and banded. Two hard overrides apply.
+CAPD_WEIGHTS = {
+    "exploitability": 25,
+    "exposure": 25,
+    "active_threat": 20,
+    "severity": 15,
+    "reachability": 10,
+    "patch": 5,
+}
+CAPD_BANDS = {"declare": "DECLARE CAPD", "monitor": "MONITOR", "none": "NO ACTION"}
+
+
+def _capd_cvss(adv: dict[str, Any]) -> dict[str, Any]:
+    """Pull {score, vector} from the advisory's raw record (best-effort), matching
+    the detail-page logic: GitHub carries ``cvss={score, vector_string}``; OSV
+    carries ``severity`` as a list of ``{type, score(=vector string)}``."""
+    raw = adv.get("raw") or {}
+    score, vector = None, ""
+    cvss = raw.get("cvss")
+    if isinstance(cvss, dict):
+        score = cvss.get("score") or cvss.get("base_score")
+        vector = cvss.get("vector_string") or cvss.get("vector") or ""
+    if not vector:
+        sev = raw.get("severity")
+        if isinstance(sev, list):
+            for s in sev:
+                if isinstance(s, dict) and s.get("score"):
+                    vector = s.get("score")  # OSV stores the vector string here
+                    break
+    try:
+        score = float(score) if score is not None else None
+    except (TypeError, ValueError):
+        score = None
+    return {"score": score, "vector": vector or ""}
+
+
+def _capd_reachability(cves: list[str]) -> dict[str, Any]:
+    """Reachability from internet-exposure scanners — Shodan + Censys.
+
+    Two independent scanners corroborate "is this vuln internet-reachable?". When
+    ``SHODAN_ORG``/``SHODAN_NET`` is configured the query is scoped to our
+    footprint → a true "are WE internet-exposed?" signal (any host => max). With
+    no scope it's a global "how exposed is this vuln on the internet" proxy,
+    clearly labelled and capped at 3 so it never alone forces a DECLARE. Censys
+    (``CENSYS_API_ID``/``CENSYS_API_SECRET``) is a second, vendor-independent
+    source; the higher reading wins and both are cited. Either source
+    missing or erroring degrades gracefully — we score from whatever responded.
+
+    Only the primary CVE is queried — aliases describe the same flaw, so summing
+    double-counts, and one call per scanner bounds the worst-case latency.
+    """
+    if not cves:
+        return _cat("reachability", "External reachability", None,
+                    "No CVE to check internet exposure (scanners need a CVE).", "—")
+    cve = cves[0]
+    org = (CONFIG.shodan_org or "").strip()
+    net = (CONFIG.shodan_net or "").strip()
+    scoped = bool(org or net)
+
+    readings: list[tuple[str, int]] = []  # (source, host count)
+    notes: list[str] = []                 # degraded-source evidence fragments
+
+    # --- Shodan (free host/count) ---
+    try:
+        from services.shodan_monitor import get_client as _shodan_client
+        sc = _shodan_client()
+        if sc.is_configured():
+            scope = ""
+            if org:
+                scope += f' org:"{org}"'
+            if net:
+                scope += f" net:{net}"
+            res = sc.count(f"vuln:{cve}{scope}")
+            if res.get("error"):
+                notes.append(f"Shodan unavailable ({res['error']})")
+            else:
+                readings.append(("Shodan", int(res.get("total") or 0)))
+    except Exception as e:  # noqa: BLE001 — never let enrichment break the scorecard
+        logger.debug("[CAPD] Shodan reachability failed: %s", e)
+        notes.append("Shodan lookup failed")
+
+    # --- Censys (hosts search count; reuses the same footprint scope) ---
+    try:
+        from services.censys import CENSYS_CVE_FIELD, get_client as _censys_client
+        cc = _censys_client()
+        if cc.is_configured():
+            # Platform CenQL host query; reuses the same footprint scope as Shodan.
+            q = f'{CENSYS_CVE_FIELD}: "{cve}"'
+            if net:
+                q += f" and host.ip: {net}"
+            if org:
+                q += (f' and (host.autonomous_system.name: "{org}"'
+                      f' or host.whois.organization.name: "{org}")')
+            res = cc.count(q)
+            if res.get("error"):
+                notes.append(f"Censys unavailable ({res['error']})")
+            else:
+                readings.append(("Censys", int(res.get("total") or 0)))
+    except Exception as e:  # noqa: BLE001
+        logger.debug("[CAPD] Censys reachability failed: %s", e)
+        notes.append("Censys lookup failed")
+
+    if not readings:
+        msg = "; ".join(notes) if notes else "No internet-exposure scanner configured."
+        return _cat("reachability", "External reachability", None, msg, "—")
+
+    sources = " + ".join(s for s, _ in readings)
+    if scoped:  # scoped to us → authoritative
+        hits = [(s, t) for s, t in readings if t > 0]
+        if hits:
+            ev = "; ".join(f"{s}: {t}" for s, t in hits)
+            return _cat("reachability", "External reachability", 4,
+                        f"Internet-exposed host(s) in our footprint run a service vulnerable "
+                        f"to {cve} — {ev}.", sources)
+        return _cat("reachability", "External reachability", 0,
+                    f"No internet-exposed host in our footprint matches {cve} ({sources}).", sources)
+    # global proxy (no org/net scope) — bucket the largest reading, cap at 3
+    top = max(t for _, t in readings)
+    score = 3 if top >= 100000 else 2 if top >= 1000 else 1 if top >= 1 else 0
+    ev = "; ".join(f"{s}: ~{t:,}" for s, t in readings)
+    return _cat("reachability", "External reachability", score,
+                f"Host(s) worldwide expose a service vulnerable to {cve} — {ev} "
+                f"(global — set SHODAN_ORG to scope to our fleet).", sources)
+
+
+def _cat(key: str, label: str, score: int | None, evidence: str, source: str) -> dict[str, Any]:
+    """One scorecard category. ``score=None`` → insufficient data (excluded from
+    the denominator so a thin scorecard reads honestly)."""
+    return {
+        "key": key, "label": label, "weight": CAPD_WEIGHTS[key], "max": 4,
+        "score": score, "sufficient": score is not None,
+        "pct": int(round((score / 4) * 100)) if score is not None else None,
+        "evidence": evidence, "source": source,
+    }
+
+
+def compute_capd_scorecard(adv: dict[str, Any]) -> dict[str, Any]:
+    """Grade an advisory across six weighted categories and roll them into a
+    0–100 CAPD risk score + band. Every input is native (no new vendor calls
+    beyond Veracode's cached SCA index + already-cached capability results).
+    Returns the full scorecard dict; never raises (degrades to insufficient)."""
+    cves = _advisory_cves(adv)
+    cvss = _capd_cvss(adv)
+    vector = (cvss.get("vector") or "").upper()
+    network = "AV:N" in vector
+    low_complexity = "AC:L" in vector
+
+    # --- active-exploitation signals (KEV + EPSS), cheap & cached ---
+    kev = False
+    epss_pct = None  # percentile rank (0..1)
+    if cves:
+        try:
+            from services.cve_priority import is_kev
+            kev = any(is_kev(c) for c in cves)
+        except Exception as e:  # noqa: BLE001
+            logger.debug("[CAPD] KEV lookup failed: %s", e)
+        try:
+            from services.epss import get_epss
+            for c in cves:
+                d = get_epss(c) or {}
+                p = d.get("percentile")
+                if isinstance(p, (int, float)):
+                    epss_pct = max(epss_pct or 0.0, float(p))
+        except Exception as e:  # noqa: BLE001
+            logger.debug("[CAPD] EPSS lookup failed: %s", e)
+
+    # --- our software exposure (Veracode SCA, cheap cached index) ---
+    veracode = enrich_veracode(adv)
+    vc_apps = (veracode or {}).get("affected_app_count", 0) if isinstance(veracode, dict) else 0
+    # plus any previously-run JFrog Xray result
+    cached = {}
+    try:
+        cached = db.get_capability_results(adv.get("uid") or adv.get("source_id") or "")
+    except Exception:  # noqa: BLE001
+        cached = {}
+    jf = (cached.get("jfrog") or {}).get("result") if isinstance(cached.get("jfrog"), dict) else None
+    jf_exposed = bool(jf.get("exposed")) if isinstance(jf, dict) else False
+
+    # --- active-threat intel (cached Recorded Future, if the owner ran it) ---
+    ti = (cached.get("threatintel") or {}).get("result") if isinstance(cached.get("threatintel"), dict) else None
+    rf_score = ti.get("risk_score") if isinstance(ti, dict) else None
+    rf_level = ti.get("risk_level") if isinstance(ti, dict) else None
+
+    cats: list[dict[str, Any]] = []
+
+    # 1) Exploitability — KEV is the ceiling; else EPSS percentile, +1 for AV:N/AC:L.
+    if kev:
+        cats.append(_cat("exploitability", "Exploitability", 4,
+                         "On CISA KEV — known-exploited in the wild right now.", "CISA KEV"))
+    elif epss_pct is not None or vector:
+        if epss_pct is None:
+            s = 2 if (network and low_complexity) else 1
+            ev = f"No EPSS; CVSS vector {'network/low-complexity' if network else 'present'}."
+        else:
+            s = 4 if epss_pct >= 0.90 else 3 if epss_pct >= 0.70 else 2 if epss_pct >= 0.40 else 1 if epss_pct >= 0.10 else 0
+            if network and low_complexity:
+                s = min(4, s + 1)
+            ev = f"EPSS {epss_pct:.0%} percentile" + (" · network/low-complexity vector" if network and low_complexity else "")
+        cats.append(_cat("exploitability", "Exploitability", s, ev, "EPSS / CVSS"))
+    else:
+        cats.append(_cat("exploitability", "Exploitability", None,
+                         "No EPSS or CVSS vector available.", "—"))
+
+    # 2) Severity — CVSS base score.
+    sc = cvss.get("score")
+    if isinstance(sc, (int, float)):
+        s = 4 if sc >= 9 else 3 if sc >= 7 else 2 if sc >= 4 else 1
+        cats.append(_cat("severity", "Severity", s, f"CVSS base score {sc:g}.", "CVSS"))
+    else:
+        cats.append(_cat("severity", "Severity", None, "No CVSS base score on record.", "—"))
+
+    # 3) Our software exposure — Veracode SCA + cached JFrog Xray.
+    if vc_apps or jf_exposed:
+        bits = []
+        if vc_apps:
+            bits.append(f"{vc_apps} application(s) carry the affected component (Veracode SCA)")
+        if jf_exposed:
+            bits.append("present in our artifacts (JFrog Xray)")
+        cats.append(_cat("exposure", "Our exposure (software)", 4, "; ".join(bits) + ".", "Veracode / JFrog"))
+    elif veracode is not None or cves or _advisory_packages(adv):
+        cats.append(_cat("exposure", "Our exposure (software)", 0,
+                         "No affected applications found in Veracode SCA (findings-only — "
+                         "not proof of absence; confirm against SBOM).", "Veracode SCA"))
+    else:
+        cats.append(_cat("exposure", "Our exposure (software)", None,
+                         "No CVE or package to correlate against the SCA index.", "—"))
+
+    # 4) External reachability — internet exposure of the vulnerability via Shodan
+    # (free host/count `vuln:` query; scoped to our footprint when SHODAN_ORG/NET
+    # is set, else a clearly-labelled global signal).
+    cats.append(_capd_reachability(cves))
+
+    # 5) Active threat — KEV or Recorded Future risk score.
+    if kev:
+        cats.append(_cat("active_threat", "Active threat", 4,
+                         "CISA KEV — active exploitation observed.", "CISA KEV"))
+    elif isinstance(rf_score, (int, float)):
+        s = 4 if rf_score >= 65 else 3 if rf_score >= 25 else 2 if rf_score >= 5 else 1
+        cats.append(_cat("active_threat", "Active threat", s,
+                         f"Recorded Future risk score {rf_score:g}" + (f" ({rf_level})" if rf_level else "") + ".",
+                         "Recorded Future"))
+    elif epss_pct is not None and epss_pct >= 0.70:
+        cats.append(_cat("active_threat", "Active threat", 2,
+                         f"Elevated EPSS ({epss_pct:.0%}) — real-world exploitation signal.", "EPSS"))
+    elif cves:
+        cats.append(_cat("active_threat", "Active threat", 0,
+                         "No active-exploitation evidence (not on KEV; run Threat Intel for actor context).",
+                         "CISA KEV"))
+    else:
+        cats.append(_cat("active_threat", "Active threat", None,
+                         "No CVE to check for active exploitation.", "—"))
+
+    # 6) Patch availability — risk is HIGHER when no fix has shipped. GitHub
+    # advisories carry first_patched_version per affected package.
+    raw = adv.get("raw") or {}
+    vulns = raw.get("vulnerabilities") or []
+    pkgs = adv.get("packages") or []
+    if vulns:
+        patched = any((v or {}).get("first_patched_version") for v in vulns)
+        if patched:
+            cats.append(_cat("patch", "Patch availability", 1, "A fixed version has shipped.", "Advisory"))
+        else:
+            cats.append(_cat("patch", "Patch availability", 4,
+                            "No fixed version published yet — remediation window is open.", "Advisory"))
+    elif pkgs:
+        cats.append(_cat("patch", "Patch availability", None,
+                         "No structured fix data (package-only advisory).", "—"))
+    else:
+        cats.append(_cat("patch", "Patch availability", None, "No package/fix data on the advisory.", "—"))
+
+    # --- roll up: weighted mean over sufficient categories ---
+    num = sum((c["score"] / 4) * c["weight"] for c in cats if c["sufficient"])
+    den = sum(c["weight"] for c in cats if c["sufficient"])
+    score = int(round((num / den) * 100)) if den else 0
+
+    band = "declare" if score >= 70 else "monitor" if score >= 40 else "none"
+
+    # --- hard overrides ---
+    override = None
+    confirmed_exposure = bool(vc_apps or jf_exposed)
+    if kev and confirmed_exposure:
+        band, override = "declare", {
+            "fired": True,
+            "reason": "Override: on CISA KEV AND confirmed to run in our environment — "
+                      "declare a CAPD regardless of composite score.",
+        }
+    elif not confirmed_exposure and not kev and band == "declare":
+        band, override = "monitor", {
+            "fired": True,
+            "reason": "Override: no confirmed software exposure and not known-exploited — "
+                      "capped at MONITOR pending an SBOM/dependency confirmation.",
+        }
+
+    result = {
+        "score": score,
+        "band": band,
+        "band_label": CAPD_BANDS[band],
+        "categories": cats,
+        "override": override,
+        "weights_basis": den,
+        "verdict": _capd_verdict(adv, score, band, cats, override),
+        "generated_at": _now_z(),
+    }
+    return result
+
+
+def _capd_verdict(adv: dict[str, Any], score: int, band: str,
+                  cats: list[dict[str, Any]], override: dict | None) -> str:
+    """A 2–3 sentence plain-language CAPD verdict, grounded ONLY in the computed
+    sub-scores (the LLM phrases the evidence; it does not re-judge). Falls back to a
+    deterministic sentence if the LLM is unavailable."""
+    drivers = "; ".join(f"{c['label']}: {c['evidence']}" for c in cats if c["sufficient"])
+    fallback = (f"CAPD score {score}/100 → {CAPD_BANDS[band]}. " +
+                (override["reason"] + " " if override else "") +
+                f"Top signals — {drivers[:600]}")
+    try:
+        from my_bot.utils.llm_factory import create_llm
+        from langchain_core.messages import HumanMessage, SystemMessage
+        sys = (
+            "You are a SOC lead writing the one-paragraph CAPD (Clear and Present Danger) "
+            "verdict for a security advisory. You are given a pre-computed risk score, a "
+            "band, and the scored evidence. Phrase a crisp 2-3 sentence verdict that a "
+            "leader can act on. DO NOT invent facts or re-score — only explain the evidence "
+            "given. Lead with the decision (declare / monitor / no action) and why."
+        )
+        ctx = (
+            f"Advisory: {adv.get('source_id')} ({adv.get('cve_id') or 'no CVE'})\n"
+            f"Computed score: {score}/100 → {CAPD_BANDS[band]}\n"
+            + (f"Override: {override['reason']}\n" if override else "")
+            + f"Scored evidence:\n{drivers}"
+        )
+        resp = create_llm().invoke([SystemMessage(content=sys), HumanMessage(content=ctx)])
+        text = (resp.content if hasattr(resp, "content") else str(resp)).strip()
+        return text[:900] or fallback
+    except Exception as e:  # noqa: BLE001
+        logger.debug("[CAPD] verdict LLM unavailable: %s", e)
+        return fallback
+
+
+def _qradar_were_we_touched(adv: dict[str, Any]) -> dict[str, Any]:
+    """SIEM-side "were we touched?" — a fast presence-check (LIMIT 1) over the
+    advisory's network indicators (IP/domain extracted by AI triage) across a 1h
+    window (QRadar's practical sweet spot; a full COUNT over 4h is too slow for a
+    button). Deeper hunts go to the Hunt Workbench. Returns
+    ``{summary_text, exposed?, ...}``.
+    """
+    ai = adv.get("ai_assessment") or {}
+    ips, domains = [], []
+    for i in (ai.get("iocs") or []):
+        if not isinstance(i, dict) or not i.get("value"):
+            continue
+        t = str(i.get("type", "")).lower()
+        v = str(i.get("value")).strip()
+        if t == "ip" and v not in ips:
+            ips.append(v)
+        elif t in ("domain", "url") and v not in domains:
+            domains.append(v)
+    ips, domains = ips[:6], domains[:6]
+
+    if not ips and not domains:
+        # No network IOCs — typical for software-supply-chain CVEs. Render neutral
+        # (omit `exposed`) rather than a misleading green "clear".
+        return {"summary_text": "No network indicators (IP/domain) on this advisory to "
+                "search the SIEM for — typical for software-supply-chain advisories. "
+                "Use the JFrog/Veracode exposure checks and the Hunt Workbench instead.",
+                "searched": 0}
+
+    from services.qradar import QRadarClient, _escape_aql_value
+    client = QRadarClient()
+    if not client.is_configured():
+        return {"error": "QRadar is not configured"}
+
+    conds = []
+    for ip in ips:
+        e = _escape_aql_value(ip)
+        conds.append(f"sourceip = '{e}' OR destinationip = '{e}'")
+    for d in domains:
+        conds.append(f"URL ILIKE '%{_escape_aql_value(d)}%'")
+    # LIMIT 1 short-circuits on the first match → fast presence/absence check.
+    aql = (f"SELECT sourceip, destinationip, starttime FROM events "
+           f"WHERE ({') OR ('.join(conds)}) LIMIT 1 LAST 1 HOURS")
+
+    res = client.run_aql_search(aql, timeout=150, max_results=1)
+    if isinstance(res, dict) and res.get("error"):
+        return {"error": f"QRadar search failed: {res['error']}"}
+    events = (res or {}).get("events") or []
+    touched = bool(events)
+
+    n = len(ips) + len(domains)
+    iocs_str = ", ".join((ips + domains)[:6])
+    if touched:
+        return {"summary_text": f"⚠️ Matching activity found in the last 1h for "
+                f"{n} indicator(s) ({iocs_str}). Investigate in QRadar and pivot to the "
+                f"Hunt Workbench for a wider window.", "exposed": True, "searched": n}
+    return {"summary_text": f"No SIEM hits in the last 1h for {n} indicator(s) "
+            f"({iocs_str}). Note: 1h is QRadar's practical AQL window — widen the hunt "
+            f"via the Hunt Workbench.", "exposed": False, "searched": n}
+
+
+# ---------------------------------------------------------------------------
+# Async capability jobs — for slow capabilities (e.g. QRadar Ariel searches,
+# which carry heavy queue/startup latency and routinely exceed 150s). The web
+# app is a single multi-threaded Waitress process, so an in-memory registry is
+# sufficient; completed results are also persisted to the DB so they survive a
+# reload (and a restart, via the saved capability result).
+# ---------------------------------------------------------------------------
+ASYNC_CAPABILITIES = {"qradar", "fleet_posture", "threat_analysis"}
+_CAP_JOBS: dict[tuple[str, str], dict[str, Any]] = {}
+_CAP_JOBS_LOCK = threading.Lock()
+
+
+def start_capability_job(adv: dict[str, Any], capability: str, run_by: str = "",
+                         opts: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Kick off a background capability run. Returns the current job state. A
+    capability already running for this advisory is not started twice. ``opts`` is
+    forwarded to ``run_advisory_capability`` (e.g. ``audience``)."""
+    uid = adv.get("uid") or adv.get("source_id") or ""
+    jkey = (uid, capability)
+    with _CAP_JOBS_LOCK:
+        cur = _CAP_JOBS.get(jkey)
+        if cur and cur.get("state") == "running":
+            return {"state": "running"}
+        _CAP_JOBS[jkey] = {"state": "running", "started_at": _now_z()}
+
+    def _worker() -> None:
+        try:
+            res = run_advisory_capability(adv, capability, opts=opts)
+            result = res.get("result") if res.get("ok") else None
+            if res.get("ok") and isinstance(result, dict) and not result.get("error"):
+                try:
+                    db.save_capability_result(uid, capability, result, run_by)
+                except Exception as e:  # noqa: BLE001 — persistence is best-effort
+                    logger.warning("[Advisories] persist %s result failed: %s", capability, e)
+                with _CAP_JOBS_LOCK:
+                    _CAP_JOBS[jkey] = {"state": "done", "result": result, "finished_at": _now_z()}
+            else:
+                err = (result or {}).get("error") if isinstance(result, dict) else None
+                with _CAP_JOBS_LOCK:
+                    _CAP_JOBS[jkey] = {"state": "error",
+                                       "error": err or res.get("error") or "capability failed",
+                                       "finished_at": _now_z()}
+        except Exception as e:  # noqa: BLE001
+            logger.error("[Advisories] async %s job failed: %s", capability, e, exc_info=True)
+            with _CAP_JOBS_LOCK:
+                _CAP_JOBS[jkey] = {"state": "error", "error": str(e), "finished_at": _now_z()}
+
+    threading.Thread(target=_worker, name=f"cap-{capability}-{uid}", daemon=True).start()
+    return {"state": "running"}
+
+
+def get_capability_job(adv: dict[str, Any], capability: str) -> dict[str, Any] | None:
+    """Current state of a background capability job, or None if none is tracked."""
+    uid = adv.get("uid") or adv.get("source_id") or ""
+    with _CAP_JOBS_LOCK:
+        job = _CAP_JOBS.get((uid, capability))
+        return dict(job) if job else None
+
+
+def run_advisory_capability(adv: dict[str, Any], capability: str,
+                            opts: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Run a server-side capability check for an advisory and return a normalized
+    result dict ``{ok, result?, error?}``. Supported: jfrog (Xray exposure),
+    threatintel (Recorded Future CVE enrichment), threat_analysis (native CTI).
+    ``opts`` carries per-capability parameters (e.g. ``audience`` for
+    threat_analysis); ignored by capabilities that don't use it."""
+    opts = opts or {}
+    cves = _advisory_cves(adv)
+    if capability == "capd_scorecard":
+        try:
+            return {"ok": True, "result": compute_capd_scorecard(adv)}
+        except Exception as e:
+            logger.error("[Advisories] CAPD scorecard failed: %s", e, exc_info=True)
+            return {"ok": False, "error": f"CAPD scorecard failed: {e}"}
+    if capability == "qradar":
+        try:
+            return {"ok": True, "result": _qradar_were_we_touched(adv)}
+        except Exception as e:
+            logger.error("[Advisories] QRadar lookup failed: %s", e, exc_info=True)
+            return {"ok": False, "error": f"QRadar lookup failed: {e}"}
+    if capability == "fleet_posture":
+        try:
+            from services.advisory_posture import fleet_posture
+            return {"ok": True, "result": fleet_posture(adv)}
+        except Exception as e:
+            logger.error("[Advisories] Fleet posture failed: %s", e, exc_info=True)
+            return {"ok": False, "error": f"Fleet posture check failed: {e}"}
+    if capability == "app_owners":
+        try:
+            from services.advisory_app_owners import app_owners
+            return {"ok": True, "result": app_owners(adv)}
+        except Exception as e:
+            logger.error("[Advisories] App-owners lookup failed: %s", e, exc_info=True)
+            return {"ok": False, "error": f"App-owners lookup failed: {e}"}
+    if capability == "attack_surface":
+        try:
+            from services.advisory_app_owners import attack_surface
+            return {"ok": True, "result": attack_surface(adv)}
+        except Exception as e:
+            logger.error("[Advisories] Attack-surface lookup failed: %s", e, exc_info=True)
+            return {"ok": False, "error": f"Attack-surface lookup failed: {e}"}
+    if capability == "jfrog":
+        if not cves:
+            return {"ok": False, "error": "advisory has no CVE to check in JFrog Xray"}
+        try:
+            from services.jfrog import exposure
+            return {"ok": True, "result": exposure(cve_ids=cves)}
+        except Exception as e:
+            logger.error("[Advisories] JFrog exposure failed: %s", e, exc_info=True)
+            return {"ok": False, "error": f"JFrog check failed: {e}"}
+    if capability == "threat_analysis":
+        try:
+            from services.advisory_threat_analysis import threat_analysis
+            return {"ok": True, "result": threat_analysis(adv, audience=opts.get("audience"))}
+        except Exception as e:
+            logger.error("[Advisories] Threat analysis failed: %s", e, exc_info=True)
+            return {"ok": False, "error": f"Threat analysis failed: {e}"}
+    if capability == "threatintel":
+        if not cves:
+            return {"ok": False, "error": "advisory has no CVE for threat-intel enrichment"}
+        try:
+            from services.recorded_future import get_client
+            client = get_client()
+            if not client.is_configured():
+                return {"ok": False, "error": "Recorded Future not configured"}
+            raw = client.enrich(vulnerabilities=cves)
+            return {"ok": True, "result": _summarize_rf_vuln(raw, cves)}
+        except Exception as e:
+            logger.error("[Advisories] Recorded Future enrichment failed: %s", e, exc_info=True)
+            return {"ok": False, "error": f"Threat-intel lookup failed: {e}"}
+    return {"ok": False, "error": f"unknown capability {capability!r}"}
+
+
 def enrich_veracode(adv: dict[str, Any]) -> dict[str, Any] | None:
     """Check Veracode SCA: do any of our applications carry the vulnerable component?
 
@@ -849,18 +1979,25 @@ def enrich_veracode(adv: dict[str, Any]) -> dict[str, Any] | None:
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
-def poll_critical_advisories(room_id: str | None = None) -> None:
+def poll_critical_advisories(room_id: str | None = None,
+                             source_keys: list[str] | None = None) -> None:
     """Poll every enabled source and notify on genuinely new advisories.
 
     Args:
         room_id: Webex room for the digest. Defaults to the dev test space.
+        source_keys: If given, poll only these source keys (e.g. ['cisa_kev'])
+            instead of the full catalog. Used to run individually-critical,
+            low-volume feeds on a tighter cadence than the hourly sweep.
     """
     room_id = room_id or CONFIG.webex_room_id_dev_test_space
     all_new: list[dict[str, Any]] = []
     labels = source_labels_map()
+    wanted = set(source_keys) if source_keys else None
 
     for spec in get_source_specs():
         name = spec["key"]
+        if wanted is not None and name not in wanted:
+            continue
         digest = spec.get("digest", True)
         if not db.is_source_enabled(name):
             logger.info("[Advisories] Source %r disabled — skipping", name)
@@ -934,11 +2071,18 @@ def poll_critical_advisories(room_id: str | None = None) -> None:
     if len(all_new) > AI_PREPOP_MAX_PER_RUN:
         logger.warning("[Advisories] %d new — prepopulating AI for first %d only; rest on demand",
                        len(all_new), AI_PREPOP_MAX_PER_RUN)
+    ai_ok = 0
     for rec in to_prepop:
         uid = db.make_uid(rec["source"], rec["source_id"])
+        # Skip advisories that already have a cached assessment (e.g. from a
+        # cross-source duplicate that was triaged under a different alias).
+        existing = db.get_advisory(uid)
+        if existing and existing.get("ai_assessment"):
+            continue
         try:
             assessment = generate_ai_triage(rec)
             db.save_ai_assessment(uid, assessment)
+            ai_ok += 1
         except Exception as e:
             logger.warning("[Advisories] Prepopulate AI triage failed for %s: %s",
                            rec.get("source_id"), e)
@@ -952,3 +2096,4 @@ def poll_critical_advisories(room_id: str | None = None) -> None:
         except Exception as e:
             logger.warning("[Advisories] Veracode enrichment failed for %s: %s",
                            rec.get("source_id"), e)
+    logger.info("[Advisories] Pre-triaged %d/%d new digest advisory(ies) via AI", ai_ok, len(to_prepop))

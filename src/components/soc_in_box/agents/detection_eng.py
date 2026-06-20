@@ -8,7 +8,7 @@ Runs on a timer (default daily). Each pass:
    asks the LLM for ONE concrete tuning recommendation (exclude this
    service account, narrow this match condition, lower this severity).
 4. Publishes a ``DetectionTuningReport`` rollup to ``soc.cases``.
-5. Sends a single Pokedex Webex card with the proposals.
+5. Sends a single Sleuth Webex card with the proposals.
 
 v1 produces TEXT recommendations only — no auto-edits to the rule
 catalog. The engineer-on-the-loop reviews the card and decides what to
@@ -393,9 +393,9 @@ def _send_to_webex(markdown: str, card: dict[str, Any], room_id: str) -> Optiona
     from my_config import get_config
     from webexteamssdk import WebexTeamsAPI
     cfg = get_config()
-    token = cfg.webex_bot_access_token_pokedex
+    token = cfg.webex_bot_access_token_sleuth
     if not token:
-        logger.warning("detection_eng: WEBEX_BOT_ACCESS_TOKEN_POKEDEX not set, skipping")
+        logger.warning("detection_eng: WEBEX_BOT_ACCESS_TOKEN_SLEUTH not set, skipping")
         return None
     try:
         api = WebexTeamsAPI(access_token=token)

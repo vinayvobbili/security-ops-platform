@@ -17,6 +17,8 @@ from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 from services.urlscan import URLScanClient
 from src.utils.tool_decorator import log_tool_call
+from my_bot.utils.webex_format import defang
+from my_bot.utils.verify_links import append_verify, urlscan_line
 
 logger = logging.getLogger(__name__)
 
@@ -67,11 +69,11 @@ def _format_search_result(data: dict, domain: str) -> str:
     results = data.get("results", [])
 
     if total == 0 or not results:
-        return f"No existing scans found for **{domain}** on URLScan.io.\n\nUse the `scan_url_urlscan` tool to submit a new scan."
+        return f"No existing scans found for **{defang(domain)}** on URLScan.io.\n\nUse the `scan_url_urlscan` tool to submit a new scan."
 
     output = [
         f"## URLScan.io Search Results",
-        f"**Domain:** {domain}",
+        f"**Domain:** {defang(domain)}",
         f"**Total Scans Found:** {total}",
         "",
         "### Recent Scans",
@@ -101,9 +103,9 @@ def _format_search_result(data: dict, domain: str) -> str:
         domains_count = stats.get("domains", 0)
 
         output.append(f"**{i}. Scan from {scan_time}**")
-        output.append(f"   - **URL:** {scan_url}")
+        output.append(f"   - **URL:** {defang(scan_url)}")
         output.append(f"   - **Title:** {title}")
-        output.append(f"   - **Server:** {server} | **IP:** {ip} ({country})")
+        output.append(f"   - **Server:** {server} | **IP:** {defang(ip)} ({country})")
         output.append(f"   - **HTTP Status:** {status}")
         output.append(f"   - **Stats:** {requests_count} requests, {ips_count} IPs, {domains_count} domains")
         output.append(f"   - 🔗 [View Full Report](https://urlscan.io/result/{scan_id}/)")
@@ -153,14 +155,14 @@ def _format_scan_result(data: dict, url: str) -> str:
 
     output = [
         f"## URLScan.io Analysis",
-        f"**Scanned URL:** {url}",
-        f"**Final URL:** {final_url}",
+        f"**Scanned URL:** {defang(url)}",
+        f"**Final URL:** {defang(final_url)}",
         f"**Scan Time:** {scan_time}",
         "",
         "### Page Information",
         f"- **Title:** {title}",
         f"- **Server:** {server}",
-        f"- **IP Address:** {ip} ({country})",
+        f"- **IP Address:** {defang(ip)} ({country})",
         f"- **HTTP Status:** {status}",
         f"- **MIME Type:** {mime_type}",
         "",
@@ -213,14 +215,14 @@ def _format_scan_result(data: dict, url: str) -> str:
         output.append("")
         output.append("### Contacted Domains (Top 10)")
         for domain in contacted_domains[:10]:
-            output.append(f"- {domain}")
+            output.append(f"- {defang(domain)}")
 
     # IPs contacted
     contacted_ips = lists.get("ips", [])
     if contacted_ips:
         output.append("")
         output.append(f"### IPs Contacted")
-        output.append(f"{', '.join(contacted_ips[:10])}" + ("..." if len(contacted_ips) > 10 else ""))
+        output.append(f"{', '.join(defang(cip) for cip in contacted_ips[:10])}" + ("..." if len(contacted_ips) > 10 else ""))
 
     # Links
     output.append("")
@@ -263,7 +265,7 @@ def search_urlscan(domain: str) -> str:
             domain = domain.split("/", 1)[0]
 
         data = client.search_domain(domain, size=5)
-        return _format_search_result(data, domain)
+        return append_verify(_format_search_result(data, domain), urlscan_line(domain))
     except Exception as e:
         logger.error(f"URLScan search failed: {e}")
         return f"Error searching URLScan: {str(e)}"

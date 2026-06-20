@@ -349,7 +349,7 @@ def daily_celebration_check():
 
     try:
         # Create Webex API instance
-        webex_api = WebexAPI(access_token=config.webex_bot_access_token_toodles)
+        webex_api = WebexAPI(access_token=config.webex_bot_access_token_aide)
 
         # Determine target room (fallback to SOC shift updates if celebrations room not configured)
         celebration_room_id = getattr(config, 'webex_room_id_celebrations', config.webex_room_id_celebrations)

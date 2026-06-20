@@ -62,7 +62,12 @@ def fetch_xsoar_ticket(state: IncidentResponseState) -> dict:
         if device_match and device_match.group(1) != 'N/A':
             ticket_data['device_id'] = device_match.group(1)
 
-        if "Error" in result:
+        # get_xsoar_ticket signals failure by RETURNING a string that starts with
+        # "Error". A successful ticket body can legitimately contain the word
+        # "Error" mid-text (e.g. an upstream tool note "Failed to execute. Error:
+        # ..."), so only treat a leading "Error" as a real fetch failure —
+        # otherwise the whole ticket gets mislabeled and dumped into errors.
+        if result.lstrip().startswith("Error"):
             updates['errors'] = [f"XSOAR fetch: {result}"]
 
         return updates
@@ -76,8 +81,17 @@ def fetch_xsoar_ticket(state: IncidentResponseState) -> dict:
 
 
 def _get_internal_domains() -> set:
-    """Get internal/company domains to filter from IOC extraction."""
-    domains = {'example.com', 'test.com'}
+    """Get internal/company domains to filter from IOC extraction.
+
+    Includes corp SaaS infra (ServiceNow, etc.) that shows up inside analyst-note
+    URLs — without this, regex-scraping the ticket body picks up e.g.
+    `the companyprod.service-now.com` as a bogus IOC and wastes a slow QRadar query
+    on it (and its noise can crowd the real IOC out of the report)."""
+    domains = {
+        'example.com', 'test.com',
+        'service-now.com', 'servicenow.com',  # ticketing / change-mgmt SaaS
+        'microsoft.com', 'office.com', 'sharepoint.com', 'windows.net',
+    }
     try:
         from my_config import get_config
         config = get_config()
@@ -127,8 +141,12 @@ def extract_iocs(state: IncidentResponseState) -> dict:
     domain_pattern = r'\b([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.(?:com|net|org|io|co|info|biz|xyz))\b'
     domains_found = re.findall(domain_pattern, raw_response, re.IGNORECASE)
     for domain in domains_found:
-        if domain.lower() not in internal_domains:
-            iocs.append(domain.lower())
+        d = domain.lower()
+        # Suffix match so subdomains are filtered too (e.g.
+        # the companyprod.service-now.com matches internal 'service-now.com').
+        if any(d == internal or d.endswith('.' + internal) for internal in internal_domains):
+            continue
+        iocs.append(d)
 
     # Extract hashes
     hash_pattern = r'\b([a-fA-F0-9]{32}|[a-fA-F0-9]{40}|[a-fA-F0-9]{64})\b'
@@ -216,6 +234,62 @@ LAST 72 HOURS LIMIT 20"""
         return {
             'qradar_events': f"Error: {str(e)}",
             'errors': [f"QRadar search: {str(e)}"],
+        }
+
+
+def check_web_access(state: IncidentResponseState) -> dict:
+    """For any domain IOC, pull web-proxy transactions: how users were directed
+    here (Referer) and what they downloaded. Answers the "how/why did the
+    user(s) connect" and "validate activity on the site" questions."""
+    iocs = state.get('iocs_extracted', [])
+    domains = [
+        i for i in iocs
+        if re.search(r'[a-zA-Z]', i) and '.' in i
+        and not re.match(r'^\d{1,3}(\.\d{1,3}){3}$', i)
+        and not re.fullmatch(r'[a-fA-F0-9]{32,64}', i)
+    ]
+
+    if not domains:
+        return {'web_access': "N/A - No domain IOC in ticket to trace web access"}
+
+    try:
+        from my_bot.tools.qradar_tools import investigate_web_access
+
+        sections = []
+        for domain in domains[:3]:
+            logger.info(f"[IR Workflow] Web-access trace for {domain}")
+            sections.append(investigate_web_access.invoke({"domain": domain, "hours": 24}))
+        return {'web_access': "\n\n---\n\n".join(sections)}
+
+    except Exception as e:
+        logger.error(f"[IR Workflow] Web-access trace error: {e}")
+        return {
+            'web_access': f"Error: {str(e)}",
+            'errors': [f"Web-access trace: {str(e)}"],
+        }
+
+
+def check_host_execution(state: IncidentResponseState) -> dict:
+    """Pull recent process/execution activity for the affected host — to validate
+    whether anything was executed (the "did they try to execute anything" ask)."""
+    hostname = state.get('hostname')
+
+    if not hostname:
+        return {'host_execution': "N/A - No hostname in ticket"}
+
+    try:
+        from my_bot.tools.oe_detection_tools import oe_get_process_timeline
+
+        logger.info(f"[IR Workflow] Process timeline for {hostname}")
+        # employee_id accepts a hostname or username (CrowdStrike LogScale lookup)
+        result = oe_get_process_timeline.invoke({"employee_id": hostname, "days": 7})
+        return {'host_execution': result}
+
+    except Exception as e:
+        logger.error(f"[IR Workflow] Host execution error: {e}")
+        return {
+            'host_execution': f"Error: {str(e)}",
+            'errors': [f"Host execution: {str(e)}"],
         }
 
 
@@ -314,9 +388,27 @@ def synthesize_findings(state: IncidentResponseState) -> dict:
         if severity == "LOW":
             severity = "MEDIUM"
 
+    # Reconcile with the analyst's own verdict on the ticket. If a human already
+    # closed it Benign / False Positive, don't override that with a HIGH driven
+    # purely by a VT "malicious" hit — surface the closure instead of crying wolf.
+    raw_ticket = (state.get('ticket_data') or {}).get('raw_response', '') or ''
+    rt = raw_ticket.lower()
+    analyst_benign = any(
+        kw in rt for kw in ('benign true positive', 'final triage verdict: benign',
+                            'triage verdict: benign', 'false positive')
+    )
+    if analyst_benign and severity == "HIGH":
+        findings.append("NOTE: analyst already closed this ticket as Benign — "
+                        "treating as informational; the malicious-reputation hit "
+                        "did not reflect real impact in our environment")
+        severity = "INFORMATIONAL"
+
     # Determine recommended actions based on severity
     actions = []
-    if severity == "HIGH":
+    if severity == "INFORMATIONAL":
+        actions.append("No action required — analyst-closed Benign; findings logged for awareness")
+        actions.append("Confirm any IOC block from the ticket is in place (e.g. ServiceNow change)")
+    elif severity == "HIGH":
         actions.append("URGENT: Escalate to senior analyst immediately")
         actions.append("Verify host containment status")
         actions.append("Collect forensic artifacts")
@@ -409,6 +501,26 @@ def generate_executive_summary(state: IncidentResponseState) -> dict:
             lines.append(qradar_result)
         lines.append("")
 
+    # Web access — how users were directed + what they downloaded
+    web_access = state.get('web_access', '')
+    if web_access and 'N/A' not in web_access:
+        lines.append("## Web Access (how directed / downloads)")
+        if len(web_access) > 3500:
+            lines.append(web_access[:3500] + "\n\n*... truncated ...*")
+        else:
+            lines.append(web_access)
+        lines.append("")
+
+    # Host execution — did anything run on the affected host
+    host_execution = state.get('host_execution', '')
+    if host_execution and 'N/A' not in host_execution:
+        lines.append("## Host Execution Activity")
+        if len(host_execution) > 1500:
+            lines.append(host_execution[:1500] + "\n\n*... truncated ...*")
+        else:
+            lines.append(host_execution)
+        lines.append("")
+
     # Summary of what was skipped (so the report doesn't look empty)
     skipped = []
     if not hostname:
@@ -476,7 +588,8 @@ def build_incident_response_graph() -> StateGraph:
 
     Workflow is sequential to avoid state merging issues with parallel nodes.
     Order: Fetch -> Extract IOCs -> CS Containment -> CS Detections -> QRadar ->
-           Enrich IOCs -> Synthesize -> Summary -> Post
+           Web Access (referrer/downloads) -> Host Execution -> Enrich IOCs ->
+           Synthesize -> Summary -> Post
     """
     graph = StateGraph(IncidentResponseState)
 
@@ -486,6 +599,8 @@ def build_incident_response_graph() -> StateGraph:
     graph.add_node("check_cs_containment", check_crowdstrike_containment)
     graph.add_node("check_cs_detections", check_crowdstrike_detections)
     graph.add_node("search_qradar", search_qradar_events)
+    graph.add_node("check_web_access", check_web_access)
+    graph.add_node("check_host_execution", check_host_execution)
     graph.add_node("enrich_iocs", enrich_iocs)
     graph.add_node("synthesize", synthesize_findings)
     graph.add_node("generate_summary", generate_executive_summary)
@@ -499,7 +614,9 @@ def build_incident_response_graph() -> StateGraph:
     graph.add_edge("extract_iocs", "check_cs_containment")
     graph.add_edge("check_cs_containment", "check_cs_detections")
     graph.add_edge("check_cs_detections", "search_qradar")
-    graph.add_edge("search_qradar", "enrich_iocs")
+    graph.add_edge("search_qradar", "check_web_access")
+    graph.add_edge("check_web_access", "check_host_execution")
+    graph.add_edge("check_host_execution", "enrich_iocs")
     graph.add_edge("enrich_iocs", "synthesize")
     graph.add_edge("synthesize", "generate_summary")
     graph.add_edge("generate_summary", "post_to_xsoar")
@@ -560,6 +677,8 @@ def run_incident_response(query: str) -> dict:
         'crowdstrike_detections': None,
         'ioc_enrichment_results': {},
         'qradar_events': None,
+        'web_access': None,
+        'host_execution': None,
         'executive_summary': None,
         'severity_assessment': None,
         'recommended_actions': [],

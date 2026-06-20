@@ -16,16 +16,16 @@ start_viewers() {
     nohup /home/vinay/security-ops-platform/.venv/bin/python deployment/log_viewer.py --port 8031 --title "All IR Services" --journalctl "ir-*" >> logs/log_viewer_all.log 2>&1 &
 
     # Port 8032: the notification service
-    nohup /home/vinay/security-ops-platform/.venv/bin/python deployment/log_viewer.py --port 8032 --title "the notification service Bot" --file /home/vinay/security-ops-platform/logs/toodles.log >> logs/log_viewer_toodles.log 2>&1 &
+    nohup /home/vinay/security-ops-platform/.venv/bin/python deployment/log_viewer.py --port 8032 --title "the notification service Bot" --file /home/vinay/security-ops-platform/logs/aide.log >> logs/log_viewer_aide.log 2>&1 &
 
     # Port 8033: the case orchestrator
-    nohup /home/vinay/security-ops-platform/.venv/bin/python deployment/log_viewer.py --port 8033 --title "the case orchestrator Bot" --file /home/vinay/security-ops-platform/logs/msoar.log >> logs/log_viewer_msoar.log 2>&1 &
+    nohup /home/vinay/security-ops-platform/.venv/bin/python deployment/log_viewer.py --port 8033 --title "the case orchestrator Bot" --file /home/vinay/security-ops-platform/logs/orchestrator.log >> logs/log_viewer_orchestrator.log 2>&1 &
 
-    # Port 8034: MoneyBall
-    nohup /home/vinay/security-ops-platform/.venv/bin/python deployment/log_viewer.py --port 8034 --title "MoneyBall Bot" --file /home/vinay/security-ops-platform/logs/money_ball.log >> logs/log_viewer_moneyball.log 2>&1 &
+    # Port 8034: Oracle
+    nohup /home/vinay/security-ops-platform/.venv/bin/python deployment/log_viewer.py --port 8034 --title "Oracle Bot" --file /home/vinay/security-ops-platform/logs/oracle.log >> logs/log_viewer_oracle.log 2>&1 &
 
     # Port 8036: the alert triage service
-    nohup /home/vinay/security-ops-platform/.venv/bin/python deployment/log_viewer.py --port 8036 --title "the alert triage service Bot" --file /home/vinay/security-ops-platform/logs/barnacles.log >> logs/log_viewer_barnacles.log 2>&1 &
+    nohup /home/vinay/security-ops-platform/.venv/bin/python deployment/log_viewer.py --port 8036 --title "the alert triage service Bot" --file /home/vinay/security-ops-platform/logs/relay.log >> logs/log_viewer_relay.log 2>&1 &
 
     # Port 8037: Scheduler
     nohup /home/vinay/security-ops-platform/.venv/bin/python deployment/log_viewer.py --port 8037 --title "Scheduler" --file /home/vinay/security-ops-platform/logs/scheduler.log >> logs/log_viewer_jobs.log 2>&1 &
@@ -34,7 +34,7 @@ start_viewers() {
     nohup /home/vinay/security-ops-platform/.venv/bin/python deployment/log_viewer.py --port 8039 --title "Web App" --file /home/vinay/security-ops-platform/logs/web_server.log >> logs/log_viewer_web_server.log 2>&1 &
 
     # Port 8042: the security assistant bot
-    nohup /home/vinay/security-ops-platform/.venv/bin/python deployment/log_viewer.py --port 8042 --title "the security assistant bot Bot" --file /home/vinay/security-ops-platform/logs/pokedex.log >> logs/log_viewer_pokedex.log 2>&1 &
+    nohup /home/vinay/security-ops-platform/.venv/bin/python deployment/log_viewer.py --port 8042 --title "the security assistant bot Bot" --file /home/vinay/security-ops-platform/logs/sleuth.log >> logs/log_viewer_sleuth.log 2>&1 &
 
     sleep 2
     echo "All log viewers started"

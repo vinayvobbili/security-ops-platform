@@ -16,7 +16,6 @@ from .cribl_diagnostics import cribl_diagnostics_bp
 from .oe_detection import oe_detection_bp
 from .escalation_contacts import escalation_contacts_bp
 from .favorite_urls import favorite_urls_bp
-from .salesforce_scanner import salesforce_scanner_bp
 from .s3_scanner import s3_scanner_bp
 from .oncall import oncall_bp
 from .roster import roster_bp
@@ -44,13 +43,9 @@ from .gitlab_onboarding import gitlab_onboarding_bp
 from .vibe_coding import vibe_coding_bp
 from .regulatory_matrix import regulatory_matrix_bp
 from .tipper_automation import tipper_automation_bp
-from .tipper_replay import tipper_replay_bp
 from .person_of_interest import person_of_interest_bp
 from .bench_local import bench_local_bp
-from .lessons import lessons_bp
-from .admin_lessons import admin_lessons_bp
 from .soc_timeline import soc_timeline_bp
-from .soc_hitl import soc_hitl_bp
 from .soc_in_a_box import soc_in_a_box_bp
 from .github_advisories import github_advisories_bp
 from .vulnerability_deep_dive import vuln_deep_dive_bp
@@ -74,7 +69,6 @@ __all__ = [
     'oe_detection_bp',
     'escalation_contacts_bp',
     'favorite_urls_bp',
-    'salesforce_scanner_bp',
     's3_scanner_bp',
     'oncall_bp',
     'roster_bp',
@@ -101,13 +95,9 @@ __all__ = [
     'vibe_coding_bp',
     'regulatory_matrix_bp',
     'tipper_automation_bp',
-    'tipper_replay_bp',
     'person_of_interest_bp',
     'bench_local_bp',
-    'lessons_bp',
-    'admin_lessons_bp',
     'soc_timeline_bp',
-    'soc_hitl_bp',
     'soc_in_a_box_bp',
     'github_advisories_bp',
     'vuln_deep_dive_bp',
@@ -138,7 +128,6 @@ def register_all_blueprints(app):
     app.register_blueprint(oe_detection_bp)
     app.register_blueprint(escalation_contacts_bp)
     app.register_blueprint(favorite_urls_bp)
-    app.register_blueprint(salesforce_scanner_bp)
     app.register_blueprint(s3_scanner_bp)
     app.register_blueprint(oncall_bp)
     app.register_blueprint(roster_bp)
@@ -166,13 +155,9 @@ def register_all_blueprints(app):
     app.register_blueprint(vibe_coding_bp)
     app.register_blueprint(regulatory_matrix_bp)
     app.register_blueprint(tipper_automation_bp)
-    app.register_blueprint(tipper_replay_bp)
     app.register_blueprint(person_of_interest_bp)
     app.register_blueprint(bench_local_bp)
-    app.register_blueprint(lessons_bp)
-    app.register_blueprint(admin_lessons_bp)
     app.register_blueprint(soc_timeline_bp)
-    app.register_blueprint(soc_hitl_bp)
     app.register_blueprint(soc_in_a_box_bp)
     app.register_blueprint(github_advisories_bp)
     app.register_blueprint(vuln_deep_dive_bp)

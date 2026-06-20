@@ -10,7 +10,7 @@ have to dig up by hand.
 Output per engaged ticket:
 
 - ``ThreatIntelReport`` event to ``soc.cases``
-- Pokedex Webex card to the dev test space
+- Sleuth Webex card to the dev test space
 - Second war-room note on the XSOAR ticket (alongside IR Lead's plan note)
 
 The TI agent runs **after** the IR Lead so its output complements

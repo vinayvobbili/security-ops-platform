@@ -1,7 +1,7 @@
 """LangChain @tool wrappers that attach a readonly/mutating tag.
 
 Fail-closed convention: tools without a "readonly" tag are NOT exposed via
-the public /pokedex web page or the public MCP endpoint. Always use one of
+the public /sleuth web page or the public MCP endpoint. Always use one of
 these two decorators in place of bare @tool — bare @tool yields an
 untagged BaseTool which the public filters will reject.
 

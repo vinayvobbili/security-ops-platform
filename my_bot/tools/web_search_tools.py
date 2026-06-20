@@ -24,7 +24,7 @@ MAX_SNIPPET_CHARS = 200
 
 FETCH_TIMEOUT_SECONDS = 15
 FETCH_MAX_BYTES = 2_000_000
-FETCH_USER_AGENT = "Mozilla/5.0 (compatible; IR-Pokedex/1.0; +https://gdnr.the-company.com)"
+FETCH_USER_AGENT = "Mozilla/5.0 (compatible; IR-Sleuth/1.0; +https://gdnr.the-company.com)"
 RENDER_TIMEOUT_SECONDS = 25
 RENDER_MIN_SIGNAL = 3  # high-signal IOC count below which we retry with headless browser
 
@@ -184,7 +184,7 @@ def _clean_entities(entities, source_host: str) -> None:
     ]
 
 
-# IOC patterns Pokedex has no first-party hunt tool for. Each entry names the
+# IOC patterns Sleuth has no first-party hunt tool for. Each entry names the
 # integration that would close the gap so the analyst knows what to build/ask for.
 # "scan=domains" reclassifies items already pulled by the extractor (moves out of
 # entities.domains); "scan=text" finds patterns the extractor misses entirely.
@@ -241,7 +241,7 @@ _GAP_PATTERNS = [
 
 
 def _classify_gaps(entities, text: str) -> dict:
-    """Find IOC-like values Pokedex has no hunt tool for.
+    """Find IOC-like values Sleuth has no hunt tool for.
 
     Reclassifies matches out of entities.domains (in-place) when appropriate,
     and scans raw text for secret/token patterns the entity extractor misses.
@@ -371,7 +371,7 @@ def fetch_url_and_extract_iocs(url: str) -> str:
     For JS-rendered pages (Next.js, React SPAs, dashboards), automatically retries
     with headless Chromium when the initial fetch yields too few high-signal IOCs.
 
-    The output may also include a "Hunt gaps" section listing IOC types Pokedex
+    The output may also include a "Hunt gaps" section listing IOC types Sleuth
     has no tool to hunt (OAuth client IDs, AWS keys, GitHub tokens, JWTs, etc.).
     Do NOT attempt to pivot on hunt-gap items with VT/QRadar/Tanium — they will
     return noise. Instead, tell the analyst the gap exists and what integration
@@ -454,7 +454,7 @@ def fetch_url_and_extract_iocs(url: str) -> str:
 
         if gaps:
             lines.append("")
-            lines.append("Hunt gaps — IOC types Pokedex has no tool for:")
+            lines.append("Hunt gaps — IOC types Sleuth has no tool for:")
             for gap_name, info in gaps.items():
                 values = info["values"]
                 shown = ", ".join(values[:5])

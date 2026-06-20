@@ -1,5 +1,5 @@
 [Unit]
-Description=Log Viewer - MoneyBall
+Description=Log Viewer - Oracle
 After=network-online.target ir-money-ball.service
 Wants=network-online.target
 
@@ -13,8 +13,8 @@ EnvironmentFile=/home/user/IR/.env
 # Kill any orphan process using this port before starting
 ExecStartPre=-/bin/bash -c 'fuser -k 8034/tcp 2>/dev/null || true'
 
-# Start log viewer for MoneyBall bot
-ExecStart=/home/user/IR/.venv/bin/python deployment/log_viewer.py --port 8034 --title "MoneyBall Bot" --file /home/user/IR/logs/money_ball.log
+# Start log viewer for Oracle bot
+ExecStart=/home/user/IR/.venv/bin/python deployment/log_viewer.py --port 8034 --title "Oracle Bot" --file /home/user/IR/logs/oracle.log
 
 Restart=on-failure
 KillMode=mixed

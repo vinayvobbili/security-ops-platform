@@ -34,42 +34,51 @@ def _get_tanium_client():
     return _tanium_client
 
 
-def _resolve_hostname(employee_id: str) -> Optional[str]:
-    """Resolve employee ID to primary device hostname via CrowdStrike."""
+def _resolve_hostname(host_or_employee: str) -> Optional[str]:
+    """Resolve a hostname or employee ID to a device hostname via CrowdStrike.
+
+    If the value is already a hostname known to CrowdStrike, it is returned
+    as-is; otherwise it is treated as an employee/username and resolved to
+    that person's primary device.
+    """
     client = _get_cs_client()
-    device_id = client.get_device_id(employee_id.strip().upper())
+    device_id = client.get_device_id(host_or_employee.strip().upper())
     if device_id:
-        return employee_id.strip().upper()
+        return host_or_employee.strip().upper()
     try:
         result = client.get_detections(
             limit=1,
-            filter_query=f"assigned_to_name:*{employee_id}*",
+            filter_query=f"assigned_to_name:*{host_or_employee}*",
         )
         resources = result.get("resources", [])
         if resources:
             details = client.get_device_details(resources[0])
-            return details.get("hostname", employee_id)
+            return details.get("hostname", host_or_employee)
     except Exception:
         pass
-    return employee_id
+    return host_or_employee
 
 
 @readonly_tool
 @log_tool_call
-def oe_get_network_connections(employee_id: str, days: int = 30) -> str:
-    """Get network connection events for an employee's device from CrowdStrike LogScale.
+def oe_get_network_connections(host_or_employee: str, days: int = 30) -> str:
+    """Get network connection events for a device from CrowdStrike LogScale.
 
-    Used for OE detection rules to identify suspicious network activity patterns,
-    such as connections to non-corporate VPN IPs or unusual external connections.
+    Per-host endpoint telemetry. Accepts a HOSTNAME directly (e.g. a host
+    surfaced by search_crowdstrike_detections_by_ioc) or an employee
+    username, which is resolved to that person's primary device. Use this in
+    incident host-sweeps to see what a host connected to (e.g. confirm a host
+    actually reached a suspicious domain/IP), and for OE/insider-threat rules
+    (non-corporate VPN IPs, unusual external connections).
 
     Args:
-        employee_id: Employee username or hostname to investigate
+        host_or_employee: Hostname (e.g. PMLIOPSVDI150) or employee username
         days: Number of days of history to query (default 30)
     """
     try:
-        hostname = _resolve_hostname(employee_id)
+        hostname = _resolve_hostname(host_or_employee)
         if not hostname:
-            return f"Could not resolve device for employee '{employee_id}'"
+            return f"Could not resolve a device for '{host_or_employee}'"
 
         client = _get_cs_client()
         hours = days * 24
@@ -83,25 +92,29 @@ def oe_get_network_connections(employee_id: str, days: int = 30) -> str:
         return str(result)
     except Exception as e:
         logger.error(f"oe_get_network_connections failed: {e}")
-        return f"Error fetching network connections for {employee_id}: {e}"
+        return f"Error fetching network connections for {host_or_employee}: {e}"
 
 
 @readonly_tool
 @log_tool_call
-def oe_get_process_timeline(employee_id: str, days: int = 30) -> str:
-    """Get process execution timeline for an employee's device from CrowdStrike LogScale.
+def oe_get_process_timeline(host_or_employee: str, days: int = 30) -> str:
+    """Get process execution timeline for a device from CrowdStrike LogScale.
 
-    Used for OE detection to identify idle/active cycling patterns, unusual process
-    chains, or execution of unauthorized tools.
+    Per-host endpoint telemetry. Accepts a HOSTNAME directly (e.g. a host
+    surfaced by search_crowdstrike_detections_by_ioc) or an employee
+    username, which is resolved to that person's primary device. Use this in
+    incident host-sweeps to see what ran on a host (process chains, command
+    lines, parent processes — e.g. what executed after a suspicious download),
+    and for OE/insider-threat rules (idle/active cycling, unauthorized tools).
 
     Args:
-        employee_id: Employee username or hostname to investigate
+        host_or_employee: Hostname (e.g. PMLIOPSVDI150) or employee username
         days: Number of days of history to query (default 30)
     """
     try:
-        hostname = _resolve_hostname(employee_id)
+        hostname = _resolve_hostname(host_or_employee)
         if not hostname:
-            return f"Could not resolve device for employee '{employee_id}'"
+            return f"Could not resolve a device for '{host_or_employee}'"
 
         client = _get_cs_client()
         hours = days * 24
@@ -115,24 +128,27 @@ def oe_get_process_timeline(employee_id: str, days: int = 30) -> str:
         return str(result)
     except Exception as e:
         logger.error(f"oe_get_process_timeline failed: {e}")
-        return f"Error fetching process timeline for {employee_id}: {e}"
+        return f"Error fetching process timeline for {host_or_employee}: {e}"
 
 
 @readonly_tool
 @log_tool_call
-def oe_get_installed_software(employee_id: str) -> str:
-    """Get installed software inventory for an employee's device from Tanium.
+def oe_get_installed_software(host_or_employee: str) -> str:
+    """Get installed software inventory for a device from Tanium.
 
-    Used for OE detection to identify unauthorized remote access tools
-    (e.g. personal VPNs, remote desktop apps) installed on corporate devices.
+    Per-host endpoint telemetry. Accepts a HOSTNAME directly (e.g. a host
+    surfaced by search_crowdstrike_detections_by_ioc) or an employee
+    username, which is resolved to that person's primary device. Use this in
+    incident host-sweeps to see what is installed on a host, and for
+    OE/insider-threat rules (unauthorized remote-access tools, personal VPNs).
 
     Args:
-        employee_id: Employee username or hostname to investigate
+        host_or_employee: Hostname (e.g. PMLIOPSVDI150) or employee username
     """
     try:
-        hostname = _resolve_hostname(employee_id)
+        hostname = _resolve_hostname(host_or_employee)
         if not hostname:
-            return f"Could not resolve device for employee '{employee_id}'"
+            return f"Could not resolve a device for '{host_or_employee}'"
 
         client = _get_tanium_client()
         computer = client.get_computer_by_name(hostname.strip(), instance_name=None)
@@ -146,4 +162,4 @@ def oe_get_installed_software(employee_id: str) -> str:
         )
     except Exception as e:
         logger.error(f"oe_get_installed_software failed: {e}")
-        return f"Error fetching installed software for {employee_id}: {e}"
+        return f"Error fetching installed software for {host_or_employee}: {e}"

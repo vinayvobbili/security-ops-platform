@@ -14,6 +14,8 @@ from my_bot.tools._tagging import readonly_tool, mutating_tool
 from services.recorded_future import RecordedFutureClient
 from src.utils.tool_decorator import log_tool_call
 from src.utils.llm_decorators import validate_args, IP_ADDRESS_PATTERN, DOMAIN_PATTERN, HASH_PATTERN
+from my_bot.utils.webex_format import defang
+from my_bot.utils.verify_links import append_verify, recorded_future_line
 
 # Lazy-initialized Recorded Future client
 _rf_client: Optional[RecordedFutureClient] = None
@@ -43,7 +45,7 @@ def _format_enrichment_result(data: dict, indicator_type: str, indicator: str) -
     results = _rf_client.extract_enrichment_results(data) if _rf_client else []
 
     if not results:
-        return f"No enrichment data found for {indicator_type}: {indicator}"
+        return f"No enrichment data found for {indicator_type}: {defang(indicator)}"
 
     # Find the matching result
     result = None
@@ -56,7 +58,7 @@ def _format_enrichment_result(data: dict, indicator_type: str, indicator: str) -
         result = results[0] if results else None
 
     if not result:
-        return f"No enrichment data found for {indicator_type}: {indicator}"
+        return f"No enrichment data found for {indicator_type}: {defang(indicator)}"
 
     risk_score = result.get("risk_score", 0)
     risk_level = result.get("risk_level", "Unknown")
@@ -66,7 +68,7 @@ def _format_enrichment_result(data: dict, indicator_type: str, indicator: str) -
 
     output = [
         f"## Recorded Future {indicator_type.upper()} Analysis",
-        f"**Indicator:** {indicator}",
+        f"**Indicator:** {defang(indicator)}",
         f"**Risk Score:** {risk_score}/99",
         f"**Risk Level:** {risk_level}",
     ]
@@ -84,7 +86,7 @@ def _format_enrichment_result(data: dict, indicator_type: str, indicator: str) -
         if len(rules) > 5:
             output.append(f"- ... and {len(rules) - 5} more")
 
-    return "\n".join(output)
+    return append_verify("\n".join(output), recorded_future_line(result.get("entity_id")))
 
 
 def _format_actor_result(data: dict) -> str:
@@ -365,7 +367,7 @@ def triage_for_phishing_recorded_future(indicator: str) -> str:
     results = client.extract_enrichment_results(data)
 
     if not results:
-        return f"No phishing intelligence found for: {indicator}"
+        return f"No phishing intelligence found for: {defang(indicator)}"
 
     result = results[0]
     risk_score = result.get("risk_score", 0)
@@ -374,7 +376,7 @@ def triage_for_phishing_recorded_future(indicator: str) -> str:
 
     output = [
         f"## Recorded Future Phishing Triage",
-        f"**Indicator:** {indicator}",
+        f"**Indicator:** {defang(indicator)}",
         f"**Phishing Risk Score:** {risk_score}/99",
         f"**Risk Level:** {risk_level}",
     ]
@@ -406,7 +408,7 @@ def _is_ip_address(value: str) -> bool:
 
 
 # =============================================================================
-# Sample Test Prompts for Pokedex Bot
+# Sample Test Prompts for Sleuth Bot
 # =============================================================================
 #
 # IP Lookup:

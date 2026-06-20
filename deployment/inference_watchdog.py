@@ -79,7 +79,7 @@ def save_state(down_key):
 def send_webex_alert(message):
     from my_config import get_config
     cfg = get_config()
-    token = cfg.webex_bot_access_token_pinger or cfg.webex_bot_access_token_jarvis or cfg.webex_bot_access_token_barnacles
+    token = cfg.webex_bot_access_token_pinger or cfg.webex_bot_access_token_jarvis or cfg.webex_bot_access_token_relay
     room_id = cfg.webex_room_id_dev_test_space
     if not token or not room_id:
         return

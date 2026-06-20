@@ -55,9 +55,9 @@ class BotHealthChecker:
 
         # Bot emails to check (configure these in .env or here)
         self.bot_emails = [
-            os.getenv('TOODLES_BOT_EMAIL', '<redacted-email>'),
-            os.getenv('BARNACLES_BOT_EMAIL', '<redacted-email>'),
-            os.getenv('MONEY_BALL_BOT_EMAIL', '<redacted-email>'),
+            os.getenv('AIDE_BOT_EMAIL', '<redacted-email>'),
+            os.getenv('RELAY_BOT_EMAIL', '<redacted-email>'),
+            os.getenv('ORACLE_BOT_EMAIL', '<redacted-email>'),
             os.getenv('SOAR_BOT_EMAIL', '<redacted-email>'),
         ]
 

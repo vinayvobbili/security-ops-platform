@@ -1922,7 +1922,7 @@ def send_webex_notification(tickets: List[dict], room_id: str = None) -> None:
 
         config = get_config()
         room_id = room_id or config.webex_room_id_dev_test_space
-        bot_token = config.webex_bot_access_token_moneyball
+        bot_token = config.webex_bot_access_token_oracle
 
         if not room_id or not bot_token:
             logger.warning("Webex notification skipped — no room ID or bot token configured")

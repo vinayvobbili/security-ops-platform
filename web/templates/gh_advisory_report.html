@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Advisory Report — {{ adv.source_id }}</title>
+<style>
+  :root{--blue:#0046AD;--green:#00A651;}
+  *{box-sizing:border-box;}
+  body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1b2330;margin:0;
+    background:#f5f7fb;line-height:1.5;}
+  .wrap{max-width:880px;margin:0 auto;padding:32px 28px;}
+  .hdr{background:linear-gradient(135deg,var(--blue),var(--green));color:#fff;border-radius:16px;
+    padding:24px 26px;margin-bottom:22px;}
+  .hdr h1{margin:0 0 6px;font-size:22px;}
+  .hdr .cve{opacity:.9;font-weight:600;}
+  .hdr .meta{font-size:12.5px;opacity:.92;margin-top:8px;}
+  .pill{display:inline-block;background:rgba(255,255,255,.22);border-radius:999px;padding:2px 10px;
+    font-size:12px;font-weight:600;margin-right:6px;}
+  .card{background:#fff;border:1px solid #e6e9ef;border-radius:14px;padding:18px 20px;margin-bottom:16px;}
+  .card h2{margin:0 0 12px;font-size:15px;color:var(--blue);border-bottom:2px solid #eef1f6;padding-bottom:6px;}
+  dl{display:grid;grid-template-columns:170px 1fr;gap:6px 14px;margin:0;font-size:13.5px;}
+  dt{color:#6b7686;font-weight:600;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{text-align:left;color:#6b7686;font-size:11px;text-transform:uppercase;letter-spacing:.03em;
+    border-bottom:1px solid #eef1f6;padding:5px 8px;}
+  td{padding:5px 8px;border-bottom:1px solid #f3f5f8;vertical-align:top;}
+  code{background:#f3f5f8;padding:1px 5px;border-radius:5px;font-size:12px;}
+  .faq-q{font-weight:700;color:#0a2540;margin:12px 0 3px;}
+  .faq-a{font-size:13.5px;white-space:pre-wrap;}
+  .cmt{border-left:3px solid var(--blue);background:#f6f8fb;border-radius:9px;padding:8px 11px;margin:8px 0;}
+  .cmt .h{display:flex;justify-content:space-between;font-size:12px;color:#6b7686;margin-bottom:3px;}
+  .cmt .h b{color:var(--blue);}
+  .res{padding:8px 11px;border-radius:9px;background:#f6f8fb;border-left:3px solid #6b7686;font-size:13px;margin:6px 0;}
+  .res.exposed{background:#fff5f5;border-left-color:#cf222e;}
+  .res.clear{background:#e9f7ef;border-left-color:#1a7f37;}
+  .foot{text-align:center;color:#8b94a3;font-size:11.5px;margin-top:18px;}
+  @media print{body{background:#fff;}.wrap{max-width:none;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr">
+    <h1>{{ adv.source_id }} <span class="cve">{{ adv.cve_id or 'no CVE' }}</span></h1>
+    <div>
+      <span class="pill">{{ adv.source_label }}</span>
+      <span class="pill">{{ adv.status.replace('_',' ') }}</span>
+      <span class="pill">severity: {{ adv.severity or 'critical' }}</span>
+      {% if adv.owner %}<span class="pill">owner: {{ adv.owner }}</span>{% endif %}
+    </div>
+    <div class="meta">Cyber Security Advisory report · generated {{ generated_at|et }}</div>
+  </div>
+
+  <div class="card">
+    <h2>Summary</h2>
+    <p>{{ adv.summary or '(no summary)' }}</p>
+    <dl>
+      <dt>CVE</dt><dd>{{ adv.cve_id or 'none' }}</dd>
+      {% if cvss.score or cvss.vector %}<dt>CVSS</dt><dd>{{ cvss.score or '' }} {{ cvss.vector or '' }}</dd>{% endif %}
+      {% if adv.ecosystem %}<dt>Ecosystem</dt><dd>{{ adv.ecosystem }}</dd>{% endif %}
+      <dt>Published</dt><dd>{{ (adv.published_at or '')[:10] or 'unknown' }}</dd>
+      {% if cwes %}<dt>CWEs</dt><dd>{{ cwes|join(', ') }}</dd>{% endif %}
+      {% if adv.aliases %}<dt>Aliases</dt><dd>{{ adv.aliases|join(', ') }}</dd>{% endif %}
+    </dl>
+  </div>
+
+  {% if vulns %}
+  <div class="card">
+    <h2>Affected packages</h2>
+    <table><thead><tr><th>Package</th><th>Vulnerable</th><th>Fixed</th></tr></thead><tbody>
+      {% for v in vulns %}<tr><td>{{ v.package }}</td><td><code>{{ v.vulnerable_range }}</code></td><td><code>{{ v.first_patched }}</code></td></tr>{% endfor %}
+    </tbody></table>
+  </div>
+  {% endif %}
+
+  {% set ai = adv.ai_assessment %}
+  {% if ai and ai.exposure %}
+  <div class="card">
+    <h2>AI assessment ({{ ai.model or 'metiq' }})</h2>
+    <dl>
+      <dt>Recommendation</dt><dd><b>{{ (ai.recommendation or '')|upper }}</b></dd>
+      <dt>Exposure</dt><dd>{{ ai.exposure }}</dd>
+      {% if ai.rationale %}<dt>Rationale</dt><dd>{{ ai.rationale }}</dd>{% endif %}
+    </dl>
+  </div>
+  {% endif %}
+
+  {% set sc = capability_results.capd_scorecard.result if capability_results.get('capd_scorecard') else None %}
+  {% if sc %}
+  <div class="card">
+    <h2>CAPD scorecard — {{ sc.band_label }} ({{ sc.score }}/100)</h2>
+    {% if sc.verdict %}<p>{{ sc.verdict }}</p>{% endif %}
+    {% if sc.override and sc.override.fired %}<div class="res exposed"><b>Override:</b> {{ sc.override.reason }}</div>{% endif %}
+    <table><thead><tr><th>Category</th><th>Score</th><th>Evidence</th><th>Source</th></tr></thead><tbody>
+      {% for c in sc.categories %}
+      <tr><td>{{ c.label }}</td><td>{{ (c.score ~ ' / 4') if c.sufficient else 'n/a' }}</td><td>{{ c.evidence }}</td><td>{{ c.source }}</td></tr>
+      {% endfor %}
+    </tbody></table>
+  </div>
+  {% endif %}
+
+  {% if faq and faq.items %}
+  <div class="card">
+    <h2>CAPD decision FAQ</h2>
+    {% for it in faq.items %}<div class="faq-q">{{ it.q }}</div><div class="faq-a">{{ it.a }}</div>{% endfor %}
+  </div>
+  {% endif %}
+
+  {% set jf = capability_results.jfrog.result if capability_results.get('jfrog') else None %}
+  {% set ti = capability_results.threatintel.result if capability_results.get('threatintel') else None %}
+  {% set qr = capability_results.qradar.result if capability_results.get('qradar') else None %}
+  {% if jf or ti or qr %}
+  <div class="card">
+    <h2>Capability checks</h2>
+    {% if jf %}<div class="res {{ 'exposed' if jf.exposed else 'clear' }}"><b>JFrog Xray:</b> {{ jf.summary_text }}</div>{% endif %}
+    {% if ti %}<div class="res"><b>Threat Intel:</b> {{ ti.summary_text }}</div>{% endif %}
+    {% if qr %}<div class="res {{ 'exposed' if qr.exposed else ('clear' if 'exposed' in qr else '') }}"><b>QRadar:</b> {{ qr.summary_text }}</div>{% endif %}
+  </div>
+  {% endif %}
+
+  {% if adv.notes %}
+  <div class="card"><h2>Reviewer notes</h2><p style="white-space:pre-wrap;">{{ adv.notes }}</p></div>
+  {% endif %}
+
+  {% if comments %}
+  <div class="card">
+    <h2>Discussion ({{ comments|length }})</h2>
+    {% for c in comments %}
+    <div class="cmt"><div class="h"><b>{{ c.author or 'unknown' }}</b><span>{{ c.created_at|et }}</span></div><div>{{ c.body }}</div></div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="foot">TLP:AMBER — the company Internal · Cyber Security Advisories · {{ adv.html_url or '' }}</div>
+</div>
+</body>
+</html>

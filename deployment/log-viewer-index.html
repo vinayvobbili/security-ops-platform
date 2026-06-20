@@ -1181,7 +1181,7 @@
                     <div class="metric-row"><span class="metric-label">Size:</span><span class="metric-value" id="size-llm-m1-analysis">--</span></div>
                     <div class="metric-row"><span class="metric-label">Uptime:</span><span class="metric-value" id="uptime-llm-m1-analysis">--</span></div>
                     <div class="metric-row"><span class="metric-label">SSH:</span><span class="metric-value" id="tunnel-llm-m1-analysis">--</span></div>
-                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">Pokedex</span></div>
+                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">Sleuth</span></div>
                 </div>
             </div>
         </div>
@@ -1201,7 +1201,7 @@
                     <div class="metric-row"><span class="metric-label">Size:</span><span class="metric-value" id="size-llm-m1-router">--</span></div>
                     <div class="metric-row"><span class="metric-label">Uptime:</span><span class="metric-value" id="uptime-llm-m1-router">--</span></div>
                     <div class="metric-row"><span class="metric-label">SSH:</span><span class="metric-value" id="tunnel-llm-m1-router">--</span></div>
-                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">Pokedex, PBI Pruner</span></div>
+                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">Sleuth, PBI Pruner</span></div>
                 </div>
             </div>
         </div>
@@ -1219,7 +1219,7 @@
                     <div class="metric-row"><span class="metric-label">Port:</span><span class="metric-value">8017 → 8002</span></div>
                     <div class="metric-row"><span class="metric-label">Latency:</span><span class="metric-value" id="latency-llm-m1-embed">--</span></div>
                     <div class="metric-row"><span class="metric-label">Model:</span><span class="metric-value" id="model-llm-m1-embed">--</span></div>
-                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">Pokedex</span></div>
+                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">Sleuth</span></div>
                 </div>
             </div>
         </div>
@@ -1481,15 +1481,15 @@
 
     // Bot configuration
     const BOTS = [
-        { key: 'pokedex',   name: 'Pokedex',       emoji: '🔮', port: 8042, group: 'bots' },
-        { key: 'toodles',   name: 'Toodles',        emoji: '🎯', port: 8032, group: 'bots' },
-        { key: 'msoar',     name: 'MSOAR',          emoji: '🤖', port: 8033, group: 'bots' },
-        { key: 'moneyball', name: 'MoneyBall',       emoji: '💰', port: 8034, group: 'bots' },
+        { key: 'sleuth',   name: 'Sleuth',       emoji: '🔮', port: 8042, group: 'bots' },
+        { key: 'aide',   name: 'Aide',        emoji: '🎯', port: 8032, group: 'bots' },
+        { key: 'orchestrator',     name: 'ORCHESTRATOR',          emoji: '🤖', port: 8033, group: 'bots' },
+        { key: 'oracle', name: 'Oracle',       emoji: '💰', port: 8034, group: 'bots' },
         { key: 'jarvis',    name: 'Jarvis',          emoji: '🛡️', port: 8035, group: 'bots' },
-        { key: 'barnacles', name: 'Barnacles',       emoji: '⚓', port: 8036, group: 'bots' },
+        { key: 'relay', name: 'Relay',       emoji: '⚓', port: 8036, group: 'bots' },
         { key: 'tars',      name: 'TARS',            emoji: '☁️', port: 8038, group: 'bots' },
         { key: 'case',      name: 'CASE',            emoji: '🏢', port: 8041, group: 'bots' },
-        { key: 'winai',     name: 'Win.AI',          emoji: '📚', port: 8043, group: 'bots' },
+        { key: 'mentor',     name: 'Mentor',          emoji: '📚', port: 8043, group: 'bots' },
         { key: 'jobs',      name: 'IR Scheduler',    emoji: '⏰', port: 8037, group: 'services' },
         { key: 'epp',       name: 'EPP Scheduler',   emoji: '🛡️', port: 8044, group: 'services' },
         { key: 'ai',        name: 'AI Scheduler',    emoji: '🧠', port: 8045, group: 'services' },

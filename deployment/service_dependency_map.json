@@ -19,15 +19,15 @@
   "patterns": {
     "my_config.py": [
       "ir-web-app", "ir-scheduler", "ir-epp-scheduler",
-      "ir-tars", "ir-jarvis", "ir-case", "ir-barnacles",
-      "ir-pokedex", "ir-toodles", "ir-msoar", "ir-money-ball",
+      "ir-tars", "ir-jarvis", "ir-case", "ir-relay",
+      "ir-sleuth", "ir-aide", "ir-orchestrator", "ir-money-ball",
       "ir-peer-ping", "ir-bot-status-api"
     ],
 
     "src/utils/**": [
       "ir-web-app", "ir-scheduler", "ir-epp-scheduler",
-      "ir-tars", "ir-jarvis", "ir-case", "ir-barnacles",
-      "ir-pokedex", "ir-toodles", "ir-msoar", "ir-money-ball",
+      "ir-tars", "ir-jarvis", "ir-case", "ir-relay",
+      "ir-sleuth", "ir-aide", "ir-orchestrator", "ir-money-ball",
       "ir-bot-status-api"
     ],
 
@@ -36,13 +36,13 @@
     ],
     "services/service_now.py": [
       "ir-tars", "ir-jarvis", "ir-case", "ir-epp-scheduler",
-      "ir-scheduler", "ir-toodles", "ir-money-ball", "ir-web-app"
+      "ir-scheduler", "ir-aide", "ir-money-ball", "ir-web-app"
     ],
     "services/xsoar.py": [
-      "ir-msoar", "ir-scheduler", "ir-toodles", "ir-web-app"
+      "ir-orchestrator", "ir-scheduler", "ir-aide", "ir-web-app"
     ],
     "services/crowdstrike.py": [
-      "ir-jarvis", "ir-epp-scheduler", "ir-toodles"
+      "ir-jarvis", "ir-epp-scheduler", "ir-aide"
     ],
     "services/recorded_future.py": [
       "ir-scheduler"
@@ -71,27 +71,27 @@
     "webex_bots/jarvis.py": [
       "ir-jarvis", "ir-epp-scheduler"
     ],
-    "webex_bots/barnacles.py": [
-      "ir-barnacles"
+    "webex_bots/relay.py": [
+      "ir-relay"
     ],
-    "webex_bots/pokedex.py": [
-      "ir-pokedex"
+    "webex_bots/sleuth.py": [
+      "ir-sleuth"
     ],
-    "webex_bots/toodles.py": [
-      "ir-toodles"
+    "webex_bots/aide.py": [
+      "ir-aide"
     ],
-    "webex_bots/msoar.py": [
-      "ir-msoar"
+    "webex_bots/orchestrator.py": [
+      "ir-orchestrator"
     ],
-    "webex_bots/money_ball.py": [
+    "webex_bots/oracle.py": [
       "ir-money-ball"
     ],
     "webex_bots/case.py": [
       "ir-case"
     ],
     "webex_bots/cards/**": [
-      "ir-tars", "ir-jarvis", "ir-case", "ir-barnacles",
-      "ir-pokedex", "ir-toodles", "ir-msoar", "ir-money-ball"
+      "ir-tars", "ir-jarvis", "ir-case", "ir-relay",
+      "ir-sleuth", "ir-aide", "ir-orchestrator", "ir-money-ball"
     ],
 
     "src/ir_scheduler.py": [
@@ -108,7 +108,7 @@
       "ir-scheduler"
     ],
     "src/components/contacts_lookup.py": [
-      "ir-pokedex", "ir-web-app"
+      "ir-sleuth", "ir-web-app"
     ],
     "src/components/reimaged_hosts.py": [
       "ir-money-ball"
@@ -132,7 +132,7 @@
     ],
 
     "my_bot/**": [
-      "ir-pokedex", "ir-barnacles", "ir-toodles"
+      "ir-sleuth", "ir-relay", "ir-aide"
     ],
 
     "web/**": [

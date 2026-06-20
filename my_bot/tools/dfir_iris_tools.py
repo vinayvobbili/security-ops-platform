@@ -418,7 +418,7 @@ def create_iris_alert(
     Args:
         title: Alert title
         description: Alert description (supports markdown)
-        source: Source of the alert (e.g., "Pokedex", "CrowdStrike", "QRadar")
+        source: Source of the alert (e.g., "Sleuth", "CrowdStrike", "QRadar")
         source_ref: Unique reference ID from the source system
         severity: Severity level - "info", "low", "medium", "high", "critical"
         iocs: Comma-separated IOCs in format "type:value" (e.g., "ip:1.2.3.4,domain:evil.com")

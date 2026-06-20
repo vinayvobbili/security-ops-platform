@@ -25,6 +25,8 @@ from my_bot.tools._tagging import readonly_tool, mutating_tool
 from services.abusech import AbuseCHClient
 from src.utils.tool_decorator import log_tool_call
 from src.utils.llm_decorators import validate_args, DOMAIN_PATTERN, IP_ADDRESS_PATTERN
+from my_bot.utils.webex_format import defang
+from my_bot.utils.verify_links import append_verify, threatfox_line
 
 logger = logging.getLogger(__name__)
 
@@ -56,14 +58,14 @@ def _format_domain_result(data: dict) -> str:
     if not is_malicious:
         return (
             f"## abuse.ch Domain Check\n"
-            f"**Domain:** {domain}\n"
+            f"**Domain:** {defang(domain)}\n"
             f"**Status:** ✅ Clean\n\n"
             f"Not found in URLhaus or ThreatFox malware databases."
         )
 
     result = [
         f"## abuse.ch Domain Check",
-        f"**Domain:** {domain}",
+        f"**Domain:** {defang(domain)}",
         f"**Status:** 🔴 MALICIOUS",
         f"**Threat Types:** {', '.join(threat_types) if threat_types else 'Unknown'}",
     ]
@@ -90,7 +92,7 @@ def _format_domain_result(data: dict) -> str:
                 threat = url_info.get("threat", "Unknown")
                 status = url_info.get("url_status", "Unknown")
                 tags = ", ".join(url_info.get("tags", [])[:3])
-                result.append(f"- `{url}...`")
+                result.append(f"- `{defang(url)}...`")
                 result.append(f"  Threat: {threat} | Status: {status}")
                 if tags:
                     result.append(f"  Tags: {tags}")
@@ -142,7 +144,7 @@ def _format_ip_result(data: dict) -> str:
     if not is_malicious:
         return (
             f"## abuse.ch IP Check\n"
-            f"**IP Address:** {ip}\n"
+            f"**IP Address:** {defang(ip)}\n"
             f"**Status:** ✅ Clean\n\n"
             f"Not found in ThreatFox or Feodo Tracker databases."
         )
@@ -157,7 +159,7 @@ def _format_ip_result(data: dict) -> str:
 
     result = [
         f"## abuse.ch IP Check",
-        f"**IP Address:** {ip}",
+        f"**IP Address:** {defang(ip)}",
         f"**Status:** {status_emoji} {status_text}",
     ]
 
@@ -237,7 +239,7 @@ def check_domain_abusech(domain: str) -> str:
             domain = domain.split("/", 1)[0]
 
         data = client.check_domain_all(domain)
-        return _format_domain_result(data)
+        return append_verify(_format_domain_result(data), threatfox_line(domain))
     except Exception as e:
         logger.error(f"abuse.ch domain check failed: {e}")
         return f"Error checking domain on abuse.ch: {str(e)}"
@@ -271,7 +273,7 @@ def check_ip_abusech(ip_address: str) -> str:
 
     try:
         data = client.check_ip_all(ip_address.strip())
-        return _format_ip_result(data)
+        return append_verify(_format_ip_result(data), threatfox_line(ip_address))
     except Exception as e:
         logger.error(f"abuse.ch IP check failed: {e}")
         return f"Error checking IP on abuse.ch: {str(e)}"

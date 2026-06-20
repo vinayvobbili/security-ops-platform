@@ -198,10 +198,10 @@ body.dark-mode .lu-table td { border-bottom-color:rgba(99,102,241,0.08); color:#
 .lu-table tr:hover td { background:rgba(99,102,241,0.05); }
 body.dark-mode .lu-table tr:hover td { background:rgba(99,102,241,0.08); }
 .lu-table .lu-bot-tag { display:inline-block; padding:2px 8px; border-radius:6px; font-size:11px; font-weight:700; letter-spacing:0.02em; }
-.lu-bot-barnacles { background:rgba(99,102,241,0.15); color:#4f46e5; }
-.lu-bot-money_ball { background:rgba(245,158,11,0.15); color:#d97706; }
-body.dark-mode .lu-bot-barnacles { background:rgba(99,102,241,0.25); color:#a5b4fc; }
-body.dark-mode .lu-bot-money_ball { background:rgba(245,158,11,0.25); color:#fcd34d; }
+.lu-bot-relay { background:rgba(99,102,241,0.15); color:#4f46e5; }
+.lu-bot-oracle { background:rgba(245,158,11,0.15); color:#d97706; }
+body.dark-mode .lu-bot-relay { background:rgba(99,102,241,0.25); color:#a5b4fc; }
+body.dark-mode .lu-bot-oracle { background:rgba(245,158,11,0.25); color:#fcd34d; }
 .lu-prompt-cell { max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#9ca3af; }
 .lu-cost-cell { font-weight:700; color:#db2777; font-variant-numeric:tabular-nums; }
 body.dark-mode .lu-cost-cell { color:#f9a8d4; }
@@ -247,7 +247,7 @@ body.dark-mode .lu-pagination button { background:rgba(99,102,241,0.12); border-
     <div class="lu-header" style="justify-content:center; text-align:center;">
         <div class="lu-header-left">
             <span class="lu-header-badge">🐚</span>
-            <span class="lu-header-title">Barnacles' LLM Usage & Cost Analytics</span>
+            <span class="lu-header-title">Relay' LLM Usage & Cost Analytics</span>
         </div>
     </div>
 
@@ -327,13 +327,13 @@ body.dark-mode .lu-pagination button { background:rgba(99,102,241,0.12); border-
     function fmt$(v) { return v != null ? '$' + v.toFixed(4) : '-'; }
     function fmtK(v) { return v >= 1000 ? (v/1000).toFixed(1) + 'k' : (v || 0).toString(); }
     function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-    function botParam() { return 'barnacles'; }
+    function botParam() { return 'relay'; }
     // Admin gating now happens server-side via the session cookie — no
     // legacy password is sent. authParam() is kept as a no-op so the
     // existing `... + authParam()` URL templates compile unchanged.
     function authParam() { return ''; }
     function botTag(name) {
-        const cls = name === 'barnacles' ? 'lu-bot-barnacles' : name === 'money_ball' ? 'lu-bot-money_ball' : '';
+        const cls = name === 'relay' ? 'lu-bot-relay' : name === 'oracle' ? 'lu-bot-oracle' : '';
         return `<span class="lu-bot-tag ${cls}">${esc(name)}</span>`;
     }
 

@@ -1,4 +1,4 @@
-"""Wiki Knowledge Base search tool for Win.AI."""
+"""Wiki Knowledge Base search tool for Mentor."""
 
 import logging
 

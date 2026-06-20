@@ -29,7 +29,7 @@ def shift_performance_dashboard():
     """Display shift performance page - loads instantly with empty structure"""
     return render_template(
         'shift_performance.html',
-        xsoar_prod_ui_base=getattr(CONFIG, 'xsoar_prod_ui_base_url', 'https://msoar.crtx.us.paloaltonetworks.com')
+        xsoar_prod_ui_base=getattr(CONFIG, 'xsoar_prod_ui_base_url', 'https://orchestrator.crtx.us.paloaltonetworks.com')
     )
 
 

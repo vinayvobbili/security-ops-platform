@@ -155,7 +155,7 @@ def fire(scenario: str = "cobalt_strike", pause_sec: float = 30.0) -> dict[str, 
     time.sleep(pause_sec)
 
     _step(f"[IR Lead] Consuming the escalation, drafting SEV/containment plan, "
-          f"sending Pokedex card with HITL Approve/Reject buttons + XSOAR note — "
+          f"sending Sleuth card with HITL Approve/Reject buttons + XSOAR note — "
           f"pausing {pause_sec:.0f}s …")
     time.sleep(pause_sec)
 

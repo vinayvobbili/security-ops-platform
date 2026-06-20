@@ -453,7 +453,7 @@ function showShiftDetailsFromGranular(data) {
         if (!tickets || tickets.length === 0) {
             return '<div class="empty-state">No inflow tickets for this shift</div>';
         }
-        const base = (typeof window !== 'undefined' && window.XSOAR_BASE) ? window.XSOAR_BASE.replace(/\/$/, '') : 'https://msoar.crtx.us.paloaltonetworks.com';
+        const base = (typeof window !== 'undefined' && window.XSOAR_BASE) ? window.XSOAR_BASE.replace(/\/$/, '') : 'https://orchestrator.crtx.us.paloaltonetworks.com';
         return `
             <table class="ticket-table">
                 <thead>
@@ -488,7 +488,7 @@ function showShiftDetailsFromGranular(data) {
         if (!tickets || tickets.length === 0) {
             return '<div class="empty-state">No outflow tickets for this shift</div>';
         }
-        const base = (typeof window !== 'undefined' && window.XSOAR_BASE) ? window.XSOAR_BASE.replace(/\/$/, '') : 'https://msoar.crtx.us.paloaltonetworks.com';
+        const base = (typeof window !== 'undefined' && window.XSOAR_BASE) ? window.XSOAR_BASE.replace(/\/$/, '') : 'https://orchestrator.crtx.us.paloaltonetworks.com';
         return `
             <table class="ticket-table">
                 <thead>
@@ -867,7 +867,7 @@ function openMtpModal(mtpIds, shiftId) {
     const modal = document.getElementById('mtpModal');
     const body = document.getElementById('mtpModalBody');
     if (!modal || !body) return;
-    const base = (typeof window !== 'undefined' && window.XSOAR_BASE) ? window.XSOAR_BASE.replace(/\/$/, '') : 'https://msoar.crtx.us.paloaltonetworks.com';
+    const base = (typeof window !== 'undefined' && window.XSOAR_BASE) ? window.XSOAR_BASE.replace(/\/$/, '') : 'https://orchestrator.crtx.us.paloaltonetworks.com';
     if (!mtpIds.length) {
         body.innerHTML = '<p>No Malicious True Positives for this shift.</p>';
     } else {

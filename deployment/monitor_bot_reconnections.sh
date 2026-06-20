@@ -6,8 +6,8 @@ echo "===================================="
 echo ""
 
 # Check if bot is running
-if ssh lab-vm "pgrep -f 'python.*webex_bots/toodles.py'" > /dev/null; then
-    PID=$(ssh lab-vm "pgrep -f 'python.*webex_bots/toodles.py'")
+if ssh lab-vm "pgrep -f 'python.*webex_bots/aide.py'" > /dev/null; then
+    PID=$(ssh lab-vm "pgrep -f 'python.*webex_bots/aide.py'")
     UPTIME=$(ssh lab-vm "ps -p $PID -o etime=" | tr -d ' ')
     echo "✅ Bot Status: RUNNING"
     echo "   PID: $PID"
@@ -20,17 +20,17 @@ fi
 echo ""
 echo "📈 Recent Activity (last 20 lines):"
 echo "------------------------------------"
-ssh lab-vm "tail -20 ~/security-ops-platform/logs/toodles.log" | grep -v "WARNING.*deprecated"
+ssh lab-vm "tail -20 ~/security-ops-platform/logs/aide.log" | grep -v "WARNING.*deprecated"
 
 echo ""
 echo "🔄 Reconnection Events (last 10):"
 echo "----------------------------------"
-ssh lab-vm "grep -E '(Triggering.*reconnection|Bot instance cleared|Bot thread|Reconnection requested|up and running)' ~/security-ops-platform/logs/toodles.log | tail -15"
+ssh lab-vm "grep -E '(Triggering.*reconnection|Bot instance cleared|Bot thread|Reconnection requested|up and running)' ~/security-ops-platform/logs/aide.log | tail -15"
 
 echo ""
 echo "⚠️  Connection Errors (last 5):"
 echo "--------------------------------"
-ssh lab-vm "grep -E '(Connection.*error|timed out|Connection aborted|Remote.*closed)' ~/security-ops-platform/logs/toodles.log | tail -5"
+ssh lab-vm "grep -E '(Connection.*error|timed out|Connection aborted|Remote.*closed)' ~/security-ops-platform/logs/aide.log | tail -5"
 
 echo ""
 echo "✅ Expected behavior with fix:"

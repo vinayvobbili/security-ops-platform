@@ -5,8 +5,8 @@ AI / LLM index scheduler.
 Runs embedding-dependent index rebuilds and incremental updates for:
 - Tipper similarity index (daily)
 - XSOAR ticket similarity index (daily)
-- Win.AI IR codebase index (weekly)
-- Win.AI XSOAR codebase index (weekly)
+- Mentor IR codebase index (weekly)
+- Mentor XSOAR codebase index (weekly)
 
 Isolated from ir_scheduler so embedding-heavy jobs don't block
 operational monitoring and alerting.
@@ -66,8 +66,8 @@ def _get_webex_api():
     if _webex_api is None:
         try:
             from webexpythonsdk import WebexAPI
-            if config.webex_bot_access_token_pokedex:
-                _webex_api = WebexAPI(access_token=config.webex_bot_access_token_pokedex)
+            if config.webex_bot_access_token_sleuth:
+                _webex_api = WebexAPI(access_token=config.webex_bot_access_token_sleuth)
         except Exception as e:
             logger.warning(f"Failed to initialize Webex API: {e}")
     return _webex_api
@@ -231,28 +231,28 @@ def main() -> None:
         )
     )
 
-    # Win.AI IR codebase index - weekly incremental update (Sunday 03:15 ET)
-    logger.info("Scheduling weekly Win.AI IR codebase index update (Sunday 03:15 ET)...")
+    # Mentor IR codebase index - weekly incremental update (Sunday 03:15 ET)
+    logger.info("Scheduling weekly Mentor IR codebase index update (Sunday 03:15 ET)...")
     def _update_ir():
         from my_bot.document.codebase_indexer import update_ir_index
         _check_embeddings_and_rebuild(
             lambda days_back=10: update_ir_index(),
-            "Win.AI IR Codebase Index Update",
+            "Mentor IR Codebase Index Update",
         )
     schedule.every().sunday.at('03:15', eastern).do(
-        lambda: safe_run(_update_ir, name="win_ai_ir_codebase_index_update", timeout=1800)
+        lambda: safe_run(_update_ir, name="mentor_ir_codebase_index_update", timeout=1800)
     )
 
-    # Win.AI XSOAR codebase index - weekly incremental update (Sunday 03:30 ET)
-    logger.info("Scheduling weekly Win.AI XSOAR codebase index update (Sunday 03:30 ET)...")
+    # Mentor XSOAR codebase index - weekly incremental update (Sunday 03:30 ET)
+    logger.info("Scheduling weekly Mentor XSOAR codebase index update (Sunday 03:30 ET)...")
     def _update_xsoar():
         from my_bot.document.codebase_indexer import update_xsoar_index
         _check_embeddings_and_rebuild(
             lambda days_back=10: update_xsoar_index(),
-            "Win.AI XSOAR Codebase Index Update",
+            "Mentor XSOAR Codebase Index Update",
         )
     schedule.every().sunday.at('03:30', eastern).do(
-        lambda: safe_run(_update_xsoar, name="win_ai_xsoar_codebase_index_update", timeout=3600)
+        lambda: safe_run(_update_xsoar, name="mentor_xsoar_codebase_index_update", timeout=3600)
     )
 
     # Wiki Knowledge Base — weekly incremental compile (Sunday 04:00 ET)

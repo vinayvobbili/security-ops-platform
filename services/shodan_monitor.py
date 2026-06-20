@@ -84,6 +84,18 @@ class ShodanClient:
             logger.error(f"Shodan request failed: {e}")
             return {"error": str(e)}
 
+    def count(self, query: str) -> dict[str, Any]:
+        """Count internet-exposed hosts matching a Shodan search query.
+
+        Uses ``/shodan/host/count`` which is FREE — it does NOT consume query
+        credits — so it's safe to call on every advisory. Returns
+        ``{"success": True, "total": <int>}`` or ``{"success": False, "error": ...}``.
+        """
+        result = self._make_request("shodan/host/count", {"query": query})
+        if result.get("error"):
+            return {"success": False, "error": result["error"]}
+        return {"success": True, "total": (result.get("data") or {}).get("total", 0)}
+
     def get_api_info(self) -> dict[str, Any]:
         """Get API plan information and remaining credits.
 

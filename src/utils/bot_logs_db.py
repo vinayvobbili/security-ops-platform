@@ -7,7 +7,7 @@ visible in the Datasette browser at http://localhost:8201/.
 
 Tables:
   conversations    — LLM bot Q&A exchanges (the security assistant bot, the Windows triage agent)
-  bot_activity     — Command/action logs (the alert triage service, Moneyball, the notification service)
+  bot_activity     — Command/action logs (the alert triage service, Oracle, the notification service)
   tool_calls       — LLM tool invocations with timing and output
   web_activity     — Web server request log
   log_viewer_audit — Audit trail for the log viewer / git-pull API

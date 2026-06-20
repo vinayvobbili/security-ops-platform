@@ -408,7 +408,7 @@ def create_thehive_alert(
     Args:
         title: Alert title
         description: Alert description (supports markdown)
-        source: Source of the alert (e.g., "Pokedex", "CrowdStrike", "QRadar")
+        source: Source of the alert (e.g., "Sleuth", "CrowdStrike", "QRadar")
         source_ref: Unique reference ID from the source system
         severity: Severity level - "low", "medium", "high", "critical"
         tags: Comma-separated tags

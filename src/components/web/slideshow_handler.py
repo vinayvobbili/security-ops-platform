@@ -22,7 +22,7 @@ def get_image_files(static_folder: str, eastern: pytz.tzinfo.BaseTzInfo) -> List
     """
     today_date = datetime.now(eastern).strftime('%m-%d-%Y')
     image_order = [
-        "images/pokedex.png",
+        "images/sleuth.png",
         "images/Threat Hunting Intro.png",
         f"charts/{today_date}/Threatcon Level.png",
         f"charts/{today_date}/Days Since Last Incident.png",

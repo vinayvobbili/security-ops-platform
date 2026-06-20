@@ -267,6 +267,26 @@
   body.dark-mode .dac-modal h4 { color: #e6f8ee; }
   body.dark-mode .dac-modal p { color: #b8d8c8; }
 
+  .dac-snr-body { margin-top: 14px; max-height: 56vh; overflow-y: auto; }
+  .dac-snr-row { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; cursor: pointer;
+                 background: #f4faf6; border: 1.5px solid #d8ece0; border-radius: 12px; padding: 11px 14px; margin-bottom: 9px; }
+  .dac-snr-row:hover { border-color: #00A651; background: rgba(0,166,81,.06); }
+  .dac-snr-row .grow { flex: 1; min-width: 0; }
+  .dac-snr-name { font-weight: 800; color: #14271d; font-size: .92rem; }
+  .dac-snr-meta { color: #6a7a70; font-size: .76rem; margin-top: 2px; }
+  .dac-snr-pill { font-size: .68rem; font-weight: 800; padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+                  background: #e7f6ed; color: #04663a; border: 1px solid #bfe6cf; }
+  .dac-snr-pre { font-family: ui-monospace, Menlo, monospace; font-size: .72rem; color: #4a5568; white-space: pre-wrap;
+                 max-height: 88px; overflow: hidden; margin-top: 6px; background: #fff; border: 1px solid #e3eee8; border-radius: 8px; padding: 7px 9px; }
+  .dac-snr-back { background: transparent; border: none; color: #04663a; font-weight: 800; cursor: pointer; padding: 4px 0 10px; font-size: .82rem; }
+  body.dark-mode .dac-snr-row { background: #0e1f17; border-color: #2a4438; }
+  body.dark-mode .dac-snr-row:hover { background: rgba(0,166,81,.12); }
+  body.dark-mode .dac-snr-name { color: #e6f8ee; }
+  body.dark-mode .dac-snr-meta { color: #9fc0b1; }
+  body.dark-mode .dac-snr-pill { background: #123a26; color: #6ee8a0; border-color: #1f5237; }
+  body.dark-mode .dac-snr-pre { background: #0b1722; color: #b8d8c8; border-color: #24384a; }
+  body.dark-mode .dac-snr-back { color: #6ee8a0; }
+
   @media (max-width: 860px) { .dac-pipe { grid-template-columns: 1fr 1fr; } }
 </style>
 {% endblock %}
@@ -319,6 +339,7 @@
 
     <div class="dac-actions">
       <button class="dac-run" id="dac-run-btn" onclick="dacSubmit()">🚀 Run pipeline</button>
+      <button class="dac-ghost" id="dac-snr-btn" onclick="dacSnrOpen()">📥 Import from SNR</button>
       <button class="dac-ghost" onclick="dacLoadExample()">📄 Load example</button>
       <button class="dac-ghost" onclick="dacClear()">Clear</button>
       <label class="dac-dryrun" title="Runs the compiled XQL against the live XSIAM tenant — uses Cortex compute. Leave off to lint, compile and review offline.">
@@ -358,7 +379,7 @@
        and best practices (severity, ATT&amp;CK tags). Schema errors stop the pipeline.</p>
 
     <h4>2️⃣ Compile → XSIAM XQL</h4>
-    <p>An in-house LLM (GPT-4.1) translates the Sigma logic into an XSIAM <b>XQL</b> correlation query,
+    <p>An in-house LLM (MetIQ GPT-4.1) translates the Sigma logic into an XSIAM <b>XQL</b> correlation query,
        mapping fields and noting any assumptions. A deterministic compiler is the floor if the model is busy.</p>
 
     <h4>3️⃣ Dry-run on the tenant</h4>
@@ -373,6 +394,19 @@
     <p>The pipeline emits the rule file, the compiled XQL, a <code>.gitlab-ci.yml</code>, and an MR description.
        <b>Approve &amp; open MR</b> pushes it to the detection repo via the GitLab API — <b>disabled on the dev
        instance</b> (it always targets the prod repo). Every run and merge is logged.</p>
+  </div>
+</div>
+
+<!-- SNR import picker -->
+<div class="dac-modal-bg" id="dac-snr-bg">
+  <div class="dac-modal">
+    <button class="close" onclick="dacSnrClose()">&times;</button>
+    <h3>📥 Import a Sigma rule from Signal to Noise</h3>
+    <p>Pick an SNR analysis, then choose one of its Sigma detection rules. It drops into the editor below —
+       review it, then run the pipeline to compile it to XSIAM XQL and quality-check it. 🧬</p>
+    <div class="dac-snr-body" id="dac-snr-body">
+      <div class="dac-note">Loading your SNR analyses…</div>
+    </div>
   </div>
 </div>
 {% endblock %}
@@ -428,7 +462,104 @@ function dacSetSource(src){
 function dacOpenModal(){ document.getElementById('dac-modal-bg').classList.add('open'); }
 function dacCloseModal(){ document.getElementById('dac-modal-bg').classList.remove('open'); }
 document.getElementById('dac-modal-bg').addEventListener('click', e => { if (e.target.id === 'dac-modal-bg') dacCloseModal(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') dacCloseModal(); });
+document.getElementById('dac-snr-bg').addEventListener('click', e => { if (e.target.id === 'dac-snr-bg') dacSnrClose(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { dacCloseModal(); dacSnrClose(); } });
+
+// ── Import from SNR ─────────────────────────────────────────────────────────
+// Pulls Sigma rules straight from the analyst's own SNR analyses. SNR is served
+// same-origin at /snr-app and its SPA stores the logged-in JWT + active team in
+// localStorage, so we reuse the user's existing SNR session — no server creds,
+// no SNR code change (vendor upgrades can't clobber this), only SNR's documented
+// read API. The button is sigma-only; YARA/Suricata rules don't compile here.
+const SNR_PROXY = '/snr-app/api';
+let dacSnrRules = [];
+
+function dacSnrAuth(){
+  const token = localStorage.getItem('snr_token');
+  if (!token) return null;
+  const h = new Headers({ 'Authorization': 'Bearer ' + token });
+  const team = localStorage.getItem('snr_active_team');
+  if (team) h.set('X-Team-Id', team);
+  return h;
+}
+function dacSnrOpen(){ document.getElementById('dac-snr-bg').classList.add('open'); dacSnrLoadSessions(); }
+function dacSnrClose(){ document.getElementById('dac-snr-bg').classList.remove('open'); }
+function dacSnrNotLoggedIn(){
+  document.getElementById('dac-snr-body').innerHTML =
+    '<div class="dac-note">You\'re not signed into Signal to Noise in this browser. '
+    + '<a href="/snr" target="_blank" rel="noopener">Open SNR</a>, sign in, then try again.</div>';
+}
+
+async function dacSnrLoadSessions(){
+  const body = document.getElementById('dac-snr-body');
+  body.innerHTML = '<div class="dac-note">Loading your SNR analyses…</div>';
+  const headers = dacSnrAuth();
+  if (!headers) { dacSnrNotLoggedIn(); return; }
+  let data;
+  try {
+    const res = await fetch(SNR_PROXY + '/sessions?limit=50', { headers });
+    if (res.status === 401) { dacSnrNotLoggedIn(); return; }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    data = await res.json();
+  } catch (e) {
+    body.innerHTML = '<div class="dac-err">Couldn\'t reach SNR: ' + esc(e.message) + '</div>';
+    return;
+  }
+  const sessions = (data && data.sessions) || [];
+  if (!sessions.length) { body.innerHTML = '<div class="dac-note">No SNR analyses found for your team.</div>'; return; }
+  body.innerHTML = sessions.map(s => {
+    const when = s.created_at ? new Date(s.created_at).toLocaleString() : '';
+    const meta = [s.incident_id, when].filter(Boolean).map(esc).join(' · ');
+    const sev = s.severity ? '<span class="dac-snr-pill">' + esc(s.severity) + '</span>' : '';
+    return '<button class="dac-snr-row" onclick="dacSnrPickSession(\'' + esc(s.id) + '\')">'
+         + '<span class="grow"><div class="dac-snr-name">' + esc(s.name || 'Untitled analysis') + '</div>'
+         + (meta ? '<div class="dac-snr-meta">' + meta + '</div>' : '') + '</span>' + sev + '</button>';
+  }).join('');
+}
+
+async function dacSnrPickSession(id){
+  const body = document.getElementById('dac-snr-body');
+  body.innerHTML = '<div class="dac-note">Loading detection rules…</div>';
+  const headers = dacSnrAuth();
+  if (!headers) { dacSnrNotLoggedIn(); return; }
+  let data;
+  try {
+    const res = await fetch(SNR_PROXY + '/sessions/' + encodeURIComponent(id), { headers });
+    if (res.status === 401) { dacSnrNotLoggedIn(); return; }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    data = await res.json();
+  } catch (e) {
+    body.innerHTML = '<div class="dac-err">Couldn\'t load that analysis: ' + esc(e.message) + '</div>';
+    return;
+  }
+  dacSnrRules = (((data.result || {}).detection_rules) || []).filter(r => (r.rule_type || '').toLowerCase() === 'sigma');
+  const back = '<button class="dac-snr-back" onclick="dacSnrLoadSessions()">← Back to analyses</button>';
+  if (!dacSnrRules.length) {
+    body.innerHTML = back + '<div class="dac-note">This analysis has no Sigma rules. (SNR also produces YARA and Suricata — only Sigma compiles here.)</div>';
+    return;
+  }
+  body.innerHTML = back + dacSnrRules.map((r, i) => {
+    const src = r.source ? '<span class="dac-snr-pill">' + esc(r.source) + '</span>' : '';
+    return '<button class="dac-snr-row" style="flex-direction:column;align-items:stretch" onclick="dacSnrPickRule(' + i + ')">'
+         + '<span style="display:flex;gap:10px;align-items:center;width:100%"><span class="grow">'
+         + '<div class="dac-snr-name">' + esc(r.rule_name || ('Sigma rule ' + (i + 1))) + '</div>'
+         + (r.description ? '<div class="dac-snr-meta">' + esc(r.description) + '</div>' : '') + '</span>' + src + '</span>'
+         + '<div class="dac-snr-pre">' + esc((r.rule_content || '').slice(0, 600)) + '</div></button>';
+  }).join('');
+}
+
+function dacSnrPickRule(i){
+  const r = dacSnrRules[i];
+  if (!r) return;
+  dacSetSource('sigma');
+  document.getElementById('dac-rule').value = r.rule_content || '';
+  document.getElementById('dac-title').value = r.rule_name || '';
+  document.getElementById('dac-err').textContent = '';
+  dacSnrClose();
+  const ta = document.getElementById('dac-rule');
+  ta.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  ta.focus();
+}
 
 const DAC_EXAMPLE = `title: Suspicious PowerShell Encoded Command
 id: 6e897651-f157-4d8f-aaeb-df8151488385
@@ -772,6 +903,28 @@ async function dacOpenJob(id){
     window.scrollTo({top: 0, behavior: 'smooth'});
   } catch (e) { /* ignore */ }
 }
+
+// Receive a Sigma rule handed off from SNR's "Send to Detection-as-Code" button.
+// SNR is same-origin, so it drops the rule into localStorage (shared across tabs)
+// and opens this page in a new tab; we pick it up here, prefill, then clear it so
+// a refresh starts clean.
+function dacConsumeImport(){
+  let rule, title;
+  try {
+    rule = localStorage.getItem('dac_import_sigma');
+    title = localStorage.getItem('dac_import_title');
+  } catch (e) { return; }
+  if (!rule) return;
+  try { localStorage.removeItem('dac_import_sigma'); localStorage.removeItem('dac_import_title'); } catch (e) {}
+  dacSetSource('sigma');
+  document.getElementById('dac-rule').value = rule;
+  if (title) document.getElementById('dac-title').value = title;
+  document.getElementById('dac-err').textContent = '';
+  const ta = document.getElementById('dac-rule');
+  ta.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  ta.focus();
+}
+dacConsumeImport();
 
 dacLoadRecent();
 </script>

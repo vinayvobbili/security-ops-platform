@@ -485,6 +485,7 @@ class RecordedFutureClient:
             result = {
                 "type": entity.get("type"),
                 "value": entity.get("name"),
+                "entity_id": entity.get("id"),  # RF entity id for the Intelligence Card deep link
                 "risk_score": risk.get("score", 0),
                 "risk_level": RecordedFutureClient.get_risk_level(risk.get("score", 0)),
                 "evidence_count": risk.get("evidenceCount", 0),

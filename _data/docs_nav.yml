@@ -11,11 +11,11 @@
     - { label: Web Server Deployment, url: /docs/WEBSERVER-DEPLOYMENT-README.html, icon: "🌐", desc: "Web server deployment" }
     - { label: SSL Verification, url: /docs/SSL_VERIFICATION_GUIDE.html, icon: "🔏", desc: "SSL/TLS configuration" }
     - { label: Mac Migration, url: /docs/MAC_MIGRATION.html, icon: "💻", desc: "Migrating to a new Mac" }
-    - { label: Windows AI Deployment, url: /docs/WIN_AI_DEPLOYMENT.html, icon: "🪟", desc: "Windows AI deployment notes" }
+    - { label: Windows AI Deployment, url: /docs/MENTOR_DEPLOYMENT.html, icon: "🪟", desc: "Windows AI deployment notes" }
 - title: Bots
   items:
-    - { label: Pokedex Executive Summary, url: /docs/POKEDEX_EXECUTIVE_SUMMARY.html, icon: "📋", desc: "Pokedex bot overview" }
-    - { label: Pokedex Usage, url: /docs/POKEDEX_USAGE.html, icon: "🤖", desc: "Pokedex bot usage guide" }
+    - { label: Sleuth Executive Summary, url: /docs/SLEUTH_EXECUTIVE_SUMMARY.html, icon: "📋", desc: "Sleuth bot overview" }
+    - { label: Sleuth Usage, url: /docs/SLEUTH_USAGE.html, icon: "🤖", desc: "Sleuth bot usage guide" }
 - title: Security & Integration
   items:
     - { label: Audit Logging, url: /docs/AUDIT_README.html, icon: "🧾", desc: "Audit logging quick reference" }

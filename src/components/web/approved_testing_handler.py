@@ -76,14 +76,14 @@ def submit_red_team_testing_form(
     )
 
 
-def submit_toodles_approved_testing(
+def submit_aide_approved_testing(
     form_data: Dict[str, Any],
     list_handler: ListHandler,
     team_name: str,
     eastern: pytz.tzinfo.BaseTzInfo,
     submitter_ip: str
 ) -> str:
-    """Handles Toodles approved testing submissions.
+    """Handles Aide approved testing submissions.
 
     Args:
         form_data: Form data from request
@@ -98,7 +98,7 @@ def submit_toodles_approved_testing(
     Raises:
         ValueError: If validation fails
     """
-    logger.info("Processing Toodles approved testing submission")
+    logger.info("Processing Aide approved testing submission")
 
     usernames = form_data.get('usernames', '').strip()
     tester_hosts = form_data.get('tester_hosts', '').strip()

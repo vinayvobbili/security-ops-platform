@@ -81,7 +81,7 @@ def _notify_audit(*, name: str, username: str, email: str, reason: str,
     try:
         cfg = get_config()
         room_id = (cfg.webex_room_id_dev_test_space or "").strip()
-        token = (cfg.webex_bot_access_token_toodles or "").strip()
+        token = (cfg.webex_bot_access_token_aide or "").strip()
         if not room_id or not token:
             return
         from webexteamssdk import WebexTeamsAPI
@@ -294,7 +294,7 @@ class POIScanner:
         """
         in_excl = is_in_exception_list(name=name, username=username, email=email)
         _notify_audit(name=name, username=username, email=email, reason=reason,
-                      requester=requester, blocked=in_excl, source="Toodles")
+                      requester=requester, blocked=in_excl, source="Aide")
         if in_excl:
             logger.info(
                 "POI scan bypassed (target on exception list, requester=%s)", requester
@@ -628,7 +628,7 @@ def run_investigation_sync(
     """
     in_excl = is_in_exception_list(name=name, username=username, email=email)
     _notify_audit(name=name, username=username, email=email, reason=reason,
-                  requester=requester, blocked=in_excl, source="Pokedex tool")
+                  requester=requester, blocked=in_excl, source="Sleuth tool")
     if in_excl:
         logger.info("POI sync scan bypassed (exception list, requester=%s)", requester)
         return None

@@ -4,6 +4,7 @@ import logging
 from typing import Optional
 
 from mcp_server.server import mcp
+from my_bot.utils.verify_links import attach_verify, recorded_future_line
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ def recorded_future_enrich(
         include_metadata: Include extra metadata in response
     """
     client = _get_client()
-    return client.enrich(
+    result = client.enrich(
         ips=ips,
         domains=domains,
         hashes=hashes,
@@ -72,6 +73,16 @@ def recorded_future_enrich(
         vulnerabilities=vulnerabilities,
         include_metadata=include_metadata,
     )
+    # The Intelligence Card deep link targets ONE entity; only attach it when the
+    # batch enriched a single indicator (the common single-IOC case). RF's own
+    # entity id is authoritative, so no URL guessing.
+    try:
+        normalized = client.extract_enrichment_results(result)
+        if len(normalized) == 1:
+            result = attach_verify(result, recorded_future_line(normalized[0].get("entity_id")))
+    except Exception:
+        pass
+    return result
 
 
 @mcp.tool(tags={"readonly"})

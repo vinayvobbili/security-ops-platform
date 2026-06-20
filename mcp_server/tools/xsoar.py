@@ -57,29 +57,20 @@ def xsoar_search_tickets(
     incident_type: str = "CIRT",
     size: int = 50,
 ) -> dict:
-    """Free-text live search across XSOAR tickets via the XSOAR API.
+    """Free-text live search across XSOAR tickets (no local index).
 
-    Hits XSOAR's search API directly — no local index, no RAG. Combines a
-    free-text term with optional metadata filters and returns slim ticket
-    summaries. For deep details on any single hit, follow up with
-    xsoar_get_case(incident_id).
+    Combines a free-text term with optional metadata filters. For deep
+    details on a single hit, follow up with xsoar_get_case(incident_id).
 
     Args:
-        text: Free-text search term — XSOAR matches it across name,
-              details, notes and most string custom fields. Wrap exact
-              phrases in double quotes: '"AWS root login"'.
-        days_back: Limit to tickets created in the last N days
-                   (default 30). Pass 0 to search all-time.
+        text: Free-text search — matches name, details, notes, custom fields.
+              Wrap exact phrases in double quotes.
+        days_back: Limit to last N days (default 30). 0 = all-time.
         status: Optional 'Active' or 'closed'.
-        severity: Optional 'Low', 'Medium', 'High', or 'Critical'.
-        incident_type: XSOAR incident type, exact match
-                       (default 'CIRT'). Empty string to search all
-                       types. Note: 'CIRT' does NOT include
-                       'CIRT IOC Hunt' — those are a separate type.
-        size: Max results to return (default 50).
-
-    Returns:
-        {"count": N, "query": "<XSOAR query string>", "tickets": [slim ticket dicts]}
+        severity: Optional 'Low', 'Medium', 'High', 'Critical'.
+        incident_type: XSOAR type, exact match (default 'CIRT'; does NOT
+                       include 'CIRT IOC Hunt'). Empty string = all.
+        size: Max results (default 50).
     """
     from datetime import datetime, timedelta, timezone
 
@@ -129,27 +120,20 @@ def xsoar_get_closed_tickets_by_period(
     include_notes: bool = True,
     size: int = 200,
 ) -> dict:
-    """Fetch CIRT tickets closed within a time window. Useful for shift
-    performance evaluation (e.g. day shift 07:00-19:00 ET, overnight 19:00-07:00 ET)
-    or daily/weekly close-rate review.
+    """CIRT tickets closed in a window — shift performance / close-rate review.
 
-    Always excludes job-category and IOC Hunt tickets. Default also excludes
-    unowned (playbook auto-closed) tickets — flip include_unowned=True for
-    auto-close ratio analysis.
+    Always excludes job-category and IOC Hunt tickets. By default also
+    excludes unowned (playbook auto-close) tickets — set include_unowned=True
+    for auto-close ratio analysis.
 
     Args:
-        start: Window start in Eastern time. Format: "YYYY-MM-DDTHH:MM:SS"
-               (e.g. "2026-04-16T07:00:00" = 7 AM ET on Apr 16).
-        end: Window end (exclusive), same format.
-        impact: Optional filter — "Benign True Positive", "False Positive",
-                "Ignore", "Security Testing", "Malicious True Positive".
-        include_unowned: If False (default), excludes unowned playbook auto-closes.
-        include_notes: If True (default), fetches analyst notes per ticket in
-                       parallel. Disable for very large windows to keep latency low.
-        size: Max tickets to return (default 200).
-
-    Returns:
-        {"count": N, "query": "<XSOAR query string>", "tickets": [slim ticket dicts]}
+        start: Eastern time, format 'YYYY-MM-DDTHH:MM:SS' (e.g. '2026-04-16T07:00:00').
+        end:   Same format, exclusive.
+        impact: 'Benign True Positive' | 'False Positive' | 'Ignore' |
+                'Security Testing' | 'Malicious True Positive'.
+        include_unowned: Default False (skip auto-closes).
+        include_notes: Default True; disable for very large windows.
+        size: Max tickets (default 200).
     """
     from concurrent.futures import ThreadPoolExecutor
     from datetime import datetime
@@ -210,14 +194,92 @@ def xsoar_get_closed_tickets_by_period(
 
 
 @mcp.tool(tags={"readonly"})
-def xsoar_get_case(incident_id: str) -> dict:
-    """Get full XSOAR case details including analyst notes.
+def xsoar_get_case_full(incident_id: str) -> dict:
+    """Full XSOAR case dump — escape hatch. Prefer xsoar_get_case.
+
+    ⚠️ Returns the entire investigation including war-room entries,
+    playbook outputs, integration command results, every analyst note.
+    Typically 20K-100K tokens. Use only when xsoar_get_case (slim) is
+    missing a field you need (raw playbook output / war-room transcript).
 
     Args:
         incident_id: The XSOAR incident ID
     """
     client = _get_client()
     return client.get_case_data_with_notes(incident_id)
+
+
+@mcp.tool(tags={"readonly"})
+def xsoar_get_case_image(incident_id: str, image_ref: str) -> dict:
+    """Download a screenshot/image embedded in an XSOAR case note to disk.
+
+    Analysts paste evidence (original-request emails, tool screenshots) into
+    war-room notes as markdown images. The investigation API returns these as
+    `![image.png](/xsoar/markdown/image/<name>)` references, NOT as text/bytes.
+    This tool fetches the raw image so it can be viewed/OCR'd, and returns the
+    local file path to read.
+
+    Args:
+        incident_id: The XSOAR incident ID (namespaces the output directory).
+        image_ref: The image reference — accepts a bare filename, the
+            `/xsoar/markdown/image/<name>` path, a full URL, or the whole
+            `![alt](path)` markdown snippet copied from a note.
+
+    Returns:
+        {"path", "filename", "bytes", "content_type"} — read `path` to view it.
+    """
+    client = _get_client()
+    return client.get_case_image(incident_id, image_ref)
+
+
+@mcp.tool(tags={"readonly"})
+def xsoar_get_case(
+    incident_id: str,
+    max_notes: int = 5,
+    note_chars: int = 800,
+) -> dict:
+    """Get an XSOAR case by ID — slim summary, default for pull/fetch/get prompts.
+
+    Returns core ticket fields + recent analyst notes (truncated). For full
+    war-room / playbook / integration history use xsoar_get_case_full.
+
+    Args:
+        incident_id: The XSOAR incident ID.
+        max_notes: Most recent N analyst notes (default 5).
+        note_chars: Truncate each note to this many chars (default 800).
+    """
+    client = _get_client()
+    case = client.get_case_data(incident_id)
+    cf = case.get("CustomFields") or {}
+
+    all_notes = client.get_user_notes(incident_id)
+    trimmed_notes = [
+        {
+            "author": n.get("author"),
+            "created_at": n.get("created_at"),
+            "note_text": (n.get("note_text") or "")[:note_chars],
+        }
+        for n in all_notes[:max_notes]
+    ]
+
+    return {
+        "id": case.get("id"),
+        "name": case.get("name"),
+        "type": case.get("type"),
+        "status": case.get("status"),
+        "severity": case.get("severity"),
+        "owner": case.get("owner"),
+        "created": case.get("created"),
+        "closed": case.get("closed"),
+        "impact": cf.get("impact"),
+        "closeReason": case.get("closeReason"),
+        "closeNotes": (case.get("closeNotes") or "")[:1500],
+        "hostname": cf.get("hostname"),
+        "detectionname": cf.get("detectionname"),
+        "sourceip": cf.get("sourceip"),
+        "note_count": len(all_notes),
+        "notes": trimmed_notes,
+    }
 
 
 @mcp.tool(tags={"mutating"})

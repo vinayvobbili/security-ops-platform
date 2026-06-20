@@ -26,7 +26,7 @@ def get_bot_details(bot_access_token):
 
 def main():
     config = get_config()
-    bot_access_token = config.webex_bot_access_token_moneyball
+    bot_access_token = config.webex_bot_access_token_oracle
     bot_details = get_bot_details(bot_access_token)
     if bot_details:
         print(f"Bot ID: {bot_details['id']}")

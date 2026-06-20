@@ -257,6 +257,50 @@ def api_powerbi_schema(dataset_id):
         return jsonify({"success": False, "error": str(exc)}), 500
 
 
+@powerbi_bp.route("/api/powerbi/route", methods=["POST"])
+@limiter.limit("20 per minute")
+@log_web_activity
+def api_powerbi_route():
+    """Cross-dataset router: NL question -> best dataset to answer it.
+
+    Returns {success, dataset_id, dataset_name, confidence, reason,
+    alternatives:[{id,name}], method}. Used by the Explorer's Auto mode so the
+    user doesn't have to pick a dataset before asking.
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        question = (data.get("message") or "").strip()
+        if not question:
+            return jsonify({"success": False, "error": "Message is required"}), 400
+        if len(question) > 2000:
+            return jsonify({"success": False, "error": "Message too long"}), 400
+
+        from services.powerbi_router import build_catalog, route_question
+
+        if _is_demo_mode():
+            # Demo mode has no live catalog — route over the demo dataset list.
+            client = _get_pbi_client()
+            catalog = build_catalog(client)
+            result = route_question(question, catalog, None, history=data.get("history"))
+            return jsonify({"success": True, **result})
+
+        client = _get_pbi_client()
+        catalog = build_catalog(client)
+        # Prefer the lightweight router LLM (fast classification); fall back to
+        # the main chat LLM, then to deterministic keyword routing inside route_question.
+        try:
+            router_llm = _get_prune_llm()
+        except Exception:
+            router_llm = None
+        if router_llm is None:
+            router_llm = _get_pbi_llm()
+        result = route_question(question, catalog, router_llm, history=data.get("history"))
+        return jsonify({"success": True, **result})
+    except Exception as exc:
+        logger.error("Power BI route error: %s", exc, exc_info=True)
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
 @powerbi_bp.route("/api/powerbi/chat/stream", methods=["POST"])
 @limiter.limit("10 per minute")
 @log_web_activity

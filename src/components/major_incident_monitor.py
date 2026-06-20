@@ -274,7 +274,7 @@ def check_for_new_incidents(room_id=None):
     try:
         config = get_config()
         room_id = room_id or config.webex_room_id_dev_test_space
-        webex_token = config.webex_bot_access_token_moneyball
+        webex_token = config.webex_bot_access_token_oracle
 
         if not room_id:
             logger.error("No Webex room ID configured")

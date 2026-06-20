@@ -1,4 +1,4 @@
-"""Pokedex Webex card for IR Lead response plans.
+"""Sleuth Webex card for IR Lead response plans.
 
 Sent on every ``IRPlan`` emission (i.e. every Tier 2 → IR Lead escalation).
 The card is the human handoff — bridge call instruction, structured action
@@ -292,7 +292,7 @@ def send_ir_plan_card(plan: IRPlan,
                       hitl_action_id: Optional[str] = None,
                       hitl_approver_role: str = "",
                       hitl_approver_name: str = "") -> Optional[str]:
-    """Send the IR Lead's plan card to Pokedex's dev test space.
+    """Send the IR Lead's plan card to Sleuth's dev test space.
 
     If ``hitl_action_id`` is set, the card includes Approve/Reject buttons
     that link to the Flask HITL endpoint.
@@ -300,9 +300,9 @@ def send_ir_plan_card(plan: IRPlan,
     from my_config import get_config
     from webexteamssdk import WebexTeamsAPI
     cfg = get_config()
-    token = cfg.webex_bot_access_token_pokedex
+    token = cfg.webex_bot_access_token_sleuth
     if not token:
-        logger.warning("ir_lead_webex: WEBEX_BOT_ACCESS_TOKEN_POKEDEX not set, skipping")
+        logger.warning("ir_lead_webex: WEBEX_BOT_ACCESS_TOKEN_SLEUTH not set, skipping")
         return None
     room = cfg.webex_room_id_soc_in_a_box or cfg.webex_room_id_dev_test_space
     if not room:

@@ -29,6 +29,7 @@ from ._retry import truncate_error_message
 from . import _search
 from . import _entries
 from . import _files
+from . import _images
 from . import _tasks
 from . import _participants
 
@@ -325,6 +326,22 @@ class TicketHandler:
     def get_case_data_with_notes(self, incident_id: str, max_retries: int = 3) -> Dict[str, Any]:
         """Fetch incident details along with notes."""
         return _entries.get_case_data_with_notes(self.client, incident_id, max_retries)
+
+    def get_case_image(self, incident_id: str, image_ref: str,
+                       dest_dir: str = _images.DEFAULT_IMAGE_DIR) -> Dict[str, Any]:
+        """Download a markdown-embedded screenshot/image from a case note to disk.
+
+        Args:
+            incident_id: XSOAR incident ID (used to namespace the output dir).
+            image_ref: bare filename, ``/xsoar/markdown/image/...`` path, full
+                URL, or a whole ``![alt](path)`` markdown snippet.
+            dest_dir: base directory for downloaded images.
+
+        Returns:
+            ``{"path", "filename", "bytes", "content_type"}``.
+        """
+        out_dir = os.path.join(dest_dir, str(incident_id))
+        return _images.download_markdown_image(self.client, image_ref, dest_dir=out_dir)
 
     def create_in_dev(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """

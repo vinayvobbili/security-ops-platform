@@ -2,7 +2,7 @@
 Codebase Indexer for the Windows triage agent
 
 Indexes a curated set of Python and Markdown source files into a dedicated
-ChromaDB collection (chroma_win_ai) for the Windows triage agent tutor bot.
+ChromaDB collection (chroma_mentor) for the Windows triage agent tutor bot.
 
 The indexed set is intentionally explicit — only directories listed in
 CURATED_DIRS are walked. This eliminates any risk of indexing .env,
@@ -343,7 +343,7 @@ INDEXED_EXTENSIONS = {".py", ".md"}
 EXTERNAL_INDEXED_EXTENSIONS = {".yml", ".yaml"}
 
 # Directories to skip even if they appear under a curated path
-SKIP_DIRS = {"__pycache__", ".git", "node_modules", "chroma_documents", "chroma_win_ai"}
+SKIP_DIRS = {"__pycache__", ".git", "node_modules", "chroma_documents", "chroma_mentor"}
 
 
 def _project_root() -> Path:
@@ -407,14 +407,14 @@ def _collect_ir_files() -> List[Path]:
 
 
 def _collect_xsoar_files() -> List[Path]:
-    """Collect YAML automation files from the XSOAR repo (WINAI_XSOAR_REPO_PATH)."""
-    xsoar_path = os.environ.get("WINAI_XSOAR_REPO_PATH")
+    """Collect YAML automation files from the XSOAR repo (MENTOR_XSOAR_REPO_PATH)."""
+    xsoar_path = os.environ.get("MENTOR_XSOAR_REPO_PATH")
     if not xsoar_path:
-        logger.warning("WINAI_XSOAR_REPO_PATH not set — XSOAR index will be empty")
+        logger.warning("MENTOR_XSOAR_REPO_PATH not set — XSOAR index will be empty")
         return []
     xsoar_dir = Path(xsoar_path)
     if not xsoar_dir.exists():
-        logger.warning(f"WINAI_XSOAR_REPO_PATH not found: {xsoar_dir}")
+        logger.warning(f"MENTOR_XSOAR_REPO_PATH not found: {xsoar_dir}")
         return []
     files: List[Path] = []
     for path in xsoar_dir.rglob("*"):
@@ -594,16 +594,16 @@ class CodebaseIndexer:
             raise ValueError(f"mode must be 'ir' or 'xsoar', got {mode!r}")
         self.mode = mode
         root = _project_root()
-        self.chroma_path = chroma_path or str(root / "chroma_win_ai")
+        self.chroma_path = chroma_path or str(root / "chroma_mentor")
         self._client: Optional[chromadb.PersistentClient] = None
         self._collection = None
-        code_embed_model = os.environ.get("WINAI_EMBEDDING_MODEL")
-        winai_base_url = os.environ.get("WINAI_EMBEDDING_BASE_URL")
+        code_embed_model = os.environ.get("MENTOR_EMBEDDING_MODEL")
+        mentor_base_url = os.environ.get("MENTOR_EMBEDDING_BASE_URL")
         kwargs = {}
         if code_embed_model:
             kwargs["model"] = code_embed_model
-        if winai_base_url:
-            kwargs["base_url"] = winai_base_url
+        if mentor_base_url:
+            kwargs["base_url"] = mentor_base_url
         self._embedding_fn = OllamaEmbeddingFunction(**kwargs)
         self.retriever = None
 
@@ -651,7 +651,7 @@ class CodebaseIndexer:
 
             # Pull latest commits before indexing (XSOAR only)
             if self.mode == "xsoar":
-                xsoar_path = os.environ.get("WINAI_XSOAR_REPO_PATH")
+                xsoar_path = os.environ.get("MENTOR_XSOAR_REPO_PATH")
                 if xsoar_path:
                     _pull_xsoar_repo(Path(xsoar_path))
 
@@ -741,9 +741,9 @@ class CodebaseIndexer:
 
             # Determine repo path; pull latest for XSOAR
             if self.mode == "xsoar":
-                xsoar_path = os.environ.get("WINAI_XSOAR_REPO_PATH")
+                xsoar_path = os.environ.get("MENTOR_XSOAR_REPO_PATH")
                 if not xsoar_path:
-                    logger.warning("WINAI_XSOAR_REPO_PATH not set")
+                    logger.warning("MENTOR_XSOAR_REPO_PATH not set")
                     return False
                 repo_path = Path(xsoar_path)
                 _pull_xsoar_repo(repo_path)
@@ -908,7 +908,7 @@ def rebuild_xsoar_index() -> bool:
 
 
 # Legacy alias so any existing callers still work
-rebuild_win_ai_index = rebuild_ir_index
+rebuild_mentor_index = rebuild_ir_index
 
 
 def update_ir_index(since_days: int = 10) -> bool:

@@ -2,7 +2,7 @@
 
 # Utility function to gracefully kill a process with fallback to force kill
 # Usage: kill_process_gracefully "process_pattern" "Process Name"
-# Example: kill_process_gracefully "webex_bots/barnacles" "the alert triage service"
+# Example: kill_process_gracefully "webex_bots/relay" "the alert triage service"
 
 kill_process_gracefully() {
     local process_pattern="$1"

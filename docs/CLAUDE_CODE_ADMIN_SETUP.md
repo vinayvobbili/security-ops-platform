@@ -187,7 +187,7 @@ Expected: the new `claude-gemma3` entry appears alongside the others.
 
 ## 🖥️ Mac backends
 
-All three Claude Code backends now live on **studio1**, behind a single reverse-tunnel session to lab-vm1. (mac-m1 still runs GLM-4.7-Flash for Pokedex + Win.AI on its own tunnel, but is no longer in the Claude Code path as of 2026-05-06.)
+All three Claude Code backends now live on **studio1**, behind a single reverse-tunnel session to lab-vm1. (mac-m1 still runs GLM-4.7-Flash for Sleuth + Mentor on its own tunnel, but is no longer in the Claude Code path as of 2026-05-06.)
 
 ### 🎙️ studio1 (GLM + Laguna, two stacks)
 - vllm-mlx GLM: `mlx-community/GLM-4.7-Flash-8bit`, parser `glm47`, reasoning `deepseek_r1`, tunnel `lab-vm1:8024 → studio1:8002` (~30 GB on disk)

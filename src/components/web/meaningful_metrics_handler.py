@@ -653,7 +653,7 @@ def _add_hyperlinks_and_formatting(temp_path: str) -> None:
             cell = ws.cell(row=row_idx, column=id_col_idx)
             if cell.value:
                 ticket_id = cell.value
-                ticket_url = f"https://msoar.crtx.us.paloaltonetworks.com/Custom/caseinfoid/{ticket_id}"
+                ticket_url = f"https://orchestrator.crtx.us.paloaltonetworks.com/Custom/caseinfoid/{ticket_id}"
                 cell.hyperlink = ticket_url
                 cell.font = blue_font
                 cell.value = ticket_id

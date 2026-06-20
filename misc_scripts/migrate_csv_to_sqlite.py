@@ -41,7 +41,7 @@ def _read_csv(path: Path) -> list[dict]:
             headers = [h.lower().strip() for h in first]
             data_rows = raw[1:]
         else:
-            # toodles has no header — infer from known schema
+            # aide has no header — infer from known schema
             headers = ["actor", "command_keyword", "room_name", "timestamp_eastern"]
             data_rows = raw
 
@@ -55,10 +55,10 @@ def _read_csv(path: Path) -> list[dict]:
 
 
 def migrate_conversations(conn: sqlite3.Connection):
-    """Migrate pokedex, win_ai conversation CSVs."""
+    """Migrate sleuth, mentor conversation CSVs."""
     mapping = {
-        "pokedex_conversations.csv": "pokedex",
-        "win_ai_conversations.csv": "win_ai",
+        "sleuth_conversations.csv": "sleuth",
+        "mentor_conversations.csv": "mentor",
     }
     total = 0
     for filename, bot in mapping.items():
@@ -102,9 +102,9 @@ def migrate_conversations(conn: sqlite3.Connection):
 def migrate_activity(conn: sqlite3.Connection):
     """Migrate decorator-based activity log CSVs."""
     files = [
-        ("barnacles_activity_log.csv", "barnacles"),
-        ("moneyball_activity_log.csv", "moneyball"),
-        ("toodles_activity_log.csv", "toodles"),
+        ("relay_activity_log.csv", "relay"),
+        ("oracle_activity_log.csv", "oracle"),
+        ("aide_activity_log.csv", "aide"),
     ]
     total = 0
     for filename, bot in files:

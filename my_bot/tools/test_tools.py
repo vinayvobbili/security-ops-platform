@@ -25,7 +25,7 @@ def run_tests() -> str:
         try:
             import sys
             for module_name in list(sys.modules.keys()):
-                if 'webex_bots.pokedex' in module_name:
+                if 'webex_bots.sleuth' in module_name:
                     bot_module = sys.modules[module_name]
                     if hasattr(bot_module, 'bot_instance'):
                         bot_instance = bot_module.bot_instance
@@ -130,7 +130,7 @@ def simple_live_message_test() -> str:
     try:
         import sys
         for module_name in list(sys.modules.keys()):
-            if 'webex_bots.pokedex' in module_name:
+            if 'webex_bots.sleuth' in module_name:
                 bot_module = sys.modules[module_name]
                 if hasattr(bot_module, 'bot_instance'):
                     bot_instance = bot_module.bot_instance

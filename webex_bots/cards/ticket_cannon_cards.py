@@ -2,7 +2,7 @@
 
 Creation moved to the login-gated web dashboard so every silencer carries an
 authenticated owner + audit trail and is RBAC-gated (only SOC analysts /
-response engineers can suppress detections). These Toodles cards no longer
+response engineers can suppress detections). These Aide cards no longer
 collect input — they just deep-link analysts to the web app. The old in-card
 create flow (and the `create_silencer` command) was retired.
 """

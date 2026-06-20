@@ -16,6 +16,8 @@ from my_bot.tools._tagging import readonly_tool, mutating_tool
 from services.abuseipdb import AbuseIPDBClient, ABUSE_CATEGORIES
 from src.utils.tool_decorator import log_tool_call
 from src.utils.llm_decorators import validate_args, IP_ADDRESS_PATTERN, DOMAIN_PATTERN
+from my_bot.utils.webex_format import defang
+from my_bot.utils.verify_links import append_verify, abuseipdb_line
 
 logger = logging.getLogger(__name__)
 
@@ -68,13 +70,13 @@ def _format_ip_result(data: dict) -> str:
 
     result = [
         f"## AbuseIPDB IP Analysis",
-        f"**IP Address:** {ip}",
+        f"**IP Address:** {defang(ip)}",
         f"**Threat Level:** {threat_level}",
         f"**Abuse Confidence Score:** {abuse_score}%",
         "",
         f"**Country:** {data.get('country_code', 'Unknown')}",
         f"**ISP:** {data.get('isp', 'Unknown')}",
-        f"**Domain:** {data.get('domain', 'N/A')}",
+        f"**Domain:** {defang(data.get('domain', 'N/A'))}",
         f"**Usage Type:** {data.get('usage_type', 'Unknown')}",
         "",
         f"**Total Reports:** {data.get('total_reports', 0)}",
@@ -124,7 +126,7 @@ def _format_domain_result(data: dict) -> str:
 
     result = [
         f"## AbuseIPDB Domain Analysis",
-        f"**Domain:** {domain}",
+        f"**Domain:** {defang(domain)}",
         f"**Threat Level:** {threat_level}",
         f"**Max Abuse Score:** {max_score}%",
         "",
@@ -143,12 +145,12 @@ def _format_domain_result(data: dict) -> str:
             reports = ip_info.get("total_reports", 0)
             isp = ip_info.get("isp", "Unknown")
             country = ip_info.get("country", "Unknown")
-            result.append(f"- **{ip}** - Score: {score}%, Reports: {reports}, ISP: {isp}, Country: {country}")
+            result.append(f"- **{defang(ip)}** - Score: {score}%, Reports: {reports}, ISP: {isp}, Country: {country}")
 
     # List clean IPs
     if clean_ips:
         result.append("")
-        result.append(f"**Clean IPs:** {', '.join(clean_ips)}")
+        result.append(f"**Clean IPs:** {', '.join(defang(ip) for ip in clean_ips)}")
 
     return "\n".join(result)
 
@@ -179,7 +181,7 @@ def lookup_ip_abuseipdb(ip_address: str) -> str:
 
     try:
         data = client.check_ip(ip_address.strip())
-        return _format_ip_result(data)
+        return append_verify(_format_ip_result(data), abuseipdb_line(ip_address))
     except Exception as e:
         logger.error(f"AbuseIPDB IP lookup failed: {e}")
         return f"Error looking up IP in AbuseIPDB: {str(e)}"

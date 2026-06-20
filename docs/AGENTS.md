@@ -19,11 +19,11 @@ This file provides guidance to AI CLI agents (Claude Code, Gemini, etc.) when wo
 
 ### Bot Management (the security assistant bot SOC Bot)
 
-- **Run Bot**: `./src/pokedex/run_pokedex.sh` - Start the main SOC bot
-- **Restart Bot**: `./src/pokedex/restart_pokedex.sh` - Restart bot service
-- **Check Status**: `./src/pokedex/pokedex_status.sh` - Check bot health
-- **Kill Bot**: `./src/pokedex/kill_pokedex.sh` - Stop bot completely
-- **Install Preloader**: `./src/pokedex/install_preloader_service.sh` - Install boot-time preloader service
+- **Run Bot**: `./src/sleuth/run_sleuth.sh` - Start the main SOC bot
+- **Restart Bot**: `./src/sleuth/restart_sleuth.sh` - Restart bot service
+- **Check Status**: `./src/sleuth/sleuth_status.sh` - Check bot health
+- **Kill Bot**: `./src/sleuth/kill_sleuth.sh` - Stop bot completely
+- **Install Preloader**: `./src/sleuth/install_preloader_service.sh` - Install boot-time preloader service
 
 ### Testing
 
@@ -42,7 +42,7 @@ This file provides guidance to AI CLI agents (Claude Code, Gemini, etc.) when wo
     - `charts/` - Metrics visualization (aging tickets, CrowdStrike efficacy, threat analysis)
     - `components/` - Reusable business logic components (SLA monitoring, ticket management)
     - `epp/` - Endpoint Protection Platform integrations and host tagging
-    - `pokedex/` - SOC Bot implementation with LLM agent architecture
+    - `sleuth/` - SOC Bot implementation with LLM agent architecture
     - `utils/` - Shared utilities for logging, filesystem, and HTTP operations
 
 - **`services/`** - External platform integrations:
@@ -94,7 +94,7 @@ This file provides guidance to AI CLI agents (Claude Code, Gemini, etc.) when wo
 - **`my_config.py`** - Central configuration hub
 - **`src/helper_methods.py`** - Core utilities (being refactored to `src/utils/`)
 - **`web/web_server.py`** - Main web application entry point
-- **`webex_bots/pokedex.py`** - Primary SOC bot implementation
+- **`webex_bots/sleuth.py`** - Primary SOC bot implementation
 - **`requirements.txt`** - Python dependencies including security tools and LLM frameworks
 
 ### Repo Scale
@@ -116,7 +116,7 @@ Key dashboard pages and their templates:
 | `/meaningful-metrics` | `meaningful_metrics.html`       | `meaningful_metrics_handler`   |
 | `/shift-performance`  | `shift_performance.html`        | `shift_performance_handler`    |
 | `/xsoar`              | `xsoar_dashboard.html`          | `xsoar_dashboard_handler`      |
-| `/pokedex`            | `pokedex.html`                  | `pokedex_handler`              |
+| `/sleuth`            | `sleuth.html`                  | `sleuth_handler`              |
 | `/travel-form`        | `travel_form.html`              | `travel_handler`               |
 | `/msoc-form`          | `msoc_form.html`                | `msoc_form_handler`            |
 | `/healthz`            | JSON response                   | inline health check            |
@@ -131,7 +131,7 @@ API endpoints are mostly `/api/*` routes defined inline in `web/web_server.py`.
 - `countdown_timer_handler.py` - Timer widget
 - `domain_monitoring.py` - Domain monitoring data processing
 - `meaningful_metrics_handler.py` - Metrics dashboard logic
-- `pokedex_handler.py` - SOC bot chat interface
+- `sleuth_handler.py` - SOC bot chat interface
 - `shift_performance_handler.py` - Shift metrics
 - `slideshow_handler.py` - Dashboard slideshow
 - `travel_handler.py` - Travel form processing
@@ -149,7 +149,7 @@ API endpoints are mostly `/api/*` routes defined inline in `web/web_server.py`.
 | Config/env issues       | `my_config.py` + `data/transient/.env`               |
 | Route not found         | `web/web_server.py` - search for `@app.route`        |
 | Background job failures | `src/all_jobs.py` + `src/components/`                |
-| Bot issues              | `src/pokedex/` for SOC bot, `webex_bots/` for others |
+| Bot issues              | `src/sleuth/` for SOC bot, `webex_bots/` for others |
 
 ### Development Notes
 

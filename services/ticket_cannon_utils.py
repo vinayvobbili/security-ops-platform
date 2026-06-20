@@ -480,7 +480,7 @@ def announce_change(entry: dict, action: str, category: str, toggled_by: str = "
     }
 
     try:
-        webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_toodles)
+        webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_aide)
         webex_api.messages.create(
             roomId=CONFIG.webex_room_id_threatcon_collab,
             text=f"{category_label} {action}: {entry.get('description', '')}",

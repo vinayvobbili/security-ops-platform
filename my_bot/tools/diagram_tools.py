@@ -424,7 +424,7 @@ def generate_diagram(mermaid_source: str, title: str = "") -> str:
 
     try:
         from webexpythonsdk import WebexAPI
-        webex_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_pokedex)
+        webex_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_sleuth)
         message_text = title.strip() if title and title.strip() else "📊 Diagram"
         webex_api.messages.create(
             roomId=room_id,

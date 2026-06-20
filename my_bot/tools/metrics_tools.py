@@ -19,7 +19,7 @@ def get_bot_metrics() -> str:
         from pathlib import Path
 
         # Load conversation data
-        csv_path = Path(__file__).parent.parent.parent / "data/transient/logs/pokedex_conversations.csv"
+        csv_path = Path(__file__).parent.parent.parent / "data/transient/logs/sleuth_conversations.csv"
         if not csv_path.exists():
             return "❌ **Conversation log not found** - No metrics data available"
 
@@ -193,7 +193,7 @@ def get_bot_metrics_summary() -> str:
         from pathlib import Path
 
         # Load conversation data  
-        csv_path = Path(__file__).parent.parent.parent / "data/transient/logs/pokedex_conversations.csv"
+        csv_path = Path(__file__).parent.parent.parent / "data/transient/logs/sleuth_conversations.csv"
         if not csv_path.exists():
             return "❌ **Metrics unavailable** - Conversation log not found"
 
@@ -261,7 +261,7 @@ def _fetch_raw_metrics() -> Dict[str, Any]:
         from pathlib import Path
 
         # Load conversation data
-        csv_path = Path(__file__).parent.parent.parent / "data/transient/logs/pokedex_conversations.csv"
+        csv_path = Path(__file__).parent.parent.parent / "data/transient/logs/sleuth_conversations.csv"
         if not csv_path.exists():
             return {'error': 'Conversation log not found'}
 

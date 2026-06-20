@@ -15,6 +15,7 @@ from langchain_core.tools import tool
 from my_bot.tools._tagging import readonly_tool, mutating_tool
 
 from src.utils.tool_decorator import log_tool_call
+from my_bot.utils.webex_format import defang
 from my_config import get_config
 
 FINAL_RESPONSE_PREFIX = "[FINAL_RESPONSE]"  # duplicated from state_manager to avoid circular import
@@ -73,18 +74,18 @@ def request_url_block(url: str) -> str:
         from webexpythonsdk import WebexAPI
         from webex_bots.cards.block_url_cards import build_block_url_card
 
-        webex_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_pokedex)
+        webex_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_sleuth)
         card = build_block_url_card(clean_url)
         webex_api.messages.create(
             roomId=room_id,
-            text=f"URL Block Request: {clean_url}",
+            text=f"URL Block Request: {defang(clean_url)}",
             attachments=[{
                 "contentType": "application/vnd.microsoft.card.adaptive",
                 "content": card,
             }],
         )
         logger.info(f"Sent block URL confirmation card for {clean_url} in room {room_id}")
-        return FINAL_RESPONSE_PREFIX + f"🚫 Confirmation card sent for blocking `{clean_url}`. Please confirm via the card."
+        return FINAL_RESPONSE_PREFIX + f"🚫 Confirmation card sent for blocking `{defang(clean_url)}`. Please confirm via the card."
 
     except Exception as e:
         logger.error(f"Failed to send block URL card: {e}", exc_info=True)
@@ -106,13 +107,13 @@ def execute_url_block(room_id: str, url: str, xsoar_ticket_id: str, reason: str,
         reason: Reason for blocking the URL
         user_email: Email of the requester
         parent_msg_id: Message ID to delete (the triggering card); empty to skip
-        bot_access_token: Webex bot access token (defaults to Pokedex's token)
+        bot_access_token: Webex bot access token (defaults to Sleuth's token)
     """
     from webexpythonsdk import WebexAPI
     from services.xsoar.ticket_handler import TicketHandler
     from src.utils.xsoar_enums import XsoarEnvironment
 
-    token = bot_access_token or CONFIG.webex_bot_access_token_pokedex
+    token = bot_access_token or CONFIG.webex_bot_access_token_sleuth
     webex_api = WebexAPI(access_token=token)
 
     # Delete the confirmation card to prevent accidental re-clicks
@@ -164,7 +165,7 @@ def execute_url_block(room_id: str, url: str, xsoar_ticket_id: str, reason: str,
         ticket_link = f"[{ticket_id}]({CONFIG.xsoar_prod_ui_base_url}/Custom/caseinfoid/{ticket_id})"
         confirm_msg = (
             f"✅ **URL Block Initiated**\n\n"
-            f"- **URL:** `{url}`\n"
+            f"- **URL:** `{defang(url)}`\n"
             f"- **XSOAR Ticket:** {ticket_link}\n"
             f"- **Reason:** {reason}\n"
             f"- **Requested by:** {user_email}\n"
@@ -180,5 +181,5 @@ def execute_url_block(room_id: str, url: str, xsoar_ticket_id: str, reason: str,
         logger.error(f"URL block failed for {url}: {e}", exc_info=True)
         webex_api.messages.create(
             roomId=room_id,
-            markdown=f"❌ **URL Block Failed**\n\n`{url}` — {e}",
+            markdown=f"❌ **URL Block Failed**\n\n`{defang(url)}` — {e}",
         )

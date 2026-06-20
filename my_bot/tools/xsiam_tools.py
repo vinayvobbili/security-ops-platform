@@ -1,7 +1,7 @@
 """
 XSIAM (Cortex XDR) Tools Module
 
-Pokedex-facing tools for Palo Alto XSIAM/Cortex XDR: incidents, alerts, and
+Sleuth-facing tools for Palo Alto XSIAM/Cortex XDR: incidents, alerts, and
 endpoint inventory. Auth uses the Advanced API Key (nonce + timestamp + SHA256)
 flow implemented in services.xsiam.
 """

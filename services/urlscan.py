@@ -122,6 +122,49 @@ class URLScanClient:
             logger.error(f"URLScan search error: {e}")
             return {"success": False, "error": str(e), "results": []}
 
+    def search_query(self, query: str, size: int = 100) -> Dict[str, Any]:
+        """Run a raw urlscan search with the advanced field syntax.
+
+        Enables brand/FQDN discovery beyond a single domain — e.g.
+        ``page.domain:*the company*`` to catch subdomain abuse and combosquats that
+        a per-domain lookup never sees. Leading wildcards (``*term*``) require an
+        API key; anonymous users get HTTP 403, so callers should fall back to a
+        prefix query (``domain:term*``) when unauthenticated — the 403's status
+        is returned so they can detect it.
+
+        Args:
+            query: urlscan query string (e.g. ``page.domain:*acme*``).
+            size: Max results (recency-sorted; newest abuse floats to the top).
+
+        Returns:
+            {success, total, results} or {success: False, error, status_code}.
+        """
+        try:
+            response = self.session.get(
+                f"{self.base_url}/search/",
+                params={"q": query, "size": size},
+                timeout=TIMEOUT,
+            )
+            if response.status_code == 429:
+                logger.warning("URLScan rate limited")
+                return {"success": False, "error": "Rate limited", "status_code": 429, "results": []}
+            if response.status_code != 200:
+                return {
+                    "success": False,
+                    "error": f"HTTP {response.status_code}",
+                    "status_code": response.status_code,
+                    "results": [],
+                }
+            data = response.json()
+            return {
+                "success": True,
+                "total": data.get("total", 0),
+                "results": data.get("results", []),
+            }
+        except requests.exceptions.RequestException as e:
+            logger.error(f"URLScan query error: {e}")
+            return {"success": False, "error": str(e), "results": []}
+
     def submit_scan(self, url: str, visibility: str = "public") -> Dict[str, Any]:
         """Submit a URL for scanning.
 

@@ -16,6 +16,8 @@
     var sending       = false;
     var currentDatasetId   = '';
     var currentDatasetName = '';
+    var autoMode      = false;   // Auto-route: pick the dataset per-question
+    var lastQuestion  = '';      // remembered for "try alternative dataset" re-runs
     var chartInstances     = [];
     var transcript         = [];
     var activeAbort        = null;
@@ -113,16 +115,137 @@
         item.addEventListener('click', function() { selectDataset(item); });
     });
 
+    // ── Auto-route mode ──
+    var autoItem = document.getElementById('pbiAutoItem');
+
+    function setAutoMode(on) {
+        autoMode = on;
+        if (autoItem) autoItem.classList.toggle('active', on);
+        if (on) {
+            datasetItems.forEach(function(el) { el.classList.remove('active'); });
+            renderRecent();
+            currentDatasetId = '';
+            currentDatasetName = '';
+            // Enable input even without a pre-selected dataset
+            inputEl.disabled = false;
+            sendBtn.disabled = false;
+            // Clear any dataset-specific schema/charts panels
+            schemaDetails.style.display = 'none';
+            destroyCharts();
+            var ce = document.getElementById('pbiChartsContent');
+            var cee = document.getElementById('pbiChartsEmpty');
+            if (ce) ce.style.display = 'none';
+            if (cee) { cee.style.display = ''; cee.querySelector('p').textContent = 'Auto-route is on — just ask a question and I’ll pick the right dataset.'; }
+            inputEl.placeholder = 'Ask anything across all datasets…';
+            inputEl.focus();
+        }
+    }
+
+    if (autoItem) {
+        autoItem.addEventListener('click', function() {
+            if (autoMode) return;
+            // Start a clean chat for auto mode
+            msgBox.querySelectorAll('.pbi-msg').forEach(function(el) { el.remove(); });
+            var welcome = document.getElementById('pbiWelcome');
+            if (welcome) welcome.style.display = 'none';
+            transcript = [];
+            setAutoMode(true);
+        });
+    }
+
+    // POST the question to the router, announce the pick, then run it.
+    function routeThenSend(text) {
+        if (!text || sending) return;
+        lastQuestion = text;
+        inputEl.value = '';
+        appendMsg('user', escapeHtml(text));
+        var routeWrap = appendMsg('assistant',
+            '<div class="pbi-loading-indicator"><div class="pbi-loading-top">' +
+            '<span class="pbi-loading-spinner"></span>' +
+            '<span class="pbi-loading-msg">🧭 Finding the best dataset…</span>' +
+            '</div></div>');
+        fetch('/api/powerbi/route', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({message: text, history: transcript.map(function(t) { return {role: t.role, text: t.text}; })})
+        }).then(function(r) { return r.json(); })
+        .then(function(data) {
+            routeWrap.remove();
+            if (!data.success || !data.dataset_id) {
+                appendMsg('assistant', '<em style="color:#ef4444">Could not route your question to a dataset. Pick one from the sidebar and try again.</em>');
+                return;
+            }
+            currentDatasetId = data.dataset_id;
+            currentDatasetName = data.dataset_name;
+            appendRouteNote(data, text);
+            // Warm the schema cache in the background (non-blocking) so the
+            // schema panel reflects what we queried; the stream rebuilds if needed.
+            warmSchema(data.dataset_id);
+            // User bubble already echoed above; sendQuestion owns the transcript.
+            sendQuestion(text, true);
+        })
+        .catch(function() {
+            routeWrap.remove();
+            appendMsg('assistant', '<em style="color:#ef4444">Routing failed — the assistant may be busy. Try again.</em>');
+        });
+    }
+
+    function warmSchema(dsId) {
+        var cached = getCachedSchema(dsId);
+        if (cached) { applySchemaQuiet(cached); return; }
+        fetch('/api/powerbi/schema/' + dsId)
+            .then(function(r) { return r.json(); })
+            .then(function(d) { if (d.success) { setCachedSchema(dsId, d.schema); applySchemaQuiet(d.schema); } })
+            .catch(function() {});
+    }
+    function applySchemaQuiet(schema) {
+        try { schemaText.innerHTML = highlightSchema(schema); schemaDetails.style.display = ''; } catch(e) {}
+    }
+
+    function appendRouteNote(data, question) {
+        var conf = (data.confidence || 'medium').toLowerCase();
+        var html = '<div class="pbi-route-note">' +
+            '<span>🧭 Routed to <span class="pbi-route-ds">' + escapeHtml(humanizeName(data.dataset_name)) + '</span></span>' +
+            '<span class="pbi-route-conf ' + conf + '">' + conf + '</span>';
+        if (data.reason) html += '<span class="pbi-route-reason">' + escapeHtml(data.reason) + '</span>';
+        var alts = data.alternatives || [];
+        if (alts.length) {
+            html += '<span class="pbi-route-alts"><span class="pbi-route-alts-label">Not right? Try:</span>';
+            alts.forEach(function(a) {
+                html += '<span class="pbi-route-alt" data-id="' + escapeHtml(a.id) + '" data-name="' + escapeHtml(a.name) + '">' + escapeHtml(humanizeName(a.name)) + '</span>';
+            });
+            html += '</span>';
+        }
+        html += '</div>';
+        var wrap = appendMsg('assistant', html);
+        // Bare note — no avatar bubble chrome needed; strip the bubble class padding
+        var bubble = wrap.querySelector('.pbi-bubble');
+        if (bubble) { bubble.style.background = 'transparent'; bubble.style.padding = '0'; bubble.style.boxShadow = 'none'; }
+        wrap.querySelectorAll('.pbi-route-alt').forEach(function(chip) {
+            chip.addEventListener('click', function() {
+                if (sending) return;
+                currentDatasetId = chip.getAttribute('data-id');
+                currentDatasetName = chip.getAttribute('data-name');
+                warmSchema(currentDatasetId);
+                appendMsg('assistant', '🧭 Re-running on <strong>' + escapeHtml(humanizeName(currentDatasetName)) + '</strong>…');
+                sendQuestion(lastQuestion || question, true);
+            });
+        });
+        return wrap;
+    }
+
     function selectDataset(item) {
         var dsId = item.getAttribute('data-id');
         var dsName = item.getAttribute('data-name');
-        if (dsId === currentDatasetId) return;
+        if (dsId === currentDatasetId && !autoMode) return;
 
-        // Confirm if switching away from a loaded dataset
-        if (currentDatasetName) {
+        // Confirm if switching away from a loaded dataset (skip when in auto mode)
+        if (currentDatasetName && !autoMode) {
             var ok = confirm('Are you sure you want to unload ' + humanizeName(currentDatasetName) + ' and load ' + humanizeName(dsName) + '?');
             if (!ok) return;
         }
+
+        setAutoMode(false);
 
         // Highlight active
         datasetItems.forEach(function(el) { el.classList.remove('active'); });
@@ -1066,7 +1189,7 @@
         container.appendChild(btn);
     }
 
-    function sendQuestion(text) {
+    function sendQuestion(text, skipUserEcho) {
         if (!text || !currentDatasetId) return;
         if (sending) return;
         sending = true;
@@ -1074,7 +1197,7 @@
         setStopMode(true);
         userStopped = false;
         chipsEl.style.display = 'none';
-        appendMsg('user', escapeHtml(text));
+        if (!skipUserEcho) appendMsg('user', escapeHtml(text));
         addToTranscript('user', text);
         addToHistory(text);
         activeAbort = new AbortController();
@@ -1247,12 +1370,19 @@
         });
     }
 
+    function dispatchSend(text) {
+        if (!text) return;
+        // In auto mode, every freshly typed question is re-routed to the best
+        // dataset (follow-ups like "what about tanium?" may land elsewhere).
+        if (autoMode) { routeThenSend(text); }
+        else { sendQuestion(text); }
+    }
     sendBtn.addEventListener('click', function() {
         if (sending) { stopGeneration(); return; }
-        sendQuestion(inputEl.value.trim());
+        dispatchSend(inputEl.value.trim());
     });
     inputEl.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (!sending) sendQuestion(inputEl.value.trim()); }
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (!sending) dispatchSend(inputEl.value.trim()); }
     });
 
     // ── Clear chat ──

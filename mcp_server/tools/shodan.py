@@ -3,6 +3,7 @@
 import logging
 
 from mcp_server.server import mcp
+from my_bot.utils.verify_links import attach_verify, shodan_line
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ def shodan_lookup_ip(ip_address: str) -> dict:
         ip_address: IPv4 address to look up
     """
     client = _get_client()
-    return client.lookup_ip(ip_address)
+    return attach_verify(client.lookup_ip(ip_address), shodan_line(ip_address, "ip"))
 
 
 @mcp.tool(tags={"readonly"})
@@ -42,4 +43,4 @@ def shodan_lookup_domain(domain: str) -> dict:
         domain: Domain name to look up (e.g. 'example.com')
     """
     client = _get_client()
-    return client.lookup_domain(domain)
+    return attach_verify(client.lookup_domain(domain), shodan_line(domain, "domain"))

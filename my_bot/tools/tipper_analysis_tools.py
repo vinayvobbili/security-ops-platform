@@ -167,7 +167,7 @@ def add_note_to_tipper(tipper_id: str, note: str) -> str:
 
         # Format note with header
         formatted_note = f"""<div>
-<p><strong>🤖 Note from Pokedex:</strong></p>
+<p><strong>🤖 Note from Sleuth:</strong></p>
 <div>{html_note}</div>
 </div>"""
 

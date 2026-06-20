@@ -348,7 +348,7 @@ CATEGORY_DISPLAY_NAMES = {
 
 
 # the Windows triage agent thinking messages — teaching tips from AI, LLMs, and Python
-WIN_AI_THINKING_MESSAGES = [
+MENTOR_THINKING_MESSAGES = [
     # LLMs & transformers
     "🧠 LLM tip: Transformers use self-attention to weigh every token against every other token in a sequence — that's why context length matters so much!",
     "🤖 LLM tip: Temperature controls randomness — 0.0 is deterministic, 1.0 is creative. Most production bots use 0.1–0.3 for factual tasks.",

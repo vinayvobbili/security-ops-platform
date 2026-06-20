@@ -16,6 +16,8 @@ from my_bot.tools._tagging import readonly_tool, mutating_tool
 from services.virustotal import VirusTotalClient
 from src.utils.tool_decorator import log_tool_call
 from src.utils.llm_decorators import validate_args, IP_ADDRESS_PATTERN, DOMAIN_PATTERN, HASH_PATTERN
+from my_bot.utils.webex_format import defang
+from my_bot.utils.verify_links import append_verify, virustotal_line
 
 # Lazy-initialized VirusTotal client
 _vt_client: Optional[VirusTotalClient] = None
@@ -123,7 +125,7 @@ def _format_url_result(data: dict) -> str:
         f"**Last Analyzed:** {last_analysis}",
         f"**Detection Stats:** {VirusTotalClient.format_analysis_stats(stats)}",
         "",
-        f"**Final URL:** {attrs.get('last_final_url', attrs.get('url', 'Unknown'))}",
+        f"**Final URL:** {defang(attrs.get('last_final_url', attrs.get('url', 'Unknown')))}",
         f"**Title:** {attrs.get('title', 'N/A')}",
     ]
 
@@ -203,7 +205,7 @@ def lookup_ip_virustotal(ip_address: str) -> str:
     if "error" in data:
         return f"Error: {data['error']}"
 
-    return _format_ip_result(data)
+    return append_verify(_format_ip_result(data), virustotal_line(ip_address, "ip"))
 
 
 @readonly_tool
@@ -227,7 +229,7 @@ def lookup_domain_virustotal(domain: str) -> str:
     if "error" in data:
         return f"Error: {data['error']}"
 
-    return _format_domain_result(data)
+    return append_verify(_format_domain_result(data), virustotal_line(domain, "domain"))
 
 
 @readonly_tool
@@ -250,7 +252,7 @@ def lookup_url_virustotal(url: str) -> str:
     if "error" in data:
         return f"Error: {data['error']}"
 
-    return _format_url_result(data)
+    return append_verify(_format_url_result(data), virustotal_line(url, "url"))
 
 
 @readonly_tool
@@ -274,7 +276,7 @@ def lookup_hash_virustotal(file_hash: str) -> str:
     if "error" in data:
         return f"Error: {data['error']}"
 
-    return _format_hash_result(data)
+    return append_verify(_format_hash_result(data), virustotal_line(file_hash, "hash"))
 
 
 def _detect_indicator_type(indicator: str) -> str:
@@ -323,7 +325,7 @@ def _format_analysis_result(
 
     result = [
         f"## VirusTotal {'Fresh' if is_fresh else 'Cached'} Analysis",
-        f"**Indicator:** {indicator}",
+        f"**Indicator:** {defang(indicator)}",
         f"**Type:** {indicator_type.upper()}",
         f"**Threat Level:** {threat_level}",
         f"**Analyzed:** {_format_analysis_date(analysis_date)}",

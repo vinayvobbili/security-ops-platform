@@ -12,6 +12,8 @@ from typing import Optional
 
 from langchain_core.tools import tool
 from my_bot.tools._tagging import readonly_tool, mutating_tool
+from my_bot.utils.webex_format import defang
+from my_bot.utils.verify_links import append_verify
 
 from services.qradar import QRadarClient
 from src.utils.tool_decorator import log_tool_call
@@ -20,7 +22,7 @@ from src.utils.llm_decorators import validate_args, IP_ADDRESS_PATTERN, DOMAIN_P
 # Lazy-initialized QRadar client
 _qradar_client: Optional[QRadarClient] = None
 
-# Lazy-initialized LLM for NL→AQL translation (separate from Pokedex's main LLM
+# Lazy-initialized LLM for NL→AQL translation (separate from Sleuth's main LLM
 # so the system prompt + few-shots stay scoped to AQL generation only)
 _nl_to_aql_llm = None
 
@@ -42,9 +44,19 @@ def _get_qradar_client() -> Optional[QRadarClient]:
 
 _DETAIL_EVENT_FIELDS = frozenset({
     "sourceip", "destinationip", "prenatsourceip", "prenatdestinationip",
-    "URL", "URL Path", "Referer URL", "File Name", "Destination Domain Name",
+    "URL", "URL Path", "Referer URL", "Referer", "File Name", "filename",
+    "Destination Domain Name", "Computer Hostname", "username", "User Agent",
     "Threat Name", "Threat Type", "eventname", "logsource", "magnitude", "starttime",
 })
+
+
+def _qradar_verify_line(result: dict):
+    """Build a 'Verify at source' deep link landing on QRadar Log Activity with the
+    EXACT AQL the search ran (surfaced as result['aql']) — so the analyst clicks
+    through to identical results, no copy-paste. None if no AQL / console URL.
+    Shared builder so Sleuth and the MCP server stay in lockstep."""
+    from my_bot.utils.verify_links import qradar_line
+    return qradar_line((result or {}).get("aql"))
 
 
 def _format_aggregation_rows(events: list, max_rows: int = 50) -> str:
@@ -97,15 +109,28 @@ def _format_events_for_display(events: list, max_events: int = 10) -> str:
         if "prenatdestinationip" in event and event["prenatdestinationip"]:
             event_lines.append(f"**Pre-NAT Dest IP:** {event['prenatdestinationip']}")
 
+        # Who / which host (web-proxy log sources carry these)
+        if event.get("Computer Hostname"):
+            event_lines.append(f"**Hostname:** {event['Computer Hostname']}")
+        if event.get("username"):
+            event_lines.append(f"**User:** {event['username']}")
+
         # URL/Path/File fields
         if "URL" in event and event["URL"]:
             event_lines.append(f"**URL:** {event['URL']}")
         if "URL Path" in event and event["URL Path"]:
             event_lines.append(f"**Path:** {event['URL Path']}")
-        if "Referer URL" in event and event["Referer URL"]:
-            event_lines.append(f"**Referer:** {event['Referer URL']}")
-        if "File Name" in event and event["File Name"]:
-            event_lines.append(f"**File Name:** {event['File Name']}")
+        # Referer = how the user was directed here. Accept both the parsed
+        # custom-property name ("Referer URL") and the raw NSS field ("Referer").
+        referer = event.get("Referer URL") or event.get("Referer")
+        if referer:
+            event_lines.append(f"**Referer (how they got here):** {referer}")
+        # Downloaded/transferred file — "File Name" (parsed) or "filename" (raw).
+        filename = event.get("File Name") or event.get("filename")
+        if filename:
+            event_lines.append(f"**File:** {filename}")
+        if event.get("User Agent"):
+            event_lines.append(f"**User Agent:** {event['User Agent']}")
         if "Destination Domain Name" in event and event["Destination Domain Name"]:
             event_lines.append(f"**Dest Domain:** {event['Destination Domain Name']}")
 
@@ -183,17 +208,17 @@ def search_qradar_by_ip(ip_address: str, hours: int = 24) -> str:
 
     events = result.get("events", [])
     if not events:
-        return f"No events found for IP `{ip_address}` in the last {hours} hours."
+        return f"No events found for IP `{defang(ip_address)}` in the last {hours} hours."
 
     output = [
         "## QRadar IP Search Results",
-        f"**IP Address:** {ip_address}",
+        f"**IP Address:** {defang(ip_address)}",
         f"**Time Range:** Last {hours} hours",
         "",
         _format_events_for_display(events)
     ]
 
-    return "\n".join(output)
+    return append_verify("\n".join(output), _qradar_verify_line(result))
 
 
 @readonly_tool
@@ -238,17 +263,216 @@ def search_qradar_by_domain(domain: str, hours: int = 24) -> str:
 
     events = result.get("events", [])
     if not events:
-        return f"No events found for domain `{domain}` in the last {hours} hours."
+        return f"No events found for domain `{defang(domain)}` in the last {hours} hours."
 
     output = [
         "## QRadar Domain Search Results",
-        f"**Domain:** {domain}",
+        f"**Domain:** {defang(domain)}",
         f"**Time Range:** Last {hours} hours",
         "",
         _format_events_for_display(events)
     ]
 
-    return "\n".join(output)
+    return append_verify("\n".join(output), _qradar_verify_line(result))
+
+
+def _parse_detection_anchor(value) -> Optional[int]:
+    """Best-effort parse of a detection/contact time into epoch MILLISECONDS, for
+    anchoring the proxy window at the actual contact instead of "now". Accepts epoch
+    ms, epoch seconds, or common date / datetime strings (YYYY-MM-DD[ HH:MM[:SS]],
+    MM/DD/YYYY). Returns None when empty or unparseable (caller looks back from now).
+    """
+    if value is None:
+        return None
+    s = str(value).strip()
+    if not s:
+        return None
+    try:
+        n = int(float(s))
+        if n > 10_000_000_000:      # already milliseconds
+            return n
+        if n > 1_000_000_000:       # seconds -> ms
+            return n * 1000
+    except (ValueError, TypeError):
+        pass
+    from datetime import datetime
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M",
+                "%Y-%m-%d", "%m/%d/%Y %H:%M:%S", "%m/%d/%Y %H:%M", "%m/%d/%Y"):
+        try:
+            return int(datetime.strptime(s, fmt).timestamp() * 1000)
+        except ValueError:
+            continue
+    return None
+
+
+@readonly_tool
+@validate_args(domain=DOMAIN_PATTERN)
+@log_tool_call
+def investigate_web_access(domain: str, hours: int = 24, detection_time: str = "") -> str:
+    """Investigate HOW users reached a website and WHAT they did there.
+
+    Use this when an analyst asks about a domain/URL involved in an incident and
+    wants to know:
+    - How was the user DIRECTED to the site? (HTTP Referer — search result,
+      webmail link, redirect from another site, etc.)
+    - WHO/which hosts connected to it?
+    - Did anyone DOWNLOAD a file from it?
+    - Was the request allowed or blocked?
+
+    Pulls web-proxy transaction events (the corporate proxy NSS / Blue Coat) from QRadar and
+    summarizes referrers, downloaded files, and the connecting hosts/users. This
+    is the right tool for "how/why did the user(s) connect to this website" and
+    "validate any activity done on the site" requests.
+
+    IMPORTANT: Only call this with a domain that ACTUALLY APPEARS in the ticket /
+    IOC data or that the user explicitly typed. Do NOT invent a domain from a
+    product, extension, or campaign name (e.g. don't turn "Chrome Wallpaper
+    Extensions" into "chrome-wallpaper-extensions.com"). If you don't have a real
+    domain yet, fetch the ticket first and use the IOC it contains.
+
+    Args:
+        domain: A real website domain from the ticket/IOCs (e.g., "yowgames.com")
+        hours: Width of the look-back window (default 24, hard-capped at 24). QRadar
+            web-proxy queries over spans wider than 24h reliably hang against the
+            high-volume proxy log source, so the span is capped — do NOT try to widen
+            it to reach an older contact. Instead pass detection_time (below).
+        detection_time: STRONGLY RECOMMENDED when the contact is not from today.
+            The detection/contact time (from the CrowdStrike detection or the ticket)
+            as an epoch or a date like "2026-06-15". The 24h window is then anchored
+            to END at that time instead of now — so an old contact's referrers are
+            found WITHOUT widening the span (which would hang). Omit it only for a
+            live/just-now incident. If still empty, fall back to endpoint browser
+            history (collect_browser_history), the durable record of older visits.
+    """
+    client = _get_qradar_client()
+    if not client:
+        return "Error: QRadar service is not available."
+
+    domain = domain.strip().lower().replace("https://", "").replace("http://", "")
+    domain = domain.split("/")[0]
+    # Hard cap at 24h: the proxy log source is high-volume and any wider span hangs
+    # the QRadar search. To reach an OLDER contact, anchor this same 24h window at the
+    # detection time (end_time) rather than widening it.
+    hours = min(max(1, hours), 24)
+    anchor_ms = _parse_detection_anchor(detection_time)
+    window_desc = (f"the {hours}h ending at the detection time ({detection_time.strip()})"
+                   if anchor_ms else f"the last {hours}h")
+
+    logging.info(f"Investigating web access to {domain} over {window_desc}"
+                 + (f" [anchored end_time={anchor_ms}]" if anchor_ms else ""))
+    result = client.search_events_by_domain(domain, hours=hours, end_time=anchor_ms)
+
+    if "error" in result:
+        return f"Error: {result['error']}"
+
+    events = result.get("events", [])
+    if not events:
+        retry_hint = (
+            "Try passing detection_time (the date the IOC was detected) so the 24h "
+            "window is anchored at the contact instead of now. "
+        ) if not anchor_ms else ""
+        return (
+            f"No web-proxy transactions found for `{defang(domain)}` in {window_desc}.\n"
+            f"{retry_hint}"
+            "Note: this only covers the corporate proxy NSS / Blue Coat logs ingested into QRadar. "
+            "If the host bypasses the proxy or the logs aren't ingested, referrer/download "
+            "data won't appear here — consider endpoint browser history "
+            "(collect_browser_history) and process activity (oe_get_process_timeline)."
+        )
+
+    # --- Precision: split REAL user navigations from investigation/lookup noise.
+    # The QRadar match is a substring (URL ILIKE '%domain%'), so it also catches the
+    # indicator appearing INSIDE another URL — a Google search query (q="domain"),
+    # a SOCRadar/urlscan IOC path (/ioc-radar/domain), a favicon fetch (?url=domain)
+    # — i.e. the SOC investigating the IOC, NOT a user browsing to it. A genuine
+    # visit has the domain as the DESTINATION HOST of the URL; everything else is
+    # lookup activity and must not be reported as "users were directed here".
+    def _url_host(url: str) -> str:
+        u = (url or "").strip().lower()
+        if "://" in u:
+            u = u.split("://", 1)[1]
+        u = u.split("/", 1)[0].split("?", 1)[0].split("#", 1)[0]
+        return u.split(":", 1)[0]  # drop any :port
+
+    def _is_dest_host(e) -> bool:
+        host = _url_host(e.get("URL"))
+        return bool(host) and (host == domain or host.endswith("." + domain))
+
+    real, lookups = [], []
+    for e in events:
+        (real if _is_dest_host(e) else lookups).append(e)
+
+    def _vals(evlist, *keys):
+        seen = []
+        for e in evlist:
+            v = next((e.get(k) for k in keys if e.get(k)), None)
+            if v and v not in seen:
+                seen.append(v)
+        return seen
+
+    referers = _vals(real, "Referer URL", "Referer")
+    files = _vals(real, "File Name", "filename")
+    hosts = _vals(real, "Computer Hostname")
+    users = _vals(real, "username")
+    lookup_users = _vals(lookups, "username")
+    lookup_hosts = _vals(lookups, "Computer Hostname")
+
+    out = [
+        f"## Web Access Investigation — {defang(domain)}",
+        f"**Window:** {window_desc} · **User navigations to site:** {len(real)} · "
+        f"**Investigation/lookup hits (search engines, TI tools):** {len(lookups)}",
+        "",
+        "### How were users directed here? (HTTP Referer)",
+    ]
+    if real:
+        if referers:
+            out += [f"- {r}" for r in referers[:15]]
+        else:
+            out.append("- No Referer recorded on the navigations (direct/typed URL, "
+                       "non-browser client, or the proxy stripped the header). No upstream "
+                       "redirect/link captured.")
+    else:
+        out.append(
+            f"- **No user navigations to {defang(domain)} in proxy logs.** All "
+            f"{len(lookups)} matching hits are the domain appearing inside search "
+            "queries or threat-intel tool URLs (Google searches of the domain name, "
+            "SOCRadar/urlscan IOC lookups, favicon fetches) — i.e. the SOC "
+            "investigating the indicator, not a user browsing to the site. No "
+            "evidence anyone was *directed* to it through the proxy. To confirm "
+            "whether it was reached off-proxy (e.g. a browser extension or "
+            "background process), check endpoint browser history "
+            "(collect_browser_history) and process activity (oe_get_process_timeline) "
+            "on the affected hosts."
+        )
+
+    out += ["", "### Files downloaded / transferred from the site"]
+    if files:
+        out += [f"- {f}" for f in files[:15]]
+    else:
+        out.append("- No file-transfer/download recorded in proxy logs for actual visits.")
+
+    out += ["", "### Connecting hosts / users"]
+    if hosts:
+        out.append("**Hosts that navigated to the site:** " + ", ".join(hosts[:20]))
+    if users:
+        out.append("**Users that navigated to the site:** " + ", ".join(users[:20]))
+    if not hosts and not users:
+        out.append("- No host/user actually navigated to the site in proxy logs.")
+    if lookups:
+        extra = []
+        if lookup_users:
+            extra.append("users: " + ", ".join(lookup_users[:10]))
+        if lookup_hosts:
+            extra.append("hosts: " + ", ".join(lookup_hosts[:10]))
+        out.append(
+            f"_Investigation/lookup activity (excluded above): {len(lookups)} hits"
+            + ((" — " + "; ".join(extra)) if extra else "")
+            + " — search-engine/TI-tool references to the indicator, not user traffic._"
+        )
+
+    if real:
+        out += ["", "### Transaction detail (user navigations)", _format_events_for_display(real)]
+    return "\n".join(out)
 
 
 @readonly_tool
@@ -558,7 +782,7 @@ def _get_nl_to_aql_llm():
 
 
 # Keyword → category mapping for auto-detection.
-# Pokedex has no sidebar — when the caller doesn't specify a category, we score
+# Sleuth has no sidebar — when the caller doesn't specify a category, we score
 # the question against these keywords and pick the highest-scoring match.
 # Order matters only as a tiebreaker (first match wins on equal scores).
 _CATEGORY_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
@@ -625,7 +849,7 @@ def nl_to_aql_query(question: str, category: str = "auto") -> str:
     This is the smartest QRadar tool — use it whenever the user asks an English question about
     SIEM data and you want a focused, log-source-aware query without writing AQL yourself.
     A specialist LLM handles AQL generation with category-specific schemas and few-shot examples,
-    so Pokedex doesn't need to know AQL syntax.
+    so Sleuth doesn't need to know AQL syntax.
 
     CRITICAL — DO NOT PASS THE `category` PARAMETER. Pass only `question`. The tool's
     auto-detector picks the right log source from the question's keywords and knows

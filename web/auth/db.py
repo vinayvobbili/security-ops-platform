@@ -70,6 +70,23 @@ CREATE TABLE IF NOT EXISTS pat_usage (
     UNIQUE(pat_id, client_ip)
 );
 CREATE INDEX IF NOT EXISTS idx_pat_usage_pat ON pat_usage(pat_id);
+CREATE TABLE IF NOT EXISTS sidecar_owners (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sidecar_key TEXT NOT NULL,
+    email TEXT NOT NULL COLLATE NOCASE,
+    created_by TEXT,
+    created_at INTEGER NOT NULL,
+    UNIQUE(sidecar_key, email)
+);
+CREATE INDEX IF NOT EXISTS idx_sidecar_owners_key ON sidecar_owners(sidecar_key);
+
+CREATE TABLE IF NOT EXISTS role_pregrants (
+    email TEXT PRIMARY KEY COLLATE NOCASE,
+    role TEXT NOT NULL,
+    note TEXT,
+    created_by TEXT,
+    created_at INTEGER NOT NULL
+);
 """
 
 
@@ -139,14 +156,40 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute('ALTER TABLE pats ADD COLUMN token_plaintext TEXT')
 
 
+def _seed_sidecar_owners(conn: sqlite3.Connection) -> None:
+    """Populate the sidecar_owners table from the in-code seed. Called ONCE,
+    only when the table is first created (see connect()), to migrate the
+    historical hardcoded owner list into the DB. After that the table is the
+    live source of truth and is edited on /admin-users — never re-seeded, so an
+    admin clearing an owner survives a restart.
+    """
+    from . import rbac  # local import: avoids a circular import at module load
+    ts = now()
+    for key, emails in rbac.SIDECAR_OWNERS_SEED.items():
+        for email in emails:
+            conn.execute(
+                'INSERT OR IGNORE INTO sidecar_owners(sidecar_key, email, created_by, created_at) '
+                'VALUES (?, ?, ?, ?)',
+                (key, email.strip().lower(), 'seed:migration', ts),
+            )
+
+
 @contextmanager
 def connect() -> Iterator[sqlite3.Connection]:
     global _initialized
     conn = _connect()
     try:
         if not _initialized:
+            # Detect a first-ever creation of the ownership table BEFORE the
+            # schema runs, so the seed lands once and only once. On an existing
+            # DB (table already present) this is False and we never re-seed.
+            owners_fresh = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='sidecar_owners'"
+            ).fetchone() is None
             conn.executescript(_SCHEMA)
             _migrate(conn)
+            if owners_fresh:
+                _seed_sidecar_owners(conn)
             _initialized = True
         yield conn
     finally:
@@ -191,12 +234,102 @@ def set_user_extra_capabilities(user_id: int, caps_csv: str) -> None:
                   (caps_csv or None, user_id))
 
 
+# --- role pre-grants -------------------------------------------------------
+# Pre-authorize an email for a (usually managed) role BEFORE that person has an
+# account, so when they sign up they land in that role directly instead of the
+# open default plus an operator-approval round-trip. The pregrant is CONSUMED
+# (deleted) the moment the account is created. Email verification is still
+# required before sign-in — the pregrant only decides the role, not identity.
+
+def set_role_pregrant(email: str, role: str, note: Optional[str] = None,
+                      created_by: Optional[str] = None) -> None:
+    """Pre-authorize (or re-authorize) an email for a role. Upserts on email."""
+    with connect() as c:
+        c.execute(
+            'INSERT OR REPLACE INTO role_pregrants(email, role, note, created_by, created_at) '
+            'VALUES (?, ?, ?, ?, ?)',
+            (email.strip().lower(), role, note, created_by, now()),
+        )
+
+
+def pop_role_pregrant(email: str) -> Optional[str]:
+    """Return and DELETE the pregrant for an email in one shot — call this at
+    account creation so a pre-authorized role is applied exactly once."""
+    with connect() as c:
+        em = email.strip().lower()
+        row = c.execute('SELECT role FROM role_pregrants WHERE email = ?', (em,)).fetchone()
+        if not row:
+            return None
+        c.execute('DELETE FROM role_pregrants WHERE email = ?', (em,))
+        return row['role']
+
+
+def list_role_pregrants() -> list:
+    """All outstanding pregrants (not yet consumed), for the admin UI."""
+    with connect() as c:
+        return [dict(r) for r in c.execute(
+            'SELECT email, role, note, created_by, created_at '
+            'FROM role_pregrants ORDER BY email'
+        ).fetchall()]
+
+
+def delete_role_pregrant(email: str) -> None:
+    with connect() as c:
+        c.execute('DELETE FROM role_pregrants WHERE email = ?', (email.strip().lower(),))
+
+
 def set_user_traffic_log_exclude(user_id: int, exclude: bool) -> None:
     with connect() as c:
         c.execute(
             'UPDATE users SET exclude_from_traffic_log = ? WHERE id = ?',
             (1 if exclude else 0, user_id),
         )
+
+
+# --- sidecar ownership -----------------------------------------------------
+
+def sidecar_owner_emails(sidecar_key: str) -> tuple[str, ...]:
+    """Owner emails for one sidecar (lowercased, sorted). Empty if none."""
+    with connect() as c:
+        rows = c.execute(
+            'SELECT email FROM sidecar_owners WHERE sidecar_key = ? ORDER BY email COLLATE NOCASE',
+            (sidecar_key,),
+        ).fetchall()
+        return tuple(r['email'] for r in rows)
+
+
+def list_sidecar_owners() -> dict[str, list[str]]:
+    """All ownership grants, grouped {sidecar_key: [emails]}. For the admin UI."""
+    with connect() as c:
+        rows = c.execute(
+            'SELECT sidecar_key, email FROM sidecar_owners '
+            'ORDER BY sidecar_key, email COLLATE NOCASE'
+        ).fetchall()
+    out: dict[str, list[str]] = {}
+    for r in rows:
+        out.setdefault(r['sidecar_key'], []).append(r['email'])
+    return out
+
+
+def add_sidecar_owner(sidecar_key: str, email: str, created_by: str) -> None:
+    """Grant a user ownership of one sidecar (idempotent). Admin action."""
+    with connect() as c:
+        c.execute(
+            'INSERT OR IGNORE INTO sidecar_owners(sidecar_key, email, created_by, created_at) '
+            'VALUES (?, ?, ?, ?)',
+            (sidecar_key, email.strip().lower(), created_by, now()),
+        )
+
+
+def remove_sidecar_owner(sidecar_key: str, email: str) -> bool:
+    """Revoke a user's ownership of one sidecar. Returns True if a row was
+    removed. Admin action."""
+    with connect() as c:
+        cur = c.execute(
+            'DELETE FROM sidecar_owners WHERE sidecar_key = ? AND email = ? COLLATE NOCASE',
+            (sidecar_key, email.strip().lower()),
+        )
+        return cur.rowcount > 0
 
 
 def distinct_assigned_roles() -> list[str]:
@@ -365,17 +498,17 @@ def revoke_pat(user_id: int, pat_id: int) -> bool:
         return cur.rowcount > 0
 
 
-# Corp-side IP ranges where NAT/proxy egress rotates within a pool. An IP
+# Private IP ranges where NAT/proxy egress rotates within a pool. An IP
 # inside one of these ranges is collapsed to its /24 for the "is this a
 # new client?" check, so the same user bouncing between adjacent NAT
-# exits (e.g. <internal-host> → 134 → 135) does not look like 3 separate
-# clients. Public IPs are NOT bucketed — that's where genuine PAT sharing
-# (a token leaked to someone outside corp) would show up.
+# exits (e.g. 10.0.50.133 → 134 → 135) does not look like 3 separate
+# clients. Public IPs are NOT bucketed — that's where genuine token sharing
+# (a token leaked to someone outside the network) would show up.
 _CORP_BUCKET_NETS = tuple(
     ipaddress.ip_network(n) for n in (
-        '10.0.0.0/8',       # RFC1918 private range
-        '172.16.0.0/12',    # RFC1918 private range
-        '192.168.0.0/16',   # RFC1918 private range
+        '10.0.0.0/8',       # RFC1918 10/8
+        '172.16.0.0/12',    # RFC1918 172.16-31
+        '192.168.0.0/16',   # RFC1918
         '127.0.0.0/8',      # loopback
     )
 )

@@ -713,7 +713,7 @@ def _prune_schema(schema_text: str, question: str, prune_llm,
 
     if selected_blocks:
         # LLM column pruning via M1 Router (separate GPU, no M3 contention)
-        # Uses Pokedex-style "respond with ONLY this JSON" prompt pattern
+        # Uses Sleuth-style "respond with ONLY this JSON" prompt pattern
         # Falls back to static priority-column truncation if LLM fails
         parts = []
         for name, cols, blk in selected_blocks:

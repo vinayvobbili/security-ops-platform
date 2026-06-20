@@ -1,4 +1,4 @@
-"""Pokedex Webex card + XSOAR note for the Threat Intel agent.
+"""Sleuth Webex card + XSOAR note for the Threat Intel agent.
 
 Card lands AFTER the IR Lead's card on every confirmed incident — it
 gives the responder actor / campaign / MITRE context to read alongside
@@ -301,9 +301,9 @@ def send_ti_card(report: ThreatIntelReport,
     from my_config import get_config
     from webexteamssdk import WebexTeamsAPI
     cfg = get_config()
-    token = cfg.webex_bot_access_token_pokedex
+    token = cfg.webex_bot_access_token_sleuth
     if not token:
-        logger.warning("threat_intel_webex: WEBEX_BOT_ACCESS_TOKEN_POKEDEX not set, skipping")
+        logger.warning("threat_intel_webex: WEBEX_BOT_ACCESS_TOKEN_SLEUTH not set, skipping")
         return None
     room = cfg.webex_room_id_soc_in_a_box or cfg.webex_room_id_dev_test_space
     if not room:

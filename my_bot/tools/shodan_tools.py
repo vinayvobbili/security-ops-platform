@@ -22,6 +22,8 @@ from my_bot.tools._tagging import readonly_tool, mutating_tool
 from services.shodan_monitor import ShodanClient
 from src.utils.tool_decorator import log_tool_call
 from src.utils.llm_decorators import validate_args, IP_ADDRESS_PATTERN, DOMAIN_PATTERN
+from my_bot.utils.webex_format import defang
+from my_bot.utils.verify_links import append_verify, shodan_line
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +78,7 @@ def _format_ip_result(data: dict) -> str:
 
     result = [
         f"## Shodan IP Analysis",
-        f"**IP Address:** {ip}",
+        f"**IP Address:** {defang(ip)}",
         f"**Organization:** {data.get('org', 'Unknown')}",
         f"**ISP:** {data.get('isp', 'Unknown')}",
         f"**ASN:** {data.get('asn', 'Unknown')}",
@@ -84,7 +86,7 @@ def _format_ip_result(data: dict) -> str:
     ]
 
     if hostnames:
-        result.append(f"**Hostnames:** {', '.join(hostnames[:5])}")
+        result.append(f"**Hostnames:** {', '.join(defang(h) for h in hostnames[:5])}")
 
     if data.get("last_update"):
         result.append(f"**Last Seen:** {data['last_update'][:10]}")
@@ -125,7 +127,7 @@ def _format_ip_result(data: dict) -> str:
                 if ssl_cert:
                     cn = ssl_cert.get("CN", "")
                     if cn:
-                        service_line += f" (CN: {cn})"
+                        service_line += f" (CN: {defang(cn)})"
 
             result.append(service_line)
 
@@ -171,7 +173,7 @@ def _format_domain_result(data: dict) -> str:
 
     result = [
         f"## Shodan Domain Infrastructure Analysis",
-        f"**Domain:** {domain}",
+        f"**Domain:** {defang(domain)}",
         f"**IPs Checked:** {data.get('ips_checked', 0)}",
         f"**Total Open Ports:** {total_ports}",
         f"**Total Vulnerabilities:** {total_vulns}",
@@ -198,7 +200,7 @@ def _format_domain_result(data: dict) -> str:
             port = svc.get("port", "?")
             product = svc.get("product", "Unknown")
             reason = svc.get("risk_reason", "")
-            result.append(f"- 🔴 **{ip}:{port}** - {product}")
+            result.append(f"- 🔴 **{defang(ip)}:{port}** - {product}")
             if reason:
                 result.append(f"  _{reason}_")
 
@@ -209,7 +211,7 @@ def _format_domain_result(data: dict) -> str:
         for vuln in vulnerabilities[:10]:
             ip = vuln.get("ip", "?")
             cve = vuln.get("cve", "Unknown")
-            result.append(f"- **{cve}** on {ip}")
+            result.append(f"- **{cve}** on {defang(ip)}")
         if len(vulnerabilities) > 10:
             result.append(f"- _...and {len(vulnerabilities) - 10} more_")
 
@@ -218,14 +220,14 @@ def _format_domain_result(data: dict) -> str:
     result.append("### Host Details")
     for host in hosts:
         if host.get("error"):
-            result.append(f"- **{host.get('ip')}**: {host.get('error')}")
+            result.append(f"- **{defang(host.get('ip'))}**: {host.get('error')}")
         else:
             ip = host.get("ip", "?")
             ports = host.get("ports", [])
             org = host.get("org", "Unknown")
             vulns = host.get("vulns", [])
             vuln_indicator = f" ⚠️ {len(vulns)} CVEs" if vulns else ""
-            result.append(f"- **{ip}** ({org}) - {len(ports)} ports{vuln_indicator}")
+            result.append(f"- **{defang(ip)}** ({org}) - {len(ports)} ports{vuln_indicator}")
 
     return "\n".join(result)
 
@@ -257,7 +259,7 @@ def lookup_ip_shodan(ip_address: str) -> str:
 
     try:
         data = client.lookup_ip(ip_address.strip())
-        return _format_ip_result(data)
+        return append_verify(_format_ip_result(data), shodan_line(ip_address, "ip"))
     except Exception as e:
         logger.error(f"Shodan IP lookup failed: {e}")
         return f"Error looking up IP in Shodan: {str(e)}"
@@ -296,7 +298,7 @@ def lookup_domain_shodan(domain: str) -> str:
             domain = domain.split("/", 1)[0]
 
         data = client.lookup_domain(domain)
-        return _format_domain_result(data)
+        return append_verify(_format_domain_result(data), shodan_line(domain, "domain"))
     except Exception as e:
         logger.error(f"Shodan domain lookup failed: {e}")
         return f"Error looking up domain in Shodan: {str(e)}"

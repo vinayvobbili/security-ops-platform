@@ -1,7 +1,7 @@
 """Person-of-Interest OSINT investigation web views.
 
 List + detail pages backed by services.poi_scanner's SQLite store.
-Read-only — investigations are launched via the Toodles bot (or Pokedex).
+Read-only — investigations are launched via the Aide bot (or Sleuth).
 """
 
 import logging

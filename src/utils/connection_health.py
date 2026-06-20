@@ -8,7 +8,7 @@ Triggers reactive reconnections on connection issues (no proactive restarts).
 Usage:
     from src.utils.connection_health import ConnectionHealthMonitor
 
-    monitor = ConnectionHealthMonitor(bot_name="MoneyBall")
+    monitor = ConnectionHealthMonitor(bot_name="Oracle")
     monitor.record_request_success(duration=1.2)  # Record successful keepalive ping
     monitor.record_request_timeout(duration=60.0)  # Record ping timeout
     monitor.log_summary()  # Log concise keepalive health summary

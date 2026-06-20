@@ -285,7 +285,7 @@ def _probe_azure_devops():
 
 
 def _probe_webex():
-    token = os.environ.get('WEBEX_BOT_ACCESS_TOKEN_MONEYBALL')
+    token = os.environ.get('WEBEX_BOT_ACCESS_TOKEN_ORACLE')
     api_url = os.environ.get('WEBEX_API_URL', 'https://webexapis.com/v1')
     resp = requests.get(
         f'{api_url}/people/me',
@@ -297,9 +297,9 @@ def _probe_webex():
 
 
 def _probe_teams():
-    app_id = os.environ.get('TEAMS_TOODLES_APP_ID')
-    app_pw = os.environ.get('TEAMS_TOODLES_APP_PASSWORD')
-    tenant = os.environ.get('TEAMS_TOODLES_TENANT_ID')
+    app_id = os.environ.get('TEAMS_AIDE_APP_ID')
+    app_pw = os.environ.get('TEAMS_AIDE_APP_PASSWORD')
+    tenant = os.environ.get('TEAMS_AIDE_TENANT_ID')
     resp = requests.post(
         f'https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token',
         data={
@@ -613,14 +613,14 @@ CONNECTORS: list[dict] = [
         'name': 'Webex',
         'category': 'Communication',
         'description': 'Primary bot messaging and notifications',
-        'env_vars': ['WEBEX_BOT_ACCESS_TOKEN_MONEYBALL', 'WEBEX_API_URL'],
+        'env_vars': ['WEBEX_BOT_ACCESS_TOKEN_ORACLE', 'WEBEX_API_URL'],
     },
     {
         'id': 'teams',
         'name': 'Microsoft Teams',
         'category': 'Communication',
-        'description': 'Teams bot integration (Toodles)',
-        'env_vars': ['TEAMS_TOODLES_APP_ID', 'TEAMS_TOODLES_APP_PASSWORD', 'TEAMS_TOODLES_TENANT_ID'],
+        'description': 'Teams bot integration (Aide)',
+        'env_vars': ['TEAMS_AIDE_APP_ID', 'TEAMS_AIDE_APP_PASSWORD', 'TEAMS_AIDE_TENANT_ID'],
     },
     {
         'id': 'twilio',

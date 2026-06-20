@@ -54,7 +54,7 @@ def cap_aql_time_window(aql: str, max_hours: int = 4) -> str:
 
     LLM-generated AQL frequently picks 24+ hour windows that time out on QRadar,
     especially for queries that ILIKE-match custom properties across email or
-    proxy log sources. Use this helper at LLM-facing call sites (the security assistant bot
+    proxy log sources. Use this helper at LLM-facing call sites (Sleuth
     nl_to_aql_query, run_qradar_aql_query, the /qradar-chat web handler).
 
     DO NOT call this from backend/batch code — hunting queries, alert triage,
@@ -271,8 +271,13 @@ class QRadarClient:
 
         logger.info(f"Search created with ID: {search_id}")
 
-        # Poll for completion using wall clock time for accurate timeout
+        # Poll for completion using wall clock time for accurate timeout.
+        # Backoff polling: short interval early (so fast searches are detected
+        # within seconds), easing off to a 15s cap on long searches to limit API
+        # load. A flat 60s poll rounded every search's reported time up to the
+        # next minute (a search that finished at 65s wasn't seen until 120s).
         start_time = time.time()
+        poll_interval = 2.0
         while True:
             elapsed = int(time.time() - start_time)
             if elapsed >= timeout:
@@ -293,7 +298,9 @@ class QRadarClient:
                 error_msg = status_result.get("error_messages", [])
                 return {"error": f"Search {status}: {error_msg}"}
 
-            time.sleep(60)  # Poll every minute
+            # Don't overshoot the timeout on the final sleep.
+            time.sleep(min(poll_interval, max(0.0, timeout - (time.time() - start_time))))
+            poll_interval = min(poll_interval * 1.5, 15.0)
 
     # ==================== Offense Methods ====================
 
@@ -580,34 +587,58 @@ class QRadarClient:
             LIMIT {max_results}
             LAST {hours} HOURS
         """
-        return self.run_aql_search(aql.strip(), max_results=max_results)
+        result = self.run_aql_search(aql.strip(), max_results=max_results)
+        if isinstance(result, dict) and "error" not in result:
+            result["aql"] = aql.strip()  # surfaced for the verify-at-source deep link
+        return result
 
     def search_events_by_domain(
         self,
         domain: str,
         hours: int = 24,
-        max_results: int = 100
+        max_results: int = 100,
+        end_time: Optional[int] = None
     ) -> Dict[str, Any]:
-        """Search for events involving a domain.
+        """Search for web-proxy events involving a domain.
+
+        The time window is `hours` wide. By default it ends now (LAST N HOURS).
+        When `end_time` is given, the same-width window is ANCHORED to end at that
+        moment instead (AQL START/STOP) — this lets a caller look at the actual
+        contact time without widening the span, which matters because the proxy log
+        source is high-volume and any span wider than ~24h hangs the QRadar search.
 
         Args:
             domain: The domain to search for
-            hours: Number of hours to look back
+            hours: Width of the window in hours (also how far back from end_time)
             max_results: Maximum events to return
+            end_time: Optional epoch-MILLISECONDS anchor; the window becomes
+                [end_time - hours, end_time + 1h grace]. None = look back from now.
 
         Returns:
             dict: Search results with events
         """
+        if end_time:
+            start_ms = int(end_time) - hours * 3600 * 1000
+            stop_ms = int(end_time) + 3600 * 1000  # 1h grace after the anchor
+            time_clause = f"START {start_ms} STOP {stop_ms}"
+        else:
+            time_clause = f"LAST {hours} HOURS"
         aql = f"""
             SELECT sourceip, destinationip, "Computer Hostname", username,
                    URL, "Referer", "User Agent", filename, starttime
             FROM events
-            WHERE logsourcetypename(devicetype) = 'Blue Coat Web Security Service'
+            WHERE (
+                logsourcetypename(devicetype) = 'web proxy logs'
+                OR logsourcetypename(devicetype) = 'Blue Coat Web Security Service'
+            )
             AND URL ILIKE '%{_escape_aql_value(domain)}%'
             LIMIT {max_results}
-            LAST {hours} HOURS
+            {time_clause}
         """
-        return self.run_aql_search(aql.strip(), max_results=max_results)
+        result = self.run_aql_search(aql.strip(), max_results=max_results)
+        if isinstance(result, dict) and "error" not in result:
+            result["aql"] = aql.strip()  # surfaced for the verify-at-source deep link
+        return result
 
     def search_email_by_sender(
         self,
@@ -768,6 +799,60 @@ class QRadarClient:
                 OR "Subject" ILIKE '%{indicator}%'
                 OR "Filename" ILIKE '%{indicator}%'
             )
+            LIMIT {max_results}
+            LAST {hours} HOURS
+        """
+        return self.run_aql_search(aql.strip(), max_results=max_results)
+
+    def search_zpa_logons_by_ip(
+        self,
+        ip: str,
+        hours: int = 168,
+        max_results: int = 100
+    ) -> Dict[str, Any]:
+        """Search for VPN logs logon events by IP.
+
+        Args:
+            ip: The IP address to search for
+            hours: Number of hours to look back
+            max_results: Maximum events to return
+
+        Returns:
+            dict: Search results with events
+        """
+        aql = f"""
+            SELECT sourceip, destinationip, username, "Computer Hostname",
+                   qidname(qid) AS eventName, "session-status", starttime
+            FROM events
+            WHERE logsourcetypename(devicetype) = 'VPN logs'
+            AND (sourceip = '{ip}' OR destinationip = '{ip}')
+            LIMIT {max_results}
+            LAST {hours} HOURS
+        """
+        return self.run_aql_search(aql.strip(), max_results=max_results)
+
+    def search_zpa_logons_by_user(
+        self,
+        username: str,
+        hours: int = 168,
+        max_results: int = 100
+    ) -> Dict[str, Any]:
+        """Search for VPN logs logon events by username.
+
+        Args:
+            username: The username to search for
+            hours: Number of hours to look back
+            max_results: Maximum events to return
+
+        Returns:
+            dict: Search results with events
+        """
+        aql = f"""
+            SELECT sourceip, destinationip, username, "Computer Hostname",
+                   qidname(qid) AS eventName, "session-status", starttime
+            FROM events
+            WHERE logsourcetypename(devicetype) = 'VPN logs'
+            AND username ILIKE '%{username}%'
             LIMIT {max_results}
             LAST {hours} HOURS
         """
@@ -1102,7 +1187,10 @@ class QRadarClient:
             SELECT sourceip, destinationip, "Computer Hostname", username,
                    URL, "Referer", "User Agent", filename, starttime
             FROM events
-            WHERE logsourcetypename(devicetype) = 'Blue Coat Web Security Service'
+            WHERE (
+                logsourcetypename(devicetype) = 'web proxy logs'
+                OR logsourcetypename(devicetype) = 'Blue Coat Web Security Service'
+            )
             AND ({domain_conditions})
             LIMIT {max_results}
             LAST {hours} HOURS
@@ -1235,7 +1323,7 @@ class QRadarClient:
     ) -> Dict[str, Any]:
         """Search for multiple domains across all log sources in a single query.
 
-        Combines webproxy (Blue Coat), email (Area1, Abnormal),
+        Combines webproxy (the corporate proxy, Blue Coat), email (Area1, Abnormal),
         O365 threat intel, and Palo Alto into one query for efficiency.
         Returns source identification and context fields for each event.
 
@@ -1268,6 +1356,7 @@ class QRadarClient:
             FROM events
             WHERE (
                 logsourcetypename(devicetype) IN (
+                    'web proxy logs',
                     'Blue Coat Web Security Service',
                     'Area1 Security',
                     'Abnormal Security',
@@ -1325,6 +1414,7 @@ class QRadarClient:
                    URL, "Action", "User Agent"
             FROM events
             WHERE logsourcetypename(devicetype) IN (
+                'web proxy logs',
                 'Blue Coat Web Security Service',
                 'Palo Alto PA Series'
             )
@@ -1365,6 +1455,41 @@ class QRadarClient:
                    qidname(qid) AS eventName, URL, "Threat Name", magnitude, starttime
             FROM events
             WHERE ({ip_conditions})
+            LIMIT {max_results}
+            LAST {hours} HOURS
+        """
+        return self.run_aql_search(aql.strip(), max_results=max_results)
+
+    def batch_search_ips_zpa(
+        self,
+        ips: List[str],
+        hours: int = 168,
+        max_results: int = 500
+    ) -> Dict[str, Any]:
+        """Search for multiple IPs in ZPA logs (single query).
+
+        Args:
+            ips: List of IP addresses to search for
+            hours: Number of hours to look back
+            max_results: Maximum events to return
+
+        Returns:
+            dict: Search results with events
+        """
+        if not ips:
+            return {"events": [], "count": 0}
+
+        ip_conditions = " OR ".join([
+            f"(sourceip = '{_escape_aql_value(ip)}' OR destinationip = '{_escape_aql_value(ip)}')"
+            for ip in ips
+        ])
+
+        aql = f"""
+            SELECT sourceip, destinationip, username, "Computer Hostname",
+                   qidname(qid) AS eventName, "session-status", starttime
+            FROM events
+            WHERE logsourcetypename(devicetype) = 'VPN logs'
+            AND ({ip_conditions})
             LIMIT {max_results}
             LAST {hours} HOURS
         """
@@ -1490,7 +1615,7 @@ class QRadarClient:
     ) -> Dict[str, Any]:
         """Search for multiple IPs across all log sources in a single query.
 
-        Combines Entra, CrowdStrike, Palo Alto, and general events into
+        Combines ZPA, Entra, CrowdStrike, Palo Alto, and general events into
         one query for efficiency. Returns source identification and context
         fields for each event.
 
@@ -1516,11 +1641,13 @@ class QRadarClient:
                    qidname(qid) AS eventName,
                    "Threat Name", "Action", URL,
                    "Process Name", Command,
+                   "session-status",
                    "Conditional Access Status",
                    "PAN Log SubType"
             FROM events
             WHERE (
                 logsourcetypename(devicetype) IN (
+                    'VPN logs',
                     'Microsoft Entra ID',
                     'CrowdStrikeEndpoint',
                     'Tanium HTTP',
@@ -1750,7 +1877,7 @@ if __name__ == "__main__":
     # Test new search methods (use short time window for speed)
     test_hours = 1
 
-    print("\n3. Testing domain search (Blue Coat web proxy)...")
+    print("\n3. Testing domain search (the corporate proxy/Blue Coat)...")
     result = client.search_events_by_domain("google.com", hours=test_hours, max_results=5)
     if "error" in result:
         print(f"   Error: {result['error']}")
@@ -1771,14 +1898,21 @@ if __name__ == "__main__":
     else:
         print(f"   Found {len(result.get('events', []))} events")
 
-    print("\n6. Testing Entra ID search...")
+    print("\n6. Testing ZPA logon search...")
+    result = client.search_zpa_logons_by_ip("<internal-host>", hours=test_hours, max_results=5)
+    if "error" in result:
+        print(f"   Error: {result['error']}")
+    else:
+        print(f"   Found {len(result.get('events', []))} events")
+
+    print("\n7. Testing Entra ID search...")
     result = client.search_entra_by_ip("<internal-host>", hours=test_hours, max_results=5)
     if "error" in result:
         print(f"   Error: {result['error']}")
     else:
         print(f"   Found {len(result.get('events', []))} events")
 
-    print("\n7. Testing endpoint hash search (CrowdStrike/Tanium)...")
+    print("\n8. Testing endpoint hash search (CrowdStrike/Tanium)...")
     result = client.search_endpoint_by_hash("d41d8cd98f00b204e9800998ecf8427e", hours=test_hours, max_results=5)
     if "error" in result:
         print(f"   Error: {result['error']}")

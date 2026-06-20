@@ -1683,7 +1683,7 @@ def _send_webex_notification(
     stage: str,
 ) -> None:
     """Send a Webex notification about a new RUAI screening submission."""
-    access_token = CONFIG.webex_bot_access_token_pokedex
+    access_token = CONFIG.webex_bot_access_token_sleuth
     room_id = CONFIG.webex_room_id_dev_test_space
 
     if not access_token or not room_id:

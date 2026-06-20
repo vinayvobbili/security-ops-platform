@@ -15,7 +15,7 @@ import zipfile
 from pathlib import Path
 
 PACKAGE_DIR = Path(__file__).parent / "app_package"
-OUTPUT_ZIP = Path(__file__).parent / "toodles-bot.zip"
+OUTPUT_ZIP = Path(__file__).parent / "aide-bot.zip"
 PLACEHOLDER = "{{AZURE_AD_APP_ID}}"
 
 

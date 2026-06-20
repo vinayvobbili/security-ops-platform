@@ -61,8 +61,8 @@ def _get_webex_api():
     if _webex_api is None:
         try:
             from webexpythonsdk import WebexAPI
-            if config.webex_bot_access_token_pokedex:
-                _webex_api = WebexAPI(access_token=config.webex_bot_access_token_pokedex)
+            if config.webex_bot_access_token_sleuth:
+                _webex_api = WebexAPI(access_token=config.webex_bot_access_token_sleuth)
         except Exception as e:
             logger.warning(f"Failed to initialize Webex API: {e}")
     return _webex_api

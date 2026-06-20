@@ -37,7 +37,7 @@ def _notify_oncall_change(message: str):
             from webexpythonsdk import WebexAPI
 
             config = get_config()
-            webex_api = WebexAPI(access_token=config.webex_bot_access_token_toodles)
+            webex_api = WebexAPI(access_token=config.webex_bot_access_token_aide)
             for room_id in [config.webex_room_id_response_engineering, config.webex_room_id_dev_test_space]:
                 if not room_id:
                     continue

@@ -24,7 +24,7 @@ def _get_client() -> OpenAI:
     if _client:
         return _client
     # m1 analysis (GLM-4.7-Flash)
-    base_url = os.environ.get('POKEDEX_LLM_BASE_URL') or os.environ.get('LLM_BASE_URL', 'http://localhost:8015/v1')
+    base_url = os.environ.get('SLEUTH_LLM_BASE_URL') or os.environ.get('LLM_BASE_URL', 'http://localhost:8015/v1')
     logger.info(f"Meeting QA LLM base URL: {base_url}")
     _client = OpenAI(base_url=base_url, api_key="not-needed")
     return _client
