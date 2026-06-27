@@ -54,6 +54,8 @@ from .markdown_viewer import markdown_viewer_bp
 from .phish_sentiment import phish_sentiment_bp
 from .hunt_workbench import hunt_workbench_bp
 from .detection_as_code import detection_as_code_bp
+from .code_security import code_security_bp
+from .third_party_risk import third_party_risk_bp
 
 __all__ = [
     'utilities_bp',
@@ -106,6 +108,8 @@ __all__ = [
     'phish_sentiment_bp',
     'hunt_workbench_bp',
     'detection_as_code_bp',
+    'code_security_bp',
+    'third_party_risk_bp',
 ]
 
 
@@ -166,3 +170,5 @@ def register_all_blueprints(app):
     app.register_blueprint(phish_sentiment_bp)
     app.register_blueprint(hunt_workbench_bp)
     app.register_blueprint(detection_as_code_bp)
+    app.register_blueprint(code_security_bp)
+    app.register_blueprint(third_party_risk_bp)

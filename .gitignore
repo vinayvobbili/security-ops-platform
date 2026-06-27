@@ -78,6 +78,7 @@ data/chroma_contacts/
 data/epp_tagging/*.db
 data/escalation_contacts/
 data/ruai_screening/
+data/tpcra/
 data/rules_cache/
 data/salesforce_scanner/
 data/recaps/

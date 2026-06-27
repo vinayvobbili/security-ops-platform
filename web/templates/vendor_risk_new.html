@@ -1,0 +1,73 @@
+{% extends "base_layout.html" %}
+{% set page_title_text = "New Vendor Assessment" %}
+{% set page_title_left_icon = "✏️" %}
+{% set page_title_right_icon = "🏢" %}
+{% block body_classes %}vra-body{% endblock %}
+
+{% block extra_css %}{% include '_vra_base.html' %}
+<style>
+  .vra-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .vra-grid2 { grid-template-columns: 1fr; } }
+  .vra-field { margin-bottom: 16px; }
+  .vra-drop { border: 2px dashed #b7c4e0; border-radius: 14px; padding: 18px; text-align: center; background: rgba(255,255,255,.5); }
+  body.dark-mode .vra-drop { background: rgba(15,28,48,.5); border-color: #3a4a66; }
+  .vra-drop p { margin: 4px 0; font-size: .86rem; color: #6b7390; }
+  .vra-filelist { font-size: .82rem; color: #0046ad; margin-top: 8px; }
+  .vra-msg { margin-left: 14px; font-weight: 700; font-size: .9rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="vra-wrap">
+  <a href="/vendor-risk-assessment" class="vra-ghost" style="margin-bottom:16px;">← Back</a>
+
+  <form id="vra-form" class="vra-card" style="margin-top:14px;">
+    <h3>🏢 Vendor & scope</h3>
+    <div class="vra-grid2">
+      <div class="vra-field"><div class="vra-label">Vendor name *</div><input class="vra-in" name="vendor_name" required></div>
+      <div class="vra-field"><div class="vra-label">Assessment title *</div><input class="vra-in" name="title" placeholder="e.g. 2026 Annual Due Diligence" required></div>
+      <div class="vra-field"><div class="vra-label">Vendor tier</div>
+        <select class="vra-sel" name="vendor_tier"><option value="">—</option>{% for t in tiers %}<option>{{ t }}</option>{% endfor %}</select></div>
+      <div class="vra-field"><div class="vra-label">Assessment type</div>
+        <select class="vra-sel" name="assessment_type"><option value="">—</option>{% for t in assessment_types %}<option>{{ t }}</option>{% endfor %}</select></div>
+      <div class="vra-field"><div class="vra-label">Aravo reference</div><input class="vra-in" name="aravo_ref" placeholder="Aravo record ID (optional)"></div>
+      <div class="vra-field"><div class="vra-label">Scope notes</div><input class="vra-in" name="scope_notes" placeholder="Services / data in scope"></div>
+    </div>
+
+    <h3 style="margin-top:18px;">📎 Documents</h3>
+    <div class="vra-field">
+      <div class="vra-label">Vendor evidence (SOC 2, policies, pen-test summaries…)</div>
+      <div class="vra-drop"><input type="file" name="documents" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.md">
+        <p>No file-count limit — drop in everything the vendor sent.</p></div>
+    </div>
+    <div class="vra-grid2">
+      <div class="vra-field"><div class="vra-label">Aravo questionnaire export</div>
+        <input type="file" name="aravo_export" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv"></div>
+      <div class="vra-field"><div class="vra-label">Baseline control document (optional)</div>
+        <input type="file" name="baseline_control" multiple accept=".pdf,.doc,.docx,.xls,.xlsx"></div>
+    </div>
+
+    <div style="margin-top:14px; display:flex; align-items:center;">
+      <button type="submit" class="vra-btn" id="vra-submit">🚀 Create assessment</button>
+      <span class="vra-msg" id="vra-msg"></span>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const form = document.getElementById('vra-form');
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('vra-submit'), msg = document.getElementById('vra-msg');
+  btn.disabled = true; btn.textContent = 'Creating…'; msg.textContent = '';
+  try {
+    const resp = await fetch('/vendor-risk-assessment/submit', { method: 'POST', body: new FormData(form) });
+    const data = await resp.json();
+    if (data.status === 'success') { window.location = data.redirect; }
+    else { msg.style.color = '#c01744'; msg.textContent = data.message || 'Failed'; btn.disabled = false; btn.textContent = '🚀 Create assessment'; }
+  } catch (err) { msg.style.color = '#c01744'; msg.textContent = 'Error: ' + err; btn.disabled = false; btn.textContent = '🚀 Create assessment'; }
+});
+</script>
+{% endblock %}

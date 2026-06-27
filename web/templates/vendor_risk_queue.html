@@ -1,0 +1,62 @@
+{% extends "base_layout.html" %}
+{% set page_title_text = "Assessment Queue" %}
+{% set page_title_left_icon = "📋" %}
+{% set page_title_right_icon = "🏢" %}
+{% block body_classes %}vra-body{% endblock %}
+
+{% block extra_css %}{% include '_vra_base.html' %}
+<style>
+  .vra-filters { display:flex; gap:8px; flex-wrap:wrap; margin: 6px 0 18px; }
+  .vra-fchip { padding: 7px 15px; border-radius: 20px; font-size: .84rem; font-weight: 700; text-decoration:none;
+      background: rgba(255,255,255,.8); color:#4a5578; border:1.5px solid transparent; }
+  .vra-fchip.on { background: linear-gradient(135deg,#e3ecff,#dff5ea); border-color:#0a8fd6; color:#0046ad; }
+  body.dark-mode .vra-fchip { background: rgba(30,41,59,.7); color:#aebbd6; }
+  .vra-row { display:flex; align-items:center; gap:16px; text-decoration:none; padding: 16px 18px; border-radius: 14px;
+      background: rgba(255,255,255,.9); border:1px solid rgba(255,255,255,.9); margin-bottom: 10px; box-shadow: 0 6px 18px rgba(40,30,90,.08);
+      transition: transform .12s; color: inherit; }
+  .vra-row:hover { transform: translateX(3px); }
+  body.dark-mode .vra-row { background: rgba(30,41,59,.82); border-color: rgba(148,163,184,.18); }
+  .vra-row-main { flex: 1; min-width: 0; }
+  .vra-row-vendor { font-weight: 800; font-size: 1.02rem; color: #1a1340; }
+  body.dark-mode .vra-row-vendor { color: #e6edf8; }
+  .vra-row-sub { font-size: .82rem; color: #6b7390; margin-top: 3px; }
+  .vra-prog-mini { height: 6px; border-radius: 4px; background: #e6ebf5; overflow:hidden; width: 160px; margin-top: 8px; }
+  .vra-prog-mini > span { display:block; height:100%; background: linear-gradient(90deg,#0046ad,#00a651); }
+  .vra-status { font-size: .76rem; font-weight: 800; text-transform: uppercase; letter-spacing:.5px; padding: 4px 11px; border-radius: 14px; background:#eef2fb; color:#3a4668; }
+  body.dark-mode .vra-status { background:#1c2942; color:#aebbd6; }
+  .vra-empty { text-align:center; padding: 50px 20px; color:#6b7390; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="vra-wrap">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:12px;">
+    <a href="/vendor-risk-assessment" class="vra-ghost">← Overview</a>
+    {% if can('tpcra.manage') %}<a href="/vendor-risk-assessment/new" class="vra-btn">✏️ New Assessment</a>{% endif %}
+  </div>
+
+  <div class="vra-filters">
+    <a class="vra-fchip {{ 'on' if not active_status }}" href="/vendor-risk-assessment/assessments">All</a>
+    {% for s in statuses %}
+    <a class="vra-fchip {{ 'on' if active_status == s }}" href="/vendor-risk-assessment/assessments?status={{ s }}">{{ s|replace('_',' ')|title }}</a>
+    {% endfor %}
+  </div>
+
+  {% if assessments %}
+    {% for a in assessments %}
+    <a class="vra-row" href="/vendor-risk-assessment/assessments/{{ a.id }}">
+      <div class="vra-row-main">
+        <div class="vra-row-vendor">🏢 {{ a.vendor_name }}</div>
+        <div class="vra-row-sub">{{ a.title }}{% if a.vendor_tier %} · {{ a.vendor_tier }}{% endif %}{% if a.residual_risk %} · Residual: {{ a.residual_risk }}{% endif %}</div>
+        <div class="vra-prog-mini"><span style="width: {{ ((a.evaluated_count / a.control_count * 100) if a.control_count else 0)|round }}%;"></span></div>
+        <div class="vra-row-sub">{{ a.evaluated_count }} / {{ a.control_count }} controls evaluated</div>
+      </div>
+      <div class="vra-status">{{ a.status|replace('_',' ') }}</div>
+    </a>
+    {% endfor %}
+  {% else %}
+    <div class="vra-card"><div class="vra-empty">No assessments{% if active_status %} with status “{{ active_status }}”{% endif %} yet.
+      {% if can('tpcra.manage') %}<br><br><a href="/vendor-risk-assessment/new" class="vra-btn">✏️ Open the first one</a>{% endif %}</div></div>
+  {% endif %}
+</div>
+{% endblock %}

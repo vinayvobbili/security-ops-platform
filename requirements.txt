@@ -120,3 +120,11 @@ detflow>=0.1.0
 # The [agent] extra brings the role agents' langgraph/langchain-core; the
 # [redis] extra brings the durable RedisBus the agent pipeline runs on.
 aisoc[agent,redis]>=0.1.0
+
+# Questionnaire / attestation RAG kernel — backs the Third-Party Risk Assessment
+# control evaluation. The handler injects a local LLM + embeddings as its seams.
+attestq>=0.2.0
+
+# Refute-first two-LLM code vulnerability scanner — the Code Security feature
+# delegates its scan engine to this package through its provider seam.
+refutescan>=0.1.0

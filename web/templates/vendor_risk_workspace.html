@@ -1,0 +1,267 @@
+{% extends "base_layout.html" %}
+{% set page_title_text = assessment.vendor_name + " — Assessment" %}
+{% set page_title_left_icon = "🛡️" %}
+{% set page_title_right_icon = "🏢" %}
+{% block body_classes %}vra-body{% endblock %}
+
+{% block extra_css %}{% include '_vra_base.html' %}
+<style>
+  .vra-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
+  .vra-head h2 { margin: 0; font-size: 1.5rem; color:#1a1340; }
+  body.dark-mode .vra-head h2 { color:#e6edf8; }
+  .vra-head-sub { font-size: .88rem; color:#6b7390; margin-top: 5px; }
+  .vra-meta-row { display:flex; gap:18px; flex-wrap:wrap; margin-top: 10px; font-size: .82rem; color:#54607e; }
+  .vra-actions { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+
+  .vra-risk { display:grid; grid-template-columns: repeat(3,1fr); gap:14px; }
+  @media (max-width:760px){ .vra-risk { grid-template-columns:1fr; } }
+  .vra-risk-cell .vra-label { margin-bottom:5px; }
+
+  .vra-domain { font-size: .8rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color:#0a8fd6;
+      margin: 22px 0 10px; padding-left: 2px; }
+  .vra-ctrl { background: rgba(255,255,255,.92); border:1px solid rgba(255,255,255,.9); border-radius: 14px; padding: 16px 18px; margin-bottom: 12px;
+      box-shadow: 0 5px 16px rgba(40,30,90,.07); }
+  body.dark-mode .vra-ctrl { background: rgba(30,41,59,.82); border-color: rgba(148,163,184,.18); }
+  .vra-ctrl-top { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+  .vra-ctrl-id { font-size: .72rem; font-weight: 800; color:#0046ad; letter-spacing:.5px; }
+  body.dark-mode .vra-ctrl-id { color:#4dabf7; }
+  .vra-ctrl-text { font-size: .94rem; font-weight: 600; margin: 3px 0 8px; color:#1a1340; }
+  body.dark-mode .vra-ctrl-text { color:#dbe3f2; }
+  .vra-field-row { font-size: .86rem; line-height:1.5; margin: 6px 0; color:#41476a; }
+  body.dark-mode .vra-field-row { color:#c4cee0; }
+  .vra-field-row b { color:#54607e; }
+  body.dark-mode .vra-field-row b { color:#9fb0cf; }
+  .vra-cites { margin-top: 8px; }
+  .vra-cite { font-size: .78rem; background:#f3f6fc; border-left:3px solid #8f94fb; border-radius:6px; padding:6px 10px; margin:5px 0; color:#4a5578; }
+  body.dark-mode .vra-cite { background:#16223a; color:#aebbd6; }
+  .vra-ctrl-tools { display:flex; gap:8px; margin-top: 10px; flex-wrap:wrap; }
+  .vra-mini { font-size:.8rem; padding: 6px 12px; border-radius:9px; cursor:pointer; border:1.5px solid #c9d3e8; background:#fff; color:#4a5578; font-weight:700; }
+  .vra-mini:hover { background:rgba(0,70,173,.06); }
+  body.dark-mode .vra-mini { background:#0f1c30; border-color:#334155; color:#b8c4d8; }
+  .vra-edit { display:none; margin-top:10px; padding-top:10px; border-top:1px dashed #d7def0; }
+  .vra-edit.on { display:block; }
+  .vra-edit .vra-label { margin-top:10px; }
+
+  .vra-doc { display:flex; justify-content:space-between; align-items:center; font-size:.85rem; padding:6px 0; border-bottom:1px solid rgba(0,0,0,.05); }
+  .vra-doc a { color:#0046ad; text-decoration:none; }
+  .vra-doc-kind { font-size:.7rem; background:#eef2fb; color:#54607e; padding:2px 8px; border-radius:10px; font-weight:700; }
+  body.dark-mode .vra-doc-kind { background:#1c2942; color:#aebbd6; }
+  .vra-audit { font-size:.8rem; color:#6b7390; max-height:200px; overflow-y:auto; }
+  .vra-audit div { padding:4px 0; border-bottom:1px solid rgba(0,0,0,.04); }
+  #vra-eval-prog { display:none; align-items:center; gap:12px; margin-top:10px; }
+  #vra-eval-prog.on { display:flex; }
+  .vra-spin { width:22px;height:22px;border-radius:50%;border:3px solid rgba(10,143,214,.22);border-top-color:#0a8fd6;animation:vsp .8s linear infinite; }
+  @keyframes vsp { to { transform: rotate(360deg); } }
+  .vra-msg { font-weight:700; font-size:.88rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% import '_vra_base.html' as vra with context %}
+{% set CAN = can('tpcra.manage') %}
+<div class="vra-wrap" data-aid="{{ assessment.id }}">
+  <a href="/vendor-risk-assessment/assessments" class="vra-ghost" style="margin-bottom:14px;">← Queue</a>
+
+  <!-- Header -->
+  <div class="vra-card">
+    <div class="vra-head">
+      <div>
+        <h2>🏢 {{ assessment.vendor_name }}</h2>
+        <div class="vra-head-sub">{{ assessment.title }}</div>
+        <div class="vra-meta-row">
+          <span>📦 {{ assessment.vendor_tier or 'Tier —' }}</span>
+          <span>🗂️ {{ assessment.assessment_type or 'Type —' }}</span>
+          {% if assessment.aravo_ref %}<span>🔗 Aravo {{ assessment.aravo_ref }}</span>{% endif %}
+          <span>📊 Status: <b>{{ assessment.status|replace('_',' ')|title }}</b></span>
+        </div>
+      </div>
+      {% if CAN %}
+      <div class="vra-actions">
+        <select class="vra-sel" id="vra-status" style="width:auto;">
+          {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if assessment.status==s }}>{{ s|replace('_',' ')|title }}</option>{% endfor %}
+        </select>
+        <button class="vra-btn" id="vra-export">📤 Export DD Form</button>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Evidence + evaluation -->
+  {% if CAN %}
+  <div class="vra-card">
+    <h3>⚙️ Evidence &amp; evaluation</h3>
+    <div style="font-size:.88rem; color:#54607e; margin-bottom:12px;">
+      {{ evidence.indexed_count }} of {{ evidence.doc_count }} document(s) indexed · {{ evidence.chunk_count }} evidence chunk(s)
+      {% if evidence.pending_count %}· <b style="color:#9a6b00;">{{ evidence.pending_count }} not yet indexed</b>{% endif %}
+    </div>
+    <div class="vra-actions">
+      <button class="vra-btn" id="vra-eval-all">🤖 Evaluate all controls</button>
+      <button class="vra-ghost" id="vra-synth">⚖️ Synthesize risk</button>
+      <label class="vra-ghost" style="cursor:pointer;">📎 Add evidence
+        <input type="file" id="vra-upload" multiple style="display:none;" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.md"></label>
+      <span class="vra-msg" id="vra-evi-msg"></span>
+    </div>
+    <div id="vra-eval-prog"><div class="vra-spin"></div><div id="vra-eval-text" style="font-weight:700;color:#0046ad;">Evaluating…</div></div>
+  </div>
+  {% endif %}
+
+  <!-- Risk panel -->
+  <div class="vra-card">
+    <h3>⚖️ Risk assessment</h3>
+    <div class="vra-risk">
+      <div class="vra-risk-cell"><div class="vra-label">Inherent risk</div>
+        <select class="vra-sel" id="vra-inherent" {{ '' if CAN else 'disabled' }}>
+          <option value="">—</option>{% for r in risk_ratings %}<option {{ 'selected' if assessment.inherent_risk==r }}>{{ r }}</option>{% endfor %}</select></div>
+      <div class="vra-risk-cell"><div class="vra-label">Residual risk</div>
+        <select class="vra-sel" id="vra-residual" {{ '' if CAN else 'disabled' }}>
+          <option value="">—</option>{% for r in risk_ratings %}<option {{ 'selected' if assessment.residual_risk==r }}>{{ r }}</option>{% endfor %}</select></div>
+      <div class="vra-risk-cell" style="grid-column:1/-1;"><div class="vra-label">Overall risk statement</div>
+        <textarea class="vra-ta" id="vra-overall" {{ '' if CAN else 'disabled' }}>{{ assessment.overall_statement or '' }}</textarea></div>
+    </div>
+    {% if CAN %}<div style="margin-top:12px;"><button class="vra-ghost" id="vra-save-risk">💾 Save risk</button> <span class="vra-msg" id="vra-risk-msg"></span></div>{% endif %}
+  </div>
+
+  <!-- Controls -->
+  <div class="vra-card">
+    <h3>📑 Baseline control evaluation <span style="font-weight:600;font-size:.82rem;color:#6b7390;">({{ controls|length }} controls)</span></h3>
+    {% set ns = namespace(domain='') %}
+    {% for c in controls %}
+      {% if c.domain != ns.domain %}{% set ns.domain = c.domain %}<div class="vra-domain">{{ c.domain }}</div>{% endif %}
+      <div class="vra-ctrl" id="ctrl-{{ c.id }}" data-cid="{{ c.id }}">
+        <div class="vra-ctrl-top">
+          <div style="flex:1;">
+            <div class="vra-ctrl-id">{{ c.control_id }}</div>
+            <div class="vra-ctrl-text">{{ c.control_text }}</div>
+          </div>
+          <div class="vra-determ">{{ vra.determ_pill(c.determination) }}</div>
+        </div>
+        <div class="vra-determ-fields">
+          <div class="vra-field-row"><b>Evidence summary:</b> <span class="f-ev">{{ c.evidence_summary or '—' }}</span></div>
+          <div class="vra-field-row"><b>Validation source:</b> <span class="f-vs">{{ c.validation_source or '—' }}</span></div>
+          <div class="vra-field-row"><b>Notes / gaps:</b> <span class="f-ng">{{ c.notes_gaps or '—' }}</span></div>
+        </div>
+        {% if c.citations %}
+        <div class="vra-cites">
+          {% for cite in c.citations[:3] %}
+          <div class="vra-cite">📄 <b>{{ cite.source_path }}</b>{% if cite.score %} · {{ (cite.score*100)|round }}% match{% endif %}<br>{{ cite.chunk_text }}</div>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if CAN %}
+        <div class="vra-ctrl-tools">
+          <button class="vra-mini" onclick="vraReeval({{ c.id }}, this)">🔄 Re-evaluate</button>
+          <button class="vra-mini" onclick="vraToggleEdit({{ c.id }})">✏️ Edit</button>
+        </div>
+        <div class="vra-edit" id="edit-{{ c.id }}">
+          <div class="vra-label">Determination</div>
+          <select class="vra-sel e-determ"><option value="">—</option>{% for d in determinations %}<option {{ 'selected' if c.determination==d }}>{{ d }}</option>{% endfor %}</select>
+          <div class="vra-label">Evidence summary</div><textarea class="vra-ta e-ev">{{ c.evidence_summary or '' }}</textarea>
+          <div class="vra-label">Validation source</div><textarea class="vra-ta e-vs" style="min-height:50px;">{{ c.validation_source or '' }}</textarea>
+          <div class="vra-label">Notes / gaps</div><textarea class="vra-ta e-ng" style="min-height:50px;">{{ c.notes_gaps or '' }}</textarea>
+          <div style="margin-top:10px;"><button class="vra-btn" onclick="vraSaveCtrl({{ c.id }}, this)">💾 Save &amp; confirm</button></div>
+        </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+
+  <!-- Audit -->
+  <div class="vra-card">
+    <h3>🕓 Activity</h3>
+    <div class="vra-audit">
+      {% for e in audit %}<div>{{ e.at }} · <b>{{ e.action }}</b> {{ e.detail }}</div>{% else %}<div>No activity yet.</div>{% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const AID = document.querySelector('.vra-wrap').dataset.aid;
+const msg = (el, txt, ok=true) => { const e=document.getElementById(el); if(e){ e.style.color = ok?'#0a7a42':'#c01744'; e.textContent = txt; } };
+
+async function postJSON(url, body) {
+  const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{})});
+  return r.json();
+}
+
+// status change
+document.getElementById('vra-status')?.addEventListener('change', async (e) => {
+  await postJSON(`/vendor-risk-assessment/assessments/${AID}/status`, {status: e.target.value});
+});
+
+// export
+document.getElementById('vra-export')?.addEventListener('click', () => {
+  const f = document.createElement('form'); f.method='POST'; f.action=`/vendor-risk-assessment/assessments/${AID}/export`;
+  document.body.appendChild(f); f.submit(); f.remove();
+});
+
+// add evidence
+document.getElementById('vra-upload')?.addEventListener('change', async (e) => {
+  if (!e.target.files.length) return;
+  msg('vra-evi-msg', 'Uploading…');
+  const fd = new FormData(); for (const f of e.target.files) fd.append('documents', f); fd.append('kind','vendor_evidence');
+  const r = await fetch(`/vendor-risk-assessment/assessments/${AID}/upload`, {method:'POST', body: fd});
+  const d = await r.json();
+  msg('vra-evi-msg', d.status==='success' ? `Added ${d.count} file(s) — reloading…` : 'Upload failed', d.status==='success');
+  if (d.status==='success') setTimeout(()=>location.reload(), 900);
+});
+
+// evaluate all + poll
+let pollTimer = null;
+document.getElementById('vra-eval-all')?.addEventListener('click', async () => {
+  const prog = document.getElementById('vra-eval-prog'); prog.classList.add('on');
+  document.getElementById('vra-eval-text').textContent = 'Indexing evidence & starting…';
+  await postJSON(`/vendor-risk-assessment/assessments/${AID}/evaluate-all`);
+  pollTimer = setInterval(pollEval, 2500); pollEval();
+});
+async function pollEval() {
+  const d = await (await fetch(`/vendor-risk-assessment/assessments/${AID}/evaluate-all/status`)).json();
+  const t = document.getElementById('vra-eval-text');
+  if (t) t.textContent = `Evaluated ${d.done}/${d.total} controls${d.running ? ` · ~${d.eta_seconds}s left` : ''}`;
+  if (!d.running) { clearInterval(pollTimer); setTimeout(()=>location.reload(), 1000); }
+}
+
+// synthesize risk
+document.getElementById('vra-synth')?.addEventListener('click', async (e) => {
+  e.target.disabled = true; msg('vra-evi-msg','Synthesizing risk…');
+  const d = await postJSON(`/vendor-risk-assessment/assessments/${AID}/synthesize-risk`);
+  if (d.status==='success') {
+    document.getElementById('vra-inherent').value = d.inherent_risk || '';
+    document.getElementById('vra-residual').value = d.residual_risk || '';
+    document.getElementById('vra-overall').value = d.overall_statement || '';
+    msg('vra-evi-msg','Risk drafted — review & save.');
+  } else { msg('vra-evi-msg','Failed', false); }
+  e.target.disabled = false;
+});
+
+// save risk
+document.getElementById('vra-save-risk')?.addEventListener('click', async () => {
+  const d = await postJSON(`/vendor-risk-assessment/assessments/${AID}/risk`, {
+    inherent_risk: document.getElementById('vra-inherent').value,
+    residual_risk: document.getElementById('vra-residual').value,
+    overall_statement: document.getElementById('vra-overall').value,
+  });
+  msg('vra-risk-msg', d.status==='success' ? 'Saved ✓' : 'Failed', d.status==='success');
+});
+
+// per-control
+function vraToggleEdit(id){ document.getElementById('edit-'+id).classList.toggle('on'); }
+async function vraReeval(id, btn){
+  btn.disabled = true; btn.textContent = '⏳ Evaluating…';
+  const d = await postJSON(`/vendor-risk-assessment/controls/${id}/evaluate`);
+  if (d.status==='success') location.reload(); else { btn.disabled=false; btn.textContent='🔄 Re-evaluate'; alert(d.message||'Failed'); }
+}
+async function vraSaveCtrl(id, btn){
+  const row = document.getElementById('ctrl-'+id);
+  btn.disabled = true; btn.textContent = '💾 Saving…';
+  const d = await postJSON(`/vendor-risk-assessment/controls/${id}/save`, {
+    determination: row.querySelector('.e-determ').value,
+    evidence_summary: row.querySelector('.e-ev').value,
+    validation_source: row.querySelector('.e-vs').value,
+    notes_gaps: row.querySelector('.e-ng').value,
+  });
+  if (d.status==='success') location.reload(); else { btn.disabled=false; btn.textContent='💾 Save & confirm'; alert('Failed'); }
+}
+</script>
+{% endblock %}

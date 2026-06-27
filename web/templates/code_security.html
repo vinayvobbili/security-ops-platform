@@ -1,0 +1,549 @@
+{% extends "base_layout.html" %}
+{% set page_title_text = "Code Security Scanner" %}
+{% set page_title_left_icon = "🛡️" %}
+{% set page_title_right_icon = "🔬" %}
+
+{% block extra_css %}
+<style>
+  /* Colorful page backdrop — light + REQUIRED dark mode (house style) */
+  body.cs-body { background:
+      radial-gradient(1100px 520px at 8% -6%, #dbe7ff 0%, transparent 55%),
+      radial-gradient(1000px 560px at 96% 2%, #ffe0ef 0%, transparent 52%),
+      radial-gradient(1200px 720px at 50% 120%, #d6f5e6 0%, transparent 55%),
+      linear-gradient(160deg, #eef3ff 0%, #fdeef7 48%, #eafaf2 100%) !important;
+      background-attachment: fixed !important; min-height: 100vh; }
+  body.cs-body.dark-mode { background:
+      linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%) !important;
+      color: #e2e8f0; }
+
+  /* Thick multi-color page scrollbar */
+  html { scrollbar-gutter: stable; }
+  ::-webkit-scrollbar { width: 16px; height: 16px; }
+  ::-webkit-scrollbar-track { border-radius: 10px;
+      background: linear-gradient(180deg, rgba(78,84,200,.08), rgba(10,143,214,.10) 50%, rgba(56,239,125,.08)); }
+  ::-webkit-scrollbar-thumb { border-radius: 10px; border: 2px solid transparent; background-clip: padding-box;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
+      background: linear-gradient(180deg, #ffd200 0%, #fc6767 22%, #ec008c 42%, #8f94fb 62%, #0a8fd6 80%, #38ef7d 100%); }
+  ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, #38ef7d 0%, #0a8fd6 20%, #8f94fb 38%, #ec008c 58%, #fc6767 78%, #ffd200 100%); }
+  ::-webkit-scrollbar-corner { background: transparent; }
+  body.dark-mode ::-webkit-scrollbar-track {
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.10) 50%, rgba(255,255,255,.06)); }
+
+  .cs-wrap { max-width: 1180px; margin: 0 auto; padding: 8px 18px 80px; }
+
+  /* ---- Hero band ---- */
+  .cs-hero { position: relative; overflow: hidden; border-radius: 22px; padding: 30px 36px;
+             margin: 8px 0 26px; color: #fff;
+             background: linear-gradient(120deg, #15113a 0%, #0046ad 52%, #0a8fd6 100%);
+             box-shadow: 0 20px 50px rgba(20,10,70,.36); }
+  .cs-hero::before { content:""; position:absolute; inset:0;
+             background: radial-gradient(820px 360px at 88% -40%, rgba(141,211,255,.40), transparent 60%),
+                         radial-gradient(560px 320px at -6% 130%, rgba(70,224,138,.38), transparent 60%),
+                         radial-gradient(420px 280px at 60% 150%, rgba(236,0,140,.28), transparent 60%);
+             pointer-events:none; }
+  .cs-hero-in { position: relative; z-index: 1; display:flex; align-items:flex-start; justify-content:space-between; gap:24px; flex-wrap:wrap; }
+  .cs-eyebrow { font-size: .76rem; letter-spacing: 2.4px; text-transform: uppercase;
+                font-weight: 700; color: #b9d6ff; margin-bottom: 11px; display:flex; align-items:center; gap:9px; }
+  .cs-livepip { width: 9px; height: 9px; border-radius: 50%; background: #46e08a;
+                box-shadow: 0 0 0 0 rgba(70,224,138,.7); animation: cspulse 2s infinite; }
+  @keyframes cspulse { 0%{box-shadow:0 0 0 0 rgba(70,224,138,.7)} 70%{box-shadow:0 0 0 12px rgba(70,224,138,0)} 100%{box-shadow:0 0 0 0 rgba(70,224,138,0)} }
+  .cs-hero h1 { font-size: 1.95rem; line-height: 1.16; margin: 0 0 10px; font-weight: 800; letter-spacing: -.7px; }
+  .cs-hero h1 .accent { background: linear-gradient(90deg,#8fd3ff,#46e08a); -webkit-background-clip: text;
+                        background-clip: text; -webkit-text-fill-color: transparent; }
+  .cs-hero p { font-size: 1.02rem; line-height: 1.5; margin: 0; color: #e2ecfb; max-width: 680px; }
+  .cs-hero p b { color: #fff; }
+  .cs-howbtn { background: #fff; border: none; color: #0046ad;
+               border-radius: 12px; padding: 12px 20px; font-size: .92rem; cursor: pointer; font-weight: 800;
+               white-space: nowrap; box-shadow: 0 8px 20px rgba(10,20,60,.28); display:inline-flex; align-items:center; gap:8px; }
+  .cs-howbtn:hover { transform: translateY(-2px); box-shadow: 0 12px 26px rgba(10,20,60,.36); filter: brightness(1.02); }
+
+  /* ---- Cards ---- */
+  .cs-card { position: relative; background: rgba(255,255,255,.86); backdrop-filter: blur(7px);
+             border: 1px solid rgba(255,255,255,.9); border-radius: 18px; padding: 22px 24px;
+             margin-bottom: 20px; box-shadow: 0 8px 24px rgba(40,30,90,.10); overflow: hidden; }
+  .cs-card::before { content:""; position:absolute; left:0; top:0; bottom:0; width:5px;
+                     background: linear-gradient(180deg,#0046ad,#00a651); }
+  body.dark-mode .cs-card { background: rgba(30,41,59,.82); border-color: rgba(148,163,184,.18); }
+  .cs-card h3 { margin: 0 0 14px; font-size: 1.12rem; font-weight: 800; color: #0046ad;
+                display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+  body.dark-mode .cs-card h3 { color: #4dabf7; }
+
+  /* ---- Input form ---- */
+  .cs-label { font-size: .74rem; text-transform: uppercase; letter-spacing: .8px; font-weight: 800;
+              color: #6b6588; margin: 0 0 6px; }
+  body.dark-mode .cs-label { color: #94a3b8; }
+  .cs-in { width: 100%; box-sizing: border-box; border: 1.5px solid #d7def0; border-radius: 11px;
+           padding: 11px 14px; font-size: .98rem; margin-bottom: 16px; background: #fff; color: #1a1340;
+           font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .cs-in:focus { outline: none; border-color: #0a8fd6; box-shadow: 0 0 0 3px rgba(10,143,214,.16); }
+  body.dark-mode .cs-in { background: #0f1c30; border-color: #334155; color: #e6edf8; }
+  .cs-row { display:flex; gap:16px; flex-wrap:wrap; }
+  .cs-row > div { flex:1; min-width: 220px; }
+
+  .cs-actions { display: flex; gap: 12px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+  .cs-run { background: linear-gradient(135deg,#0046ad,#00a651); border: none; color: #fff; border-radius: 12px;
+            padding: 13px 26px; font-size: 1rem; font-weight: 800; cursor: pointer;
+            box-shadow: 0 10px 24px rgba(0,70,173,.30); display:flex; align-items:center; gap:9px; }
+  .cs-run:hover { filter: brightness(1.07); transform: translateY(-1px); }
+  .cs-run:disabled { opacity: .55; cursor: not-allowed; transform: none; filter: none; }
+  .cs-ghost { background: transparent; border: 1.5px solid #c9d3e8; border-radius: 12px;
+              padding: 12px 18px; font-size: .92rem; font-weight: 700; cursor: pointer; color: #4a5578; }
+  .cs-ghost:hover { background: rgba(0,70,173,.06); }
+  body.dark-mode .cs-ghost { border-color: #3a4a66; color: #b8c4d8; }
+  .cs-hint { font-size: .82rem; color: #8b86a6; }
+  body.dark-mode .cs-hint { color: #94a3b8; }
+  .cs-err { color: #d12b4a; font-weight: 700; font-size: .9rem; }
+
+  /* ---- Progress ---- */
+  .cs-prog { display: none; align-items: center; gap: 14px; padding: 16px 4px 4px; }
+  .cs-prog.on { display: flex; }
+  .cs-spin { width: 26px; height: 26px; border-radius: 50%; border: 3px solid rgba(10,143,214,.22);
+             border-top-color: #0a8fd6; animation: csspin .8s linear infinite; flex: none; }
+  @keyframes csspin { to { transform: rotate(360deg); } }
+  .cs-phase { font-weight: 700; color: #0046ad; font-size: .98rem; }
+  body.dark-mode .cs-phase { color: #8fd3ff; }
+  .cs-phase .sub { display:block; font-weight: 500; color: #8b86a6; font-size: .8rem; margin-top: 2px; }
+
+  /* ---- KPI stat cards ---- */
+  .cs-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
+  .cs-kpi { border-radius: 16px; padding: 18px 20px; color: #fff; position: relative; overflow: hidden;
+            box-shadow: 0 12px 28px rgba(20,35,63,.20); }
+  .cs-kpi::before { content:""; position:absolute; right:-26px; top:-26px; width:110px; height:110px;
+                    border-radius:50%; background: rgba(255,255,255,.13); }
+  .cs-kpi .kk { font-size: .72rem; text-transform: uppercase; letter-spacing: 1.1px; font-weight: 800; opacity:.92; }
+  .cs-kpi .kv { font-size: 2rem; font-weight: 800; margin: 4px 0 0; letter-spacing:-1px; line-height:1.05; position:relative; z-index:1; }
+  .cs-kpi .ks { font-size: .78rem; opacity:.95; position:relative; z-index:1; }
+  .k-find { background: linear-gradient(135deg,#c31432,#f45c43); }
+  .k-clean { background: linear-gradient(135deg,#11998e,#38ef7d); }
+  .k-culled { background: linear-gradient(135deg,#5a6480,#8893ad); }
+  .k-files { background: linear-gradient(135deg,#0046ad,#0a8fd6); }
+  .k-sev { background: linear-gradient(135deg,#373b44,#4286f4); }
+
+  /* ---- Findings ---- */
+  .cs-find { border: 1px solid rgba(0,0,0,.08); border-radius: 14px; padding: 16px 18px; margin-bottom: 13px;
+             background: rgba(255,255,255,.72); border-left-width: 5px; }
+  body.dark-mode .cs-find { background: rgba(15,28,48,.55); border-color: rgba(148,163,184,.16); }
+  .cs-find.sev-critical { border-left-color:#b21e3c; } .cs-find.sev-high { border-left-color:#f45c43; }
+  .cs-find.sev-medium { border-left-color:#f7971e; } .cs-find.sev-low { border-left-color:#3aa0ff; }
+  .cs-find.sev-info { border-left-color:#8893ad; }
+  .cs-fh { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .cs-ft { font-weight: 800; color: #1a1340; font-size: 1.02rem; }
+  body.dark-mode .cs-ft { color: #e8eefc; }
+  .cs-floc { font-family: ui-monospace, Menlo, monospace; font-size: .82rem; color: #6b6588; margin-top: 3px; }
+  body.dark-mode .cs-floc { color: #9fb0c9; }
+  .cs-badges { display:flex; gap:7px; flex-wrap:wrap; align-items:center; }
+  .cs-pill { display:inline-block; font-size:.68rem; font-weight:800; padding:4px 11px; border-radius:20px;
+             text-transform:uppercase; letter-spacing:.5px; }
+  .b-critical { background:#fbdce3; color:#b21e3c; } .b-high { background:#fde0d6; color:#c1410b; }
+  .b-medium { background:#fdf0cf; color:#b5530a; } .b-low { background:#dcecfb; color:#1763b8; }
+  .b-info { background:#e7ecf7; color:#3a4668; }
+  body.dark-mode .b-critical { background:#3a1620; color:#ff8da3; } body.dark-mode .b-high { background:#3a2010; color:#ffab85; }
+  body.dark-mode .b-medium { background:#3a2d10; color:#f0c44a; } body.dark-mode .b-low { background:#11294a; color:#79b8ff; }
+  body.dark-mode .b-info { background:#1c2942; color:#aebbd6; }
+  .cs-class { background:#ede9fb; color:#5b3fd6; } body.dark-mode .cs-class { background:#241a44; color:#b9a7ff; }
+  .cs-conf { display:inline-flex; align-items:center; gap:6px; font-size:.74rem; font-weight:800; color:#3a4668; }
+  body.dark-mode .cs-conf { color:#aebbd6; }
+  .cs-confbar { width:64px; height:7px; border-radius:6px; background:#e2e7f2; overflow:hidden; }
+  body.dark-mode .cs-confbar { background:#1c2942; }
+  .cs-confbar i { display:block; height:100%; background:linear-gradient(90deg,#0a8fd6,#38ef7d); }
+  .cs-fsec { margin-top: 11px; }
+  .cs-fsec .lab { font-size:.7rem; font-weight:800; text-transform:uppercase; letter-spacing:.6px; color:#8b86a6; margin-bottom:3px; }
+  .cs-fsec .val { font-size:.9rem; color:#2c2748; line-height:1.5; }
+  body.dark-mode .cs-fsec .val { color:#dbe4f0; }
+  .cs-code { font-family: ui-monospace, Menlo, monospace; font-size: .8rem; background: #0f1c30; color: #cfe3ff;
+             border-radius: 9px; padding: 11px 13px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; margin-top:4px; }
+  .cs-flow { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:.84rem; margin-top:4px; }
+  .cs-flow .node { padding:5px 10px; border-radius:8px; font-weight:700; font-family: ui-monospace, Menlo, monospace; font-size:.78rem; }
+  .cs-flow .src { background:#fde0d6; color:#c1410b; } .cs-flow .snk { background:#fbdce3; color:#b21e3c; }
+  .cs-flow .arr { color:#8b86a6; font-weight:800; }
+  body.dark-mode .cs-flow .src { background:#3a2010; color:#ffab85; } body.dark-mode .cs-flow .snk { background:#3a1620; color:#ff8da3; }
+
+  /* ---- Class chips / culled ---- */
+  .cs-chips { display:flex; flex-wrap:wrap; gap:9px; }
+  .cs-chip { display:inline-flex; align-items:center; gap:7px; padding:7px 13px; border-radius:20px;
+             font-size:.85rem; font-weight:700; color:#2c2748; background:rgba(255,255,255,.7);
+             border:1.5px solid rgba(10,143,214,.2); }
+  .cs-chip b { color:#0046ad; }
+  body.dark-mode .cs-chip { background:rgba(15,28,48,.6); color:#cdd8ea; border-color:rgba(77,171,247,.25); }
+  body.dark-mode .cs-chip b { color:#8fd3ff; }
+  .cs-culled { font-size:.86rem; color:#5d5878; padding:9px 0; border-bottom:1px dashed #e6e9f2; line-height:1.45; }
+  .cs-culled:last-child { border-bottom:none; }
+  .cs-culled b { color:#1a1340; } body.dark-mode .cs-culled { color:#9fb0c9; border-color:#2c3a52; } body.dark-mode .cs-culled b { color:#e8eefc; }
+  .cs-note { font-size:.88rem; color:#7c7693; font-style: italic; line-height:1.5; }
+  body.dark-mode .cs-note { color:#9fb0c9; }
+  details.cs-det { margin-top:6px; } details.cs-det summary { cursor:pointer; font-weight:800; color:#0046ad; font-size:.92rem; }
+  body.dark-mode details.cs-det summary { color:#4dabf7; }
+
+  /* ---- Recent rail ---- */
+  .cs-recent { display: grid; grid-template-columns: 1fr; gap: 9px; }
+  .cs-rrow { display:flex; align-items:center; gap:12px; padding: 11px 14px; border-radius: 12px; cursor:pointer;
+             background: rgba(255,255,255,.66); border: 1px solid rgba(0,0,0,.05); transition: all .14s; }
+  .cs-rrow:hover { transform: translateX(3px); box-shadow: 0 6px 16px rgba(40,30,90,.12); }
+  body.dark-mode .cs-rrow { background: rgba(15,28,48,.5); border-color: rgba(148,163,184,.14); }
+  .cs-rrow .rt { flex:1; min-width:0; }
+  .cs-rrow .rt .tt { font-weight:700; color:#1a1340; font-size:.92rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  body.dark-mode .cs-rrow .rt .tt { color:#e8eefc; }
+  .cs-rrow .rt .mm { font-size:.76rem; color:#8b86a6; margin-top:2px; }
+  .cs-dot { width:10px; height:10px; border-radius:50%; flex:none; }
+  .d-critical{background:#b21e3c;} .d-high{background:#f45c43;} .d-medium{background:#f7971e;}
+  .d-low{background:#3aa0ff;} .d-clean{background:#38ef7d;} .d-run{background:#0a8fd6; animation:cspulse 1.6s infinite;} .d-err{background:#94a3b8;}
+
+  /* ---- Modal ---- */
+  .cs-modal-bg { position: fixed; inset: 0; background: rgba(20,10,50,.62); display: none;
+                 align-items: flex-start; justify-content: center; z-index: 9000; padding: 40px 16px;
+                 overflow-y: auto; backdrop-filter: blur(3px); }
+  .cs-modal-bg.open { display: flex; }
+  .cs-modal { background: #fff; border-radius: 18px; max-width: 720px; width: 100%;
+              padding: 28px 32px; box-shadow: 0 24px 70px rgba(0,0,0,.38);
+              animation: csmodal .25s cubic-bezier(.22,1,.36,1); }
+  @keyframes csmodal { from{opacity:0; transform: translateY(16px) scale(.98)} to{opacity:1; transform:none} }
+  .cs-modal h3 { margin: 0 0 6px; color: #0046ad; }
+  .cs-modal h4 { margin: 18px 0 5px; color: #1a1340; font-size: .98rem; display:flex; align-items:center; gap:8px; }
+  .cs-modal p { color: #4a5568; font-size: .9rem; line-height: 1.55; margin: 5px 0; }
+  .cs-modal .close { float: right; cursor: pointer; color: #95a0b3; font-size: 1.6rem; line-height: 1;
+                     border: none; background: none; }
+  body.dark-mode .cs-modal { background: #1e293b; }
+  body.dark-mode .cs-modal h3 { color: #4dabf7; }
+  body.dark-mode .cs-modal h4 { color: #e8eefc; }
+  body.dark-mode .cs-modal p { color: #b8c4d8; }
+
+  @media (max-width: 820px) {
+    .cs-kpis { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cs-wrap">
+
+  <div class="cs-hero">
+    <div class="cs-hero-in">
+      <div>
+        <div class="cs-eyebrow"><span class="cs-livepip"></span> 🟢 Read-only source audit &middot; navigate + validate</div>
+        <h1>Scan a repo for <span class="accent">exploitable vulnerabilities</span> — validated, not just flagged 🛡️</h1>
+        <p>Point it at a code repository. <b>An LLM</b> walks the source like a researcher and records candidates;
+           <b>a second LLM pass</b> then <b>refutes each one</b> against the real code 🔬 — so what reaches you is a short list of
+           findings with a data-flow rationale, severity, confidence, and repro, not a wall of false positives. ⚡</p>
+      </div>
+      <button class="cs-howbtn" onclick="csOpenModal()">💡 How does this work?</button>
+    </div>
+  </div>
+
+  <!-- Input -->
+  <div class="cs-card">
+    <h3>🎯 New scan</h3>
+    <div class="cs-label">Repository — a path on this host, or a git URL to clone</div>
+    <input type="text" id="cs-source" class="cs-in" placeholder="/home/vinay/security-ops-platform-dev   ·   or   https://github.com/org/repo.git">
+    <div class="cs-row">
+      <div>
+        <div class="cs-label">Branch (optional, git URL only)</div>
+        <input type="text" id="cs-branch" class="cs-in" placeholder="main">
+      </div>
+      <div>
+        <div class="cs-label">Title (optional)</div>
+        <input type="text" id="cs-title" class="cs-in" placeholder="e.g. payments-api security pass" style="font-family:inherit">
+      </div>
+    </div>
+
+    <div class="cs-actions">
+      {% if authenticated %}
+      <button class="cs-run" id="cs-run-btn" onclick="csSubmit()">🔬 Run scan</button>
+      <button class="cs-ghost" onclick="csClear()">Clear</button>
+      <span class="cs-hint" id="cs-hint">Scans run one at a time and can take a few minutes on a large repo.</span>
+      {% else %}
+      <a class="cs-run" href="/login?next=/code-security" style="text-decoration:none">🔑 Log in to run a scan</a>
+      <span class="cs-hint">This tool reads source from a path or repo you choose, so running a scan needs an account. Browsing is open — <a href="/login?next=/code-security" style="color:#0a8fd6;font-weight:700">log in or create one</a> to start.</span>
+      {% endif %}
+    </div>
+    <div class="cs-err" id="cs-err" style="margin-top:10px"></div>
+
+    <div class="cs-prog" id="cs-prog">
+      <div class="cs-spin"></div>
+      <div class="cs-phase" id="cs-phase">Starting…<span class="sub" id="cs-phase-sub"></span></div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="cs-results"></div>
+
+  <!-- Recent -->
+  <div class="cs-card">
+    <h3>🕓 Recent scans</h3>
+    <div class="cs-recent" id="cs-recent"><div class="cs-note">No scans yet — run one above.</div></div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="cs-modal-bg" id="cs-modal-bg">
+  <div class="cs-modal">
+    <button class="close" onclick="csCloseModal()">&times;</button>
+    <h3>🛡️ How the Code Security Scanner works</h3>
+    <p>An agentic source-code audit that splits the work into two passes — a wide-net <b>navigation</b> pass and a
+       skeptical <b>validation</b> pass — the way modern AI security tooling finds and then validates bugs.</p>
+
+    <h4>1️⃣ Map</h4>
+    <p>The repo is walked once (deterministically) to build a code map — languages, dependency manifests,
+       likely entrypoints, and the list of source files worth auditing. No LLM, no guessing.</p>
+
+    <h4>2️⃣ Navigate — LLM tool loop</h4>
+    <p>An LLM drives a read-only tool loop (list / read / grep) scoped to the repo. It finds where untrusted input
+       enters, follows it toward dangerous sinks (SQL, command, template, file paths, SSRF, deserializers,
+       auth checks), and <b>records candidate findings</b>. It casts a wide net on purpose.</p>
+
+    <h4>3️⃣ Validate — second LLM pass (refute-first)</h4>
+    <p>Every candidate is re-checked against the <b>real code slice</b> by a second LLM pass, prompted to <b>refute</b> it:
+       does untrusted input actually reach the sink unsanitized? Candidates it can't stand up are <b>culled</b>
+       (and shown, never silently dropped) — this is what kills the false-positive flood.</p>
+
+    <h4>4️⃣ Report</h4>
+    <p>What survives is a ranked list of findings with severity, a confidence score, the source→sink flow,
+       repro steps, and a recommended fix. Everything is <b>read-only</b> — no writes, no patches, no merge
+       requests (that's a later slice). Every scan is logged with an audit trail.</p>
+
+    <h4>🔒 Safety</h4>
+    <p>Scanning never executes the target's code, and each scan runs <b>inside an isolated container</b> —
+       non-root, read-only, no network, with only the target mounted. A git URL is cloned in a separate
+       throwaway container (no host access), hardened against malicious-repo tricks (no submodules, no repo
+       hooks, transport allowlist). Secret-shaped files (keys, certs, <code>.env</code>, credential stores) are
+       <b>never read</b>, and local scans are confined to allowed roots.</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.body.classList.add('cs-body');
+
+const CS_AUTHED = {{ 'true' if authenticated else 'false' }};
+let csPoll = null;
+const esc = s => (s == null ? '' : String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])));
+const num = n => (n == null ? '0' : Number(n).toLocaleString());
+const CLASS_LBL = {
+  injection:'Injection', authz:'Broken authz / IDOR', ssrf:'SSRF', path_traversal:'Path traversal',
+  deserialization:'Unsafe deserialization', secrets:'Hardcoded secret', crypto:'Weak crypto',
+  xss:'XSS', auth:'Auth flaw', other:'Other'
+};
+
+function csOpenModal(){ document.getElementById('cs-modal-bg').classList.add('open'); }
+function csCloseModal(){ document.getElementById('cs-modal-bg').classList.remove('open'); }
+document.getElementById('cs-modal-bg').addEventListener('click', e => { if (e.target.id === 'cs-modal-bg') csCloseModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') csCloseModal(); });
+
+function csClear(){
+  if (csPoll) { clearInterval(csPoll); csPoll = null; }
+  ['cs-source','cs-branch','cs-title'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('cs-err').textContent = '';
+  document.getElementById('cs-results').innerHTML = '';
+  document.getElementById('cs-prog').classList.remove('on');
+  document.getElementById('cs-run-btn').disabled = false;
+}
+
+async function csSubmit(){
+  const source = document.getElementById('cs-source').value.trim();
+  const errEl = document.getElementById('cs-err');
+  errEl.textContent = '';
+  if (!source){ errEl.textContent = 'Enter a repository path on this box, or a git URL to clone.'; return; }
+
+  const body = {
+    source,
+    branch: document.getElementById('cs-branch').value.trim(),
+    title: document.getElementById('cs-title').value.trim(),
+  };
+
+  const btn = document.getElementById('cs-run-btn');
+  btn.disabled = true;
+  document.getElementById('cs-results').innerHTML = '';
+  const prog = document.getElementById('cs-prog');
+  prog.classList.add('on');
+  document.getElementById('cs-phase').childNodes[0].nodeValue = 'Submitting…';
+
+  try {
+    const r = await fetch('/code-security/submit', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) throw new Error(d.error || 'submit failed');
+    csStartPoll(d.scan_id);
+  } catch (e) {
+    errEl.textContent = e.message;
+    prog.classList.remove('on');
+    btn.disabled = false;
+  }
+}
+
+function csStartPoll(scanId){
+  if (csPoll) clearInterval(csPoll);
+  const tick = async () => {
+    try {
+      const r = await fetch('/code-security/scan/' + scanId);
+      const scan = await r.json();
+      if (scan.error) throw new Error(scan.error);
+      csSetPhase(scan);
+      if (scan.status === 'done' || scan.status === 'error'){
+        clearInterval(csPoll); csPoll = null;
+        document.getElementById('cs-prog').classList.remove('on');
+        document.getElementById('cs-run-btn').disabled = false;
+        csRender(scan);
+        csLoadRecent();
+      }
+    } catch (e) {
+      clearInterval(csPoll); csPoll = null;
+      document.getElementById('cs-prog').classList.remove('on');
+      document.getElementById('cs-run-btn').disabled = false;
+      document.getElementById('cs-err').textContent = e.message;
+    }
+  };
+  tick();
+  csPoll = setInterval(tick, 2500);
+}
+
+function csSetPhase(scan){
+  const p = document.getElementById('cs-phase');
+  p.childNodes[0].nodeValue = scan.phase || (scan.status === 'queued' ? 'Queued…' : 'Working…');
+  document.getElementById('cs-phase-sub').textContent =
+      scan.status === 'queued' ? 'waiting for a scan slot' : 'live — auditing source';
+}
+
+/* ---------- render ---------- */
+function csRender(scan){
+  const host = document.getElementById('cs-results');
+  if (scan.status === 'error'){
+    host.innerHTML = `<div class="cs-card"><h3>⚠️ Scan failed</h3><p class="cs-note">${esc(scan.error || 'Unknown error')}</p></div>`;
+    return;
+  }
+  host.innerHTML =
+      csKpiCard(scan) +
+      csFindingsCard(scan.findings || []) +
+      csCulledCard(scan.culled || []) +
+      csMapCard(scan.map || {});
+}
+
+const SEV_ICON = {critical:'🟥', high:'🟧', medium:'🟨', low:'🟦', info:'⬜'};
+
+function csKpiCard(scan){
+  const s = scan.summary || {};
+  const total = s.total_findings || 0;
+  const culled = s.culled_count || 0;
+  const maxSev = s.max_severity;
+  const sevCard = total
+    ? `<div class="cs-kpi k-sev"><div class="kk">Highest severity</div><div class="kv">${SEV_ICON[maxSev]||''} ${esc((maxSev||'—').toUpperCase())}</div><div class="ks">worst confirmed issue</div></div>`
+    : `<div class="cs-kpi k-clean"><div class="kk">Highest severity</div><div class="kv">✓ CLEAN</div><div class="ks">no findings survived</div></div>`;
+  const findCard = total
+    ? `<div class="cs-kpi k-find"><div class="kk">Confirmed findings</div><div class="kv">${num(total)}</div><div class="ks">validated by the refute pass</div></div>`
+    : `<div class="cs-kpi k-clean"><div class="kk">Confirmed findings</div><div class="kv">0</div><div class="ks">nothing exploitable found</div></div>`;
+  return `<div class="cs-card"><h3>📊 Scan summary
+      <span class="cs-pill cs-class" style="text-transform:none">${esc(scan.source_label||'')}</span></h3>
+    <div class="cs-kpis">
+      ${findCard}
+      ${sevCard}
+      <div class="cs-kpi k-culled"><div class="kk">Culled candidates</div><div class="kv">${num(culled)}</div><div class="ks">of ${num(s.candidate_count||0)} flagged by the navigator</div></div>
+      <div class="cs-kpi k-files"><div class="kk">Source scanned</div><div class="kv">${num(s.files_scanned||0)}</div><div class="ks">files · ${num(s.total_loc||0)} LOC</div></div>
+    </div></div>`;
+}
+
+function csFindingsCard(findings){
+  if (!findings.length){
+    return `<div class="cs-card"><h3>🔬 Findings</h3>
+      <div class="cs-note">No vulnerabilities survived validation. The navigator's candidates were all refuted by the validation pass (see culled below), or none were flagged.</div></div>`;
+  }
+  const rows = findings.map((f, i) => csFinding(f, i)).join('');
+  return `<div class="cs-card"><h3>🔬 Findings <span class="cs-pill b-critical" style="background:#0046ad;color:#fff">${num(findings.length)}</span></h3>${rows}</div>`;
+}
+
+function csFinding(f, i){
+  const sev = f.severity || 'medium';
+  const conf = Math.round((Number(f.confidence)||0) * 100);
+  const flow = (f.source || f.sink)
+    ? `<div class="cs-fsec"><div class="lab">Data flow</div><div class="cs-flow">
+         ${f.source ? `<span class="node src">${esc(f.source)}</span><span class="arr">→</span>` : ''}
+         <span class="node snk">${esc(f.sink || 'sink')}</span></div></div>` : '';
+  return `<div class="cs-find sev-${esc(sev)}">
+    <div class="cs-fh">
+      <div>
+        <div class="cs-ft">${SEV_ICON[sev]||''} ${esc(f.title)}</div>
+        <div class="cs-floc">📄 ${esc(f.file)}${f.line ? ':'+esc(f.line) : ''}</div>
+      </div>
+      <div class="cs-badges">
+        <span class="cs-pill b-${esc(sev)}">${esc(sev)}</span>
+        <span class="cs-pill cs-class">${esc(CLASS_LBL[f.vuln_class]||f.vuln_class)}</span>
+        <span class="cs-conf">conf <span class="cs-confbar"><i style="width:${conf}%"></i></span> ${conf}%</span>
+      </div>
+    </div>
+    ${flow}
+    ${f.reasoning ? `<div class="cs-fsec"><div class="lab">Why it's real</div><div class="val">${esc(f.reasoning)}</div></div>` : ''}
+    ${f.snippet ? `<div class="cs-fsec"><div class="lab">Code</div><div class="cs-code">${esc(f.snippet)}</div></div>` : ''}
+    ${f.repro ? `<div class="cs-fsec"><div class="lab">Repro</div><div class="val">${esc(f.repro)}</div></div>` : ''}
+    ${f.recommendation ? `<div class="cs-fsec"><div class="lab">Recommended fix</div><div class="val">${esc(f.recommendation)}</div></div>` : ''}
+  </div>`;
+}
+
+function csCulledCard(culled){
+  if (!culled.length) return '';
+  const rows = culled.map(c => `<div class="cs-culled">
+      <b>${esc(CLASS_LBL[c.vuln_class]||c.vuln_class)}: ${esc(c.title)}</b>
+      <span class="cs-floc" style="display:inline">— ${esc(c.file)}${c.line?':'+esc(c.line):''}</span>
+      <div>${esc(c.cull_reason || 'refuted')}</div></div>`).join('');
+  return `<div class="cs-card"><h3>🧹 Culled by validation <span class="cs-pill b-info">${num(culled.length)}</span></h3>
+    <p class="cs-note" style="margin-top:0">Candidates the navigator flagged that the validation pass could not stand up against the real code. Shown for transparency — these are NOT confirmed issues.</p>
+    <details class="cs-det"><summary>Show ${num(culled.length)} culled candidate(s)</summary><div style="margin-top:10px">${rows}</div></details></div>`;
+}
+
+function csMapCard(m){
+  if (!m || !m.root_name) return '';
+  const langs = Object.entries(m.languages||{}).map(([k,v]) => `<span class="cs-chip">${esc(k)} <b>${num(v)}</b></span>`).join('');
+  const entries = (m.entrypoints||[]).slice(0,8).map(e => `<span class="cs-chip">🚪 ${esc(e)}</span>`).join('');
+  const trunc = m.truncated ? `<div class="cs-note" style="margin-top:10px">⚠️ File list was truncated at ${num(m.source_files_scanned)} files — scan a sub-path for full coverage of a very large repo.</div>` : '';
+  return `<div class="cs-card"><h3>🗺️ Codebase map</h3>
+    <div class="cs-chips">${langs}${entries}</div>
+    <div class="cs-note" style="margin-top:10px">${num(m.source_files_scanned)} source files · ${num(m.total_loc)} LOC · ${num((m.manifests||[]).length)} dependency manifest(s)</div>
+    ${trunc}</div>`;
+}
+
+/* ---------- recent ---------- */
+async function csLoadRecent(){
+  if (!CS_AUTHED){
+    document.getElementById('cs-recent').innerHTML =
+      '<div class="cs-note">🔒 Scan history is visible once you log in.</div>';
+    return;
+  }
+  try {
+    const r = await fetch('/code-security/recent?limit=25');
+    const d = await r.json();
+    const host = document.getElementById('cs-recent');
+    const scans = d.scans || [];
+    if (!scans.length){ host.innerHTML = '<div class="cs-note">No scans yet — run one above.</div>'; return; }
+    const dot = s => {
+      if (s.status === 'error') return 'd-err';
+      if (s.status !== 'done') return 'd-run';
+      return s.max_severity ? ('d-' + s.max_severity) : 'd-clean';
+    };
+    host.innerHTML = scans.map(s => {
+      const st = s.status === 'done'
+        ? (s.total_findings ? `🔴 ${num(s.total_findings)} finding(s) · ${esc((s.max_severity||'').toUpperCase())}` : '🟢 clean')
+        : (s.status === 'error' ? '⚠ failed' : '⏳ ' + (s.phase || 'running'));
+      return `<div class="cs-rrow" onclick="csOpenScan('${s.id}')">
+          <div class="cs-dot ${dot(s)}"></div>
+          <div class="rt"><div class="tt">${esc(s.title)}</div>
+            <div class="mm">${esc(s.created_at)} · ${esc(s.actor||'')} · ${st}</div></div></div>`;
+    }).join('');
+  } catch (e) { /* leave as-is */ }
+}
+
+async function csOpenScan(id){
+  try {
+    const r = await fetch('/code-security/scan/' + id);
+    const scan = await r.json();
+    if (scan.error) return;
+    document.getElementById('cs-source').value = scan.source_label || '';
+    document.getElementById('cs-branch').value = scan.branch || '';
+    document.getElementById('cs-title').value = scan.title || '';
+    if (scan.status === 'done' || scan.status === 'error'){ csRender(scan); }
+    else { csStartPoll(id); }
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  } catch (e) { /* ignore */ }
+}
+
+csLoadRecent();
+</script>
+{% endblock %}

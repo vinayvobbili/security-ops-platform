@@ -46,6 +46,7 @@ MANAGE_SILENCER = 'manage.silencer'      # create / activate / deactivate a Tick
 RUN_DRYRUN = 'run.dryrun'                # fire a live XSIAM XQL dry-run (burns Cortex compute units)
 MANAGE_DOMAIN_MONITORING_WATCHLIST = 'manage.domain_monitoring_watchlist'  # add / remove domains on the Domain Monitoring lists
 RUN_RTR = 'run.rtr'                      # run an ad-hoc command on a live endpoint via CrowdStrike RTR (arbitrary on-host execution)
+TPCRA_MANAGE = 'tpcra.manage'            # run/edit/export vendor cyber risk assessments on Third-Party Risk Assessment
 
 # Human-readable descriptions, surfaced on the 403 page and the admin UI.
 CAPABILITIES: dict[str, str] = {
@@ -59,6 +60,7 @@ CAPABILITIES: dict[str, str] = {
     RUN_DRYRUN: 'Run a live XSIAM XQL dry-run on the Detection-as-Code pipeline (consumes Cortex compute units)',
     MANAGE_DOMAIN_MONITORING_WATCHLIST: 'Add or remove domains on the Domain Monitoring monitored list and RF watchlist',
     RUN_RTR: 'Run an ad-hoc command on a live endpoint via CrowdStrike RTR (traceroute, ipconfig, etc.)',
+    TPCRA_MANAGE: 'Run, edit, and export vendor cyber due-diligence assessments on Third-Party Risk Assessment',
 }
 
 ALL_CAPABILITIES: frozenset[str] = frozenset(CAPABILITIES)
@@ -94,6 +96,7 @@ ROLE_CAPABILITIES: dict[str, frozenset[str]] = {
     'secops_analyst':            frozenset({MANAGE_SILENCER, MANAGE_DOMAIN_MONITORING_WATCHLIST}),
     'ai_project_submitter':      frozenset(),
     'Customer Assurance Analyst': frozenset({CA_MANAGE}),
+    'Third Party Cyber Analyst': frozenset({TPCRA_MANAGE}),
     VIEWER_ROLE:                 frozenset(),
 }
 

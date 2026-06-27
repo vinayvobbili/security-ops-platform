@@ -1,0 +1,202 @@
+{% extends "base_layout.html" %}
+{% set page_title_text = "Third-Party Risk Assessment" %}
+{% set page_title_left_icon = "🛡️" %}
+{% set page_title_right_icon = "🏢" %}
+
+{% block body_classes %}vra-body{% endblock %}
+
+{% block extra_css %}
+<style>
+  body.vra-body { background:
+      radial-gradient(1100px 520px at 10% -6%, #dbe7ff 0%, transparent 55%),
+      radial-gradient(1000px 560px at 96% 2%, #e3f7ec 0%, transparent 52%),
+      radial-gradient(1200px 720px at 50% 120%, #fff0d6 0%, transparent 55%),
+      linear-gradient(160deg, #eef3ff 0%, #eafaf2 48%, #fff7ea 100%) !important;
+      background-attachment: fixed !important; min-height: 100vh; }
+  body.vra-body.dark-mode { background:
+      linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%) !important; color: #e2e8f0; }
+
+  html { scrollbar-gutter: stable; }
+  ::-webkit-scrollbar { width: 16px; height: 16px; }
+  ::-webkit-scrollbar-track { border-radius: 10px;
+      background: linear-gradient(180deg, rgba(78,84,200,.08), rgba(10,143,214,.10) 50%, rgba(56,239,125,.08)); }
+  ::-webkit-scrollbar-thumb { border-radius: 10px; border: 2px solid transparent; background-clip: padding-box;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
+      background: linear-gradient(180deg, #ffd200 0%, #fc6767 22%, #ec008c 42%, #8f94fb 62%, #0a8fd6 80%, #38ef7d 100%); }
+  ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, #38ef7d 0%, #0a8fd6 20%, #8f94fb 38%, #ec008c 58%, #fc6767 78%, #ffd200 100%); }
+  body.dark-mode ::-webkit-scrollbar-track {
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.10) 50%, rgba(255,255,255,.06)); }
+
+  .vra-wrap { max-width: 1180px; margin: 0 auto; padding: 8px 18px 80px; }
+
+  .vra-hero { position: relative; overflow: hidden; border-radius: 22px; padding: 30px 36px;
+      margin: 8px 0 24px; color: #fff;
+      background: linear-gradient(120deg, #08313f 0%, #0046ad 50%, #00a651 100%);
+      box-shadow: 0 20px 50px rgba(10,40,40,.34); }
+  .vra-hero::before { content:""; position:absolute; inset:0;
+      background: radial-gradient(820px 360px at 88% -40%, rgba(141,255,200,.34), transparent 60%),
+                  radial-gradient(560px 320px at -6% 130%, rgba(80,180,255,.34), transparent 60%);
+      pointer-events:none; }
+  .vra-hero-in { position: relative; z-index: 1; display:flex; align-items:flex-start; justify-content:space-between; gap:24px; flex-wrap:wrap; }
+  .vra-eyebrow { font-size: .76rem; letter-spacing: 2.4px; text-transform: uppercase; font-weight: 700;
+      color: #b9f0d6; margin-bottom: 11px; display:flex; align-items:center; gap:9px; }
+  .vra-hero h1 { font-size: 1.95rem; line-height: 1.16; margin: 0 0 10px; font-weight: 800; letter-spacing: -.7px; }
+  .vra-hero h1 .accent { background: linear-gradient(90deg,#8fffc4,#8fd3ff); -webkit-background-clip: text;
+      background-clip: text; -webkit-text-fill-color: transparent; }
+  .vra-hero p { font-size: 1.02rem; line-height: 1.5; margin: 0; color: #e6f5ec; max-width: 680px; }
+  .vra-hero p b { color: #fff; }
+  .vra-howbtn { background: #fff; border: none; color: #0046ad; border-radius: 12px; padding: 12px 20px;
+      font-size: .92rem; cursor: pointer; font-weight: 800; white-space: nowrap;
+      box-shadow: 0 8px 20px rgba(10,20,60,.28); display:inline-flex; align-items:center; gap:8px; }
+  .vra-howbtn:hover { transform: translateY(-2px); filter: brightness(1.02); }
+
+  /* KPI cards */
+  .vra-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin: 0 0 26px; }
+  @media (max-width: 900px) { .vra-kpis { grid-template-columns: repeat(2, 1fr); } }
+  .vra-kpi { border-radius: 16px; padding: 18px 20px; color: #fff; position: relative; overflow: hidden;
+      box-shadow: 0 10px 26px rgba(20,35,63,.16); }
+  .vra-kpi::before { content:""; position:absolute; right:-26px; top:-26px; width:110px; height:110px;
+      border-radius:50%; background: rgba(255,255,255,.14); }
+  .vra-kpi .v { font-size: 2.1rem; font-weight: 800; line-height: 1; letter-spacing: -1px; }
+  .vra-kpi .l { font-size: .78rem; text-transform: uppercase; letter-spacing: .8px; font-weight: 700; margin-top: 8px; opacity: .95; }
+  .vra-kpi .ic { position:absolute; right:14px; bottom:10px; font-size: 1.5rem; opacity:.5; }
+  .k-total { background: linear-gradient(135deg,#0046ad,#0a8fd6); }
+  .k-eval  { background: linear-gradient(135deg,#7b2ff7,#8f94fb); }
+  .k-review{ background: linear-gradient(135deg,#ec008c,#fc6767); }
+  .k-ready { background: linear-gradient(135deg,#00a651,#38ef7d); }
+  .k-deliv { background: linear-gradient(135deg,#ff8008,#ffc837); }
+
+  .vra-sec-title { font-size: 1.15rem; font-weight: 800; color: #0046ad; margin: 26px 0 14px; display:flex; align-items:center; gap:9px; }
+  body.dark-mode .vra-sec-title { color: #4dabf7; }
+
+  .vra-flow { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
+  @media (max-width: 900px) { .vra-flow { grid-template-columns: repeat(2, 1fr); } }
+  .vra-step { background: rgba(255,255,255,.86); backdrop-filter: blur(7px); border: 1px solid rgba(255,255,255,.9);
+      border-radius: 16px; padding: 18px; box-shadow: 0 8px 22px rgba(40,30,90,.09); }
+  body.dark-mode .vra-step { background: rgba(30,41,59,.82); border-color: rgba(148,163,184,.18); }
+  .vra-step .n { width: 30px; height: 30px; border-radius: 50%; display:flex; align-items:center; justify-content:center;
+      font-weight: 800; color:#fff; background: linear-gradient(135deg,#0046ad,#00a651); margin-bottom: 10px; }
+  .vra-step h4 { margin: 0 0 6px; font-size: .98rem; color:#1a1340; }
+  body.dark-mode .vra-step h4 { color: #e6edf8; }
+  .vra-step p { margin: 0; font-size: .85rem; line-height: 1.45; color: #5b6280; }
+  body.dark-mode .vra-step p { color: #94a3b8; }
+
+  .vra-tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  @media (max-width: 760px) { .vra-tiles { grid-template-columns: 1fr; } }
+  .vra-tile { display:flex; gap:16px; align-items:flex-start; text-decoration:none; background: rgba(255,255,255,.9);
+      border: 1px solid rgba(255,255,255,.9); border-radius: 18px; padding: 22px 24px; box-shadow: 0 8px 24px rgba(40,30,90,.10);
+      transition: transform .14s; }
+  .vra-tile:hover { transform: translateY(-3px); }
+  body.dark-mode .vra-tile { background: rgba(30,41,59,.82); border-color: rgba(148,163,184,.18); }
+  .vra-tile-ic { font-size: 1.9rem; width: 54px; height: 54px; flex:none; border-radius: 14px; display:flex; align-items:center; justify-content:center;
+      background: linear-gradient(135deg,#e3ecff,#dff5ea); }
+  .vra-tile h3 { margin: 2px 0 5px; font-size: 1.1rem; color: #0046ad; }
+  body.dark-mode .vra-tile h3 { color: #4dabf7; }
+  .vra-tile p { margin: 0; font-size: .88rem; line-height: 1.45; color: #5b6280; }
+  body.dark-mode .vra-tile p { color: #94a3b8; }
+
+  .vra-skeleton-note { margin-top: 26px; font-size: .82rem; color: #8b86a6; text-align:center; font-style: italic; }
+  body.dark-mode .vra-skeleton-note { color: #748098; }
+
+  /* methodology modal */
+  .vra-ov { position: fixed; inset: 0; background: rgba(10,15,30,.55); backdrop-filter: blur(3px); z-index: 1000;
+      display:flex; align-items:center; justify-content:center; padding: 24px; }
+  .vra-ov[hidden] { display:none; }
+  .vra-modal { background: #fff; border-radius: 18px; max-width: 760px; width: 100%; max-height: 86vh; overflow-y:auto;
+      padding: 30px 34px; position: relative; box-shadow: 0 30px 80px rgba(0,0,0,.4); }
+  body.dark-mode .vra-modal { background: #16223a; color: #e2e8f0; }
+  .vra-modal-close { position:absolute; top: 16px; right: 18px; border:none; background:none; font-size: 1.6rem; cursor:pointer; color:#9aa4bd; }
+  .vra-modal h2 { margin: 0 0 6px; color: #0046ad; }
+  body.dark-mode .vra-modal h2 { color: #4dabf7; }
+  .vra-modal h3 { margin: 22px 0 8px; font-size: 1rem; color:#0a8fd6; }
+  .vra-modal p, .vra-modal li { font-size: .92rem; line-height: 1.55; color: #41476a; }
+  body.dark-mode .vra-modal p, body.dark-mode .vra-modal li { color: #c4cee0; }
+  .vra-prompt { background: #0f1c30; color: #d7e4f5; border-radius: 10px; padding: 14px 16px; font-size: .82rem;
+      line-height: 1.5; white-space: pre-wrap; font-family: ui-monospace, Menlo, monospace; margin: 8px 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="vra-wrap">
+
+  <div class="vra-hero">
+    <div class="vra-hero-in">
+      <div>
+        <div class="vra-eyebrow">🏢 Third-Party Cyber Risk · Vendor Due Diligence</div>
+        <h1>Auto-populate the <span class="accent">Due-Diligence Form</span> from vendor evidence</h1>
+        <p>Upload a vendor's security documentation and the Aravo questionnaire export. The assistant evaluates every baseline control against <b>only the evidence provided</b>, fills each field, and exports a complete Word DD Form — no document-count ceiling, every analyst still in control. ✨</p>
+      </div>
+      <button type="button" class="vra-howbtn" id="vra-how-open"><span>✦</span> How does this work?</button>
+    </div>
+  </div>
+
+  <div class="vra-kpis">
+    <div class="vra-kpi k-total"><div class="v">{{ stats.total }}</div><div class="l">Assessments</div><div class="ic">📋</div></div>
+    <div class="vra-kpi k-eval"><div class="v">{{ stats.evaluating }}</div><div class="l">Evaluating</div><div class="ic">⚙️</div></div>
+    <div class="vra-kpi k-review"><div class="v">{{ stats.in_review }}</div><div class="l">In Review</div><div class="ic">🔎</div></div>
+    <div class="vra-kpi k-ready"><div class="v">{{ stats.ready }}</div><div class="l">Ready</div><div class="ic">✅</div></div>
+    <div class="vra-kpi k-deliv"><div class="v">{{ stats.delivered }}</div><div class="l">Delivered</div><div class="ic">📤</div></div>
+  </div>
+
+  <div class="vra-sec-title">🧭 How the assessment flows</div>
+  <div class="vra-flow">
+    <div class="vra-step"><div class="n">1</div><h4>Intake</h4><p>Open an assessment for the vendor and attach its evidence + the Aravo export.</p></div>
+    <div class="vra-step"><div class="n">2</div><h4>Index</h4><p>Every document is chunked and indexed — no 20-file limit.</p></div>
+    <div class="vra-step"><div class="n">3</div><h4>Evaluate</h4><p>Each baseline control is judged Met / Not Met / N/A against the evidence.</p></div>
+    <div class="vra-step"><div class="n">4</div><h4>Review</h4><p>Analyst confirms or edits every determination, evidence summary, and gap.</p></div>
+    <div class="vra-step"><div class="n">5</div><h4>Export</h4><p>Download the fully-populated DD Form as Word, then refine in Aravo.</p></div>
+  </div>
+
+  <div class="vra-sec-title">🚀 Get started</div>
+  <div class="vra-tiles">
+    {% if can('tpcra.manage') %}
+    <a class="vra-tile" href="/vendor-risk-assessment/new">
+      <div class="vra-tile-ic">✏️</div>
+      <div><h3>New Assessment</h3><p>Open a vendor assessment — upload its security docs and the Aravo questionnaire export.</p></div>
+    </a>
+    {% endif %}
+    <a class="vra-tile" href="/vendor-risk-assessment/assessments">
+      <div class="vra-tile-ic">📋</div>
+      <div><h3>Assessment Queue</h3><p>Review in-flight vendor assessments, filter by status, open a workspace.</p></div>
+    </a>
+  </div>
+
+  <div class="vra-skeleton-note">v1 skeleton — baseline control set &amp; DD Form layout are placeholders pending the real templates.</div>
+</div>
+
+<!-- methodology modal -->
+<div class="vra-ov" id="vra-how" hidden>
+  <div class="vra-modal" role="dialog" aria-modal="true">
+    <button type="button" class="vra-modal-close" id="vra-how-close" aria-label="Close">×</button>
+    <h2>How Third-Party Risk Assessment works</h2>
+    <p>This is a retrieval-grounded (RAG) assistant, not a black-box model. It reads only the vendor's own documents and evaluates each control against them — a human analyst reviews and signs off every determination.</p>
+
+    <h3>📚 Per-vendor evidence indexing</h3>
+    <p>Each assessment gets its own slice of the evidence index. Every uploaded document — SOC 2 reports, policies, the Aravo export — is broken into passages and indexed by meaning. There is no document-count limit; the chunking and embedding happen on our infrastructure.</p>
+
+    <h3>🔎 Evidence-only control evaluation</h3>
+    <p>For each baseline control, the most relevant passages from <em>that vendor's</em> evidence are retrieved and re-ranked, then handed to the model as the only source it may use. The standing instruction:</p>
+    <div class="vra-prompt">Use ONLY the vendor evidence provided. Do NOT infer or speculate.
+The absence of evidence is valid assessment data — if evidence does not
+support the control, the determination is "Not Met" (lack of evidence,
+NOT a control failure). Use "Not Applicable" only when clearly out of
+scope. Never invent dates, names, versions, or counts.</div>
+    <p>If retrieval comes back below the relevance threshold, the control is marked Not Met with the standardized "not provided" statement — no answer is invented from thin evidence.</p>
+
+    <h3>⚖️ Risk synthesis</h3>
+    <p>Once controls are evaluated, the assistant proposes inherent and residual risk ratings plus a neutral, executive-ready overall statement, derived only from the determinations. The analyst can edit all three.</p>
+
+    <h3>👤 Human in control</h3>
+    <p>The assistant only ever produces a draft. Every determination, every rating, and the final sign-off stay with the analyst. The exported DD Form fills every field — including explicit "not provided" statements — so nothing is left blank.</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.getElementById('vra-how-open')?.addEventListener('click', () => document.getElementById('vra-how').hidden = false);
+  document.getElementById('vra-how-close')?.addEventListener('click', () => document.getElementById('vra-how').hidden = true);
+  document.getElementById('vra-how')?.addEventListener('click', (e) => { if (e.target.id === 'vra-how') e.target.hidden = true; });
+</script>
+{% endblock %}

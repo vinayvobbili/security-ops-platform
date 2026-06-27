@@ -321,6 +321,20 @@ def main() -> None:
             name="attackiq_results_poll", timeout=600)
     )
 
+    # Pokedex ambient mode — proactive, suggestion-only room watcher. Polls each
+    # configured room every 5 minutes (clock-aligned to :00/:05/.../:55 so reads
+    # are predictable for the team), runs a light relevance gate over new human
+    # messages, auto-runs read-only lookups and posts the answer, and raises a
+    # human-in-the-loop "Run it" card for anything with blast radius. Off unless
+    # POKEDEX_AMBIENT_ENABLED is set.
+    logger.info("Scheduling Pokedex ambient room scan (clock-aligned every 5 min on :00/:05/.../:55, off unless POKEDEX_AMBIENT_ENABLED)...")
+    for _ambient_minute in range(0, 60, 5):
+        schedule.every().hour.at(f":{_ambient_minute:02d}").do(
+            lambda: safe_run(
+                _lazy_component('services.pokedex_ambient', 'scan_ambient_rooms'),
+                name="pokedex_ambient_scan", timeout=300)
+        )
+
     # Hourly tipper analysis - analyzes new tippers and sends to Webex
     tipper_analysis_room = config.webex_room_id_threat_tipper_analysis
     if tipper_analysis_room:

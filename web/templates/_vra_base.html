@@ -1,0 +1,72 @@
+<style>
+  /* Shared TPCRA backdrop, scrollbar, cards, buttons — light + REQUIRED dark mode */
+  body.vra-body { background:
+      radial-gradient(1100px 520px at 10% -6%, #dbe7ff 0%, transparent 55%),
+      radial-gradient(1000px 560px at 96% 2%, #e3f7ec 0%, transparent 52%),
+      radial-gradient(1200px 720px at 50% 120%, #fff0d6 0%, transparent 55%),
+      linear-gradient(160deg, #eef3ff 0%, #eafaf2 48%, #fff7ea 100%) !important;
+      background-attachment: fixed !important; min-height: 100vh; }
+  body.vra-body.dark-mode { background:
+      linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%) !important; color: #e2e8f0; }
+
+  html { scrollbar-gutter: stable; }
+  ::-webkit-scrollbar { width: 16px; height: 16px; }
+  ::-webkit-scrollbar-track { border-radius: 10px;
+      background: linear-gradient(180deg, rgba(78,84,200,.08), rgba(10,143,214,.10) 50%, rgba(56,239,125,.08)); }
+  ::-webkit-scrollbar-thumb { border-radius: 10px; border: 2px solid transparent; background-clip: padding-box;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
+      background: linear-gradient(180deg, #ffd200 0%, #fc6767 22%, #ec008c 42%, #8f94fb 62%, #0a8fd6 80%, #38ef7d 100%); }
+  ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, #38ef7d 0%, #0a8fd6 20%, #8f94fb 38%, #ec008c 58%, #fc6767 78%, #ffd200 100%); }
+  body.dark-mode ::-webkit-scrollbar-track {
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.10) 50%, rgba(255,255,255,.06)); }
+
+  .vra-wrap { max-width: 1180px; margin: 0 auto; padding: 8px 18px 80px; }
+
+  .vra-card { position: relative; background: rgba(255,255,255,.88); backdrop-filter: blur(7px);
+      border: 1px solid rgba(255,255,255,.9); border-radius: 18px; padding: 22px 24px; margin-bottom: 18px;
+      box-shadow: 0 8px 24px rgba(40,30,90,.10); overflow: hidden; }
+  .vra-card::before { content:""; position:absolute; left:0; top:0; bottom:0; width:5px;
+      background: linear-gradient(180deg,#0046ad,#00a651); }
+  body.dark-mode .vra-card { background: rgba(30,41,59,.82); border-color: rgba(148,163,184,.18); }
+  .vra-card h3 { margin: 0 0 14px; font-size: 1.1rem; font-weight: 800; color: #0046ad; display:flex; align-items:center; gap:9px; }
+  body.dark-mode .vra-card h3 { color: #4dabf7; }
+
+  .vra-label { font-size: .74rem; text-transform: uppercase; letter-spacing: .8px; font-weight: 800; color: #6b6588; margin: 0 0 6px; }
+  body.dark-mode .vra-label { color: #94a3b8; }
+  .vra-in, .vra-ta, .vra-sel { width: 100%; box-sizing: border-box; border: 1.5px solid #d7def0; border-radius: 11px;
+      padding: 11px 14px; font-size: .96rem; background: #fff; color: #1a1340; }
+  .vra-ta { min-height: 90px; resize: vertical; line-height: 1.5; }
+  .vra-in:focus, .vra-ta:focus, .vra-sel:focus { outline: none; border-color: #0a8fd6; box-shadow: 0 0 0 3px rgba(10,143,214,.16); }
+  body.dark-mode .vra-in, body.dark-mode .vra-ta, body.dark-mode .vra-sel { background: #0f1c30; border-color: #334155; color: #e6edf8; }
+
+  .vra-btn { background: linear-gradient(135deg,#0046ad,#00a651); border:none; color:#fff; border-radius: 12px;
+      padding: 12px 22px; font-size: .96rem; font-weight: 800; cursor: pointer; box-shadow: 0 10px 24px rgba(0,70,173,.26);
+      display:inline-flex; align-items:center; gap:9px; text-decoration:none; }
+  .vra-btn:hover { filter: brightness(1.07); transform: translateY(-1px); }
+  .vra-btn:disabled { opacity: .55; cursor: not-allowed; transform:none; filter:none; }
+  .vra-ghost { background: transparent; border: 1.5px solid #c9d3e8; border-radius: 12px; padding: 11px 18px;
+      font-size: .9rem; font-weight: 700; cursor: pointer; color: #4a5578; text-decoration:none; display:inline-flex; align-items:center; gap:7px; }
+  .vra-ghost:hover { background: rgba(0,70,173,.06); }
+  body.dark-mode .vra-ghost { border-color: #3a4a66; color: #b8c4d8; }
+
+  /* determination + status pills */
+  .vra-pill { display:inline-flex; align-items:center; gap:5px; padding: 3px 11px; border-radius: 20px;
+      font-size: .76rem; font-weight: 800; letter-spacing: .3px; }
+  .p-met { background:#dff5ea; color:#0a7a42; }
+  .p-notmet { background:#ffe0e6; color:#c01744; }
+  .p-na { background:#e7ebf5; color:#54607e; }
+  .p-pending { background:#fff0d6; color:#9a6b00; }
+  .p-failed { background:#ffe0d6; color:#b03a16; }
+  body.dark-mode .p-met { background:#0f3a2c; color:#5fe0a0; }
+  body.dark-mode .p-notmet { background:#3a1420; color:#ff8aa6; }
+  body.dark-mode .p-na { background:#23304a; color:#a9b6d4; }
+  body.dark-mode .p-pending { background:#3a2e10; color:#ffce6b; }
+  body.dark-mode .p-failed { background:#3a1d10; color:#ff9d72; }
+</style>
+{% macro determ_pill(d) %}
+  {% if d == 'Met' %}<span class="vra-pill p-met">✅ Met</span>
+  {% elif d == 'Not Met' %}<span class="vra-pill p-notmet">⛔ Not Met</span>
+  {% elif d == 'Not Applicable' %}<span class="vra-pill p-na">➖ N/A</span>
+  {% else %}<span class="vra-pill p-pending">⏳ Pending</span>{% endif %}
+{% endmacro %}
