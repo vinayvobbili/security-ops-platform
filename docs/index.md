@@ -14,10 +14,10 @@ An enterprise-grade security operations platform that automates and orchestrates
 | Metric | Value |
 |--------|-------|
 | **Security Tool Integrations** | 30+ |
-| **MCP Server Tools** | 30 |
-| **LLM Investigation Tools** | 39 |
+| **MCP Server Tools** | 31 |
+| **LLM Investigation Tools** | 40 |
 | **Production Chat Bots** | 10 (Webex + Teams) |
-| **Web App Pages** | 50+ |
+| **Web App Pages** | 55+ |
 | **n8n Automation Workflows** | 33 |
 
 ---

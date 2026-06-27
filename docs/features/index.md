@@ -17,7 +17,7 @@ Explore the core capabilities of the Security Operations Automation Platform.
 | [LLM-Powered Assistant](llm-assistant) | AI investigation engine with 40 security tools |
 | [MCP Server](mcp-server) | 31 tools exposed via Model Context Protocol; public mode with per-user PATs |
 | [Self-Healing Bots](webex-bots) | 10 production chat bots (Webex + Teams) with enterprise reliability |
-| [SOC Dashboard](soc-dashboard) | Real-time metrics, dashboards, and 50+ web app pages |
+| [SOC Dashboard](soc-dashboard) | Real-time metrics, dashboards, and 55+ web app pages |
 | [30+ Integrations](integrations) | Unified security tool ecosystem |
 | [Domain Monitoring](domain-monitoring) | Discover → weaponization triage → exposure hunt → block/takedown → campaign clustering (powered by `domainflow`) |
 | [Vulnerability Deep Dive](vulnerability-deep-dive) | CVE → P1–P4 verdict (EPSS/KEV/pre-auth) + which apps are affected |
@@ -25,6 +25,9 @@ Explore the core capabilities of the Security Operations Automation Platform.
 | [Detection as Code](detection-as-code) | Sigma → lint → compile → live dry-run → review → MR (powered by `detflow`) |
 | [Advisory Triage](advisory-triage) | Advisory queue → ATT&CK + Sigma/YARA/Suricata + STIX/Navigator + blast radius → escalation (powered by `detflow`) |
 | [Customer Assurance](customer-assurance) | LLM-assisted questionnaire drafting with `.xlsx` round-trip |
+| [Code Security Scanner](code-security) | Agentic read-only repo vuln audit — navigate → refute false positives → container-jailed (powered by `refutescan`) |
+| [Third-Party Risk](third-party-risk) | Vendor cyber due-diligence workspace — drafts control answers from evidence (powered by `attestq`) |
+| [Ambient Assistant](ambient-assistant) | Proactive room watcher — relevance gate → auto-run read-only lookups → human-in-the-loop "Run it" cards |
 | Person-of-Interest OSINT | Streaming investigation page with HIBP, holehe, maigret, dorks + LLM commentary |
 | Self-Serve Auth + PATs | Register/login/verify, per-user PATs, admin console, role-gated routes |
 | [n8n Workflows](n8n-workflows) | 33 automation workflows for SOC operations |
@@ -46,7 +49,7 @@ A team of specialized AI agents working a case together:
 
 AI-powered investigation using RAG and LangChain:
 - Natural language security queries
-- 39 specialized investigation tools (CrowdStrike, DFIR-IRIS, TheHive, XSOAR, and more)
+- 40 specialized investigation tools (CrowdStrike, DFIR-IRIS, TheHive, XSOAR, and more)
 - Automated IOC enrichment
 - LLM-powered threat intel novelty analysis
 
@@ -77,7 +80,7 @@ Interactive web interface providing:
 
 ### [Model Context Protocol (MCP) Server →](mcp-server)
 
-A standalone MCP server (`mcp_server/`) exposing 30 security tools to any
+A standalone MCP server (`mcp_server/`) exposing 31 security tools to any
 MCP-compatible client. One uniform schema across the entire stack — drop
 into Claude Desktop, Cline, or any agent framework that speaks MCP and
 get instant access to the full investigation toolbox.
