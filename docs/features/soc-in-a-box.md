@@ -70,6 +70,16 @@ human-in-the-loop actions, and a decision timeline. It's read from what actually
 happened, not a fresh guess, so "why was this host contained?" has a cited
 answer.
 
+### Ask it in chat
+The same memory is reachable conversationally from the chat assistant — no page
+needed. Ask "why did the IR Lead call SEV-2 on #12345?" and it cites the agents'
+recorded trace; ask "why did *you* just say that?" and it walks back its own last
+answer from a stored per-turn trace instead of re-running the investigation; ask
+"what do we know about this CVE?" to pull the room's captured tribal knowledge;
+and tell it "that's a false positive on #777" to coach a verdict correction back
+into case memory. The assistant routes these to the case-memory, knowledge, and
+coaching stores automatically.
+
 ### Per-role accuracy
 Where ground-truth labels exist, each agent's verdicts are scored against them
 and surfaced as a per-role accuracy card — an honest read on which roles are

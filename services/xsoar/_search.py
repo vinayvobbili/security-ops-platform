@@ -112,6 +112,48 @@ def get_tickets(
     return _fetch_unpaginated(client, full_query, period, size, read_timeout=read_timeout)
 
 
+def get_tickets_with_total(
+    client,
+    base_url: str,
+    query: str,
+    team_name: str,
+    size: int = 10,
+    period: Optional[Dict[str, Any]] = None,
+    test_connection: bool = True,
+) -> Dict[str, Any]:
+    """Single-page search returning the server-reported match total plus the latest rows.
+
+    Unlike get_tickets(), this never walks the whole result set — it issues ONE
+    search and reads the API's `total`, so it stays cheap even when thousands of
+    tickets match. Built for "how many open cases + show the latest N" questions.
+
+    Returns a dict: {"total": int, "tickets": [<=size dicts]}.
+    """
+    full_query = query + f' -category:job -type:"{team_name} Ticket QA" -type:"{team_name} SNOW Whitelist Request"'
+
+    if test_connection:
+        try:
+            test_connectivity(client, base_url)
+        except Exception as e:
+            log.error(f"✗ XSOAR connectivity test failed: {truncate_error_message(e)}")
+            raise
+
+    filter_data: Dict[str, Any] = {
+        "query": full_query,
+        "page": 0,
+        "size": max(1, min(size, 100)),
+        "sort": [{"field": "created", "asc": False}],
+    }
+    if period:
+        filter_data["period"] = period
+
+    response = client.search_incidents(filter=SearchIncidentsData(filter=filter_data))
+    raw_data = response.data if hasattr(response, "data") else []
+    tickets = [item.to_dict() if hasattr(item, "to_dict") else item for item in raw_data]
+    total = getattr(response, "total", None)
+    return {"total": total if total is not None else len(tickets), "tickets": tickets}
+
+
 def _fetch_paginated(
     client,
     query: str,

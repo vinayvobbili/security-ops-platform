@@ -93,6 +93,19 @@ class TicketHandler:
             progress_callback=progress_callback
         )
 
+    def get_tickets_with_total(self, query: str, size: int = 10,
+                               period: Optional[Dict[str, Any]] = None,
+                               test_connection: bool = True) -> Dict[str, Any]:
+        """Cheap single-page search: returns {"total": int, "tickets": [<=size]}.
+
+        Use for "how many open cases + show the latest N" — reads the API's
+        match total instead of paginating the whole result set.
+        """
+        return _search.get_tickets_with_total(
+            self.client, self.base_url, query, CONFIG.team_name,
+            size=size, period=period, test_connection=test_connection,
+        )
+
     # --- Entry Operations (delegated to _entries module) ---
 
     def get_entries(self, incident_id: str) -> List[Dict[str, Any]]:

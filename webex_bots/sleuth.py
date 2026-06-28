@@ -187,6 +187,38 @@ def log_conversation(user_name: str, user_prompt: str, bot_response: str, respon
         logger.error(f"Error logging conversation: {e}")
 
 
+def log_reasoning(user_name: str, user_id: str, room_id: str, room_name: str,
+                  message_id: str, question: str, answer: str, metrics: dict):
+    """Persist this turn's own reasoning trace for a later 'why did you say that?'.
+
+    Pulls the route, loop count, synthesis flag, and the per-tool trace out of the
+    answer's metrics dict so explain_my_reasoning can cite the record instead of
+    re-running the investigation.
+    """
+    try:
+        import json as _json
+        from src.utils.bot_logs_db import log_reasoning as _db_log
+        now_eastern = datetime.now(eastern).strftime('%Y-%m-%d %H:%M:%S')
+        m = metrics if isinstance(metrics, dict) else {}
+        _db_log(
+            bot="sleuth",
+            person=user_name,
+            user_id=user_id or "",
+            room_id=room_id or "",
+            room_name=room_name or "",
+            message_id=message_id or "",
+            question=question or "",
+            answer=answer or "",
+            route=(m.get("route") or ""),
+            iterations=int(m.get("iterations") or 0),
+            synth_used=bool(m.get("synth_used")),
+            trace_json=_json.dumps(m.get("reasoning_trace") or []),
+            message_time=now_eastern,
+        )
+    except Exception as e:
+        logger.error(f"Error logging reasoning: {e}")
+
+
 def initialize_bot():
     """Initialize the bot components using streamlined approach"""
 
@@ -683,6 +715,18 @@ class Bot(WebexBot):
                     self._send_triage_action_card_if_needed(teams_message.roomId, detail_msg.id)
 
                     log_conversation(user_name, raw_message, response_text, response_time, room_name)
+                    # Persist this turn's own reasoning trace so a later
+                    # "why did you say that?" cites the record, not a re-run.
+                    log_reasoning(
+                        user_name=user_name,
+                        user_id=getattr(teams_message, 'personEmail', '') or "",
+                        room_id=teams_message.roomId,
+                        room_name=room_name,
+                        message_id=getattr(teams_message, 'id', '') or "",
+                        question=raw_message,
+                        answer=response_text,
+                        metrics=metrics if isinstance(metrics, dict) else {},
+                    )
 
                 except Exception as threading_error:
                     logger.error(f"Error in threading/response: {threading_error}")

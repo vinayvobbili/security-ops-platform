@@ -95,6 +95,25 @@ CREATE TABLE IF NOT EXISTS log_viewer_audit (
     success    INTEGER,
     message    TEXT
 );
+
+CREATE TABLE IF NOT EXISTS sleuth_reasoning (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    bot          TEXT,
+    person       TEXT,
+    user_id      TEXT,
+    room_id      TEXT,
+    room_name    TEXT,
+    message_id   TEXT,
+    question     TEXT,
+    answer       TEXT,
+    route        TEXT,
+    iterations   INTEGER,
+    synth_used   INTEGER,
+    trace_json   TEXT,
+    message_time TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_sleuth_reasoning_room ON sleuth_reasoning(room_id);
+CREATE INDEX IF NOT EXISTS idx_sleuth_reasoning_user ON sleuth_reasoning(user_id);
 """
 
 
@@ -144,6 +163,76 @@ def log_conversation(bot: str, person: str, user_prompt: str, bot_response: str,
          room_name,
          message_time)
     )
+
+
+def log_reasoning(bot: str, person: str, user_id: str, room_id: str,
+                  room_name: str, message_id: str, question: str, answer: str,
+                  route: str, iterations: int, synth_used: bool,
+                  trace_json: str, message_time: str):
+    """Persist one Sleuth turn's own reasoning trace.
+
+    This is the live-assistant counterpart to the autonomous SOC's case_memory:
+    it records the tools Sleuth called, what they returned, and how the answer
+    was composed, so a later "why did you say that?" can cite the actual record
+    instead of triggering a fresh re-investigation. Keyed by room_id + user_id
+    (the same context the thread-local logging key carries) so the retrieval
+    tool can find the asker's most recent turn.
+    """
+    _insert(
+        """INSERT INTO sleuth_reasoning
+           (bot, person, user_id, room_id, room_name, message_id, question,
+            answer, route, iterations, synth_used, trace_json, message_time)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (bot, person, user_id, room_id, room_name, message_id,
+         (question or "")[:2000],
+         (answer or "")[:4000],
+         route,
+         iterations,
+         int(bool(synth_used)),
+         (trace_json or "")[:12000],
+         message_time)
+    )
+
+
+def get_recent_reasoning(room_id: Optional[str] = None,
+                         user_id: Optional[str] = None,
+                         exclude_message_id: Optional[str] = None,
+                         limit: int = 1) -> list:
+    """Fetch the most recent Sleuth reasoning rows for a room / user.
+
+    Prefers the most recent turn matching both room_id and user_id (the asker's
+    own last answer); callers can relax to room-only by omitting user_id. The
+    in-flight 'why?' turn hasn't been logged yet at retrieval time, but
+    exclude_message_id guards against echo if it ever has been.
+    """
+    try:
+        with _lock:
+            conn = _connect()
+            where, params = ["bot = 'sleuth'"], []
+            if room_id:
+                where.append("room_id = ?")
+                params.append(room_id)
+            if user_id:
+                where.append("user_id = ?")
+                params.append(user_id)
+            if exclude_message_id:
+                where.append("COALESCE(message_id, '') != ?")
+                params.append(exclude_message_id)
+            sql = ("""SELECT id, bot, person, user_id, room_id, room_name,
+                             message_id, question, answer, route, iterations,
+                             synth_used, trace_json, message_time
+                      FROM sleuth_reasoning WHERE """ + " AND ".join(where) +
+                   " ORDER BY id DESC LIMIT ?")
+            params.append(limit)
+            rows = conn.execute(sql, tuple(params)).fetchall()
+            conn.close()
+        cols = ["id", "bot", "person", "user_id", "room_id", "room_name",
+                "message_id", "question", "answer", "route", "iterations",
+                "synth_used", "trace_json", "message_time"]
+        return [dict(zip(cols, r)) for r in rows]
+    except Exception as e:
+        logger.error(f"get_recent_reasoning failed: {e}")
+        return []
 
 
 def log_activity(bot: str, actor: str, command_keyword: Optional[str],

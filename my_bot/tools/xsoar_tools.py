@@ -1025,3 +1025,121 @@ def check_approved_testing_entries(identifier: str) -> str:
     except Exception as e:
         logger.error(f"check_approved_testing_entries failed for '{identifier}': {e}", exc_info=True)
         return FINAL_RESPONSE_PREFIX + f"Error checking `{identifier}`: {str(e)}"
+
+_XSOAR_STATUS_QUERY = {
+    "open": ("status:Active", "open"),
+    "opened": ("status:Active", "open"),
+    "active": ("status:Active", "open"),
+    "closed": ("status:Closed", "closed"),
+    "close": ("status:Closed", "closed"),
+    "resolved": ("status:Closed", "closed"),
+    "pending": ("status:Pending", "pending"),
+    "archived": ("status:Archived", "archived"),
+    "archive": ("status:Archived", "archived"),
+    "all": ("", "total"),
+    "any": ("", "total"),
+    "": ("", "total"),
+}
+
+
+@readonly_tool
+@log_tool_call
+def list_xsoar_cases(status: str = "open", limit: int = 10,
+                     incident_type: str = "CIRT*", environment: str = "prod") -> str:
+    """Count XSOAR cases (a.k.a. tickets/incidents) by status and list the most recent ones.
+
+    USE THIS TOOL when the user asks:
+    - "How many open cases/tickets are there in XSOAR?" (status defaults to open)
+    - "How many closed XSOAR cases are there?"
+    - "Show me the latest open/closed XSOAR cases/tickets"
+
+    By default this counts only CIRT* cases — the team's own incident types
+    (CIRT Case, Third Party Compromise, IOC Hunt, CrowdStrike/QRadar/Vectra
+    detections, etc.) — and excludes the high-volume automation feeds (Azure
+    Sentinel DB alerts, Akamai/EMEA/DSPM, etc.). The total is XSOAR's own match
+    count, so report THAT, not the number of rows shown.
+
+    Args:
+        status: "open"/"active" (default) for non-closed cases, "closed" for closed,
+            "all" (or "") for any status, or a specific XSOAR status
+            ("Pending", "Archived"). Case-insensitive.
+        limit: How many recent cases to list. Default 10 — keep it 10 unless the
+            user explicitly asks for a specific larger number (max 25; the chat
+            message can't fit long lists).
+        incident_type: XSOAR type filter, default "CIRT*" (all CIRT subtypes).
+            Pass "" / "all" to include every type (automation feeds included).
+        environment: XSOAR environment - 'prod' (default) or 'dev'.
+
+    Returns:
+        A summary line with the matching-case total, then one row per recent case:
+        linkified ticket id — name — type — owner — severity.
+    """
+    try:
+        limit = max(1, min(int(limit), 25))
+
+        if environment.lower() == "prod":
+            xsoar_env = XsoarEnvironment.PROD
+        elif environment.lower() == "dev":
+            xsoar_env = XsoarEnvironment.DEV
+        else:
+            return f"Error: Invalid environment '{environment}'. Must be 'prod' or 'dev'."
+
+        key = (status or "").strip().lower()
+        if key in _XSOAR_STATUS_QUERY:
+            query, label = _XSOAR_STATUS_QUERY[key]
+        else:
+            # Unknown word → treat it as a literal XSOAR status value.
+            query, label = f"status:{status.strip()}", key
+
+        itype = (incident_type or "").strip()
+        type_scope = ""
+        if itype and itype.lower() not in ("all", "any", "*"):
+            query = f"{query} type:{itype}".strip()
+            type_scope = "CIRT " if itype.upper().startswith("CIRT") else f"{itype} "
+        scope = f"{label} " if label and label != "total" else ""
+
+        handler = TicketHandler(environment=xsoar_env)
+        result = handler.get_tickets_with_total(query, size=limit)
+        total = result.get("total", 0)
+        tickets = result.get("tickets", []) or []
+
+        app = get_config()
+        ui_base = (
+            app.xsoar_dev_ui_base_url
+            if environment.lower() == "dev"
+            else app.xsoar_prod_ui_base_url
+        )
+
+        from my_bot.core.state_manager import FINAL_RESPONSE_PREFIX
+
+        title = " ".join(f"There are {total:,} {scope}{type_scope}XSOAR cases".split())
+        if not total:
+            return FINAL_RESPONSE_PREFIX + f"There are no {scope}{type_scope}XSOAR cases."
+
+        # Render with a char budget so a large list can never truncate mid-message.
+        shown = tickets[:limit]
+        body, budget, n = [], 0, 0
+        for t in shown:
+            tid = t.get("id", "?")
+            link = f"[#{tid}]({ui_base}/Custom/caseinfoid/{tid})" if ui_base else f"#{tid}"
+            name = (t.get("name") or "Unknown").strip()
+            ttype = t.get("type") or "—"
+            owner = t.get("owner") or "Unassigned"
+            sev = _XSOAR_SEVERITY.get(t.get("severity"), str(t.get("severity") or "—"))
+            row = f"{n + 1}. {link} — {name} — *{ttype}* — {owner} — {sev}"
+            if budget + len(row) > 5000:
+                break
+            body.append(row)
+            budget += len(row)
+            n += 1
+
+        lines = [f"**{title}.** Latest {n}:", ""] + body
+        if n < len(shown):
+            lines.append(f"_…and {len(shown) - n} more not shown (message length cap)._")
+        if ui_base:
+            lines += ["", f"🔗 Verify at source: [Open in XSOAR]({ui_base})"]
+        return FINAL_RESPONSE_PREFIX + "\n".join(lines)
+
+    except Exception as e:
+        logger.error(f"list_xsoar_cases failed: {e}", exc_info=True)
+        return FINAL_RESPONSE_PREFIX + f"Error listing XSOAR cases: {str(e)}"
