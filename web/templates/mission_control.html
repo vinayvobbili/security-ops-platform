@@ -1,0 +1,2654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DnR Mission Control</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='icons/favicon.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/pwa/dashboard-192.png') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest-dashboard.json') }}">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --container-bg: #ffffff;
+            --container-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            --text-primary: #2d3748;
+            --text-secondary: #4a5568;
+            --text-muted: #718096;
+            --text-footer: #a0aec0;
+            --card-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --card-down-gradient: linear-gradient(135deg, #fc5c7d 0%, #6a82fb 100%);
+            --card-degraded-gradient: linear-gradient(135deg, #f6ad55 0%, #dd6b20 100%);
+            --section-bg: #f7fafc;
+            --toast-bg: #ffffff;
+            --toast-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            --title-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+        }
+
+        body.dark-mode {
+            --bg-gradient: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            --container-bg: #1e1e2e;
+            --container-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+            --text-primary: #e2e8f0;
+            --text-secondary: #a0aec0;
+            --text-muted: #718096;
+            --text-footer: #4a5568;
+            --card-gradient: linear-gradient(135deg, #4a54a0 0%, #5a3a7a 100%);
+            --card-down-gradient: linear-gradient(135deg, #c44a6a 0%, #4a5eb0 100%);
+            --card-degraded-gradient: linear-gradient(135deg, #b7791f 0%, #975a16 100%);
+            --section-bg: #252540;
+            --toast-bg: #2d3748;
+            --toast-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            --title-gradient: linear-gradient(135deg, #8b9cf7 0%, #a67dd8 50%, #f5b0f0 100%);
+        }
+
+        /* Feature Switches panel */
+        .feature-switches {
+            background: var(--section-bg);
+            border-radius: 14px;
+            padding: 18px 22px;
+            margin: 0 auto 22px;
+            max-width: 1400px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+            border-left: 5px solid #00A651;
+        }
+        .feature-switches-header {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 12px; margin-bottom: 12px;
+        }
+        .feature-switches-title { font-weight: 800; font-size: 1.1rem; color: var(--text-primary); }
+        .feature-switches-sub {
+            font-size: 0.82rem; font-weight: 600; color: var(--text-secondary);
+            background: rgba(0, 70, 173, 0.10); padding: 3px 10px; border-radius: 999px;
+        }
+        .feature-switches-list { display: grid; gap: 8px; }
+        .feature-row {
+            display: flex; align-items: center; justify-content: space-between; gap: 18px;
+            padding: 11px 14px; border-radius: 10px; background: var(--container-bg);
+        }
+        .feature-meta { min-width: 0; }
+        .feature-label { font-weight: 700; color: var(--text-primary); font-size: 0.95rem; }
+        .feature-desc { font-size: 0.8rem; color: var(--text-muted); margin-top: 2px; line-height: 1.35; }
+        .switch { position: relative; display: inline-block; width: 48px; height: 27px; flex: 0 0 auto; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .switch .slider {
+            position: absolute; cursor: pointer; inset: 0; background: #b6bcc8;
+            border-radius: 27px; transition: .3s;
+        }
+        .switch .slider:before {
+            content: ""; position: absolute; height: 21px; width: 21px; left: 3px; bottom: 3px;
+            background: #fff; border-radius: 50%; transition: .3s; box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        .switch input:checked + .slider { background: linear-gradient(135deg, #0046AD 0%, #00A651 100%); }
+        .switch input:checked + .slider:before { transform: translateX(21px); }
+        .switch input:disabled + .slider { opacity: 0.5; cursor: wait; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: var(--bg-gradient);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: var(--container-bg);
+            border-radius: 16px;
+            box-shadow: var(--container-shadow);
+            max-width: 1600px;
+            width: 100%;
+            padding: 40px 50px;
+        }
+
+        h1 {
+            margin-bottom: 8px;
+            font-size: 2.2em;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            text-align: center;
+        }
+
+        h1 .gradient-text {
+            background: var(--title-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        h1 .title-icon {
+            -webkit-text-fill-color: initial;
+            margin-right: 4px;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            margin-bottom: 16px;
+            font-size: 1.05em;
+            letter-spacing: 0.5px;
+            text-align: center;
+        }
+
+        .subtitle .dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background: #48bb78;
+            border-radius: 50%;
+            margin: 0 8px;
+            vertical-align: middle;
+            animation: pulse 2s infinite;
+        }
+
+        /* Status Bar */
+        .status-bar {
+            background: var(--card-gradient);
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .status-bar:hover {
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .status-summary {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .status-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .status-indicator {
+            font-size: 1.5em;
+        }
+
+        .status-text {
+            font-size: 1.1em;
+            font-weight: 500;
+        }
+
+        .status-count {
+            opacity: 0.9;
+            font-size: 0.9em;
+        }
+
+        .status-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85em;
+            opacity: 0.9;
+        }
+
+        .reload-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .reload-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        .reload-btn:active {
+            transform: scale(0.95);
+        }
+
+        .reload-btn.loading {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .reload-icon {
+            display: inline-block;
+            transition: transform 0.3s ease;
+        }
+
+        .reload-btn.loading .reload-icon {
+            animation: spin 1s linear infinite;
+        }
+
+        .expand-icon {
+            transition: transform 0.3s ease;
+        }
+
+        .status-bar.expanded .expand-icon {
+            transform: rotate(180deg);
+        }
+
+        .status-details {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .status-bar.expanded .status-details {
+            max-height: 600px;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .bot-status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .bot-status-item:last-child {
+            border-bottom: none;
+        }
+
+        .bot-status-name {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .bot-status-controls {
+            display: flex;
+            gap: 6px;
+        }
+
+        .btn-small {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 0.8em;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-small:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-small:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Log Grid */
+        .log-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 18px;
+            margin-bottom: 18px;
+        }
+
+        .log-card {
+            background: var(--card-gradient);
+            border-radius: 12px;
+            padding: 24px;
+            padding-bottom: 165px;
+            text-decoration: none;
+            color: white;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+            min-height: 240px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .log-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .log-card.featured {
+            grid-column: 1 / -1;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            padding-bottom: 24px;
+            min-height: auto;
+        }
+
+        .log-card.status-down {
+            background: var(--card-down-gradient);
+        }
+
+        .log-card.status-degraded {
+            background: var(--card-degraded-gradient);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .log-card h3 {
+            font-size: 1.3em;
+            margin: 0;
+        }
+
+        .card-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.85em;
+            opacity: 0.95;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.running {
+            background: #48bb78;
+        }
+
+        .status-dot.stopped {
+            background: #f56565;
+            animation: none;
+        }
+
+        .status-dot.error {
+            background: #ed8936;
+            animation: blink 1s infinite;
+        }
+
+        .status-dot.degraded {
+            background: #ed8936;
+            animation: pulse 1.2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        @keyframes blink {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.3;
+            }
+        }
+
+        .log-card p {
+            opacity: 0.9;
+            font-size: 0.9em;
+            margin: 0;
+        }
+
+        /* Card Overlay */
+        .card-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.35);
+            backdrop-filter: blur(10px);
+            padding: 16px 20px;
+            opacity: 1;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            min-height: 165px;
+            box-sizing: border-box;
+        }
+
+        .log-card.llm-card {
+            min-height: 290px;
+            padding-bottom: 215px;
+        }
+        .log-card.llm-card .card-overlay {
+            min-height: 215px;
+        }
+
+        .log-card.mac-card {
+            min-height: auto;
+            padding: 14px 24px 175px;
+        }
+        .log-card.mac-card .card-overlay {
+            min-height: 175px;
+            padding: 10px 16px;
+        }
+        .log-card.mac-card .card-overlay-content {
+            margin-bottom: 0;
+        }
+        .log-card.mac-card .metric-row {
+            margin-bottom: 2px;
+        }
+
+        .card-overlay-content {
+            font-size: 0.82em;
+            margin-bottom: 12px;
+            line-height: 1.6;
+        }
+
+        .card-overlay-content div {
+            display: flex;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .card-overlay-content .metric-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 4px;
+            margin-bottom: 6px;
+            line-height: 1.4;
+        }
+
+        .card-overlay-content .metric-label {
+            white-space: nowrap;
+            width: 56px;
+            flex-shrink: 0;
+            text-align: left;
+        }
+
+        .card-overlay-content .metric-value {
+            white-space: nowrap;
+            flex: 1;
+            text-align: right;
+        }
+
+        .card-overlay-content .progress-bar {
+            flex: 1;
+            margin-top: 0;
+            margin-left: 8px;
+            align-self: center;
+        }
+
+        .card-actions {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .btn-card {
+            flex: 1;
+            min-width: 75px;
+            background: rgba(255, 255, 255, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            color: white;
+            padding: 7px 11px;
+            border-radius: 6px;
+            font-size: 0.78em;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+            font-weight: 500;
+        }
+
+        .btn-card:hover {
+            background: rgba(255, 255, 255, 0.4);
+            border-color: rgba(255, 255, 255, 0.6);
+            transform: translateY(-1px);
+        }
+
+        .btn-card:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-card.btn-start {
+            background: rgba(72, 187, 120, 0.3);
+            border-color: rgba(72, 187, 120, 0.5);
+        }
+
+        .btn-card.btn-start:hover {
+            background: rgba(72, 187, 120, 0.5);
+        }
+
+        .btn-card.btn-stop {
+            background: rgba(245, 101, 101, 0.3);
+            border-color: rgba(245, 101, 101, 0.5);
+        }
+
+        .btn-card.btn-stop:hover {
+            background: rgba(245, 101, 101, 0.5);
+        }
+
+        /* Toast Notifications */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--toast-bg);
+            border-radius: 8px;
+            box-shadow: var(--toast-shadow);
+            padding: 16px 20px;
+            max-width: 350px;
+            opacity: 0;
+            transform: translateX(400px);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .toast.success {
+            border-left: 4px solid #48bb78;
+        }
+
+        .toast.error {
+            border-left: 4px solid #f56565;
+        }
+
+        .toast.info {
+            border-left: 4px solid #4299e1;
+        }
+
+        .toast-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: var(--text-primary);
+        }
+
+        .toast-message {
+            font-size: 0.9em;
+            color: var(--text-secondary);
+        }
+
+        /* Features */
+        .features {
+            background: var(--section-bg);
+            border-radius: 12px;
+            padding: 20px 30px;
+            margin-top: 20px;
+        }
+
+        .features h3 {
+            color: var(--text-primary);
+            margin-bottom: 12px;
+        }
+
+        .features ul {
+            list-style: none;
+            color: var(--text-secondary);
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px 20px;
+        }
+
+        .features li {
+            padding: 6px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+
+        .features li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #48bb78;
+            font-weight: bold;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 16px;
+            color: var(--text-footer);
+            font-size: 0.9em;
+        }
+
+        /* Loading Spinner */
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Status Change Animations */
+        @keyframes statusChange {
+            0% {
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
+            50% {
+                box-shadow: 0 0 30px rgba(72, 187, 120, 0.6), 0 8px 12px rgba(0, 0, 0, 0.2);
+                transform: translateY(-6px) scale(1.02);
+            }
+            100% {
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
+        }
+
+        @keyframes statusChangeDown {
+            0% {
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
+            50% {
+                box-shadow: 0 0 30px rgba(245, 101, 101, 0.6), 0 8px 12px rgba(0, 0, 0, 0.2);
+                transform: translateY(-6px) scale(1.02);
+            }
+            100% {
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
+        }
+
+        .log-card.status-change-up {
+            animation: statusChange 1.5s ease-out;
+        }
+
+        .log-card.status-change-down {
+            animation: statusChangeDown 1.5s ease-out;
+        }
+
+        /* Progress Bar Styles */
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 4px;
+            display: flex;
+            align-items: stretch;
+        }
+
+        .progress-fill {
+            height: 6px;
+            display: block;
+            line-height: 1;
+            font-size: 0;
+            overflow: hidden;
+            transition: width 0.5s ease, background-color 0.3s ease;
+        }
+
+        .progress-fill.low {
+            background: #48bb78;
+        }
+
+        .progress-fill.medium {
+            background: #ecc94b;
+        }
+
+        .progress-fill.high {
+            background: #f56565;
+        }
+
+        /* Uptime Badge */
+        .uptime-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.25);
+            margin-left: 6px;
+        }
+
+        .uptime-badge.excellent {
+            background: rgba(72, 187, 120, 0.3);
+            border: 1px solid rgba(72, 187, 120, 0.5);
+        }
+
+        .uptime-badge.good {
+            background: rgba(236, 201, 75, 0.3);
+            border: 1px solid rgba(236, 201, 75, 0.5);
+        }
+
+        .uptime-badge.poor {
+            background: rgba(245, 101, 101, 0.3);
+            border: 1px solid rgba(245, 101, 101, 0.5);
+        }
+
+        /* Quick Actions Toolbar */
+        .quick-actions {
+            background: var(--section-bg);
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .quick-actions-title {
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 1em;
+        }
+
+        .quick-actions-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .btn-action {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-action:active {
+            transform: translateY(0);
+        }
+
+        .btn-action:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-action.btn-success {
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+        }
+
+        .btn-action.btn-danger {
+            background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+        }
+
+        .btn-action.btn-warning {
+            background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+        }
+
+        /* Trend Indicators */
+        .trend-indicator {
+            display: inline-block;
+            margin-left: 4px;
+            font-size: 0.9em;
+        }
+
+        .trend-up {
+            color: #f56565;
+        }
+
+        .trend-down {
+            color: #48bb78;
+        }
+
+        .trend-stable {
+            color: #cbd5e0;
+        }
+
+        /* Theme Toggle */
+        #themeToggleBtn {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            z-index: 2000;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+        }
+
+        #themeToggleBtn:hover {
+            background: rgba(255, 255, 255, 0.35);
+            transform: scale(1.1);
+        }
+
+        /* Auth Modal */
+        .auth-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+            z-index: 3000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .auth-modal {
+            background: var(--container-bg);
+            border-radius: 12px;
+            padding: 28px 32px;
+            width: 340px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+        }
+
+        .auth-modal h3 {
+            color: var(--text-primary);
+            margin-bottom: 16px;
+            font-size: 1.2em;
+        }
+
+        .auth-modal input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid rgba(128, 128, 128, 0.3);
+            border-radius: 8px;
+            margin-bottom: 12px;
+            font-size: 0.95em;
+            background: var(--section-bg);
+            color: var(--text-primary);
+            outline: none;
+            box-sizing: border-box;
+        }
+
+        .auth-modal input:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+        }
+
+        .auth-modal-buttons {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+            margin-top: 4px;
+        }
+
+        .auth-modal-buttons button {
+            padding: 8px 20px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            cursor: pointer;
+            border: none;
+            font-weight: 500;
+        }
+
+        .auth-btn-cancel {
+            background: var(--section-bg);
+            color: var(--text-secondary);
+        }
+
+        .auth-btn-cancel:hover {
+            background: rgba(128, 128, 128, 0.2);
+        }
+
+        .auth-btn-submit {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .auth-btn-submit:hover {
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+<button id="themeToggleBtn" title="Toggle theme" onclick="toggleTheme()">🌙</button>
+<div class="container">
+    <h1><span class="title-icon">🛡️</span><span class="gradient-text">DnR Mission Control</span></h1>
+    <p class="subtitle">Real-time monitoring for all DnR services</p>
+
+    <!-- Status Bar -->
+    <div class="status-bar" id="statusBar">
+        <div class="status-summary">
+            <div class="status-left">
+                <span class="status-indicator" id="statusIndicator">⏳</span>
+                <div>
+                    <div class="status-text" id="statusText">Loading...</div>
+                    <div class="status-count" id="statusCount">Checking bot status...</div>
+                </div>
+            </div>
+            <div class="status-right">
+                <span id="lastUpdate">Just now</span>
+                <button class="reload-btn" id="pauseBtn" onclick="togglePause()" title="Pause auto-refresh">
+                    <span id="pauseIcon">⏸️</span>
+                </button>
+                <button class="reload-btn" id="reloadBtn" onclick="manualRefresh()">
+                    <span class="reload-icon">🔄</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions Toolbar -->
+    <div class="quick-actions">
+        <div class="quick-actions-title">Quick Actions</div>
+        <div class="quick-actions-buttons">
+            <button class="btn-action btn-success" onclick="controlAllBots('start')" id="startAllBtn">
+                Start All Stopped
+            </button>
+            <button class="btn-action btn-warning" onclick="controlAllBots('restart')" id="restartAllBtn">
+                Restart All Running
+            </button>
+            <button class="btn-action btn-danger" onclick="controlAllBots('stop')" id="stopAllBtn">
+                Stop All Running
+            </button>
+            <button class="btn-action" onclick="restartLogViewers()" id="restartLogViewersBtn">
+                🔄 Restart Log Viewers
+            </button>
+            <button class="btn-action" onclick="gitPull()" id="gitPullBtn">
+                📥
+            </button>
+        </div>
+    </div>
+
+    <!-- Feature Switches -->
+    <div class="feature-switches" id="featureSwitches" style="display:none;">
+        <div class="feature-switches-header">
+            <span class="feature-switches-title">🎛️ Feature Switches</span>
+            <span class="feature-switches-sub" id="featureSwitchesSub">Loading…</span>
+        </div>
+        <div class="feature-switches-list" id="featureSwitchesList"></div>
+    </div>
+
+    <!-- Log Cards Grid -->
+    <div class="log-grid" id="logGrid">
+        <!-- System Status Card -->
+        <div class="log-card mac-card" id="card-system">
+            <div class="card-header">
+                <h3>🐧 Lab VM 1</h3>
+                <div class="card-status">
+                    <span class="status-dot running" id="dot-system"></span>
+                    <span id="status-system">Loading...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-system">
+                <div class="card-overlay-content" id="info-system">
+                    <div class="metric-row">
+                        <span class="metric-label">Uptime:</span>
+                        <span class="metric-value" id="sys-uptime">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">CPU:</span>
+                        <span class="metric-value" id="sys-cpu">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="sys-cpu-bar" style="width: 0%"></div></div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Load:</span>
+                        <span class="metric-value" id="sys-load">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Mem:</span>
+                        <span class="metric-value" id="sys-mem">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="sys-mem-bar" style="width: 0%"></div></div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Disk:</span>
+                        <span class="metric-value" id="sys-disk">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="sys-disk-bar" style="width: 0%"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="log-card mac-card" id="card-lab-vm2">
+            <div class="card-header">
+                <h3>🐧 Lab VM 2</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-lab-vm2"></span>
+                    <span id="status-lab-vm2">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-lab-vm2">
+                <div class="card-overlay-content" id="info-lab-vm2">
+                    <div class="metric-row">
+                        <span class="metric-label">Uptime:</span>
+                        <span class="metric-value" id="vm2-uptime">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">CPU:</span>
+                        <span class="metric-value" id="vm2-cpu">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="vm2-cpu-bar" style="width: 0%"></div></div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Load:</span>
+                        <span class="metric-value" id="vm2-load">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Mem:</span>
+                        <span class="metric-value" id="vm2-mem">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="vm2-mem-bar" style="width: 0%"></div></div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Disk:</span>
+                        <span class="metric-value" id="vm2-disk">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="vm2-disk-bar" style="width: 0%"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="log-card mac-card" id="card-mac-m1">
+            <div class="card-header">
+                <h3>🖥️ Mac M1</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-mac-m1"></span>
+                    <span id="status-mac-m1">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-mac-m1">
+                <div class="card-overlay-content">
+                    <div class="metric-row">
+                        <span class="metric-label">Chip:</span>
+                        <span class="metric-value" id="mac-m1-chip">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Cores:</span>
+                        <span class="metric-value" id="mac-m1-cores">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">macOS:</span>
+                        <span class="metric-value" id="mac-m1-macos">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Uptime:</span>
+                        <span class="metric-value" id="mac-m1-uptime">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">CPU:</span>
+                        <span class="metric-value" id="mac-m1-cpu">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="mac-m1-cpu-bar" style="width: 0%"></div></div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Mem:</span>
+                        <span class="metric-value" id="mac-m1-mem">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="mac-m1-mem-bar" style="width: 0%"></div></div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Load:</span>
+                        <span class="metric-value" id="mac-m1-load">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Disk:</span>
+                        <span class="metric-value" id="mac-m1-disk">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="mac-m1-disk-bar" style="width: 0%"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="log-card mac-card" id="card-studio1">
+            <div class="card-header">
+                <h3>🖥️ Studio 1</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-studio1"></span>
+                    <span id="status-studio1">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-studio1">
+                <div class="card-overlay-content">
+                    <div class="metric-row">
+                        <span class="metric-label">Chip:</span>
+                        <span class="metric-value" id="studio1-chip">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Cores:</span>
+                        <span class="metric-value" id="studio1-cores">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">macOS:</span>
+                        <span class="metric-value" id="studio1-macos">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Uptime:</span>
+                        <span class="metric-value" id="studio1-uptime">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">CPU:</span>
+                        <span class="metric-value" id="studio1-cpu">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="studio1-cpu-bar" style="width: 0%"></div></div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Mem:</span>
+                        <span class="metric-value" id="studio1-mem">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="studio1-mem-bar" style="width: 0%"></div></div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Load:</span>
+                        <span class="metric-value" id="studio1-load">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Disk:</span>
+                        <span class="metric-value" id="studio1-disk">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="studio1-disk-bar" style="width: 0%"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="log-card mac-card" id="card-studio2">
+            <div class="card-header">
+                <h3>🖥️ Studio 2</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-studio2"></span>
+                    <span id="status-studio2">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-studio2">
+                <div class="card-overlay-content">
+                    <div class="metric-row">
+                        <span class="metric-label">Chip:</span>
+                        <span class="metric-value" id="studio2-chip">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Cores:</span>
+                        <span class="metric-value" id="studio2-cores">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">macOS:</span>
+                        <span class="metric-value" id="studio2-macos">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Uptime:</span>
+                        <span class="metric-value" id="studio2-uptime">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">CPU:</span>
+                        <span class="metric-value" id="studio2-cpu">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="studio2-cpu-bar" style="width: 0%"></div></div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Mem:</span>
+                        <span class="metric-value" id="studio2-mem">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="studio2-mem-bar" style="width: 0%"></div></div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Load:</span>
+                        <span class="metric-value" id="studio2-load">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Disk:</span>
+                        <span class="metric-value" id="studio2-disk">--</span>
+                        <div class="progress-bar"><div class="progress-fill low" id="studio2-disk-bar" style="width: 0%"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div style="grid-column: 1 / -1; padding: 12px 4px 0; color: var(--text-muted); font-size: 0.8em; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Bots</div>
+        <!-- Bot cards will be populated by JavaScript -->
+        <div data-section="services" style="grid-column: 1 / -1; padding: 12px 4px 0; color: var(--text-muted); font-size: 0.8em; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Services</div>
+        <!-- Service cards will be populated by JavaScript -->
+        <!-- Inference Server Health Cards -->
+        <div data-section="inference" style="grid-column: 1 / -1; padding: 12px 4px 0; color: var(--text-muted); font-size: 0.8em; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Inference Servers</div>
+        <div style="grid-column: 1 / -1; display: grid; grid-template-columns: repeat(5, 1fr); gap: 18px;">
+        <div class="log-card llm-card" id="card-llm-m1-analysis">
+            <div class="card-header">
+                <h3>🧠 M1 Analysis</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-llm-m1-analysis"></span>
+                    <span id="status-llm-m1-analysis">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-llm-m1-analysis">
+                <div class="card-overlay-content">
+                    <div class="metric-row"><span class="metric-label">Port:</span><span class="metric-value">8015 → 8000</span></div>
+                    <div class="metric-row"><span class="metric-label">Latency:</span><span class="metric-value" id="latency-llm-m1-analysis">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Model:</span><span class="metric-value" id="model-llm-m1-analysis">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Size:</span><span class="metric-value" id="size-llm-m1-analysis">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Uptime:</span><span class="metric-value" id="uptime-llm-m1-analysis">--</span></div>
+                    <div class="metric-row"><span class="metric-label">SSH:</span><span class="metric-value" id="tunnel-llm-m1-analysis">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">Pokedex</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="log-card llm-card" id="card-llm-m1-router">
+            <div class="card-header">
+                <h3>🔀 M1 Router</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-llm-m1-router"></span>
+                    <span id="status-llm-m1-router">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-llm-m1-router">
+                <div class="card-overlay-content">
+                    <div class="metric-row"><span class="metric-label">Port:</span><span class="metric-value">8016 → 8001</span></div>
+                    <div class="metric-row"><span class="metric-label">Latency:</span><span class="metric-value" id="latency-llm-m1-router">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Model:</span><span class="metric-value" id="model-llm-m1-router">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Size:</span><span class="metric-value" id="size-llm-m1-router">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Uptime:</span><span class="metric-value" id="uptime-llm-m1-router">--</span></div>
+                    <div class="metric-row"><span class="metric-label">SSH:</span><span class="metric-value" id="tunnel-llm-m1-router">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">Pokedex, PBI Pruner</span></div>
+                </div>
+            </div>
+        </div>
+        <!-- M1 Embeds card hidden: dropped to free memory for GLM-4.7-Flash-8bit
+        <div class="log-card" id="card-llm-m1-embed">
+            <div class="card-header">
+                <h3>🔢 M1 Embeds</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-llm-m1-embed"></span>
+                    <span id="status-llm-m1-embed">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-llm-m1-embed">
+                <div class="card-overlay-content">
+                    <div class="metric-row"><span class="metric-label">Port:</span><span class="metric-value">8017 → 8002</span></div>
+                    <div class="metric-row"><span class="metric-label">Latency:</span><span class="metric-value" id="latency-llm-m1-embed">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Model:</span><span class="metric-value" id="model-llm-m1-embed">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">Pokedex</span></div>
+                </div>
+            </div>
+        </div>
+        -->
+        <div class="log-card llm-card" id="card-llm-s1-reranker">
+            <div class="card-header">
+                <h3>🎯 S1 Reranker</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-llm-s1-reranker"></span>
+                    <span id="status-llm-s1-reranker">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-llm-s1-reranker">
+                <div class="card-overlay-content">
+                    <div class="metric-row"><span class="metric-label">Port:</span><span class="metric-value">8020 → 8020</span></div>
+                    <div class="metric-row"><span class="metric-label">Latency:</span><span class="metric-value" id="latency-llm-s1-reranker">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Model:</span><span class="metric-value" id="model-llm-s1-reranker">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Size:</span><span class="metric-value" id="size-llm-s1-reranker">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Uptime:</span><span class="metric-value" id="uptime-llm-s1-reranker">--</span></div>
+                    <div class="metric-row"><span class="metric-label">SSH:</span><span class="metric-value" id="tunnel-llm-s1-reranker">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">Customer Assurance, RAG</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="log-card llm-card" id="card-llm-embed">
+            <div class="card-header">
+                <h3>🔢 S1 Embeddings</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-llm-embed"></span>
+                    <span id="status-llm-embed">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-llm-embed">
+                <div class="card-overlay-content">
+                    <div class="metric-row"><span class="metric-label">Endpoint:</span><span class="metric-value">studio1:8004 (direct)</span></div>
+                    <div class="metric-row"><span class="metric-label">Latency:</span><span class="metric-value" id="latency-llm-embed">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Model:</span><span class="metric-value" id="model-llm-embed">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Size:</span><span class="metric-value" id="size-llm-embed">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Uptime:</span><span class="metric-value" id="uptime-llm-embed">--</span></div>
+                    <div class="metric-row"><span class="metric-label">SSH:</span><span class="metric-value" id="tunnel-llm-embed">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">Web App, Scheduler</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="log-card llm-card" id="card-llm-s1-transcription">
+            <div class="card-header">
+                <h3>🎙️ S1 Transcription</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-llm-s1-transcription"></span>
+                    <span id="status-llm-s1-transcription">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-llm-s1-transcription">
+                <div class="card-overlay-content">
+                    <div class="metric-row"><span class="metric-label">Port:</span><span class="metric-value">11437 → 11437</span></div>
+                    <div class="metric-row"><span class="metric-label">Latency:</span><span class="metric-value" id="latency-llm-s1-transcription">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Model:</span><span class="metric-value" id="model-llm-s1-transcription">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Size:</span><span class="metric-value" id="size-llm-s1-transcription">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Uptime:</span><span class="metric-value" id="uptime-llm-s1-transcription">--</span></div>
+                    <div class="metric-row"><span class="metric-label">SSH:</span><span class="metric-value" id="tunnel-llm-s1-transcription">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">Meeting Recap</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="log-card llm-card" id="card-llm-s1-tts">
+            <div class="card-header">
+                <h3>🔊 S1 TTS</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-llm-s1-tts"></span>
+                    <span id="status-llm-s1-tts">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-llm-s1-tts">
+                <div class="card-overlay-content">
+                    <div class="metric-row"><span class="metric-label">Port:</span><span class="metric-value">8021 → 8021</span></div>
+                    <div class="metric-row"><span class="metric-label">Latency:</span><span class="metric-value" id="latency-llm-s1-tts">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Model:</span><span class="metric-value" id="model-llm-s1-tts">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Size:</span><span class="metric-value" id="size-llm-s1-tts">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Uptime:</span><span class="metric-value" id="uptime-llm-s1-tts">--</span></div>
+                    <div class="metric-row"><span class="metric-label">SSH:</span><span class="metric-value" id="tunnel-llm-s1-tts">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">Demo videos</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="log-card llm-card" id="card-llm-s1-laguna">
+            <div class="card-header">
+                <h3>🧠 S1 Laguna</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-llm-s1-laguna"></span>
+                    <span id="status-llm-s1-laguna">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-llm-s1-laguna">
+                <div class="card-overlay-content">
+                    <div class="metric-row"><span class="metric-label">Port:</span><span class="metric-value">8022 → 11434</span></div>
+                    <div class="metric-row"><span class="metric-label">Latency:</span><span class="metric-value" id="latency-llm-s1-laguna">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Model:</span><span class="metric-value" id="model-llm-s1-laguna">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Size:</span><span class="metric-value" id="size-llm-s1-laguna">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Uptime:</span><span class="metric-value" id="uptime-llm-s1-laguna">--</span></div>
+                    <div class="metric-row"><span class="metric-label">SSH:</span><span class="metric-value" id="tunnel-llm-s1-laguna">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">(none yet)</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="log-card llm-card" id="card-llm-s1-coder">
+            <div class="card-header">
+                <h3>🧠 S1 Coder</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-llm-s1-coder"></span>
+                    <span id="status-llm-s1-coder">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-llm-s1-coder">
+                <div class="card-overlay-content">
+                    <div class="metric-row"><span class="metric-label">Port:</span><span class="metric-value">Studio1:8003 (direct)</span></div>
+                    <div class="metric-row"><span class="metric-label">Latency:</span><span class="metric-value" id="latency-llm-s1-coder">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Model:</span><span class="metric-value" id="model-llm-s1-coder">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Size:</span><span class="metric-value" id="size-llm-s1-coder">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Uptime:</span><span class="metric-value" id="uptime-llm-s1-coder">--</span></div>
+                    <div class="metric-row"><span class="metric-label">SSH:</span><span class="metric-value" id="tunnel-llm-s1-coder">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">Claude Code (ccr)</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="log-card llm-card" id="card-llm-s1-router">
+            <div class="card-header">
+                <h3>🧠 S1 Router</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-llm-s1-router"></span>
+                    <span id="status-llm-s1-router">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-llm-s1-router">
+                <div class="card-overlay-content">
+                    <div class="metric-row"><span class="metric-label">Port:</span><span class="metric-value">Studio1:8005 (direct)</span></div>
+                    <div class="metric-row"><span class="metric-label">Latency:</span><span class="metric-value" id="latency-llm-s1-router">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Model:</span><span class="metric-value" id="model-llm-s1-router">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Size:</span><span class="metric-value" id="size-llm-s1-router">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Uptime:</span><span class="metric-value" id="uptime-llm-s1-router">--</span></div>
+                    <div class="metric-row"><span class="metric-label">SSH:</span><span class="metric-value" id="tunnel-llm-s1-router">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">tool routing</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="log-card llm-card" id="card-llm-s2-gemma">
+            <div class="card-header">
+                <h3>🧠 S2 Gemma 4</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-llm-s2-gemma"></span>
+                    <span id="status-llm-s2-gemma">Checking...</span>
+                </div>
+            </div>
+            <div class="card-overlay" id="overlay-llm-s2-gemma">
+                <div class="card-overlay-content">
+                    <div class="metric-row"><span class="metric-label">Port:</span><span class="metric-value">Studio2:8000 (direct)</span></div>
+                    <div class="metric-row"><span class="metric-label">Latency:</span><span class="metric-value" id="latency-llm-s2-gemma">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Model:</span><span class="metric-value" id="model-llm-s2-gemma">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Size:</span><span class="metric-value" id="size-llm-s2-gemma">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Uptime:</span><span class="metric-value" id="uptime-llm-s2-gemma">--</span></div>
+                    <div class="metric-row"><span class="metric-label">SSH:</span><span class="metric-value" id="tunnel-llm-s2-gemma">--</span></div>
+                    <div class="metric-row"><span class="metric-label">Used By:</span><span class="metric-value">(none yet)</span></div>
+                </div>
+            </div>
+        </div>
+        </div>
+    </div>
+
+    <div class="features">
+        <h3>Features</h3>
+        <ul>
+            <li>Real-time bot status monitoring</li>
+            <li>Start/Stop/Restart bots from the web interface</li>
+            <li>Live log streaming with color-coded levels</li>
+            <li>Full-text search across logs (Ctrl+F)</li>
+            <li>Resource usage monitoring (CPU, Memory, Uptime)</li>
+            <li>Auto-refresh every minute</li>
+            <li>No SSH access required</li>
+        </ul>
+    </div>
+
+    <div class="footer">
+        Security Operations Team
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast" id="toast">
+    <div class="toast-title" id="toastTitle"></div>
+    <div class="toast-message" id="toastMessage"></div>
+</div>
+
+<script>
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
+    const API_BASE = '/mission-control/api';
+
+    // Cached auth credentials (only needed for control actions)
+    let cachedAuth = null;
+
+    function getAuthHeader() {
+        if (cachedAuth) return cachedAuth;
+        // Synchronous callers should use requestAuth() instead
+        return null;
+    }
+
+    // Mission Control is served by the IR web app behind an admin-gated route, so
+    // every request to /mission-control/api/* already carries the logged-in admin's
+    // session cookie (sent automatically, same-origin) and the server enforces admin
+    // via @admin_required. There is no separate credential to prompt for — this
+    // resolves immediately with a harmless sentinel kept only so the existing
+    // `headers: { 'Authorization': auth }` call sites stay valid (the server ignores
+    // the header and reads the session instead). A 401 means the session expired;
+    // the per-call handlers redirect to /login.
+    function requestAuth() {
+        return Promise.resolve('session');
+    }
+
+    let lastStatusData = null;
+    let previousStatusData = null;
+    let refreshInterval = null;
+    let botsUnderControl = new Map(); // Track bots being controlled and what action (start/stop/restart)
+    let isPaused = false; // Track pause state
+
+    // Bot configuration
+    const BOTS = [
+        { key: 'pokedex',   name: 'Pokedex',       emoji: '🔮', port: 8042, group: 'bots' },
+        { key: 'toodles',   name: 'Toodles',        emoji: '🎯', port: 8032, group: 'bots' },
+        { key: 'msoar',     name: 'MSOAR',          emoji: '🤖', port: 8033, group: 'bots' },
+        { key: 'moneyball', name: 'MoneyBall',       emoji: '💰', port: 8034, group: 'bots' },
+        { key: 'jarvis',    name: 'Jarvis',          emoji: '🛡️', port: 8035, group: 'bots' },
+        { key: 'barnacles', name: 'Barnacles',       emoji: '⚓', port: 8036, group: 'bots' },
+        { key: 'tars',      name: 'TARS',            emoji: '☁️', port: 8038, group: 'bots' },
+        { key: 'case',      name: 'CASE',            emoji: '🏢', port: 8041, group: 'bots' },
+        { key: 'winai',     name: 'Win.AI',          emoji: '📚', port: 8043, group: 'bots' },
+        { key: 'jobs',      name: 'IR Scheduler',    emoji: '⏰', port: 8037, group: 'services' },
+        { key: 'epp',       name: 'EPP Scheduler',   emoji: '🛡️', port: 8044, group: 'services' },
+        { key: 'ai',        name: 'AI Scheduler',    emoji: '🧠', port: 8045, group: 'services' },
+        { key: 'de',        name: 'DE Scheduler',    emoji: '🔍', port: 8046, group: 'services' },
+        { key: 'webserver', name: 'Web App',         emoji: '🌐', port: 8039, group: 'services' },
+        { key: 'mcp-public', name: 'MCP Public',      emoji: '🔌', port: 8047, group: 'services' },
+        { key: 'soc-tier2',        name: 'SOC Tier 2',      emoji: '🔍', group: 'services' },
+        { key: 'soc-ir-lead',      name: 'SOC IR Lead',     emoji: '🚨', group: 'services' },
+        { key: 'soc-threat-intel', name: 'SOC Threat Intel', emoji: '🌐', group: 'services' },
+    ];
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+        initializeBotCards();
+        fetchStatus();
+        fetchSystemStatus();
+        fetchLabVm2Status();
+        fetchLlmHealth();
+        fetchMacHealth();
+        loadFeatureFlags();
+
+        startAutoRefresh();
+    });
+
+    function initializeBotCards() {
+        const logGrid = document.getElementById('logGrid');
+        const servicesSection = logGrid.querySelector('[data-section="services"]');
+        const inferenceSection = logGrid.querySelector('[data-section="inference"]');
+
+        BOTS.forEach(bot => {
+            const card = createBotCard(bot);
+            const anchor = bot.group === 'services' ? inferenceSection : servicesSection;
+            logGrid.insertBefore(card, anchor);
+        });
+    }
+
+    function createBotCard(bot) {
+        const card = document.createElement('div');
+        card.className = 'log-card';
+        card.id = `card-${bot.key}`;
+        card.innerHTML = `
+            <div class="card-header">
+                <h3>${bot.emoji} ${bot.name}</h3>
+                <div class="card-status">
+                    <span class="status-dot stopped" id="dot-${bot.key}"></span>
+                    <span id="status-${bot.key}">Checking...</span>
+                </div>
+            </div>
+            <p id="desc-${bot.key}">${bot.name} bot logs</p>
+            <div class="card-overlay" id="overlay-${bot.key}">
+                <div class="card-overlay-content" id="info-${bot.key}">
+                    <div><span>Status:</span><span>Checking...</span></div>
+                </div>
+                <div class="card-actions">
+                    ${bot.port ? `<button class="btn-card" onclick="window.open('http://' + window.location.hostname + ':${bot.port}', '_blank')">View Logs</button>` : ''}
+                    <button class="btn-card btn-start" id="start-${bot.key}" onclick="controlBot('${bot.key}', 'start')" disabled>Start</button>
+                    <button class="btn-card" id="restart-${bot.key}" onclick="controlBot('${bot.key}', 'restart')" disabled>Restart</button>
+                    <button class="btn-card btn-stop" id="stop-${bot.key}" onclick="controlBot('${bot.key}', 'stop')" disabled>Stop</button>
+                </div>
+            </div>
+        `;
+        return card;
+    }
+
+    async function fetchStatus() {
+        try {
+            const response = await fetch(`${API_BASE}/status`);
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch status');
+            }
+
+            const data = await response.json();
+            updateUI(data, lastStatusData);
+            previousStatusData = lastStatusData;
+            lastStatusData = data;
+            updateLastUpdateTime();
+
+        } catch (error) {
+            console.error('Error fetching status:', error);
+            showToast('Error', 'Failed to fetch bot status', 'error');
+        }
+    }
+
+    function updateUI(data, previousData) {
+        updateStatusBar(data);
+        updateBotCards(data, previousData);
+    }
+
+    function updateStatusBar(data) {
+        const { summary } = data;
+        const running = summary.running;
+        const total = summary.total;
+
+        const statusIndicator = document.getElementById('statusIndicator');
+        const statusText = document.getElementById('statusText');
+        const statusCount = document.getElementById('statusCount');
+
+        if (running === total) {
+            statusIndicator.textContent = '✅';
+            statusText.textContent = 'All Systems Operational';
+        } else if (running === 0) {
+            statusIndicator.textContent = '❌';
+            statusText.textContent = 'All Systems Down';
+        } else {
+            statusIndicator.textContent = '⚠️';
+            statusText.textContent = 'Partial Systems Online';
+        }
+
+        statusCount.textContent = `${running} of ${total} bots running`;
+    }
+
+    function formatUptime(uptime) {
+        if (!uptime) return 'N/A';
+
+        // Format: "20-06:12:53" = 20 days, 6 hours, 12 minutes, 53 seconds
+        // or "06:12:53" = 6 hours, 12 minutes, 53 seconds
+        // or "12:53" = 12 minutes, 53 seconds
+
+        const parts = uptime.split('-');
+        let days = 0;
+        let timeStr = uptime;
+
+        if (parts.length === 2) {
+            days = parseInt(parts[0]);
+            timeStr = parts[1];
+        }
+
+        const timeParts = timeStr.split(':');
+        const hours = timeParts.length === 3 ? parseInt(timeParts[0]) : 0;
+        const minutes = timeParts.length === 3 ? parseInt(timeParts[1]) : parseInt(timeParts[0]) || 0;
+
+        // Build human-readable string: 5m 4w 3d 2h
+        const months = Math.floor(days / 30);
+        days = days % 30;
+        const weeks = Math.floor(days / 7);
+        days = days % 7;
+
+        const segments = [];
+        if (months > 0) segments.push(`${months}mo`);
+        if (weeks > 0)  segments.push(`${weeks}w`);
+        if (days > 0)   segments.push(`${days}d`);
+        if (hours > 0)  segments.push(`${hours}h`);
+        if (minutes > 0 && months === 0) segments.push(`${minutes}m`);
+
+        return segments.length > 0 ? segments.join(' ') : '0m';
+    }
+
+    function getProgressBarClass(value) {
+        if (value < 50) return 'low';
+        if (value < 80) return 'medium';
+        return 'high';
+    }
+
+    function getUptimeBadge(uptime) {
+        if (!uptime) return '';
+
+        const hours = getUptimeHours(uptime);
+
+        if (hours >= 168) { // 7 days
+            return '<span class="uptime-badge excellent">🏆 Excellent</span>';
+        } else if (hours >= 24) { // 1 day
+            return '<span class="uptime-badge good">✨ Good</span>';
+        } else if (hours >= 4) { // 4 hours
+            return '<span class="uptime-badge good">👍 Stable</span>';
+        } else {
+            return '<span class="uptime-badge poor">🔄 Recent Restart</span>';
+        }
+    }
+
+    function getUptimeDays(uptime) {
+        if (!uptime) return 0;
+        const parts = uptime.split('-');
+        if (parts.length === 2) {
+            return parseInt(parts[0]);
+        }
+        return 0;
+    }
+
+    function getUptimeHours(uptime) {
+        if (!uptime) return 0;
+
+        // Format: "20-06:12:53" = 20 days, 6 hours, 12 minutes, 53 seconds
+        // or "06:12:53" = 6 hours, 12 minutes, 53 seconds
+        // or "12:53" = 12 minutes, 53 seconds
+
+        const parts = uptime.split('-');
+        let days = 0;
+        let timeStr = uptime;
+
+        if (parts.length === 2) {
+            days = parseInt(parts[0]);
+            timeStr = parts[1];
+        }
+
+        const timeParts = timeStr.split(':');
+        let hours = 0;
+        let minutes = 0;
+
+        if (timeParts.length === 3) {
+            // HH:MM:SS format
+            hours = parseInt(timeParts[0]);
+            minutes = parseInt(timeParts[1]);
+        } else if (timeParts.length === 2) {
+            // MM:SS format (less than an hour)
+            minutes = parseInt(timeParts[0]);
+        }
+
+        return days * 24 + hours + (minutes / 60);
+    }
+
+    function getTrendIndicator(current, previous, inverse = false) {
+        if (!previous || previous === 0 || current === 0) return '';
+        const diff = current - previous;
+        const threshold = 5; // 5% change threshold
+
+        if (Math.abs(diff) < threshold) {
+            return '<span class="trend-indicator trend-stable">—</span>';
+        }
+
+        if (inverse) {
+            // For metrics where lower is better (CPU, memory)
+            if (diff > 0) return '<span class="trend-indicator trend-up">↑</span>';
+            return '<span class="trend-indicator trend-down">↓</span>';
+        } else {
+            // For metrics where higher is better
+            if (diff > 0) return '<span class="trend-indicator trend-down">↑</span>';
+            return '<span class="trend-indicator trend-up">↓</span>';
+        }
+    }
+
+    function updateBotCards(data, previousData) {
+        const { bots } = data;
+        const previousBots = previousData?.bots || {};
+
+        Object.values(bots).forEach(bot => {
+            const card = document.getElementById(`card-${bot.key}`);
+            const dot = document.getElementById(`dot-${bot.key}`);
+            // The API may return bots that have no card here (e.g. new services not
+            // yet added to the JS BOTS list). Skip them rather than throwing — one
+            // missing card must not abort the whole dashboard refresh.
+            if (!card || !dot) return;
+            const status = document.getElementById(`status-${bot.key}`);
+            const desc = document.getElementById(`desc-${bot.key}`);
+            const info = document.getElementById(`info-${bot.key}`);
+            const startBtn = document.getElementById(`start-${bot.key}`);
+            const restartBtn = document.getElementById(`restart-${bot.key}`);
+            const stopBtn = document.getElementById(`stop-${bot.key}`);
+
+            const previousBot = previousBots[bot.key];
+            const controlAction = botsUnderControl.get(bot.key); // Get the action being performed
+            const isUnderControl = controlAction !== undefined;
+
+            // Detect status change and trigger animation
+            if (previousBot && previousBot.status !== bot.status) {
+                card.classList.remove('status-change-up', 'status-change-down');
+                if (bot.status === 'running') {
+                    setTimeout(() => card.classList.add('status-change-up'), 10);
+                    showToast('Bot Started', `${bot.name} is now running`, 'success');
+                    // Remove from control tracking when it successfully starts
+                    botsUnderControl.delete(bot.key);
+                } else if (bot.status === 'stopped') {
+                    setTimeout(() => card.classList.add('status-change-down'), 10);
+                    showToast('Bot Stopped', `${bot.name} has stopped`, 'info');
+                }
+                // Remove animation class after animation completes
+                setTimeout(() => {
+                    card.classList.remove('status-change-up', 'status-change-down');
+                }, 1500);
+            }
+
+            // Update status dot (add pending state for bots under control)
+            if (isUnderControl) {
+                dot.className = 'status-dot error'; // Use error (orange) for pending
+            } else {
+                dot.className = `status-dot ${bot.status}`;
+            }
+
+            // Update status text based on control action
+            if (isUnderControl) {
+                if (controlAction === 'stop') {
+                    status.textContent = 'Stopping...';
+                } else if (controlAction === 'start') {
+                    status.textContent = 'Starting...';
+                } else if (controlAction === 'restart') {
+                    status.textContent = 'Restarting...';
+                }
+            } else if (bot.status === 'running') {
+                status.textContent = 'Live';
+
+                // Show all PIDs if multiple processes are running
+                const hostSuffix = bot.host ? ` • on <span style="color:#60a5fa; font-weight:600;">${bot.host}</span>` : '';
+                if (bot.pid_count > 1) {
+                    const pidList = bot.pids.join(', ');
+                    desc.innerHTML = `<span style="color: #f56565; font-weight: 600;">⚠️ ${bot.pid_count} processes running!</span> • PIDs: ${pidList}${hostSuffix}`;
+                } else {
+                    desc.innerHTML = `Running • PID ${bot.pid}${hostSuffix}`;
+                }
+                card.classList.remove('status-down');
+
+                // Get previous values for trend indicators
+                const prevCpu = previousBot?.cpu_percent || 0;
+                const prevMem = previousBot?.memory_percent || 0;
+
+                // Update info overlay with progress bars and trends
+                const uptimeBadge = getUptimeBadge(bot.uptime);
+                info.innerHTML = `
+                    <div class="metric-row">
+                        <span class="metric-label">Uptime:</span>
+                        <span class="metric-value">${formatUptime(bot.uptime)}</span>
+                        <div style="flex: 1; margin-left: 8px;">${uptimeBadge}</div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Memory:</span>
+                        <span class="metric-value">${bot.memory_mb}MB (${bot.memory_percent.toFixed(1)}%)${getTrendIndicator(bot.memory_percent, prevMem, true)}</span>
+                        <div class="progress-bar">
+                            <div class="progress-fill ${getProgressBarClass(bot.memory_percent)}" style="width: ${bot.memory_percent}%"></div>
+                        </div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">CPU:</span>
+                        <span class="metric-value">${bot.cpu_percent.toFixed(1)}%${getTrendIndicator(bot.cpu_percent, prevCpu, true)}</span>
+                        <div class="progress-bar">
+                            <div class="progress-fill ${getProgressBarClass(bot.cpu_percent)}" style="width: ${Math.min(bot.cpu_percent, 100)}%"></div>
+                        </div>
+                    </div>
+                `;
+
+                // Enable/disable buttons and show spinners if under control
+                if (isUnderControl) {
+                    startBtn.disabled = true;
+                    restartBtn.disabled = true;
+                    stopBtn.disabled = true;
+                    startBtn.innerHTML = '<span class="spinner"></span>';
+                    restartBtn.innerHTML = '<span class="spinner"></span>';
+                    stopBtn.innerHTML = '<span class="spinner"></span>';
+                } else {
+                    startBtn.disabled = true;
+                    startBtn.innerHTML = 'Start';
+                    restartBtn.disabled = false;
+                    restartBtn.innerHTML = 'Restart';
+                    stopBtn.disabled = false;
+                    stopBtn.innerHTML = 'Stop';
+                }
+
+            } else if (bot.status === 'stopped') {
+                status.textContent = 'Down';
+                desc.textContent = 'Not running';
+                card.classList.add('status-down');
+
+                info.innerHTML = `
+                    <div class="metric-row">
+                        <span class="metric-label">Status:</span>
+                        <span class="metric-value">🔴 Stopped</span>
+                    </div>
+                `;
+
+                if (isUnderControl) {
+                    startBtn.disabled = true;
+                    restartBtn.disabled = true;
+                    stopBtn.disabled = true;
+                    startBtn.innerHTML = '<span class="spinner"></span>';
+                    restartBtn.innerHTML = '<span class="spinner"></span>';
+                    stopBtn.innerHTML = '<span class="spinner"></span>';
+                } else {
+                    startBtn.disabled = false;
+                    startBtn.innerHTML = 'Start';
+                    restartBtn.disabled = true;
+                    restartBtn.innerHTML = 'Restart';
+                    stopBtn.disabled = true;
+                    stopBtn.innerHTML = 'Stop';
+                }
+
+            } else {
+                status.textContent = 'Error';
+                desc.textContent = 'Status unknown';
+
+                info.innerHTML = `
+                    <div class="metric-row">
+                        <span class="metric-label">Status:</span>
+                        <span class="metric-value">⚠️ Error</span>
+                    </div>
+                `;
+
+                if (isUnderControl) {
+                    startBtn.disabled = true;
+                    restartBtn.disabled = true;
+                    stopBtn.disabled = true;
+                    startBtn.innerHTML = '<span class="spinner"></span>';
+                    restartBtn.innerHTML = '<span class="spinner"></span>';
+                    stopBtn.innerHTML = '<span class="spinner"></span>';
+                } else {
+                    startBtn.disabled = false;
+                    startBtn.innerHTML = 'Start';
+                    restartBtn.disabled = false;
+                    restartBtn.innerHTML = 'Restart';
+                    stopBtn.disabled = false;
+                    stopBtn.innerHTML = 'Stop';
+                }
+            }
+        });
+    }
+
+    async function controlBot(botKey, action) {
+        const auth = await requestAuth();
+        if (!auth) return;
+
+        const actionText = action.charAt(0).toUpperCase() + action.slice(1);
+
+        // Mark bot as under control and track which action
+        botsUnderControl.set(botKey, action);
+
+        // Disable all buttons for this bot
+        ['start', 'restart', 'stop'].forEach(a => {
+            const btn = document.getElementById(`${a}-${botKey}`);
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner"></span>';
+            }
+        });
+
+        // Update UI immediately to show pending state
+        fetchStatus();
+
+        try {
+            const response = await fetch(`${API_BASE}/control/${botKey}/${action}`, {
+                method: 'POST',
+                headers: { 'Authorization': auth }
+            });
+
+            if (response.status === 401) {
+                cachedAuth = null;
+                showToast('Error', 'Invalid credentials', 'error');
+                botsUnderControl.delete(botKey);
+                fetchStatus();
+                return;
+            }
+
+            const data = await response.json();
+
+            if (data.success) {
+                showToast('Success', data.message, 'success');
+
+                // Poll more frequently for 6 seconds to catch status changes
+                let pollCount = 0;
+                const pollInterval = setInterval(() => {
+                    fetchStatus();
+                    pollCount++;
+                    if (pollCount >= 12) { // 12 polls x 500ms = 6 seconds
+                        clearInterval(pollInterval);
+                        botsUnderControl.delete(botKey); // Stop tracking after polling
+                        fetchStatus(); // Final refresh
+                    }
+                }, 500);
+
+            } else {
+                showToast('Error', data.message || `Failed to ${action} bot`, 'error');
+                botsUnderControl.delete(botKey);
+                fetchStatus();
+            }
+
+        } catch (error) {
+            console.error(`Error ${action}ing bot:`, error);
+            showToast('Error', `Failed to ${action} bot`, 'error');
+            botsUnderControl.delete(botKey);
+            fetchStatus();
+        }
+    }
+
+    async function restartLogViewers() {
+        const auth = await requestAuth();
+        if (!auth) return;
+
+        const btn = document.getElementById('restartLogViewersBtn');
+        const originalText = btn.innerHTML;
+
+        // Disable button and show loading state
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Restarting...';
+
+        showToast('Processing', 'Restarting log viewer services...', 'info');
+
+        try {
+            const response = await fetch(`${API_BASE}/log-viewers/restart`, {
+                method: 'POST',
+                headers: { 'Authorization': auth }
+            });
+
+            if (response.status === 401) {
+                cachedAuth = null;
+                showToast('Error', 'Invalid credentials', 'error');
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                return;
+            }
+
+            const data = await response.json();
+
+            if (data.success) {
+                showToast('Success', data.message, 'success');
+            } else {
+                showToast('Error', data.message || 'Failed to restart log viewers', 'error');
+            }
+
+        } catch (error) {
+            console.error('Error restarting log viewers:', error);
+            showToast('Error', 'Failed to restart log viewers', 'error');
+        } finally {
+            // Re-enable button after a delay
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }, 3000);
+        }
+    }
+
+    async function restartSelf() {
+        const auth = await requestAuth();
+        if (!auth) return;
+
+        const btn = document.getElementById('restartSelfBtn');
+        const originalText = btn.innerHTML;
+
+        // Disable button and show loading state
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Restarting...';
+
+        showToast('Processing', 'Restarting this service...', 'info');
+
+        try {
+            const response = await fetch(`${API_BASE}/self-restart`, {
+                method: 'POST',
+                headers: { 'Authorization': auth }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showToast('Success', 'Service restarting. Refresh the page in a few seconds.', 'success');
+                // Auto-refresh after 5 seconds
+                setTimeout(() => {
+                    window.location.reload();
+                }, 5000);
+            } else {
+                showToast('Error', data.message || 'Failed to restart service', 'error');
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+
+        } catch (error) {
+            // This error is expected if the service restarts before responding
+            console.log('Service restart initiated (connection lost as expected)');
+            showToast('Success', 'Service restarting. Refresh the page in a few seconds.', 'success');
+            // Auto-refresh after 5 seconds
+            setTimeout(() => {
+                window.location.reload();
+            }, 5000);
+        }
+    }
+
+    async function gitPull() {
+        const auth = await requestAuth();
+        if (!auth) return;
+
+        const btn = document.getElementById('gitPullBtn');
+        const originalText = btn.innerHTML;
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Pulling...';
+
+        showToast('Processing', 'Pulling latest changes from git...', 'info');
+
+        try {
+            const response = await fetch(`${API_BASE}/git-pull`, {
+                method: 'POST',
+                headers: { 'Authorization': auth }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showToast('Git Pull', data.message, 'success');
+            } else {
+                showToast('Git Pull Failed', data.message || 'Failed to pull', 'error');
+            }
+
+        } catch (error) {
+            console.error('Error during git pull:', error);
+            showToast('Error', 'Failed to pull from git', 'error');
+        } finally {
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }, 2000);
+        }
+    }
+
+    // ---- Feature Switches -------------------------------------------------
+    function escapeHtml(s) {
+        return String(s || '').replace(/[&<>"']/g, c => (
+            {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
+        ));
+    }
+
+    async function loadFeatureFlags() {
+        try {
+            const res = await fetch(`${API_BASE}/feature-flags`);
+            const data = await res.json();
+            renderFeatureFlags(data.flags || []);
+        } catch (e) {
+            const sub = document.getElementById('featureSwitchesSub');
+            if (sub) sub.textContent = 'Unavailable';
+        }
+    }
+
+    function renderFeatureFlags(flags) {
+        const panel = document.getElementById('featureSwitches');
+        const list = document.getElementById('featureSwitchesList');
+        const sub = document.getElementById('featureSwitchesSub');
+        if (!panel || !list) return;
+        if (!flags.length) { panel.style.display = 'none'; return; }
+        panel.style.display = '';
+        const onCount = flags.filter(f => f.enabled).length;
+        if (sub) sub.textContent = `${onCount}/${flags.length} on`;
+        list.innerHTML = flags.map(f => `
+            <div class="feature-row">
+                <div class="feature-meta">
+                    <div class="feature-label">${escapeHtml(f.icon)} ${escapeHtml(f.label)}</div>
+                    <div class="feature-desc">${escapeHtml(f.description)}</div>
+                </div>
+                <label class="switch" title="${escapeHtml(f.env)}">
+                    <input type="checkbox" ${f.enabled ? 'checked' : ''}
+                        onchange="toggleFeature('${f.key}', this.checked, this)">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        `).join('');
+    }
+
+    async function toggleFeature(key, enabled, inputEl) {
+        const auth = await requestAuth();
+        if (!auth) { if (inputEl) inputEl.checked = !enabled; return; }  // revert on cancel
+        if (inputEl) inputEl.disabled = true;
+        showToast('Applying', `Turning ${enabled ? 'on' : 'off'}… restarting service`, 'info');
+        try {
+            const response = await fetch(`${API_BASE}/feature-flags/${key}`, {
+                method: 'POST',
+                headers: { 'Authorization': auth, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled })
+            });
+            if (response.status === 401) {
+                cachedAuth = null;
+                showToast('Error', 'Invalid credentials', 'error');
+                if (inputEl) inputEl.checked = !enabled;
+                return;
+            }
+            const data = await response.json();
+            if (data.success) {
+                showToast('Feature Switches', data.message, 'success');
+            } else {
+                showToast('Feature Switches', data.message || 'Failed to apply', 'error');
+                if (inputEl) inputEl.checked = !enabled;  // revert on failure
+            }
+        } catch (error) {
+            console.error('Error toggling feature:', error);
+            showToast('Error', 'Failed to toggle feature', 'error');
+            if (inputEl) inputEl.checked = !enabled;
+        } finally {
+            if (inputEl) inputEl.disabled = false;
+            loadFeatureFlags();  // re-sync from the file (authoritative)
+        }
+    }
+
+    function renderLinuxStats(prefix, statusId, dotId, data) {
+        // Uptime - parse "up X weeks, Y days, Z hours, N minutes" into bot-style format
+        const raw = (data.uptime || '').replace('up ', '');
+        const wMatch = raw.match(/(\d+)\s*week/);
+        const dMatch = raw.match(/(\d+)\s*day/);
+        const hMatch = raw.match(/(\d+)\s*hour/);
+        const mMatch = raw.match(/(\d+)\s*minute/);
+        const d = (wMatch ? parseInt(wMatch[1]) * 7 : 0) + (dMatch ? parseInt(dMatch[1]) : 0);
+        const h = hMatch ? parseInt(hMatch[1]) : 0;
+        const m = mMatch ? parseInt(mMatch[1]) : 0;
+        const normalised = d > 0
+            ? `${d}-${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00`
+            : `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00`;
+        document.getElementById(`${prefix}-uptime`).textContent = formatUptime(normalised);
+        const statusEl = document.getElementById(statusId);
+        const dotEl = document.getElementById(dotId);
+        if (statusEl) statusEl.textContent = 'Live';
+        if (dotEl) dotEl.className = 'status-dot running';
+
+        // Real-time CPU utilization
+        const cpuPct = data.cpu_percent;
+        if (cpuPct !== null && cpuPct !== undefined) {
+            document.getElementById(`${prefix}-cpu`).textContent = `${cpuPct}%`;
+            document.getElementById(`${prefix}-cpu-bar`).style.width = Math.min(cpuPct, 100) + '%';
+            document.getElementById(`${prefix}-cpu-bar`).className = 'progress-fill ' + getProgressBarClass(cpuPct);
+        } else {
+            document.getElementById(`${prefix}-cpu`).textContent = '--';
+            document.getElementById(`${prefix}-cpu-bar`).style.width = '0%';
+        }
+
+        // Load average (use server-side cpu_count, fallback to browser)
+        const cpuCores = data.cpu_count || navigator.hardwareConcurrency || 4;
+        const load1 = parseFloat(data.load['1min']) || 0;
+        const loadPct = Math.min(Math.round((load1 / cpuCores) * 100), 100);
+        document.getElementById(`${prefix}-load`).textContent = `${loadPct}%`;
+
+        // Memory
+        const memUsed = data.memory.used;
+        const memTotal = data.memory.total;
+        const parseMemGB = (s) => parseFloat(s) || 0;
+        const memUsedGB = parseMemGB(memUsed);
+        const memTotalGB = parseMemGB(memTotal);
+        const memPct = memTotalGB > 0 ? (memUsedGB / memTotalGB) * 100 : 0;
+
+        document.getElementById(`${prefix}-mem`).textContent = `${memUsed} / ${memTotal}`;
+        document.getElementById(`${prefix}-mem-bar`).style.width = memPct + '%';
+        document.getElementById(`${prefix}-mem-bar`).className = 'progress-fill ' + getProgressBarClass(memPct);
+
+        // Disk
+        const diskPctStr = data.disk.percent || '0%';
+        const diskPct = parseInt(diskPctStr) || 0;
+
+        document.getElementById(`${prefix}-disk`).textContent = `${data.disk.used} / ${data.disk.size}`;
+        document.getElementById(`${prefix}-disk-bar`).style.width = diskPct + '%';
+        document.getElementById(`${prefix}-disk-bar`).className = 'progress-fill ' + getProgressBarClass(diskPct);
+    }
+
+    async function fetchSystemStatus() {
+        try {
+            const response = await fetch(`${API_BASE}/system-status`);
+            const data = await response.json();
+            if (!data.success) return;
+            renderLinuxStats('sys', 'status-system', 'dot-system', data);
+        } catch (error) {
+            console.error('Error fetching system status:', error);
+        }
+    }
+
+    async function fetchLabVm2Status() {
+        const statusEl = document.getElementById('status-lab-vm2');
+        const dotEl = document.getElementById('dot-lab-vm2');
+        const cardEl = document.getElementById('card-lab-vm2');
+        const markNetworkError = (detail) => {
+            if (statusEl) statusEl.textContent = 'Network error';
+            if (dotEl) dotEl.className = 'status-dot degraded';
+            if (cardEl && detail) cardEl.title = `lab-vm1 → lab-vm2 unreachable: ${detail}`;
+        };
+        try {
+            const response = await fetch(`${API_BASE}/lab-vm2-status`);
+            const data = await response.json();
+            if (data.success) {
+                if (cardEl) cardEl.title = '';
+                renderLinuxStats('vm2', 'status-lab-vm2', 'dot-lab-vm2', data);
+            } else {
+                markNetworkError(data.error || 'unreachable');
+            }
+        } catch (error) {
+            console.error('Error fetching lab-vm2 status:', error);
+            markNetworkError(error && error.message ? error.message : 'fetch failed');
+        }
+    }
+
+    async function fetchMacHealth() {
+        try {
+            const response = await fetch(`${API_BASE}/mac-health`);
+            if (!response.ok) return;
+            const data = await response.json();
+            for (const [key, mac] of Object.entries(data.hosts)) {
+                const dot = document.getElementById(`dot-${key}`);
+                const statusEl = document.getElementById(`status-${key}`);
+                if (!dot || !statusEl) continue;
+
+                if (mac.status === 'up') {
+                    dot.className = 'status-dot running';
+                    statusEl.textContent = 'Up';
+
+                    const chipEl = document.getElementById(`${key}-chip`);
+                    const coresEl = document.getElementById(`${key}-cores`);
+                    const macosEl = document.getElementById(`${key}-macos`);
+                    const uptimeEl = document.getElementById(`${key}-uptime`);
+                    const cpuEl = document.getElementById(`${key}-cpu`);
+                    const cpuBar = document.getElementById(`${key}-cpu-bar`);
+                    const memEl = document.getElementById(`${key}-mem`);
+                    const memBar = document.getElementById(`${key}-mem-bar`);
+                    const loadEl = document.getElementById(`${key}-load`);
+
+                    if (chipEl && mac.chip) chipEl.textContent = mac.chip.replace('Apple ', '');
+                    if (coresEl && mac.ncpu) {
+                        let coreStr = `${mac.ncpu} total`;
+                        if (mac.pcores && mac.ecores) coreStr += ` (${mac.pcores}P + ${mac.ecores}E)`;
+                        coresEl.textContent = coreStr;
+                    }
+                    if (macosEl && mac.macos) macosEl.textContent = mac.macos;
+                    if (uptimeEl && mac.uptime) uptimeEl.textContent = mac.uptime;
+                    if (cpuEl && mac.cpu_pct != null) {
+                        cpuEl.textContent = `${mac.cpu_pct}%`;
+                        if (cpuBar) {
+                            cpuBar.style.width = Math.min(mac.cpu_pct, 100) + '%';
+                            cpuBar.className = 'progress-fill ' + getProgressBarClass(mac.cpu_pct);
+                        }
+                    }
+                    if (memEl && mac.mem_used_gb != null) {
+                        memEl.textContent = `${mac.mem_used_gb}G / ${mac.mem_total_gb}G`;
+                        if (memBar && mac.mem_pct != null) {
+                            memBar.style.width = mac.mem_pct + '%';
+                            memBar.className = 'progress-fill ' + getProgressBarClass(mac.mem_pct);
+                        }
+                    }
+                    if (loadEl && mac.load_1m != null) {
+                        const cores = mac.ncpu || 1;
+                        loadEl.textContent = `${Math.round(mac.load_1m / cores * 100)}%`;
+                    }
+                    const diskEl = document.getElementById(`${key}-disk`);
+                    const diskBar = document.getElementById(`${key}-disk-bar`);
+                    if (diskEl && mac.disk_used_gb != null && mac.disk_size_gb != null) {
+                        diskEl.textContent = `${mac.disk_used_gb}G / ${mac.disk_size_gb}G`;
+                        if (diskBar && mac.disk_pct != null) {
+                            diskBar.style.width = Math.min(mac.disk_pct, 100) + '%';
+                            diskBar.className = 'progress-fill ' + getProgressBarClass(mac.disk_pct);
+                        }
+                    }
+                } else {
+                    dot.className = 'status-dot stopped';
+                    statusEl.textContent = 'Down';
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching Mac health:', error);
+        }
+    }
+
+    function formatLlmUptime(seconds) {
+        const d = Math.floor(seconds / 86400);
+        const h = Math.floor((seconds % 86400) / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        if (d > 0) return `${d}d ${h}h`;
+        if (h > 0) return `${h}h ${m}m`;
+        return `${m}m`;
+    }
+
+    async function fetchLlmHealth() {
+        try {
+            const response = await fetch(`${API_BASE}/llm-health`);
+            if (!response.ok) return;
+            const data = await response.json();
+            for (const [key, ep] of Object.entries(data.endpoints)) {
+                const card = document.getElementById(`card-llm-${key}`);
+                const dot = document.getElementById(`dot-llm-${key}`);
+                const statusEl = document.getElementById(`status-llm-${key}`);
+                const descEl = document.getElementById(`desc-llm-${key}`);
+                const modelEl = document.getElementById(`model-llm-${key}`);
+                const latencyEl = document.getElementById(`latency-llm-${key}`);
+                const uptimeEl = document.getElementById(`uptime-llm-${key}`);
+                const sizeEl = document.getElementById(`size-llm-${key}`);
+                const tunnelEl = document.getElementById(`tunnel-llm-${key}`);
+                if (!card) continue;
+                if (ep.status === 'up') {
+                    card.classList.remove('status-down');
+                    card.classList.remove('status-degraded');
+                    dot.className = 'status-dot running';
+                    statusEl.textContent = 'Up';
+                    if (ep.models && ep.models.length > 0) {
+                        if (modelEl) modelEl.textContent = ep.models[0];
+                    }
+                    if (latencyEl) latencyEl.textContent = ep.latency_ms ? `${ep.latency_ms}ms` : '--';
+                    if (uptimeEl) uptimeEl.textContent = ep.uptime_s != null ? formatLlmUptime(ep.uptime_s) : '--';
+                    if (sizeEl) sizeEl.textContent = ep.model_size || '--';
+                } else if (ep.status === 'degraded') {
+                    card.classList.remove('status-down');
+                    card.classList.add('status-degraded');
+                    dot.className = 'status-dot degraded';
+                    const note = ep.upstream_error ? ` (${ep.upstream_error})` : '';
+                    statusEl.textContent = `Degraded${note}`;
+                    if (ep.models && ep.models.length > 0) {
+                        if (modelEl) modelEl.textContent = `${ep.models[0]} (fallback)`;
+                    }
+                    if (latencyEl) latencyEl.textContent = ep.latency_ms ? `${ep.latency_ms}ms` : '--';
+                    if (uptimeEl) uptimeEl.textContent = ep.uptime_s != null ? formatLlmUptime(ep.uptime_s) : '--';
+                    if (sizeEl) sizeEl.textContent = ep.model_size || '--';
+                } else if (ep.status === 'unknown') {
+                    card.classList.remove('status-down');
+                    card.classList.remove('status-degraded');
+                    dot.className = 'status-dot stopped';
+                    statusEl.textContent = 'TBD';
+                    if (modelEl) modelEl.textContent = '--';
+                    if (latencyEl) latencyEl.textContent = '--';
+                    if (uptimeEl) uptimeEl.textContent = '--';
+                } else {
+                    card.classList.add('status-down');
+                    card.classList.remove('status-degraded');
+                    dot.className = 'status-dot stopped';
+                    statusEl.textContent = 'Down';
+                    if (descEl) descEl.textContent = ep.error || 'Unreachable';
+                    if (modelEl) modelEl.textContent = '--';
+                    if (latencyEl) latencyEl.textContent = '--';
+                    if (uptimeEl) uptimeEl.textContent = '--';
+                }
+                // Tunnel status
+                if (tunnelEl) {
+                    if (ep.tunnel === 'up') {
+                        tunnelEl.innerHTML = '<span style="color: #4ade80;">&#x25CF;</span> Up' + (ep.remote ? ` (${ep.remote})` : '');
+                    } else if (ep.tunnel === 'direct') {
+                        tunnelEl.innerHTML = '<span style="color: #4ade80;">&#x25CF;</span> Direct' + (ep.remote ? ` (${ep.remote})` : '');
+                    } else {
+                        tunnelEl.innerHTML = '<span style="color: #f87171;">&#x25CF;</span> Down' + (ep.remote ? ` (${ep.remote})` : '');
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching LLM health:', error);
+        }
+    }
+
+    async function controlAllBots(action) {
+        const auth = await requestAuth();
+        if (!auth) return;
+        if (!lastStatusData) return;
+
+        const { bots } = lastStatusData;
+        let targetBots = [];
+
+        // Determine which bots to target based on action
+        if (action === 'start') {
+            targetBots = Object.values(bots).filter(bot => bot.status === 'stopped');
+        } else if (action === 'stop' || action === 'restart') {
+            targetBots = Object.values(bots).filter(bot => bot.status === 'running');
+        }
+
+        if (targetBots.length === 0) {
+            showToast('Info', `No bots to ${action}`, 'info');
+            return;
+        }
+
+        // Mark all target bots as under control and track which action
+        targetBots.forEach(bot => botsUnderControl.set(bot.key, action));
+
+        // Disable all quick action buttons
+        ['startAllBtn', 'restartAllBtn', 'stopAllBtn'].forEach(btnId => {
+            const btn = document.getElementById(btnId);
+            if (btn) btn.disabled = true;
+        });
+
+        showToast('Processing', `${action === 'start' ? 'Starting' : action === 'stop' ? 'Stopping' : 'Restarting'} ${targetBots.length} bot(s)...`, 'info');
+
+        // Update UI immediately to show pending state
+        fetchStatus();
+
+        // Execute action for all target bots
+        const promises = targetBots.map(bot =>
+            fetch(`${API_BASE}/control/${bot.key}/${action}`, {
+                method: 'POST',
+                headers: { 'Authorization': auth }
+            }).then(res => {
+                if (res.status === 401) {
+                    cachedAuth = null;
+                    throw new Error('Invalid credentials');
+                }
+                return res.json();
+            })
+        );
+
+        try {
+            const results = await Promise.all(promises);
+            const successCount = results.filter(r => r.success).length;
+            const failCount = results.length - successCount;
+
+            if (failCount === 0) {
+                showToast('Success', `All ${targetBots.length} bot(s) ${action}ed successfully`, 'success');
+            } else {
+                showToast('Partial Success', `${successCount} succeeded, ${failCount} failed`, 'error');
+            }
+
+            // Poll more frequently for 8 seconds to catch all status changes
+            let pollCount = 0;
+            const pollInterval = setInterval(() => {
+                fetchStatus();
+                pollCount++;
+                if (pollCount >= 16) { // 16 polls x 500ms = 8 seconds
+                    clearInterval(pollInterval);
+                    // Clear all bots from tracking
+                    targetBots.forEach(bot => botsUnderControl.delete(bot.key));
+                    fetchStatus(); // Final refresh
+                }
+            }, 500);
+
+        } catch (error) {
+            console.error(`Error in bulk ${action}:`, error);
+            showToast('Error', `Failed to ${action} bots`, 'error');
+            targetBots.forEach(bot => botsUnderControl.delete(bot.key));
+            fetchStatus();
+        } finally {
+            // Re-enable quick action buttons after 8 seconds
+            setTimeout(() => {
+                ['startAllBtn', 'restartAllBtn', 'stopAllBtn'].forEach(btnId => {
+                    const btn = document.getElementById(btnId);
+                    if (btn) btn.disabled = false;
+                });
+            }, 8000);
+        }
+    }
+
+    function updateLastUpdateTime() {
+        const lastUpdate = document.getElementById('lastUpdate');
+        lastUpdate.textContent = 'Just now';
+    }
+
+    async function manualRefresh() {
+        const reloadBtn = document.getElementById('reloadBtn');
+
+        // Prevent multiple clicks while loading
+        if (reloadBtn.classList.contains('loading')) {
+            return;
+        }
+
+        // Add loading state
+        reloadBtn.classList.add('loading');
+
+        try {
+            await Promise.all([fetchStatus(), fetchSystemStatus(), fetchLabVm2Status(), fetchLlmHealth(), fetchMacHealth()]);
+        } finally {
+            // Remove loading state after a minimum of 300ms for visual feedback
+            setTimeout(() => {
+                reloadBtn.classList.remove('loading');
+            }, 300);
+        }
+    }
+
+    function startAutoRefresh() {
+        if (!isPaused) {
+            refreshInterval = setInterval(() => {
+                if (!isPaused) {
+                    fetchStatus();
+                    fetchSystemStatus();
+                    fetchLabVm2Status();
+                    fetchLlmHealth();
+                    fetchMacHealth();
+                }
+            }, 60000); // Refresh every 60 seconds
+        }
+    }
+
+    function togglePause() {
+        isPaused = !isPaused;
+        const pauseBtn = document.getElementById('pauseBtn');
+        const pauseIcon = document.getElementById('pauseIcon');
+        const lastUpdate = document.getElementById('lastUpdate');
+
+        if (isPaused) {
+            // Paused state
+            pauseIcon.textContent = '▶️';
+            pauseBtn.title = 'Resume auto-refresh';
+            pauseBtn.style.background = 'rgba(237, 137, 54, 0.3)';
+            lastUpdate.textContent = 'Paused';
+            lastUpdate.style.color = '#ed8936';
+
+            // Clear the refresh interval
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+            }
+
+            showToast('Auto-refresh Paused', 'You can now inspect elements', 'info');
+        } else {
+            // Resumed state
+            pauseIcon.textContent = '⏸️';
+            pauseBtn.title = 'Pause auto-refresh';
+            pauseBtn.style.background = '';
+            lastUpdate.style.color = '';
+
+            // Restart auto-refresh
+            startAutoRefresh();
+
+            // Fetch status immediately
+            fetchStatus();
+            fetchSystemStatus();
+            fetchLabVm2Status();
+            fetchLlmHealth();
+            fetchMacHealth();
+
+            showToast('Auto-refresh Resumed', 'Updates will continue every 60 seconds', 'success');
+        }
+    }
+
+    function showToast(title, message, type = 'info') {
+        const toast = document.getElementById('toast');
+        const toastTitle = document.getElementById('toastTitle');
+        const toastMessage = document.getElementById('toastMessage');
+
+        toastTitle.textContent = title;
+        toastMessage.textContent = message;
+
+        toast.className = `toast ${type} show`;
+
+        setTimeout(() => {
+            toast.classList.remove('show');
+        }, 4000);
+    }
+
+    // Theme Management
+    function detectOSTheme() {
+        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+
+    function applyTheme(mode) {
+        document.body.classList.toggle('dark-mode', mode === 'dark');
+        const btn = document.getElementById('themeToggleBtn');
+        if (btn) btn.textContent = mode === 'dark' ? '☀️' : '🌙';
+    }
+
+    function toggleTheme() {
+        const isDark = document.body.classList.contains('dark-mode');
+        const newMode = isDark ? 'light' : 'dark';
+        localStorage.setItem('mc-theme', newMode);
+        applyTheme(newMode);
+    }
+
+    (function initTheme() {
+        const saved = localStorage.getItem('mc-theme');
+        applyTheme(saved || detectOSTheme());
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+            if (!localStorage.getItem('mc-theme')) {
+                applyTheme(e.matches ? 'dark' : 'light');
+            }
+        });
+    })();
+
+    // Update "last updated" text every second
+    setInterval(() => {
+        if (lastStatusData) {
+            const lastUpdate = document.getElementById('lastUpdate');
+            const now = new Date();
+            const timestamp = new Date(lastStatusData.timestamp);
+            const seconds = Math.floor((now - timestamp) / 1000);
+
+            if (seconds < 60) {
+                lastUpdate.textContent = `${seconds}s ago`;
+            } else if (seconds < 3600) {
+                const minutes = Math.floor(seconds / 60);
+                lastUpdate.textContent = `${minutes}m ago`;
+            } else {
+                const hours = Math.floor(seconds / 3600);
+                lastUpdate.textContent = `${hours}h ago`;
+            }
+        }
+    }, 1000);
+</script>
+</body>
+</html>

@@ -32,6 +32,7 @@ from .db_security import db_security_bp
 from .wiki import wiki_bp
 from .llm_usage import llm_usage_bp
 from .customer_assurance import customer_assurance_bp
+from .mission_control import mission_control_bp
 from .ai_drt import ai_drt_bp
 from .exposed_api_scanner import exposed_api_scanner_bp
 from .cyber_simulator import cyber_simulator_bp
@@ -152,6 +153,7 @@ def register_all_blueprints(app):
     app.register_blueprint(wiki_bp)
     app.register_blueprint(llm_usage_bp)
     app.register_blueprint(customer_assurance_bp)
+    app.register_blueprint(mission_control_bp)
     app.register_blueprint(ai_drt_bp)
     app.register_blueprint(exposed_api_scanner_bp)
     app.register_blueprint(cyber_simulator_bp)
