@@ -21,6 +21,24 @@ class SimilarTicketPrediction:
         return self.sample_size < 3
 
 
+@dataclass
+class ImpactModelPrediction:
+    """Scikit-learn 3-class impact prediction (Benign / Ignore / MTP).
+
+    Independent automated signal alongside `SimilarTicketPrediction`. Trained
+    on analyst-worked tickets since the BTP/MTP taxonomy cutover (2025-06-04),
+    using only triage-time features. See services/ticket_impact_model.py.
+
+    FP and BTP collapse into 'Benign' at training time — the FP/BTP boundary
+    isn't predictable from triage features (driven by post-investigation
+    findings and transient external events like threat-intel feed bugs).
+    """
+    label: str  # top class: 'Benign' | 'Ignore' | 'Malicious True Positive'
+    confidence: float  # probability of the top class, 0..1
+    probabilities: Dict[str, float]  # full class -> probability
+    model_version: str = ""
+
+
 class XsoarTriageLLMResponse(BaseModel):
     """Structured LLM output for XSOAR ticket triage.
 
@@ -248,6 +266,8 @@ class XsoarTriageResult:
     llm_critique_rationale: str = ""
     # Similar ticket prediction (ChromaDB semantic similarity)
     similar_ticket_prediction: Optional[SimilarTicketPrediction] = None
+    # Scikit-learn impact model prediction (Benign / Ignore / MTP, 3-class)
+    impact_model_prediction: Optional[ImpactModelPrediction] = None
     # Repeat offender: how many tickets this user/host had in the last N days
     repeat_offender_count: int = 0
     repeat_offender_window_days: int = 7

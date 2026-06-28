@@ -4,6 +4,7 @@ Provides a registry of all external integrations and parallel health probing.
 Every configured connector gets a real live probe — not just env-var checks.
 """
 
+import json
 import logging
 import os
 import socket
@@ -38,6 +39,20 @@ def _probe_xsoar_dev():
     client = get_dev_client()
     search = SearchIncidentsData(filter={"query": "id:1", "page": 0, "size": 1})
     client.search_incidents(filter=search)
+    return True
+
+
+def _probe_xsoar_mail_robot():
+    # XSOAR binds every API command to an investigation, so we pin integration
+    # sends (send-mail, enrichment) to a long-lived "mail robot" incident. That
+    # incident must stay OPEN for those commands to run — open = healthy,
+    # closed = XSOAR integrations are blocked until someone reopens it.
+    from services.xsoar_email import MAIL_ROBOT_INCIDENT_ID, _is_mail_robot_closed
+    if _is_mail_robot_closed():
+        raise RuntimeError(
+            f'Incident {MAIL_ROBOT_INCIDENT_ID} is CLOSED — XSOAR integration '
+            'commands (send-mail, enrichment) are blocked until it is reopened'
+        )
     return True
 
 
@@ -133,18 +148,29 @@ def _probe_palo_alto():
     return True
 
 
+def _probe_veracode():
+    from services.veracode import VeracodeClient
+    client = VeracodeClient()
+    if not client.is_configured():
+        raise RuntimeError('Not configured')
+    # Lightweight: first page of application profiles validates HMAC auth.
+    apps = client._get_paginated('/appsec/v1/applications', max_pages=1)
+    if client.last_error:
+        raise RuntimeError(client.last_error)
+    return True
+
+
 def _probe_recorded_future():
     from services.recorded_future import RecordedFutureClient
     client = RecordedFutureClient()
     if not client.is_configured():
         raise RuntimeError('Not configured')
-    # Lightweight: fetch a single IP reputation (localhost = no real data, tiny response)
-    resp = requests.get(
-        f'{client.base_url}/ip/8.8.8.8',
-        headers=client.headers,
-        timeout=_PROBE_TIMEOUT,
-    )
-    resp.raise_for_status()
+    # Single-IP enrichment via the client's own request path validates auth +
+    # connectivity. The client returns a structured {"error": ...} on failure
+    # (it never raises for HTTP errors), so inspect the result rather than status.
+    result = client.enrich_ips(['8.8.8.8'])
+    if isinstance(result, dict) and 'error' in result:
+        raise RuntimeError(result['error'])
     return True
 
 
@@ -178,7 +204,7 @@ def _probe_abuseipdb():
     client = AbuseIPDBClient()
     if not client.is_configured():
         raise RuntimeError('Not configured')
-    result = client.check_ip('8.8.8.8', max_age_days=1, verbose=False)
+    result = client.check_ip('8.8.8.8', max_age_days=1)
     if isinstance(result, dict) and 'error' in result:
         raise RuntimeError(result['error'])
     return True
@@ -200,8 +226,12 @@ def _probe_hibp():
 
 
 def _probe_intelx():
-    from services.intelx import IntelligenceXClient
-    client = IntelligenceXClient()
+    # Use get_client() (not IntelligenceXClient() directly) so the probe tests the
+    # SAME configured key + base URL the tools use. The bare constructor falls back
+    # to the dead hardcoded public key against 2.intelx.io, which 401s — making a
+    # perfectly good configured key read as "broken".
+    from services.intelx import get_client
+    client = get_client()
     # Authenticate endpoint — lightweight
     resp = requests.get(
         f'{client.base_url}/authenticate/info',
@@ -244,11 +274,13 @@ def _probe_abnormal_security():
 
 
 def _probe_phishfort():
-    from services.phish_fort import contact_phishfort_api
-    api_key = os.environ.get('PHISH_FORT_API_KEY')
-    result = contact_phishfort_api(api_key, status_verbose=True)
-    if isinstance(result, dict) and 'error' in result:
-        raise RuntimeError(result['error'])
+    from services.phish_fort import INCIDENT_STATUSES, contact_phishfort_api
+    # Query one known status bucket. The function reads PHISH_FORT_API_KEY itself
+    # and returns None on any failure (a 401 = the key was rotated/expired).
+    status = INCIDENT_STATUSES[0] if INCIDENT_STATUSES else 'action_required'
+    result = contact_phishfort_api(status)
+    if result is None:
+        raise RuntimeError('PhishFort API request failed (key may be rejected or expired)')
     return True
 
 
@@ -266,9 +298,19 @@ def _probe_attackiq():
 def _probe_servicenow():
     from services.service_now import ServiceNowClient
     client = ServiceNowClient()
-    # Token manager validates/refreshes the OAuth token on init
-    if not client.token_manager or not client.token_manager.access_token:
-        raise RuntimeError('Failed to acquire ServiceNow OAuth token')
+    impl = getattr(client, '_impl', client)
+    tm = getattr(impl, 'token_manager', None)
+    if tm is not None:
+        # Direct-API mode: the token manager acquires/refreshes the OAuth token on init.
+        if not getattr(tm, 'access_token', None):
+            raise RuntimeError('Failed to acquire ServiceNow OAuth token')
+        return True
+    # HTTP-shim mode (no token_manager): a lightweight host read exercises the
+    # shim and its upstream auth. A reachability/auth failure surfaces as an
+    # error envelope or a raised request exception.
+    result = client.get_host_details('__connectors_healthcheck__')
+    if isinstance(result, dict) and 'error' in result:
+        raise RuntimeError(result['error'])
     return True
 
 
@@ -284,22 +326,30 @@ def _probe_azure_devops():
     return True
 
 
-def _probe_webex():
-    token = os.environ.get('WEBEX_BOT_ACCESS_TOKEN_ORACLE')
-    api_url = os.environ.get('WEBEX_API_URL', 'https://webexapis.com/v1')
-    resp = requests.get(
-        f'{api_url}/people/me',
-        headers={'Authorization': f'Bearer {token}'},
-        timeout=_PROBE_TIMEOUT,
-    )
-    resp.raise_for_status()
-    return True
+def _make_webex_probe(env_var: str):
+    """Build a probe that validates ONE Webex bot token via GET /people/me.
+
+    Each bot has its own independently-revocable access token, so a 401 here
+    means that specific bot's token is dead — even while every other bot stays
+    healthy. The token name is bound at registration so each card probes its own.
+    """
+    def _probe():
+        token = os.environ.get(env_var)
+        api_url = os.environ.get('WEBEX_API_URL') or 'https://webexapis.com/v1'
+        resp = requests.get(
+            f'{api_url}/people/me',
+            headers={'Authorization': f'Bearer {token}'},
+            timeout=_PROBE_TIMEOUT,
+        )
+        resp.raise_for_status()
+        return True
+    return _probe
 
 
 def _probe_teams():
-    app_id = os.environ.get('TEAMS_AIDE_APP_ID')
-    app_pw = os.environ.get('TEAMS_AIDE_APP_PASSWORD')
-    tenant = os.environ.get('TEAMS_AIDE_TENANT_ID')
+    app_id = os.environ.get('TEAMS_TOODLES_APP_ID')
+    app_pw = os.environ.get('TEAMS_TOODLES_APP_PASSWORD')
+    tenant = os.environ.get('TEAMS_TOODLES_TENANT_ID')
     resp = requests.post(
         f'https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token',
         data={
@@ -337,10 +387,23 @@ def _probe_domain_lookalike():
     return True
 
 
-def _probe_censys_ct():
-    from services.censys_ct import is_configured
-    if not is_configured():
-        raise RuntimeError('Censys CT not configured (requires Shodan API key)')
+def _probe_brand_impersonation_ct():
+    # Diagnose precisely instead of the module's is_configured(), which collapses
+    # every failure (missing key / missing SDK / no query credits) into one
+    # ambiguous "not configured". The key is usually present — the real blocker
+    # is the `shodan` SDK not being installed, or the account being out of credits.
+    from my_config import get_config
+    api_key = get_config().shodan_api_key
+    if not api_key:
+        raise RuntimeError('SHODAN_API_KEY not set')
+    try:
+        import shodan
+    except ImportError:
+        raise RuntimeError('shodan Python package not installed (feature needs the SDK, not just the key)')
+    info = shodan.Shodan(api_key).info()
+    credits = info.get('query_credits', 0)
+    if credits <= 0:
+        raise RuntimeError(f"Shodan account has 0 query credits (plan: {info.get('plan')})")
     return True
 
 
@@ -374,10 +437,81 @@ def _probe_infoblox():
     return True
 
 
+def _probe_jfrog():
+    from services.jfrog import JFrogClient
+    client = JFrogClient()
+    if not client.is_configured():
+        raise RuntimeError('Not configured')
+    if not client.ping():
+        raise RuntimeError(client.last_error or 'Artifactory ping failed')
+    return True
+
+
+def _probe_xsiam():
+    from services.xsiam import XsiamClient
+    client = XsiamClient()
+    if not client.is_configured():
+        raise RuntimeError('Not configured')
+    result = client.validate_auth()
+    if isinstance(result, dict) and 'error' in result:
+        raise RuntimeError(result['error'])
+    return True
+
+
+def _probe_censys():
+    from services.censys import CensysClient
+    client = CensysClient()
+    if not client.is_configured():
+        raise RuntimeError('Not configured')
+    # Minimal CenQL query validates the PAT + org entitlement.
+    result = client.count('host.services.port: 443')
+    if not result.get('success'):
+        raise RuntimeError(result.get('error', 'Censys query failed'))
+    return True
+
+
+def _probe_domaintools():
+    from services.domaintools import DomainToolsClient
+    client = DomainToolsClient()
+    if not client.is_configured():
+        raise RuntimeError('Not configured')
+    # Reputation lookup validates the HMAC signing + credentials.
+    result = client.reputation('example.com')
+    if isinstance(result, dict) and 'error' in result:
+        raise RuntimeError(result['error'])
+    return True
+
+
+def _probe_gitlab():
+    from services.gitlab_client import GitLabClient
+    client = GitLabClient()
+    if not client.is_configured():
+        raise RuntimeError(client.config_hint() or 'Not configured')
+    # Project metadata read validates the token + project access.
+    proxies = client._proxies()
+    resp = requests.get(
+        f'{client.base_url}/api/v4/projects/{client._proj()}',
+        headers={'PRIVATE-TOKEN': client.token},
+        proxies=proxies,
+        timeout=_PROBE_TIMEOUT,
+    )
+    resp.raise_for_status()
+    return True
+
+
+def _probe_powerbi():
+    from services.powerbi import PowerBIClient
+    client = PowerBIClient()  # raises if creds missing / no cert+secret
+    # Dataset discovery validates MSAL token acquisition + REST access.
+    client.list_datasets()
+    return True
+
+
 # Map connector ID → probe function
 _PROBES = {
     'xsoar_prod': _probe_xsoar_prod,
     'xsoar_dev': _probe_xsoar_dev,
+    'xsoar_mail_robot': _probe_xsoar_mail_robot,
     'thehive': _probe_thehive,
     'dfir_iris': _probe_dfir_iris,
     'crowdstrike': _probe_crowdstrike,
@@ -388,6 +522,7 @@ _PROBES = {
     'proxy': _probe_proxy,
     'vectra': _probe_vectra,
     'palo_alto': _probe_palo_alto,
+    'veracode': _probe_veracode,
     'recorded_future': _probe_recorded_future,
     'virustotal': _probe_virustotal,
     'shodan': _probe_shodan,
@@ -401,14 +536,19 @@ _PROBES = {
     'attackiq': _probe_attackiq,
     'servicenow': _probe_servicenow,
     'azure_devops': _probe_azure_devops,
-    'webex': _probe_webex,
     'teams': _probe_teams,
     'twilio': _probe_twilio,
     'domain_lookalike': _probe_domain_lookalike,
-    'censys_ct': _probe_censys_ct,
+    'brand_impersonation_ct': _probe_brand_impersonation_ct,
     'vllm_mlx': _probe_vllm_mlx,
     'infoblox': _probe_infoblox,
     'ssh_tunnel': _probe_ssh_tunnel,
+    'jfrog': _probe_jfrog,
+    'xsiam': _probe_xsiam,
+    'censys': _probe_censys,
+    'domaintools': _probe_domaintools,
+    'gitlab': _probe_gitlab,
+    'powerbi': _probe_powerbi,
 }
 
 # ---------------------------------------------------------------------------
@@ -430,6 +570,13 @@ CONNECTORS: list[dict] = [
         'category': 'SOAR & Case Management',
         'description': 'Development SOAR environment for testing',
         'env_vars': ['XSOAR_DEV_API_BASE_URL', 'XSOAR_DEV_AUTH_KEY', 'XSOAR_DEV_AUTH_ID'],
+    },
+    {
+        'id': 'xsoar_mail_robot',
+        'name': 'XSOAR Integration Ticket',
+        'category': 'SOAR & Case Management',
+        'description': 'Mail-robot incident #1056832 — must stay OPEN to run XSOAR integration commands (send-mail, enrichment)',
+        'env_vars': ['XSOAR_PROD_API_BASE_URL', 'XSOAR_PROD_AUTH_KEY', 'XSOAR_PROD_AUTH_ID'],
     },
     {
         'id': 'thehive',
@@ -505,6 +652,29 @@ CONNECTORS: list[dict] = [
         'description': 'Next-generation firewall management',
         'env_vars': ['PALO_ALTO_HOST', 'PALO_ALTO_API_KEY'],
     },
+    {
+        'id': 'xsiam',
+        'name': 'Cortex XSIAM',
+        'category': 'SIEM & Network Security',
+        'description': 'Palo Alto Cortex XSIAM/XDR — incidents, alerts, endpoints',
+        'env_vars': ['XSIAM_PROD_API_KEY', 'XSIAM_PROD_API_AUTH_ID', 'XSIAM_PROD_API_BASE_URL'],
+    },
+
+    # ── Application Security ────────────────────────────────────────────
+    {
+        'id': 'veracode',
+        'name': 'Veracode',
+        'category': 'Application Security',
+        'description': 'Application security & SCA — maps CVEs to affected applications',
+        'env_vars': ['VERACODE_CLIENT_ID', 'VERACODE_CLIENT_SECRET'],
+    },
+    {
+        'id': 'jfrog',
+        'name': 'JFrog',
+        'category': 'Application Security',
+        'description': 'Artifactory repository + Xray scanning — CVE→artifact exposure',
+        'env_vars': ['JFROG_API_URL', 'JFROG_TOKEN'],
+    },
 
     # ── Threat Intelligence ─────────────────────────────────────────────
     {
@@ -564,6 +734,20 @@ CONNECTORS: list[dict] = [
         'description': 'URL scanning and analysis service',
         'env_vars': ['URLSCAN_API_KEY'],
     },
+    {
+        'id': 'censys',
+        'name': 'Censys',
+        'category': 'Threat Intelligence',
+        'description': 'Internet-exposure host search (vendor-independent vs Shodan)',
+        'env_vars': ['CENSYS_API_KEY', 'CENSYS_ORG_ID'],
+    },
+    {
+        'id': 'domaintools',
+        'name': 'DomainTools',
+        'category': 'Threat Intelligence',
+        'description': 'Domain/IP reputation, Whois and domain profile intelligence',
+        'env_vars': ['DOMAINTOOLS_API_USERNAME', 'DOMAINTOOLS_API_KEY'],
+    },
 
     # ── Email Security ──────────────────────────────────────────────────
     {
@@ -606,21 +790,23 @@ CONNECTORS: list[dict] = [
         'description': 'Work-item tracking and project management',
         'env_vars': ['AZDO_ORGANIZATION', 'AZDO_PERSONAL_ACCESS_TOKEN'],
     },
+    {
+        'id': 'gitlab',
+        'name': 'GitLab',
+        'category': 'ITSM',
+        'description': 'Detection-as-code merge requests (CI/CD → XSIAM)',
+        'env_vars': ['GITLAB_BASE_URL', 'GITLAB_API_TOKEN', 'GITLAB_PROJECT_ID'],
+    },
 
     # ── Communication ───────────────────────────────────────────────────
-    {
-        'id': 'webex',
-        'name': 'Webex',
-        'category': 'Communication',
-        'description': 'Primary bot messaging and notifications',
-        'env_vars': ['WEBEX_BOT_ACCESS_TOKEN_ORACLE', 'WEBEX_API_URL'],
-    },
+    # Webex bots are expanded one-card-per-token below (see WEBEX_BOTS) so each
+    # bot's access token gets its own independent health check.
     {
         'id': 'teams',
         'name': 'Microsoft Teams',
         'category': 'Communication',
-        'description': 'Teams bot integration (Aide)',
-        'env_vars': ['TEAMS_AIDE_APP_ID', 'TEAMS_AIDE_APP_PASSWORD', 'TEAMS_AIDE_TENANT_ID'],
+        'description': 'Teams bot integration (Toodles)',
+        'env_vars': ['TEAMS_TOODLES_APP_ID', 'TEAMS_TOODLES_APP_PASSWORD', 'TEAMS_TOODLES_TENANT_ID'],
     },
     {
         'id': 'twilio',
@@ -640,10 +826,10 @@ CONNECTORS: list[dict] = [
         'always_configured': True,
     },
     {
-        'id': 'censys_ct',
-        'name': 'Censys CT',
+        'id': 'brand_impersonation_ct',
+        'name': 'Brand Impersonation (CT)',
         'category': 'Domain Monitoring',
-        'description': 'Certificate transparency log monitoring',
+        'description': 'Certificate-transparency brand-impersonation monitoring (Shodan / crt.sh)',
         'env_vars': ['SHODAN_API_KEY'],
     },
 
@@ -665,6 +851,13 @@ CONNECTORS: list[dict] = [
         'env_vars': ['INFOBLOX_BASE_URL', 'INFOBLOX_USERNAME', 'INFOBLOX_PASSWORD'],
     },
     {
+        'id': 'powerbi',
+        'name': 'Power BI',
+        'category': 'Infrastructure',
+        'description': 'Power BI REST API — fleet-posture DAX queries & dataset reads',
+        'env_vars': ['POWER_BI_TENANT_ID', 'POWER_BI_CLIENT_ID'],
+    },
+    {
         'id': 'ssh_tunnel',
         'name': 'Mac SSH Tunnel',
         'category': 'Infrastructure',
@@ -674,11 +867,42 @@ CONNECTORS: list[dict] = [
     },
 ]
 
+# Webex bot tokens — one card + probe per bot. Every bot authenticates with its
+# own access token, each independently revocable, so the page shows per-token
+# health instead of one card that only ever checked MoneyBall. (suffix, label,
+# env var, role). Names mirror data/transient/.secrets.age.
+WEBEX_BOTS = [
+    ('moneyball', 'MoneyBall', 'WEBEX_BOT_ACCESS_TOKEN_MONEYBALL', 'Metrics & knowledge assistant'),
+    ('pokedex', 'Pokedex', 'WEBEX_BOT_ACCESS_TOKEN_POKEDEX', 'Live investigation / tool-calling bot'),
+    ('hal9000', 'HAL 9000', 'WEBEX_BOT_ACCESS_TOKEN_HAL9000', 'MCP investigation assistant'),
+    ('toodles', 'Toodles', 'WEBEX_BOT_ACCESS_TOKEN_TOODLES', 'Alert & card notifier'),
+    ('soar', 'SOAR', 'WEBEX_BOT_ACCESS_TOKEN_SOAR', 'XSOAR prod case notifications'),
+    ('dev_xsoar', 'SOAR (Dev)', 'WEBEX_BOT_ACCESS_TOKEN_DEV_XSOAR', 'XSOAR dev notifications'),
+    ('jarvis', 'Jarvis', 'WEBEX_BOT_ACCESS_TOKEN_JARVIS', 'Assistant bot'),
+    ('tars', 'TARS', 'WEBEX_BOT_ACCESS_TOKEN_TARS', 'Assistant bot'),
+    ('case', 'Case', 'WEBEX_BOT_ACCESS_TOKEN_CASE', 'Case notifier'),
+    ('barnacles', 'Barnacles', 'WEBEX_BOT_ACCESS_TOKEN_BARNACLES', 'Assistant bot'),
+    ('pinger', 'Pinger', 'WEBEX_BOT_ACCESS_TOKEN_PINGER', 'Heartbeat / notification bot'),
+    ('winai', 'WinAI', 'WEBEX_BOT_ACCESS_TOKEN_WINAI', 'Assistant bot'),
+]
+
+for _suffix, _label, _env, _role in WEBEX_BOTS:
+    _cid = f'webex_{_suffix}'
+    CONNECTORS.append({
+        'id': _cid,
+        'name': f'Webex · {_label}',
+        'category': 'Communication',
+        'description': f'Webex bot token — {_role}',
+        'env_vars': [_env],
+    })
+    _PROBES[_cid] = _make_webex_probe(_env)
+
 # Category display order
 CATEGORY_ORDER = [
     'SOAR & Case Management',
     'Endpoint Protection',
     'SIEM & Network Security',
+    'Application Security',
     'Threat Intelligence',
     'Email Security',
     'Breach & Attack Simulation',
@@ -692,6 +916,52 @@ CATEGORY_ORDER = [
 # ---------------------------------------------------------------------------
 # Health-check logic
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Retirement state — connectors we've chosen to drop. A retired connector reads
+# as "not set up" (unconfigured) and is never probed, so a dead integration we
+# no longer use stops alarming as "unhealthy". Persisted to a small JSON file in
+# the (data-isolated) transient dir, so it sticks across restarts and is
+# per-environment (dev vs prod) just like the rest of the data.
+# ---------------------------------------------------------------------------
+
+_RETIRED_FILE = os.path.normpath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    '..', '..', '..', 'data', 'transient', 'connectors_retired.json',
+))
+
+
+def get_retired_ids() -> set:
+    """Return the set of retired connector ids (empty on any read error)."""
+    try:
+        with open(_RETIRED_FILE) as f:
+            data = json.load(f)
+        if isinstance(data, list):
+            return set(data)
+    except (FileNotFoundError, ValueError, OSError):
+        pass
+    return set()
+
+
+def set_connector_retired(cid: str, retired: bool) -> bool:
+    """Retire a connector (it then reads as 'not set up') or restore it.
+
+    Returns True on success, False if the id is not a known connector.
+    """
+    if cid not in {c['id'] for c in CONNECTORS}:
+        return False
+    current = get_retired_ids()
+    if retired:
+        current.add(cid)
+    else:
+        current.discard(cid)
+    os.makedirs(os.path.dirname(_RETIRED_FILE), exist_ok=True)
+    tmp = _RETIRED_FILE + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(sorted(current), f, indent=2)
+    os.replace(tmp, _RETIRED_FILE)
+    return True
 
 
 def _check_env_vars(env_vars: list[str]) -> bool:
@@ -755,41 +1025,54 @@ def get_all_connector_statuses(run_probes: bool = True) -> dict:
     Returns:
         dict with 'connectors' list and 'summary' counts.
     """
+    retired = get_retired_ids()
+
+    def _base(conn: dict) -> dict:
+        return {
+            'id': conn['id'],
+            'name': conn['name'],
+            'category': conn['category'],
+            'description': conn['description'],
+            'env_vars': conn['env_vars'],
+            'configured': conn.get('always_configured', False) or _check_env_vars(conn['env_vars']),
+            'healthy': None,
+            'latency_ms': None,
+            'error': None,
+            'retired': False,
+        }
+
     if not run_probes:
-        results = []
-        for conn in CONNECTORS:
-            results.append({
-                'id': conn['id'],
-                'name': conn['name'],
-                'category': conn['category'],
-                'description': conn['description'],
-                'env_vars': conn['env_vars'],
-                'configured': conn.get('always_configured', False) or _check_env_vars(conn['env_vars']),
-                'healthy': None,
-                'latency_ms': None,
-                'error': None,
-            })
+        results = [_base(c) for c in CONNECTORS]
     else:
-        results = []
+        # Probe only live (non-retired) connectors; retired ones are synthesized
+        # below so we never waste a probe on something we've dropped.
+        results = [_base(c) for c in CONNECTORS if c['id'] in retired]
+        live = [c for c in CONNECTORS if c['id'] not in retired]
         with ThreadPoolExecutor(max_workers=10) as pool:
-            futures = {pool.submit(_probe_single, c): c['id'] for c in CONNECTORS}
+            futures = {pool.submit(_probe_single, c): c['id'] for c in live}
             for future in as_completed(futures):
+                cid = futures[future]
                 try:
-                    results.append(future.result(timeout=_PROBE_TIMEOUT + 5))
+                    r = future.result(timeout=_PROBE_TIMEOUT + 5)
+                    r.setdefault('retired', False)
+                    results.append(r)
                 except Exception as exc:
-                    cid = futures[future]
                     conn = next(c for c in CONNECTORS if c['id'] == cid)
-                    results.append({
-                        'id': cid,
-                        'name': conn['name'],
-                        'category': conn['category'],
-                        'description': conn['description'],
-                        'env_vars': conn['env_vars'],
-                        'configured': False,
-                        'healthy': False,
-                        'latency_ms': None,
-                        'error': str(exc),
-                    })
+                    r = _base(conn)
+                    r['configured'] = False
+                    r['healthy'] = False
+                    r['error'] = str(exc)
+                    results.append(r)
+
+    # Apply retirement: a retired connector reads as "not set up" and carries no
+    # probe verdict, so it lands in the unconfigured bucket instead of alarming.
+    for r in results:
+        if r['id'] in retired:
+            r['retired'] = True
+            r['configured'] = False
+            r['healthy'] = None
+            r['latency_ms'] = None
+            r['error'] = None
 
     # Sort by category order then name
     cat_idx = {c: i for i, c in enumerate(CATEGORY_ORDER)}
@@ -801,6 +1084,7 @@ def get_all_connector_statuses(run_probes: bool = True) -> dict:
     healthy = sum(1 for r in results if r['healthy'] is True)
     unhealthy = sum(1 for r in results if r['healthy'] is False)
     unknown = sum(1 for r in results if r['configured'] and r['healthy'] is None)
+    retired_count = sum(1 for r in results if r['retired'])
 
     return {
         'connectors': results,
@@ -810,6 +1094,7 @@ def get_all_connector_statuses(run_probes: bool = True) -> dict:
             'healthy': healthy,
             'unhealthy': unhealthy,
             'unknown': unknown,
+            'retired': retired_count,
         },
     }
 

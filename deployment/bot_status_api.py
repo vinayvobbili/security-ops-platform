@@ -75,35 +75,35 @@ def _get_cpu_utilization():
 
 # Bot configuration mapping bot name to process pattern
 BOTS = {
-    'sleuth': {
-        'name': 'Sleuth',
+    'pokedex': {
+        'name': 'Pokedex',
         'emoji': '🔮',
-        'process_pattern': 'webex_bots/sleuth',
-        'start_script': 'startup_scripts/start_sleuth.sh',
+        'process_pattern': 'webex_bots/pokedex',
+        'start_script': 'startup_scripts/start_pokedex.sh',
         'log_port': 8042,
-        'systemd_service': 'ir-sleuth.service',
+        'systemd_service': 'ir-pokedex.service',
     },
-    'aide': {
-        'name': 'Aide',
+    'toodles': {
+        'name': 'Toodles',
         'emoji': '🎯',
-        'process_pattern': 'webex_bots/aide',
-        'start_script': 'startup_scripts/start_aide.sh',
+        'process_pattern': 'webex_bots/toodles',
+        'start_script': 'startup_scripts/start_toodles.sh',
         'log_port': 8032,
-        'systemd_service': 'ir-aide.service',
+        'systemd_service': 'ir-toodles.service',
     },
-    'orchestrator': {
-        'name': 'ORCHESTRATOR',
+    'msoar': {
+        'name': 'MSOAR',
         'emoji': '🤖',
-        'process_pattern': 'webex_bots/orchestrator',
-        'start_script': 'startup_scripts/start_orchestrator.sh',
+        'process_pattern': 'webex_bots/msoar',
+        'start_script': 'startup_scripts/start_msoar.sh',
         'log_port': 8033,
-        'systemd_service': 'ir-orchestrator.service',
+        'systemd_service': 'ir-msoar.service',
     },
-    'oracle': {
-        'name': 'Oracle',
+    'moneyball': {
+        'name': 'MoneyBall',
         'emoji': '💰',
-        'process_pattern': 'webex_bots/oracle',
-        'start_script': 'startup_scripts/start_oracle.sh',
+        'process_pattern': 'webex_bots/money_ball',
+        'start_script': 'startup_scripts/start_money_ball.sh',
         'log_port': 8034,
         'systemd_service': 'ir-money-ball.service',
     },
@@ -115,13 +115,13 @@ BOTS = {
         'log_port': 8035,
         'systemd_service': 'ir-jarvis.service',
     },
-    'relay': {
-        'name': 'Relay',
+    'barnacles': {
+        'name': 'Barnacles',
         'emoji': '⚓',
-        'process_pattern': 'webex_bots/relay',
-        'start_script': 'startup_scripts/start_relay.sh',
+        'process_pattern': 'webex_bots/barnacles',
+        'start_script': 'startup_scripts/start_barnacles.sh',
         'log_port': 8036,
-        'systemd_service': 'ir-relay.service',
+        'systemd_service': 'ir-barnacles.service',
     },
     'tars': {
         'name': 'TARS',
@@ -169,10 +169,10 @@ BOTS = {
         'log_port': 8046,
         'systemd_service': 'de-scheduler.service'
     },
-    'mentor': {
-        'name': 'Mentor',
+    'winai': {
+        'name': 'Win.AI',
         'emoji': '📚',
-        'process_pattern': 'webex_bots/mentor',
+        'process_pattern': 'webex_bots/win_ai',
         'log_port': 8043,
         'systemd_service': 'win-ai.service'
     },
@@ -219,7 +219,7 @@ BOTS = {
 
 LLM_ENDPOINTS = [
     # Analysis / tool-calling: mac-m1 is the ONLY analysis LLM in the fleet.
-    # Powers Sleuth, Mentor, and any caller that needs tools.
+    # Powers Pokedex, Win.AI, and any caller that needs tools.
     {'key': 'm1-analysis', 'label': 'M1 Analysis',   'port': 8015, 'model_size': '30 GB', 'remote': 'M1:8000'},
     {'key': 'm1-router',   'label': 'M1 Router',     'port': 8016, 'model_size': '4.3 GB', 'remote': 'M1:8001'},
     # Embeddings, reranker, transcription, TTS: all on studio1 since 2026-05-07.
@@ -246,6 +246,12 @@ LLM_ENDPOINTS = [
     # Studio1 Qwen3-4B-Instruct-8bit via vllm-mlx — small fast router model for
     # tool-routing and other cheap turns. Same SOCKS-forward path, shared bearer.
     {'key': 's1-router', 'label': 'S1 Router', 'port': 8005, 'probe_auth_env': 'EMBEDS_API_KEY', 'display_model': 'Qwen3-4B-Instruct-8bit', 'model_size': '~4 GB', 'remote': 'Studio1:8005 (reverse tunnel)'},
+    # Studio1 Qwen2.5-VL-7B-Instruct-8bit via mlx-vlm — the stack's only
+    # vision-capable model (reads screenshots: OCR + IOC extraction). The text
+    # models (which strip image blocks) cannot see images. Reached
+    # on localhost via a forward tunnel (ir-vlm-tunnel.service). health_timeout
+    # 30s: mlx-vlm serializes /v1/models behind in-flight image generations.
+    {'key': 's1-vlm', 'label': 'S1 Vision', 'port': 8031, 'display_model': 'Qwen2.5-VL-7B-Instruct-8bit', 'model_size': '~8.3 GB', 'health_timeout': 30, 'remote': 'Studio1:8025 (forward tunnel)'},
     # Mac Studio 2 (M3 Ultra, 96GB) — Gemma 4 31B-it Q8 via vllm-mlx. Direct-bind
     # from lab-vm1 (studio2 is on the same /24, no tunnel).
     {'key': 's2-gemma', 'label': 'S2 Gemma 4', 'port': None, 'probe_url': 'http://lab-lab-31.internal.local:8000', 'display_model': 'gemma-4-31b-it-8bit', 'model_size': '~34 GB', 'remote': 'Studio2:8000'},

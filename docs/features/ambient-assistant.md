@@ -24,16 +24,30 @@ ones and flag the risky ones. That's the behavior this models.
 
 ## What it does
 
-### Watch → gate
-On a clock-aligned cadence, the watcher reads new human messages and runs a
-single lightweight relevance pass to decide which ones are actually security
-questions worth acting on — batched into one call per tick to stay cheap.
+### Watch → gist
+On a clock-aligned cadence, the watcher reads the new human messages and runs a
+single pass over the whole window — not message-by-message — to synthesize what
+the room actually *needs*: the open security questions, who they're about, and
+what would answer them. One batched call per tick keeps it cheap, and a dedup
+guard means a need that was just answered won't be re-raised on the next tick.
+
+### See the screenshots
+Analysts paste screenshots, not transcripts. When a relevant image shows up, the
+watcher runs it through the vision model (OCR + IOC extraction) and inlines the
+read-back into the lookup — so "is this IP malicious?" under a pasted alert gets
+answered from what the picture actually says, not ignored for lack of text.
 
 ### Auto-run the safe ones
-A question that only needs read-only lookups (a status check, an enrichment, an
+A need that only takes read-only lookups (a status check, an enrichment, an
 asset lookup) is run automatically and the answer is posted back. A thread-local
 guard hard-denies every state-changing tool during an auto-run, so an
 un-requested action can never fire — no matter who asked.
+
+### Stay in the thread
+Answers post under the asker's own message, and the watcher remembers the
+context, so a follow-up like "what about his email?" or "and her manager?"
+resolves against the right person instead of starting cold. A short intent pass
+tells a genuine follow-up apart from a fresh question.
 
 ### Card the risky ones
 Anything with blast radius — block, isolate, contain, close — isn't run.

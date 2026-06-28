@@ -178,7 +178,7 @@ group." Do not interpret 0/0 scores as "absence of signal" on a triaged detectio
 IPs", "Web Proxies", or scanner groups are infrastructure, not user endpoints — \
 do not infer "compromised user credentials" from an entity name that looks like \
 an email when the source is a connector. Destinations in groups like "M365 \
-worldwide IPs", "corporate domains", or vendor IP groups are expected destinations; \
+worldwide IPs", "the company Domains", or vendor IP groups are expected destinations; \
 proxy fanout to those is not by itself a compromise indicator. Always name the \
 specific group when citing it as evidence.
 - "Session Shape" carries the discriminator numbers within a detection class. For \
@@ -1298,11 +1298,17 @@ def _build_xsoar_triage_prompt(
     if vt and "error" not in vt:
         sections.append("\n## VirusTotal")
         for h, data in vt.get("hashes", {}).items():
-            sections.append(f"- Hash {h[:16]}...: {data.get('malicious', 0)}/{data.get('total', 0)} ({data.get('threat_level', 'N/A')})")
+            signal = data.get("clean_signal")
+            tail = f" [{signal}]" if signal else ""
+            sections.append(f"- Hash {h[:16]}...: {data.get('malicious', 0)}/{data.get('total', 0)} ({data.get('threat_level', 'N/A')}){tail}")
         for ip, data in vt.get("ips", {}).items():
-            sections.append(f"- IP {ip}: {data.get('malicious', 0)}/{data.get('total', 0)}")
+            signal = data.get("clean_signal")
+            tail = f" [{signal}]" if signal else ""
+            sections.append(f"- IP {ip}: {data.get('malicious', 0)}/{data.get('total', 0)}{tail}")
         for d, data in vt.get("domains", {}).items():
-            sections.append(f"- Domain {d}: {data.get('malicious', 0)}/{data.get('total', 0)}")
+            signal = data.get("clean_signal")
+            tail = f" [{signal}]" if signal else ""
+            sections.append(f"- Domain {d}: {data.get('malicious', 0)}/{data.get('total', 0)}{tail}")
 
     abuse = enrichment.get("abuseipdb", {})
     if abuse and "error" not in abuse:
@@ -1779,7 +1785,14 @@ def _run_xsoar_llm_triage(
     try:
         from my_bot.utils.llm_factory import structured_output
         structured_llm = structured_output(llm, XsoarTriageLLMResponse)
-        return structured_llm.invoke(verdict_messages), tool_trace, critique
+        structured_resp = structured_llm.invoke(verdict_messages)
+        # `with_structured_output(method="json_mode")` returns None (not raises)
+        # when the response can't be parsed — common on s1 Qwen3-Coder failover.
+        # Raise so we fall through to the fence-strip path instead of silently
+        # returning a None verdict.
+        if structured_resp is None:
+            raise ValueError("structured_output returned None — LLM produced no parseable JSON")
+        return structured_resp, tool_trace, critique
     except Exception as parse_err:
         logger.warning(
             f"XSOAR LLM structured-output path failed "
@@ -1809,11 +1822,97 @@ def _run_xsoar_llm_triage(
         return XsoarTriageLLMResponse.model_validate_json(cleaned), tool_trace, critique
     except Exception as fallback_err:
         logger.error(
-            f"XSOAR LLM fallback path also failed "
-            f"({type(fallback_err).__name__}: {fallback_err})",
+            f"XSOAR LLM fence-strip fallback also failed "
+            f"({type(fallback_err).__name__}: {str(fallback_err)[:200]}); "
+            f"no verdict produced for ticket {ticket_id}.",
             exc_info=True,
         )
         return None, tool_trace, critique
+
+
+def _publish_triage_to_bus(result) -> None:
+    """Publish the triage verdict to the SOC-in-Box Redis Streams bus.
+
+    Failures are logged and swallowed — the bus is downstream of Sentinel;
+    a Redis outage must not break the normal Webex / IRIS / SNOW flow.
+    Downstream consumers (Tier 2 / IR Lead / Detection Eng / Threat Intel /
+    SOC Manager) subscribe to soc.triage to pick up the AlertTriaged events.
+    """
+    try:
+        from dataclasses import asdict
+
+        from src.components.soc_in_box.bus import (
+            STREAM_TRIAGE, get_redis_client, publish,
+        )
+        from src.components.soc_in_box.schemas import AlertTriaged, VALID_VERDICTS
+
+        details = asdict(result) if hasattr(result, "__dataclass_fields__") else {}
+        # Nested dataclasses with their own structure — leave them out of the
+        # JSON payload; consumers that need them can look up the verdict_store
+        # SQLite or query Sentinel directly.
+        details.pop("similar_ticket_prediction", None)
+        details.pop("impact_model_prediction", None)
+
+        verdict = result.llm_verdict if result.llm_verdict in VALID_VERDICTS else "close_ticket"
+        confidence = max(0.0, min(1.0, float(result.llm_confidence or 0.0)))
+
+        event = AlertTriaged(
+            correlation_id=str(result.ticket_id),
+            produced_by="sentinel_triage",
+            ticket_id=str(result.ticket_id),
+            verdict=verdict,
+            confidence=confidence,
+            summary=result.llm_summary or result.llm_what_happened or "",
+            recommended_action=result.llm_recommended_action or "",
+            priority_score=int(result.priority_score or 0),
+            hostname=result.hostname or "",
+            username=result.username or "",
+            severity=result.severity or "",
+            details=details,
+        )
+        publish(get_redis_client(), STREAM_TRIAGE, event)
+        logger.debug(
+            f"[Sentinel] bus published alert.triaged ticket={result.ticket_id} "
+            f"verdict={verdict} priority={result.priority_score}"
+        )
+    except Exception as exc:
+        ticket_id = getattr(result, "ticket_id", "?")
+        logger.warning(f"[Sentinel] bus publish failed for ticket {ticket_id}: {exc}")
+
+
+def _persist_sentinel_verdict(result) -> None:
+    """Persist the Tier-1 (Sentinel) verdict to verdicts.sqlite as role='sentinel'.
+
+    The downstream agents (tier2 / ir_lead / threat_intel) already write their
+    verdict rows; Sentinel's was the missing tier. Recording it here gives the
+    shadow-mode scorecard a per-tier row to score against XSOAR ground truth and
+    lets the nightly reconciler backfill ``ground_truth`` from the human close.
+
+    Best-effort: a verdict-store failure must not break the triage flow, so any
+    exception is logged and swallowed. shadow_mode=True — Sentinel never auto-acts.
+    """
+    try:
+        from src.components.soc_in_box import verdict_store
+        from src.components.soc_in_box.schemas import VALID_VERDICTS
+
+        verdict = result.llm_verdict if result.llm_verdict in VALID_VERDICTS else "close_ticket"
+        confidence = max(0.0, min(1.0, float(result.llm_confidence or 0.0)))
+        evidence = list(result.llm_risk_factors or [])[:12]
+        verdict_store.save_verdict(
+            ticket_id=str(result.ticket_id),
+            correlation_id=str(result.ticket_id),
+            role="sentinel",
+            verdict=verdict,
+            confidence=confidence,
+            reason=(result.llm_summary or result.llm_what_happened or "")[:2000],
+            evidence=evidence,
+            tool_calls_made=len(result.llm_tool_calls or []),
+            shadow_mode=True,
+        )
+    except Exception as exc:
+        ticket_id = getattr(result, "ticket_id", "?")
+        logger.debug("[Sentinel] verdict_store persist failed for %s (non-fatal): %s",
+                     ticket_id, exc)
 
 
 class XsoarTriagePipeline:
@@ -2084,6 +2183,20 @@ class XsoarTriagePipeline:
             f"confidence={result.llm_confidence:.0%}, action={result.llm_recommended_action}, "
             f"priority={result.priority_score}"
         )
+        _publish_triage_to_bus(result)
+        # Tier-1 (SOC-in-a-Box) verdict → verdicts.sqlite (role='sentinel') so the
+        # shadow-mode scorecard can score every tier against XSOAR ground truth.
+        _persist_sentinel_verdict(result)
+        # Tier-1 (SOC-in-a-Box) verdict → XSOAR incident context. Gated behind
+        # SOC_TIER1_CONTEXT_WRITE=1 (off by default), env-aware, best-effort —
+        # writes context only, never a note. A no-op unless the flag is set.
+        try:
+            from src.components.soc_in_box.agents.triage_xsoar_context import (
+                write_verdict_to_context,
+            )
+            write_verdict_to_context(result)
+        except Exception as exc:
+            logger.debug("tier1 context write hook failed (non-fatal): %s", exc)
         return result
 
     @staticmethod
@@ -2660,6 +2773,14 @@ class XsoarTriagePipeline:
         Both writes are wrapped independently so a failure in one doesn't
         block the other. Neither failure blocks the pipeline.
         """
+        # Sandbox/demo tickets (999 namespace) have no real XSOAR ticket —
+        # skip both write-backs entirely rather than 404 against a fake id.
+        from src.components.soc_in_box.sandbox import is_sandbox_ticket
+        if is_sandbox_ticket(result.ticket_id):
+            logger.info("Skipping XSOAR write-back for sandbox ticket %s",
+                        result.ticket_id)
+            return
+
         try:
             from services.xsoar.ticket_handler import TicketHandler
             handler = TicketHandler()
@@ -2668,20 +2789,30 @@ class XsoarTriagePipeline:
             return
 
         # ---- Write 1: Long-form note (human-visible war room entry) ----
-        try:
-            from webex_bots.cards.sentinel_cards import build_xsoar_triage_note
-            from services.xsoar._entries import create_new_entry_in_existing_ticket
-
-            note_md = build_xsoar_triage_note(result)
-            create_new_entry_in_existing_ticket(
-                client=handler.client,
-                incident_id=str(result.ticket_id),
-                entry_data=note_md,
-                markdown=True,
+        # PAUSED 2026-05-29: the human-visible note write is gated off by
+        # default. Set XSOAR_TRIAGE_WRITE_NOTE=1 to re-enable. The analytics
+        # context JSON (Write 2) is unaffected — it stays invisible to analysts.
+        import os
+        if os.getenv("XSOAR_TRIAGE_WRITE_NOTE", "") != "1":
+            logger.info(
+                f"AI triage note write PAUSED for XSOAR ticket {result.ticket_id} "
+                f"(set XSOAR_TRIAGE_WRITE_NOTE=1 to re-enable)"
             )
-            logger.info(f"AI triage note posted to XSOAR ticket {result.ticket_id}")
-        except Exception as e:
-            logger.warning(f"Failed to post triage note to XSOAR ticket {result.ticket_id}: {e}")
+        else:
+            try:
+                from webex_bots.cards.sentinel_cards import build_xsoar_triage_note
+                from services.xsoar._entries import create_new_entry_in_existing_ticket
+
+                note_md = build_xsoar_triage_note(result)
+                create_new_entry_in_existing_ticket(
+                    client=handler.client,
+                    incident_id=str(result.ticket_id),
+                    entry_data=note_md,
+                    markdown=True,
+                )
+                logger.info(f"AI triage note posted to XSOAR ticket {result.ticket_id}")
+            except Exception as e:
+                logger.warning(f"Failed to post triage note to XSOAR ticket {result.ticket_id}: {e}")
 
         # ---- Write 2: Context JSON (analytics) ----
         try:

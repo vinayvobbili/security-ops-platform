@@ -27,7 +27,7 @@ Explore the core capabilities of the Security Operations Automation Platform.
 | [Customer Assurance](customer-assurance) | LLM-assisted questionnaire drafting with `.xlsx` round-trip |
 | [Code Security Scanner](code-security) | Agentic read-only repo vuln audit — navigate → refute false positives → container-jailed (powered by `refutescan`) |
 | [Third-Party Risk](third-party-risk) | Vendor cyber due-diligence workspace — drafts control answers from evidence (powered by `attestq`) |
-| [Ambient Assistant](ambient-assistant) | Proactive room watcher — relevance gate → auto-run read-only lookups → human-in-the-loop "Run it" cards |
+| [Ambient Assistant](ambient-assistant) | Proactive room watcher — gist synthesis + screenshot vision → auto-run read-only lookups → threaded follow-ups + human-in-the-loop "Run it" cards |
 | [Security Training](lessons) | Interactive SOC lessons → fresh auto-graded mixed-format quizzes → completion certificate, with anti-cheat + admin analytics (powered by `quizforge`) |
 | Person-of-Interest OSINT | Streaming investigation page with HIBP, holehe, maigret, dorks + LLM commentary |
 | Self-Serve Auth + PATs | Register/login/verify, per-user PATs, admin console, role-gated routes |

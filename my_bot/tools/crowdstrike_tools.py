@@ -1010,6 +1010,145 @@ def run_endpoint_diagnostic(hostname: str, diagnostic: str, target: str = "") ->
     return f"✅ `{command}` on **{hostname}** via CrowdStrike RTR:\n\n```\n{out}\n```"
 
 
+def _requester_email() -> str:
+    """The Webex email of the user who issued the current request, read from the
+    thread-local logging context ('{email}_{room_id}'). '' if not resolvable
+    (e.g. the public web playground, which carries no identity)."""
+    try:
+        from src.utils.tool_logging import get_logging_context
+        ctx = (get_logging_context() or "").strip()
+    except Exception:
+        return ""
+    email = ctx.split("_", 1)[0].strip() if "_" in ctx else ctx
+    return email if "@" in email else ""
+
+
+def _sam_from_email_via_ad(email: str) -> str:
+    """Best-effort sAMAccountName for an email via the AD XSOAR integration
+    (synchronous war-room command, the same path services.active_directory uses).
+    Returns '' on any failure. Used only as a fallback when the email local-part
+    doesn't resolve a host."""
+    email = (email or "").strip()
+    if "@" not in email:
+        return ""
+    try:
+        import os
+        from services.xsoar._client import get_prod_client
+        from services.xsoar._utils import _parse_generic_response
+        from services.xsoar_email import MAIL_ROBOT_INCIDENT_ID
+        incident_id = os.environ.get("AD_LOOKUP_INCIDENT_ID") or MAIL_ROBOT_INCIDENT_ID
+        resp = get_prod_client().generic_request(
+            path="/entry/execute/sync", method="POST",
+            body={"investigationId": incident_id, "data": "!ad-get-user",
+                  "args": {"email": {"simple": email}}},
+        )
+        parsed = _parse_generic_response(resp)
+        entries = parsed if isinstance(parsed, list) else [parsed]
+        for ent in entries:
+            if not isinstance(ent, dict):
+                continue
+            contents = ent.get("contents")
+            if isinstance(contents, str):
+                m = re.search(r"sAMAccountName[\s\"'|:\]\[]+([A-Za-z0-9._-]+)", contents)
+                if m:
+                    return m.group(1).strip()
+    except Exception as e:
+        logging.debug("AD sAMAccountName fallback failed for %s: %s", email, e)
+    return ""
+
+
+def _describe_host(row: dict) -> str:
+    """One-line host summary for the confirmation prompt."""
+    name = row.get("hostname") or "?"
+    bits = [b for b in (
+        row.get("product_type_desc"),
+        row.get("platform_name"),
+        (f"last seen {_fmt_cs_ts(row.get('last_seen'))}" if row.get("last_seen") else None),
+    ) if b]
+    return f"**{name}**" + (" — " + " · ".join(bits) if bits else "")
+
+
+@readonly_tool
+@log_tool_call
+def find_my_host(diagnostic: str = "", target: str = "") -> str:
+    """Resolve the workstation belonging to the user who is ASKING, so a diagnostic
+    can be run on "my host" without them having to type a hostname.
+
+    USE THIS whenever the user refers to their OWN machine — "run ipconfig on my
+    host", "check my machine", "my workstation/computer/laptop" — instead of
+    guessing a hostname. It maps the requester's Webex identity to the CrowdStrike
+    device(s) they most recently logged into.
+
+    IMPORTANT — this tool only RESOLVES the host and asks the user to CONFIRM; it
+    never runs the diagnostic itself. It returns a message naming the device and
+    asking the user to confirm. Only AFTER the user confirms (e.g. replies "yes")
+    do you call run_endpoint_diagnostic on the confirmed hostname. This confirm
+    step exists so a live action is never run on the wrong machine.
+
+    Args:
+        diagnostic: The diagnostic the user wants (ipconfig, netstat, tasklist,
+            route, arp, getmac, tracert, ping, nslookup), if they said which.
+            Used only to phrase the confirmation; pass "" if unspecified.
+        target: Destination for tracert/ping/nslookup, if the user gave one.
+    """
+    from my_bot.core.state_manager import FINAL_RESPONSE_PREFIX
+
+    email = _requester_email()
+    if not email:
+        return FINAL_RESPONSE_PREFIX + (
+            "I can't tell which account you're signed in as here, so I can't look "
+            "up your device automatically. 🖥️ Tell me the hostname and I'll run the "
+            "diagnostic."
+        )
+
+    client = _get_crowdstrike_client()
+    if not client:
+        return FINAL_RESPONSE_PREFIX + "Error: CrowdStrike service is not available."
+
+    diag = (diagnostic or "").strip().lower()
+    diag = diag if diag in _ENDPOINT_DIAGNOSTICS else ""
+    tgt = (target or "").strip()
+    action = diag + (f" to {tgt}" if diag in {"tracert", "ping", "nslookup"} and tgt else "")
+
+    # The email local-part is almost always the sAMAccountName / logon name.
+    candidates = [email.split("@", 1)[0].strip()]
+    rows = client.find_hosts_by_login_user(candidates[0])
+    if not rows:
+        sam = _sam_from_email_via_ad(email)
+        if sam and sam.lower() != candidates[0].lower():
+            candidates.append(sam)
+            rows = client.find_hosts_by_login_user(sam)
+
+    if not rows:
+        who = " / ".join(candidates)
+        tail = f"run {action} on" if action else "run a diagnostic on"
+        return FINAL_RESPONSE_PREFIX + (
+            f"I couldn't find a device registered to you in CrowdStrike (looked up "
+            f"your login as {who}). 🖥️ If you tell me the hostname, I'll {tail} it."
+        )
+
+    # Prefer workstations over servers / domain controllers for "my host".
+    workstations = [r for r in rows if (r.get("product_type_desc") or "").lower() == "workstation"]
+    picks = workstations or rows
+
+    if len(picks) == 1:
+        if action:
+            tail = f"Reply **yes** and I'll run {action} on it — or give me a different hostname."
+        else:
+            tail = ("Which diagnostic should I run on it? (ipconfig, netstat, tasklist, "
+                    "route, arp, getmac, tracert, ping, nslookup)")
+        msg = f"🖥️ I found one device registered to you:\n\n{_describe_host(picks[0])}\n\n{tail}"
+    else:
+        listing = "\n".join(f"{i}. {_describe_host(r)}" for i, r in enumerate(picks[:5], 1))
+        if action:
+            tail = f"Reply with the number or hostname and I'll run {action} on it."
+        else:
+            tail = "Reply with the number or hostname, and tell me which diagnostic to run."
+        msg = (f"🖥️ I found a few devices registered to you — which one?\n\n{listing}\n\n{tail}")
+
+    return FINAL_RESPONSE_PREFIX + msg
+
+
 @readonly_tool
 @validate_args(hostname=HOSTNAME_PATTERN)
 @log_tool_call
