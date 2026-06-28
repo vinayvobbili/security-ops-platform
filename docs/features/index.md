@@ -28,6 +28,7 @@ Explore the core capabilities of the Security Operations Automation Platform.
 | [Code Security Scanner](code-security) | Agentic read-only repo vuln audit — navigate → refute false positives → container-jailed (powered by `refutescan`) |
 | [Third-Party Risk](third-party-risk) | Vendor cyber due-diligence workspace — drafts control answers from evidence (powered by `attestq`) |
 | [Ambient Assistant](ambient-assistant) | Proactive room watcher — relevance gate → auto-run read-only lookups → human-in-the-loop "Run it" cards |
+| [Security Training](lessons) | Interactive SOC lessons → fresh auto-graded mixed-format quizzes → completion certificate, with anti-cheat + admin analytics (powered by `quizforge`) |
 | Person-of-Interest OSINT | Streaming investigation page with HIBP, holehe, maigret, dorks + LLM commentary |
 | Self-Serve Auth + PATs | Register/login/verify, per-user PATs, admin console, role-gated routes |
 | [n8n Workflows](n8n-workflows) | 33 automation workflows for SOC operations |
@@ -141,6 +142,23 @@ A standing queue that works advisories instead of just listing them:
 - Blast radius: app ownership, fleet posture, attack-surface exposure
 - Cross-source corroboration, campaign clustering, and one-click escalation
 - Built on the open-source `detflow` analysis core
+
+### [Security Training & Readiness →](lessons)
+
+Interactive analyst training that ends in a graded readiness check:
+
+- Per-topic prep pages — training video, why-it's-risky, key concepts
+- Mixed-format quizzes (multiple choice, fill-in-the-blank, match, short
+  and free-response) sampled fresh and shuffled from a deep per-topic bank,
+  so two analysts rarely see the same test and retakes stay novel
+- Open answers graded on concepts (0..1 with feedback) by the local LLM;
+  closed formats graded deterministically — 60% to pass, 80% for distinction
+- Branded completion certificate (web + PDF) with a tamper-evident
+  verification code, and a 30-minute timer that auto-submits at zero
+- Anti-cheat fast-pass detection plus an admin command center with
+  per-lesson trends and Excel export
+- Generation, sampling, grading, and integrity policy delegate to the
+  open-source `quizforge` core
 
 ### Person-of-Interest OSINT Tool
 

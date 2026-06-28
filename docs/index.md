@@ -169,6 +169,23 @@ advisories into prioritized, owned work:
 
 [Learn more about Advisory Triage →](features/advisory-triage)
 
+### Security Training & Readiness
+
+Interactive analyst training that ends in a graded readiness check, not a
+slide deck:
+
+- **Fresh mixed-format quizzes** — multiple choice, fill-in-the-blank, match,
+  short and free-response, sampled and shuffled from a deep per-topic bank so
+  retakes stay novel and answer-sharing doesn't work.
+- **Concept-based grading** — open answers scored 0..1 with feedback by the
+  local LLM; 60% passes, 80% earns a distinction.
+- **Verifiable certificate + integrity** — branded web/PDF certificate with a
+  tamper-evident code, a 30-minute auto-submit timer, anti-cheat fast-pass
+  detection, and an admin analytics view, all built on the open-source
+  [quizforge](https://pypi.org/project/quizforge/) core.
+
+[Learn more about Security Training →](features/lessons)
+
 ### Deeper EDR Reach
 
 CrowdStrike coverage goes beyond detections into exposure and response:
