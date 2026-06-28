@@ -1,0 +1,261 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = topic.title ~ ' Quiz' %}
+{% set page_title_left_icon = '📝' %}
+{% block body_classes %}les-body{% endblock %}
+
+{% block extra_css %}
+{% include 'lessons/_base.html' %}
+<style>
+  .les-q { border:1px solid #e6e9ef; border-radius:16px; padding:20px 22px; background:#fff; margin-bottom:16px;
+      box-shadow:0 4px 14px rgba(16,24,40,.05); transition:border-color .15s; }
+  body.dark-mode .les-q { background:#161b22; border-color:#30363d; box-shadow:none; }
+  .les-q-num { flex:none; display:inline-grid; place-items:center; width:26px; height:26px; border-radius:8px; color:#fff;
+      font-weight:800; font-size:.82rem; background:linear-gradient(135deg,#0046ad,#00a651); margin-right:9px; }
+  .les-q-prompt { font-weight:700; font-size:1.02rem; margin:0 0 14px; display:flex; align-items:flex-start; }
+  .les-q-prompt > span:last-child { flex:1; }
+  .les-choice { display:flex; align-items:center; gap:11px; padding:11px 13px; border:1.5px solid #e6e9ef; border-radius:11px;
+      cursor:pointer; margin-bottom:8px; transition:background .14s, border-color .14s; font-size:.95rem; }
+  .les-choice:hover { background:#f4f8ff; border-color:#bcd0ff; }
+  body.dark-mode .les-choice { border-color:#30363d; }
+  body.dark-mode .les-choice:hover { background:#1c2740; border-color:#4493f8; }
+  .les-choice input { accent-color:#0046ad; width:17px; height:17px; flex:none; }
+  .les-choice:has(input:checked) { background: linear-gradient(135deg,#eaf1ff,#e6fbf0); border-color:#0046ad; font-weight:600; }
+  body.dark-mode .les-choice:has(input:checked) { background:#16291f; border-color:#38ef7d; }
+  .les-ai-tag { display:inline-flex; align-items:center; gap:5px; font-size:.72rem; font-weight:800; text-transform:uppercase;
+      letter-spacing:.04em; padding:3px 11px; border-radius:999px; color:#fff; margin:0 0 12px;
+      background:linear-gradient(135deg,#5b1f8f,#8f5cff); }
+  .les-ta { width:100%; box-sizing:border-box; max-width:100%; border:1.5px solid #e6e9ef; border-radius:12px; padding:14px 16px;
+      font-size:.97rem; line-height:1.5; font-family:inherit; resize:vertical; background:#fff; color:#1a2230;
+      transition:border-color .14s, box-shadow .14s; }
+  .les-ta:focus { outline:none; border-color:#0046ad; box-shadow:0 0 0 3px rgba(0,70,173,.14); }
+  body.dark-mode .les-ta { background:#0f141b; border-color:#30363d; color:#e6edf3; }
+  body.dark-mode .les-ta:focus { border-color:#4493f8; box-shadow:0 0 0 3px rgba(68,147,248,.22); }
+  .les-ta-hint { margin:7px 2px 0; font-size:.82rem; color:#8a93a3; }
+  /* difficulty + format badges on each question */
+  .les-q-tags { display:flex; gap:7px; flex-wrap:wrap; margin:0 0 11px; }
+  .les-tag { font-size:.68rem; font-weight:800; text-transform:uppercase; letter-spacing:.04em;
+      padding:3px 9px; border-radius:999px; }
+  .les-tag.fmt { background:#eef2f7; color:#5b6675; }
+  body.dark-mode .les-tag.fmt { background:#222a36; color:#9aa5b1; }
+  .les-tag.diff-easy { background:#e6fbf0; color:#0a6b3f; }
+  .les-tag.diff-medium { background:#fff4e0; color:#a85a07; }
+  .les-tag.diff-hard { background:#fdecef; color:#a4123a; }
+  body.dark-mode .les-tag.diff-easy { background:#16291f; color:#5ee9a4; }
+  body.dark-mode .les-tag.diff-medium { background:#2a2012; color:#f0b86a; }
+  body.dark-mode .les-tag.diff-hard { background:#2a121a; color:#ff9db0; }
+  /* fill in the blank */
+  .les-fill { width:100%; max-width:420px; box-sizing:border-box; border:1.5px solid #e6e9ef; border-radius:11px; padding:12px 15px;
+      font-size:1rem; font-family:inherit; background:#fff; color:#1a2230; transition:border-color .14s, box-shadow .14s; }
+  .les-fill:focus { outline:none; border-color:#0046ad; box-shadow:0 0 0 3px rgba(0,70,173,.14); }
+  body.dark-mode .les-fill { background:#0f141b; border-color:#30363d; color:#e6edf3; }
+  body.dark-mode .les-fill:focus { border-color:#4493f8; box-shadow:0 0 0 3px rgba(68,147,248,.22); }
+  /* match the following */
+  .les-match-row { display:flex; align-items:center; gap:12px; padding:9px 0; border-bottom:1px dashed #e6e9ef; }
+  .les-match-row:last-child { border-bottom:none; }
+  body.dark-mode .les-match-row { border-color:#2a313c; }
+  .les-match-left { flex:0 0 44%; font-weight:600; font-size:.95rem; display:flex; align-items:center; gap:9px; }
+  .les-match-left .dot { width:9px; height:9px; border-radius:50%; flex:none;
+      background:linear-gradient(135deg,#0046ad,#00a651); }
+  .les-match-arrow { color:#b3bccb; flex:none; font-weight:800; }
+  .les-match-sel { flex:1; min-width:0; box-sizing:border-box; max-width:100%; border:1.5px solid #e6e9ef; border-radius:10px;
+      padding:10px 12px; font-size:.92rem; font-family:inherit; background:#fff; color:#1a2230; cursor:pointer; transition:border-color .14s; }
+  .les-match-sel:focus { outline:none; border-color:#0046ad; box-shadow:0 0 0 3px rgba(0,70,173,.14); }
+  .les-match-sel:invalid { color:#8a93a3; }
+  body.dark-mode .les-match-sel { background:#0f141b; border-color:#30363d; color:#e6edf3; }
+  .les-match-hint { margin:11px 2px 0; font-size:.82rem; color:#8a93a3; }
+  /* floating countdown timer — fixed time limit, auto-submits at zero */
+  .les-timer { position:fixed; top:84px; right:26px; z-index:60; display:flex; align-items:center; gap:10px;
+      padding:11px 17px; border-radius:14px; color:#fff; font-weight:800; letter-spacing:.5px;
+      background:linear-gradient(135deg,#0046ad 0%,#0a7bd0 55%,#00a651 130%);
+      box-shadow:0 10px 26px rgba(0,70,173,.36); user-select:none; transition:background .3s, box-shadow .3s; }
+  .les-timer .pulse { width:11px; height:11px; border-radius:50%; background:#38ef7d; flex:none;
+      box-shadow:0 0 0 0 rgba(56,239,125,.7); animation:lesTimerPulse 1.6s ease-out infinite; }
+  @keyframes lesTimerPulse { 0%{ box-shadow:0 0 0 0 rgba(56,239,125,.7);} 70%{ box-shadow:0 0 0 9px rgba(56,239,125,0);} 100%{ box-shadow:0 0 0 0 rgba(56,239,125,0);} }
+  .les-timer .clock { font-variant-numeric:tabular-nums; font-size:1.12rem; }
+  .les-timer .lbl { font-size:.66rem; text-transform:uppercase; letter-spacing:.08em; opacity:.85; font-weight:700; }
+  body.dark-mode .les-timer { box-shadow:0 10px 26px rgba(0,0,0,.5); }
+  /* last 5 min: amber warning */
+  .les-timer.warn { background:linear-gradient(135deg,#b06a00 0%,#e08a1e 55%,#f0a830 130%);
+      box-shadow:0 10px 26px rgba(176,106,0,.4); }
+  .les-timer.warn .pulse { background:#ffd24d; box-shadow:0 0 0 0 rgba(255,210,77,.7);
+      animation:lesTimerWarn 1.2s ease-out infinite; }
+  @keyframes lesTimerWarn { 0%{ box-shadow:0 0 0 0 rgba(255,210,77,.7);} 70%{ box-shadow:0 0 0 9px rgba(255,210,77,0);} 100%{ box-shadow:0 0 0 0 rgba(255,210,77,0);} }
+  /* last 60s: red danger + gentle blink */
+  .les-timer.danger { background:linear-gradient(135deg,#9a1228 0%,#cf2440 55%,#e84a63 130%);
+      box-shadow:0 10px 26px rgba(154,18,40,.45); animation:lesTimerBlink 1s steps(2,start) infinite; }
+  .les-timer.danger .pulse { background:#ff8da0; box-shadow:0 0 0 0 rgba(255,141,160,.75);
+      animation:lesTimerWarn .8s ease-out infinite; }
+  @keyframes lesTimerBlink { 0%,100%{ opacity:1; } 50%{ opacity:.78; } }
+  @media (prefers-reduced-motion: reduce) {
+    .les-timer .pulse, .les-timer.warn .pulse, .les-timer.danger .pulse, .les-timer.danger { animation:none; }
+  }
+  /* submit overlay — grading can take a few seconds (AI-graded answers) */
+  .les-grading { position:fixed; inset:0; z-index:120; display:none; flex-direction:column; align-items:center;
+      justify-content:center; gap:20px; text-align:center;
+      background:rgba(12,18,30,.62); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
+  .les-grading.show { display:flex; }
+  .les-grading .spin { width:64px; height:64px; border-radius:50%; border:6px solid rgba(255,255,255,.22);
+      border-top-color:#38ef7d; border-right-color:#0a7bd0; animation:lesSpin .9s linear infinite; }
+  @keyframes lesSpin { to { transform:rotate(360deg); } }
+  .les-grading h3 { color:#fff; font-size:1.35rem; font-weight:800; margin:0; }
+  .les-grading p { color:#cfe0f5; font-size:.95rem; margin:0; max-width:340px; }
+  .les-grading .dots::after { content:''; animation:lesDots 1.4s steps(4,end) infinite; }
+  @keyframes lesDots { 0%{content:'';} 25%{content:'.';} 50%{content:'..';} 75%{content:'...';} 100%{content:'';} }
+  @media (prefers-reduced-motion: reduce) { .les-grading .spin { animation-duration:2s; } }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if questions %}
+<div class="les-grading" id="lesGrading">
+  <div class="spin"></div>
+  <h3>Grading your answers<span class="dots"></span></h3>
+  <p>Your written answers are being scored by the AI assistant — hang tight, this takes a few seconds.</p>
+</div>
+<div class="les-timer" id="lesTimer" data-limit="{{ time_limit_seconds }}"
+     title="Time remaining — the quiz auto-submits when this hits zero">
+  <span class="pulse"></span>
+  <span><span class="lbl">Time left</span><br><span class="clock" id="lesClock">--:--</span></span>
+</div>
+{% endif %}
+<div class="les-wrap">
+  <a class="les-back" href="/lessons/{{ topic.id }}">← Back to {{ topic.title }}</a>
+
+  <div class="les-mhero">
+    <div class="les-mhero-row">
+      <div class="les-mhero-ic">📝</div>
+      <h1>{{ topic.title }} quiz</h1>
+    </div>
+    <p class="sub">Score <b>60%+</b> to pass · <b>80%+</b> for a 🏆 distinction. Questions are sampled and shuffled each attempt — you'll see fresh ones first. ⏱️ You have <b>{{ (time_limit_seconds // 60) }} minutes</b> — the timer auto-submits when it runs out.</p>
+  </div>
+
+  {% if not questions %}
+  <div class="les-panel"><p style="margin:0; color:#cf222e; font-weight:700;">No questions available for this topic yet.</p></div>
+  {% else %}
+  <form method="POST" action="/lessons/{{ topic.id }}/quiz/submit" id="lesQuizForm">
+    <input type="hidden" name="n" value="{{ questions|length }}">
+    <input type="hidden" name="elapsed_seconds" id="lesElapsed" value="0">
+    {% for q in questions %}
+    {% set fmt_label = {'mc':'Multiple choice','fill_blank':'Fill in the blank','match':'Match the following','short':'Short answer','freetext':'Free response'} %}
+    <div class="les-q">
+      <p class="les-q-prompt"><span class="les-q-num">{{ loop.index }}</span><span>{{ q.prompt }}</span></p>
+      <div class="les-q-tags">
+        <span class="les-tag fmt">{{ fmt_label.get(q.type, q.type) }}</span>
+        <span class="les-tag diff-{{ q.difficulty }}">{{ q.difficulty }}</span>
+      </div>
+      <input type="hidden" name="q_id_{{ loop.index0 }}" value="{{ q.id }}">
+      {% set qi = loop.index0 %}
+      {% if q.type == 'mc' %}
+      <input type="hidden" name="q_perm_{{ qi }}" value="{{ q.perm }}">
+      {% for choice in q.choices_in_order %}
+      <label class="les-choice">
+        <input type="radio" name="answer_{{ qi }}" value="{{ loop.index0 }}" required>
+        <span>{{ choice }}</span>
+      </label>
+      {% endfor %}
+      {% elif q.type == 'fill_blank' %}
+      <input type="text" class="les-fill" name="answer_text_{{ qi }}" required autocomplete="off"
+             placeholder="Type your answer…">
+      <p class="les-ta-hint">Spelling/case don't matter — just the right term.</p>
+      {% elif q.type == 'match' %}
+      <div class="les-match">
+        {% for left in q.lefts %}
+        <div class="les-match-row">
+          <span class="les-match-left"><span class="dot"></span>{{ left }}</span>
+          <span class="les-match-arrow">→</span>
+          <select class="les-match-sel" name="answer_match_{{ qi }}_{{ loop.index0 }}" required>
+            <option value="" selected disabled>Choose a match…</option>
+            {% for opt in q.options %}<option value="{{ opt }}">{{ opt }}</option>{% endfor %}
+          </select>
+        </div>
+        {% endfor %}
+      </div>
+      <p class="les-match-hint">Pick the best match for each item. Partial credit per correct row.</p>
+      {% else %}
+      <span class="les-ai-tag">✨ AI-graded · answer in your own words</span>
+      <textarea class="les-ta" name="answer_text_{{ qi }}" rows="{{ q.rows }}" required
+                placeholder="Type your answer — you're scored on the concepts, not the wording."></textarea>
+      <p class="les-ta-hint">Partial credit applies. Explain your reasoning like you would to a teammate.</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+    <div class="les-actions">
+      <button type="submit" class="les-btn les-btn-primary">✓ Submit quiz</button>
+      <a href="/lessons/{{ topic.id }}" class="les-btn les-btn-ghost">Cancel</a>
+    </div>
+  </form>
+  {% endif %}
+</div>
+
+{% if questions %}
+<script>
+  (function () {
+    var clock = document.getElementById('lesClock');
+    var timerBox = document.getElementById('lesTimer');
+    var elapsedField = document.getElementById('lesElapsed');
+    var form = document.getElementById('lesQuizForm');
+    if (!clock || !form) return;
+
+    // Wall-clock budget for this attempt (seconds), from the server.
+    var limit = parseInt((timerBox && timerBox.dataset.limit) || '1800', 10);
+    if (!(limit > 0)) limit = 1800;
+    var start = Date.now();
+    var submitted = false;
+
+    function fmt(s) {
+      if (s < 0) s = 0;
+      var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+      var mm = (h > 0 ? String(m).padStart(2, '0') : String(m));
+      return (h > 0 ? h + ':' : '') + mm + ':' + String(sec).padStart(2, '0');
+    }
+
+    function showGrading(label) {
+      var overlay = document.getElementById('lesGrading');
+      if (overlay) overlay.classList.add('show');
+      var btn = form.querySelector('button[type="submit"]');
+      if (btn) { btn.disabled = true; btn.textContent = label; }
+    }
+
+    // Time's up: submit whatever's filled. form.submit() bypasses HTML5
+    // 'required' validation (we don't want a half-finished quiz to be blocked
+    // from submitting at the deadline) and skips the submit-event listener, so
+    // we set elapsed + show the overlay here ourselves.
+    function autoSubmit() {
+      if (submitted) return;
+      submitted = true;
+      clearInterval(timer);
+      if (elapsedField) elapsedField.value = limit;  // full budget consumed
+      if (clock) clock.textContent = '0:00';
+      showGrading('⏳ Time up — grading…');
+      form.submit();
+    }
+
+    function tick() {
+      var elapsed = Math.floor((Date.now() - start) / 1000);
+      if (elapsedField) elapsedField.value = elapsed;
+      var remaining = limit - elapsed;
+      clock.textContent = fmt(remaining);
+      if (timerBox) {
+        timerBox.classList.toggle('warn', remaining <= 300 && remaining > 60);
+        timerBox.classList.toggle('danger', remaining <= 60);
+      }
+      if (remaining <= 0) autoSubmit();
+    }
+
+    tick();  // paint immediately so it never flashes the placeholder
+    var timer = setInterval(tick, 1000);
+
+    // Normal (button) submit: record true elapsed, lock the button, show overlay.
+    // Fires only after HTML5 validation passes, so it won't flash on an
+    // incomplete form.
+    form.addEventListener('submit', function () {
+      if (submitted) return;
+      submitted = true;
+      clearInterval(timer);
+      if (elapsedField) elapsedField.value = Math.floor((Date.now() - start) / 1000);
+      showGrading('⏳ Grading…');
+    });
+  })();
+</script>
+{% endif %}
+{% endblock %}

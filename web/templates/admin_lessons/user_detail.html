@@ -1,0 +1,149 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'Analyst Detail' %}
+{% set page_title_left_icon = '👤' %}
+{% set page_title_right_icon = '🎓' %}
+{% block body_classes %}adl-body{% endblock %}
+
+{% block extra_css %}
+<style>
+  body.adl-body { background:
+      radial-gradient(1100px 520px at 8% -6%, #dbe7ff 0%, transparent 55%),
+      radial-gradient(1000px 560px at 96% 2%, #e7dcff 0%, transparent 52%),
+      radial-gradient(1200px 700px at 50% 120%, #d6f5e6 0%, transparent 55%),
+      linear-gradient(160deg, #eef3ff 0%, #f4eefe 48%, #eafaf2 100%) !important;
+      background-attachment: fixed !important; min-height: 100vh; }
+  body.adl-body.dark-mode { background:
+      linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%) !important; color:#e2e8f0; }
+  html { scrollbar-gutter: stable; }
+  ::-webkit-scrollbar { width: 16px; height: 16px; }
+  ::-webkit-scrollbar-track { border-radius:10px;
+      background: linear-gradient(180deg, rgba(78,84,200,.08), rgba(10,143,214,.10) 50%, rgba(56,239,125,.08)); }
+  ::-webkit-scrollbar-thumb { border-radius:10px; border:2px solid transparent; background-clip:padding-box;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
+      background: linear-gradient(180deg, #ffd200 0%, #fc6767 22%, #ec008c 42%, #8f94fb 62%, #0a8fd6 80%, #38ef7d 100%); }
+  ::-webkit-scrollbar-corner { background: transparent; }
+  body.dark-mode ::-webkit-scrollbar-track {
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.10) 50%, rgba(255,255,255,.06)); }
+
+  .adu-wrap { max-width: 980px; margin:0 auto; padding:8px 18px 70px; }
+  .adu-back { display:inline-block; margin:6px 0 14px; color:#0046ad; text-decoration:none; font-weight:700; }
+  body.dark-mode .adu-back { color:#7cc4ff; }
+  .adu-back:hover { text-decoration:underline; }
+
+  .adu-hero { position:relative; overflow:hidden; border-radius:20px; padding:26px 30px; margin-bottom:22px; color:#fff;
+      display:flex; align-items:center; gap:18px;
+      background: linear-gradient(120deg, #2a0a52 0%, #0046ad 52%, #00a651 116%);
+      box-shadow:0 18px 44px rgba(20,10,70,.32); }
+  .adu-hero::after { content:""; position:absolute; right:-50px; top:-70px; width:240px; height:240px; border-radius:50%;
+      background: radial-gradient(circle, rgba(255,255,255,.16), transparent 70%); }
+  .adu-av { width:62px; height:62px; border-radius:16px; flex:none; display:grid; place-items:center; z-index:1;
+      font-weight:850; font-size:1.7rem; color:#0046ad; background:#fff; box-shadow:0 8px 20px rgba(0,0,0,.22); }
+  .adu-hero h1 { margin:0; font-size:1.7rem; font-weight:850; z-index:1; }
+  .adu-hero .em { margin:4px 0 0; opacity:.92; font-size:.96rem; z-index:1; }
+
+  .adu-card { background:#fff; border:1px solid #e6e9ef; border-radius:16px; overflow:hidden;
+      box-shadow:0 6px 18px rgba(16,24,40,.07); margin-bottom:24px; }
+  body.dark-mode .adu-card { background:#161b22; border-color:#30363d; box-shadow:none; }
+  .adu-sec-h { font-size:1.15rem; font-weight:850; color:#1a1340; margin:6px 0 12px; display:flex; align-items:center; gap:8px; }
+  body.dark-mode .adu-sec-h { color:#e2e8f0; }
+
+  .adu-table { width:100%; border-collapse:collapse; }
+  .adu-table thead th { text-align:left; padding:12px 16px; font-size:.78rem; font-weight:800; text-transform:uppercase;
+      letter-spacing:.6px; color:#5b6675;
+      background:linear-gradient(135deg, rgba(0,70,173,.08), rgba(0,166,81,.08)); border-bottom:1px solid #e6e9ef; }
+  body.dark-mode .adu-table thead th { color:#9aa5b1; border-color:#30363d;
+      background:linear-gradient(135deg, rgba(0,70,173,.22), rgba(0,166,81,.18)); }
+  .adu-table td { padding:12px 16px; border-bottom:1px solid #f0f2f6; font-size:.95rem; color:#2a2f3a; }
+  body.dark-mode .adu-table td { border-color:#23282f; color:#cbd5e1; }
+  .adu-table tbody tr:last-child td { border-bottom:none; }
+  .adu-table tbody tr:hover { background:rgba(0,70,173,.04); }
+  body.dark-mode .adu-table tbody tr:hover { background:rgba(124,196,255,.06); }
+  .adu-topic { display:flex; align-items:center; gap:9px; font-weight:700; }
+
+  .adl-badge { display:inline-block; padding:4px 12px; border-radius:11px; font-size:.82rem; font-weight:800; color:#fff; }
+  .adl-badge.dist { background:linear-gradient(135deg,#f5b301,#ff8c00); }
+  .adl-badge.pass { background:#0f9d58; }
+  .adl-badge.fail { background:#e0524d; }
+  .adl-badge.warn { background:linear-gradient(135deg,#f59e0b,#fb923c); }
+  .adl-badge.warnhi { background:linear-gradient(135deg,#e0524d,#b91c1c); }
+  .adu-ok { color:#16a34a; font-weight:800; }
+  .adl-score { font-weight:850; } .adl-score.hi { color:#0f9d58; } .adl-score.mid { color:#e08a00; } .adl-score.lo { color:#e0524d; }
+  body.dark-mode .adl-score.mid { color:#ffc24d; }
+  .adu-when { color:#7a8494; font-size:.88rem; }
+  body.dark-mode .adu-when { color:#8a93a3; }
+  .adu-empty { padding:40px; text-align:center; color:#8a93a3; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="adu-wrap">
+  <a class="adu-back" href="/admin-lessons">← All analysts</a>
+
+  <div class="adu-hero">
+    <div class="adu-av">{{ display_name[:1]|upper }}</div>
+    <div>
+      <h1>{{ display_name }}</h1>
+      <div class="em">{{ user_email }}</div>
+    </div>
+  </div>
+
+  {% if progress %}
+  <div class="adu-card" style="padding:18px 20px;">
+    <div class="adu-sec-h">📊 Lesson summary</div>
+    <table class="adu-table">
+      <thead>
+        <tr><th>Lesson</th><th>Status</th><th>Best score</th><th>Attempts</th><th>Last attempt</th></tr>
+      </thead>
+      <tbody>
+        {% for p in progress %}
+        <tr>
+          <td><span class="adu-topic">{{ p.icon }} {{ p.title }}</span></td>
+          <td>
+            {% if p.distinction %}<span class="adl-badge dist">🏆 Distinction</span>
+            {% elif p.passed %}<span class="adl-badge pass">✓ Passed</span>
+            {% else %}<span class="adl-badge fail">In progress</span>{% endif %}
+          </td>
+          <td><span class="adl-score {{ 'hi' if p.best_pct >= dist_pct else ('mid' if p.best_pct >= pass_pct else 'lo') }}">{{ p.best_pct }}%</span></td>
+          <td>{{ p.attempts }}</td>
+          <td><span class="adu-when">{{ p.last_ts }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="adu-card" style="padding:18px 20px;">
+    <div class="adu-sec-h">🕓 Attempt history</div>
+    <table class="adu-table">
+      <thead>
+        <tr><th>When</th><th>Lesson</th><th>Score</th><th>Result</th><th>Time</th><th>Integrity</th></tr>
+      </thead>
+      <tbody>
+        {% for a in attempts %}
+        <tr>
+          <td><span class="adu-when">{{ a.ts_et }}</span></td>
+          <td><span class="adu-topic">{{ a.topic_icon }} {{ a.topic_title }}</span></td>
+          <td><span class="adl-score {{ 'hi' if a.score >= dist_pct else ('mid' if a.score >= pass_pct else 'lo') }}">{{ a.score }}%</span></td>
+          <td>
+            {% if a.passed %}<span class="adl-badge pass">✓ Pass</span>
+            {% else %}<span class="adl-badge fail">✗ Fail</span>{% endif %}
+          </td>
+          <td><span class="adu-when">{{ a.elapsed_label }}</span></td>
+          <td>
+            {% if a.flagged %}
+              <span class="adl-badge {{ 'warnhi' if a.flag_severity == 'high' else 'warn' }}"
+                    title="Passed faster than it realistically takes to read and answer this test — possible answer-sharing or automation.">
+                ⚠️ {{ 'Too fast' if a.flag_severity == 'high' else 'Review' }}
+              </span>
+            {% else %}<span class="adu-ok">✓</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="adu-card"><div class="adu-empty">📭 No attempts on record for this analyst.</div></div>
+  {% endif %}
+</div>
+{% endblock %}

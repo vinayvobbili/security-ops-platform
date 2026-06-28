@@ -1,0 +1,143 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = topic.title %}
+{% set page_title_left_icon = '🎓' %}
+{% block body_classes %}les-body{% endblock %}
+
+{% block extra_css %}
+{% include 'lessons/_base.html' %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/chat_widget.css') }}">
+<style>
+  .les-video { width:100%; border-radius:14px; background:#000; box-shadow:0 12px 30px rgba(16,24,40,.18); display:block; }
+  .les-video-todo { background: linear-gradient(135deg,#eef3ff,#eafaf2); border:1px dashed #b9c8ec; border-radius:14px;
+      padding:30px; text-align:center; color:#5b6675; }
+  body.dark-mode .les-video-todo { background:#1a2030; border-color:#33415e; color:#9aa5b1; }
+  .les-risk { background: linear-gradient(135deg,#fff5f5,#fff9f0); border:1px solid #ffd9c9; border-left:5px solid #fc6767;
+      border-radius:14px; padding:20px 22px; color:#5a2a2a; line-height:1.6; }
+  body.dark-mode .les-risk { background:#251820; border-color:#5a2a3a; color:#f0c8c8; }
+  .les-concepts { list-style:none; padding:0; margin:0; counter-reset:lc; }
+  .les-concept { position:relative; padding:16px 18px 16px 62px; border:1px solid #e6e9ef; border-radius:14px;
+      background:#fff; margin-bottom:12px; box-shadow:0 3px 10px rgba(16,24,40,.05); }
+  body.dark-mode .les-concept { background:#161b22; border-color:#30363d; box-shadow:none; }
+  .les-concept::before { counter-increment:lc; content:counter(lc); position:absolute; left:16px; top:16px;
+      width:32px; height:32px; border-radius:9px; display:grid; place-items:center; font-weight:800; color:#fff;
+      background: linear-gradient(135deg,#0046ad,#00a651); font-size:.95rem; }
+  .les-concept b { display:block; margin-bottom:5px; font-size:1.02rem; color:#1a1340; }
+  body.dark-mode .les-concept b { color:#e2e8f0; }
+  .les-concept span { color:#4b5563; line-height:1.55; font-size:.94rem; }
+  body.dark-mode .les-concept span { color:#9aa5b1; }
+  .les-done { background: linear-gradient(135deg,#e6fbf0,#eafaf2); border:1px solid #9be7c0; border-left:5px solid #11998e;
+      border-radius:14px; padding:16px 20px; color:#0a5b3a; line-height:1.55; font-size:.95rem; margin-bottom:18px; }
+  body.dark-mode .les-done { background:#10231b; border-color:#1f5e44; color:#7ce8b4; }
+
+  /* Readiness-check CTA — hypes the analyst into the quiz */
+  .les-cta { position:relative; overflow:hidden; display:flex; gap:22px; align-items:center;
+      background: linear-gradient(125deg,#0046ad 0%,#0a7bd0 48%,#00a651 115%); color:#fff;
+      border-radius:20px; padding:26px 30px; margin-top:6px; box-shadow:0 18px 44px rgba(0,70,173,.34); }
+  .les-cta::before { content:""; position:absolute; right:-50px; top:-60px; width:240px; height:240px; border-radius:50%;
+      background:radial-gradient(circle, rgba(255,255,255,.20), transparent 68%); }
+  .les-cta::after { content:""; position:absolute; left:-40px; bottom:-70px; width:200px; height:200px; border-radius:50%;
+      background:radial-gradient(circle, rgba(56,239,125,.30), transparent 70%); }
+  .les-cta-spark { font-size:62px; line-height:1; flex:none; position:relative; z-index:1;
+      filter:drop-shadow(0 6px 14px rgba(0,0,0,.28)); animation:lesPulse 2.2s ease-in-out infinite; }
+  @keyframes lesPulse { 0%,100%{ transform:translateY(0) scale(1); } 50%{ transform:translateY(-5px) scale(1.08); } }
+  @media (prefers-reduced-motion: reduce) { .les-cta-spark { animation:none; } }
+  .les-cta-main { position:relative; z-index:1; flex:1; min-width:0; }
+  .les-cta-main h3 { margin:0 0 6px; font-size:1.62rem; font-weight:800; letter-spacing:-.4px; line-height:1.15; }
+  .les-cta-main p { margin:0 0 16px; font-size:1.0rem; line-height:1.5; color:#eaf3ff; max-width:640px; }
+  .les-cta-main p b { color:#fff; }
+  .les-cta-actions { display:flex; gap:12px; flex-wrap:wrap; }
+  .les-cta-go { background:#fff; color:#0046ad; font-weight:800; box-shadow:0 8px 20px rgba(0,0,0,.18);
+      transition:transform .12s, box-shadow .12s; }
+  .les-cta-go:hover { transform:translateY(-2px); box-shadow:0 12px 26px rgba(0,0,0,.26); }
+  .les-cta-ghost { background:rgba(255,255,255,.14); color:#fff; border:1.5px solid rgba(255,255,255,.42); font-weight:700; }
+  .les-cta-ghost:hover { background:rgba(255,255,255,.24); }
+  body.dark-mode .les-cta { box-shadow:0 18px 44px rgba(0,0,0,.5); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="les-wrap">
+  <a class="les-back" href="/lessons">← All lessons</a>
+
+  <div class="les-mhero">
+    <div class="les-mhero-row">
+      <div class="les-mhero-ic">{{ topic.icon|default('🎓') }}</div>
+      <h1>{{ topic.title }}</h1>
+      {% if passed %}<span class="les-pill pass">✓ Complete</span>{% endif %}
+      {% if topic.tier %}<span class="les-pill tier">Tier {{ topic.tier }}</span>{% endif %}
+    </div>
+    <p class="sub">{{ topic.summary }}</p>
+  </div>
+
+  <div class="les-panel">
+    <h3 class="les-sec-h">🎬 Training video</h3>
+    {% if has_video %}
+    <video class="les-video" controls preload="metadata">
+      <source src="{{ url_for('static', filename='videos/' + video_filename) }}" type="video/mp4">
+      Your browser doesn't support HTML5 video.
+    </video>
+    {% else %}
+    <div class="les-video-todo">
+      <p style="margin:0; font-weight:700;">Video for this topic isn't generated yet.</p>
+      <p style="font-size:.85rem; margin:8px 0 0;">Run <b>python scripts/gen_training_video.py {{ topic.id }}</b></p>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="les-panel">
+    <h3 class="les-sec-h">⚠️ Why it's risky</h3>
+    <div class="les-risk">{{ topic.why_risky }}</div>
+  </div>
+
+  <div class="les-panel">
+    <h3 class="les-sec-h">🧠 Key concepts</h3>
+    <ol class="les-concepts">
+      {% for c in topic.key_concepts %}
+      <li class="les-concept"><b>{{ c.title }}</b><span>{{ c.body }}</span></li>
+      {% endfor %}
+    </ol>
+  </div>
+
+  {% if passed %}
+  <div class="les-done">✅ <b>Lesson complete.</b> You've passed this topic — it's marked complete on your lessons page. You can retake the quiz anytime to refresh.</div>
+  <div class="les-actions">
+    <a class="les-btn les-btn-primary" href="/lessons/{{ topic.id }}/certificate">🏅 View certificate</a>
+    <a class="les-btn les-btn-ghost" href="/lessons/{{ topic.id }}/quiz">🔁 Retake quiz</a>
+    <button type="button" class="les-btn les-btn-ghost" onclick="document.getElementById('cwToggle').click()">💬 Ask about this lesson</button>
+  </div>
+  {% else %}
+  <div class="les-cta">
+    <div class="les-cta-spark">🚀</div>
+    <div class="les-cta-main">
+      <h3>Ready for Mythos? Let's check it! 🔥</h3>
+      <p>You've got the brief — now prove it. {{ quiz_len }} questions, score <b>60%+</b> to lock this lesson in — hit <b>80%+</b> for a 🏆 distinction. Fresh questions every attempt, so dive in.</p>
+      <div class="les-cta-actions">
+        <a class="les-btn les-cta-go" href="/lessons/{{ topic.id }}/quiz">📝 Start the quiz →</a>
+        <button type="button" class="les-btn les-cta-ghost" onclick="document.getElementById('cwToggle').click()">💬 Ask a question first</button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% include '_chat_widget.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/vendor/marked.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chat_widget.js') }}"></script>
+<script>
+  // Standard in-page chat assistant, seeded with this lesson's material.
+  var LESSON_CTX = {{ chat_context|tojson }};
+  if (window.initChatWidget) initChatWidget({
+    title: {{ ('Lesson coach · ' ~ topic.title)|tojson }},
+    greeting: {{ ("Hi! I'm your coach for this lesson. Ask me anything about " ~ topic.title ~ " — I'll explain it like a teammate, one step at a time.")|tojson }},
+    chips: [
+      {label: '🧠 Explain the basics', q: 'Explain the core idea of this lesson in plain terms, like I am new to it.'},
+      {label: '⚠️ Why it matters', q: 'Why is this risky and why does the SOC prioritize it?'},
+      {label: '🔍 What to watch for', q: 'What detections or signals should a SOC analyst watch for here?'},
+      {label: '📝 Quiz me', q: 'Ask me one practice question about this lesson, then check my answer.'}
+    ],
+    getContext: function () { return LESSON_CTX; }
+  });
+</script>
+{% endblock %}

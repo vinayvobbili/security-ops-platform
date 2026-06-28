@@ -1,0 +1,308 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = topic.title ~ ' Result' %}
+{% set page_title_left_icon = '📊' %}
+{% block body_classes %}les-body{% endblock %}
+
+{% block extra_css %}
+{% include 'lessons/_base.html' %}
+<style>
+  .les-score { position:relative; overflow:hidden; border-radius:20px; padding:28px 30px; color:#fff; margin-bottom:24px;
+      box-shadow:0 18px 44px rgba(20,10,70,.30); }
+  .les-score.pass { background: linear-gradient(120deg,#0a6b3f 0%,#11998e 50%,#38ef7d 120%); }
+  .les-score.dist { background: linear-gradient(120deg,#7a4d00 0%,#c98a00 38%,#f5b800 78%,#ffe25a 120%); }
+  .les-score.fail { background: linear-gradient(120deg,#7a1020 0%,#cf222e 55%,#fc6767 120%); }
+  .les-score.dist .emoji { animation:lesBounce 1.0s ease-in-out 5; }
+  .les-dist-badge { position:relative; z-index:1; display:inline-flex; align-items:center; gap:8px; margin:14px 0 0;
+      padding:8px 16px; border-radius:999px; font-weight:800; font-size:.9rem; color:#5a3d00;
+      background:linear-gradient(135deg,#ffe98a,#ffd24d); box-shadow:0 6px 18px rgba(180,130,0,.4); }
+  .les-score::before { content:""; position:absolute; right:-40px; top:-40px; width:180px; height:180px; border-radius:50%;
+      background:rgba(255,255,255,.12); }
+  .les-score h2 { position:relative; z-index:1; margin:0 0 6px; font-size:1.9rem; font-weight:800;
+      display:flex; align-items:center; gap:12px; }
+  .les-score .emoji { font-size:2rem; display:inline-block; }
+  .les-score.pass .emoji { animation:lesBounce 1.1s ease-in-out 3; }
+  .les-score.fail .emoji { animation:lesShakeY 1.4s ease-in-out infinite; }
+  @keyframes lesBounce { 0%,100%{ transform:translateY(0);} 50%{ transform:translateY(-10px) scale(1.12);} }
+  @keyframes lesShakeY { 0%,100%{ transform:translateY(0);} 50%{ transform:translateY(-4px);} }
+  @media (prefers-reduced-motion: reduce) { .les-score .emoji { animation:none !important; } }
+  .les-score .pct { position:relative; z-index:1; font-size:1.15rem; font-weight:600; }
+  .les-score .pct b { font-size:1.6rem; }
+  .les-score .meta { position:relative; z-index:1; margin:12px 0 0; display:flex; gap:10px; flex-wrap:wrap; }
+  .les-score .meta .chip { background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.28);
+      padding:5px 13px; border-radius:999px; font-size:.86rem; font-weight:700; }
+  .les-score .note { position:relative; z-index:1; margin:12px 0 0; font-size:.92rem; opacity:.95; }
+  .les-confetti { position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:80; }
+
+  .les-revbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:0 0 14px; }
+  .les-revbar h3 { margin:0; }
+  .les-toggle { display:inline-flex; align-items:center; gap:8px; cursor:pointer; border:1.5px solid #e6e9ef;
+      background:#fff; color:#cf222e; font-weight:800; font-size:.9rem; padding:9px 16px; border-radius:11px;
+      transition:background .14s, border-color .14s, transform .12s; }
+  .les-toggle:hover { background:#fdecef; border-color:#fcb8c2; transform:translateY(-1px); }
+  .les-toggle.active { background:linear-gradient(135deg,#cf222e,#fc6767); color:#fff; border-color:transparent; }
+  body.dark-mode .les-toggle { background:#161b22; border-color:#30363d; }
+  body.dark-mode .les-toggle:hover { background:#2a121a; }
+
+  .les-rev { border:1px solid #e6e9ef; border-left-width:5px; border-radius:14px; padding:16px 18px; background:#fff; margin-bottom:12px;
+      box-shadow:0 3px 10px rgba(16,24,40,.05); }
+  body.dark-mode .les-rev { background:#161b22; border-color:#30363d; box-shadow:none; }
+  .les-rev.ok { border-left-color:#38ef7d; }
+  .les-rev.no { border-left-color:#fc6767; }
+  .les-rev.part { border-left-color:#f7971e; }
+  .les-rev.skip { border-left-color:#8a93a3; }
+  body.les-only-wrong .les-rev.ok { display:none; }
+  .les-rev-q { font-weight:700; margin:0 0 8px; }
+  .les-rev-tag { display:inline-flex; align-items:center; gap:5px; font-size:.72rem; font-weight:800; text-transform:uppercase;
+      letter-spacing:.04em; padding:3px 10px; border-radius:999px; color:#fff; margin-bottom:8px; }
+  .les-rev-tag.ok { background:linear-gradient(135deg,#11998e,#38ef7d); }
+  .les-rev-tag.no { background:linear-gradient(135deg,#cf222e,#fc6767); }
+  .les-rev-tag.part { background:linear-gradient(135deg,#a85a07,#f7971e); }
+  .les-rev-tag.skip { background:linear-gradient(135deg,#5b6573,#8a93a3); }
+  .les-rev-tag.ai { background:linear-gradient(135deg,#5b1f8f,#8f5cff); }
+  .les-rev-tag.fmt { background:#5b6675; }
+  .les-rev-pts { float:right; font-weight:800; font-size:.95rem; color:#4b5563; }
+  body.dark-mode .les-rev-pts { color:#9aa5b1; }
+  .les-rev-line { margin:5px 0; font-size:.92rem; }
+  .les-rev-line.ans { color:#0a6b3f; font-weight:600; }
+  body.dark-mode .les-rev-line.ans { color:#5ee9a4; }
+  .les-rev-line.mine { color:#8a93a3; }
+  .les-rev-mine-box { margin:6px 0 0; font-size:.92rem; color:#475569; white-space:pre-wrap; line-height:1.5;
+      background:#f4f7fc; border:1px solid #e6e9ef; border-radius:10px; padding:10px 13px; }
+  body.dark-mode .les-rev-mine-box { color:#aeb8c4; background:#11161d; border-color:#30363d; }
+  .les-rev-fb { margin:10px 0 0; font-size:.92rem; line-height:1.55; color:#3b2f57;
+      background:linear-gradient(135deg,#f3ecff,#f7f0ff); border:1px solid #e4d7ff; border-radius:10px; padding:11px 14px; }
+  body.dark-mode .les-rev-fb { color:#d8c9ff; background:#1c1430; border-color:#3a2a5e; }
+  .les-chips { display:flex; flex-wrap:wrap; gap:6px; margin:9px 0 0; }
+  .les-chip { font-size:.8rem; font-weight:600; padding:4px 11px; border-radius:999px; }
+  .les-chip.got { background:#e6fbf0; color:#0a6b3f; }
+  .les-chip.miss { background:#fdecef; color:#a4123a; }
+  body.dark-mode .les-chip.got { background:#16291f; color:#5ee9a4; }
+  body.dark-mode .les-chip.miss { background:#2a121a; color:#ff9db0; }
+  .les-rev-exp { margin:10px 0 0; color:#4b5563; font-size:.9rem; line-height:1.55;
+      background:#f7f9fc; border-radius:10px; padding:10px 13px; }
+  body.dark-mode .les-rev-exp { color:#9aa5b1; background:#0f141b; }
+  /* match review grid */
+  .les-mrow { display:flex; align-items:center; gap:10px; padding:7px 0; font-size:.9rem; border-bottom:1px dashed #eef1f6; }
+  .les-mrow:last-child { border-bottom:none; }
+  body.dark-mode .les-mrow { border-color:#2a313c; }
+  .les-mrow .ml { flex:0 0 40%; font-weight:600; }
+  .les-mrow .mv { flex:1; }
+  .les-mrow .mv.bad { color:#a4123a; text-decoration:line-through; }
+  .les-mrow .mv.good { color:#0a6b3f; font-weight:600; }
+  body.dark-mode .les-mrow .mv.bad { color:#ff9db0; }
+  body.dark-mode .les-mrow .mv.good { color:#5ee9a4; }
+  .les-mrow .mi { flex:none; font-weight:800; }
+  .les-empty-note { text-align:center; color:#8a93a3; font-size:.92rem; padding:18px; display:none; }
+  body.les-only-wrong .les-empty-note.show-when-clean { display:block; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if passed %}<canvas class="les-confetti" id="lesConfetti"></canvas>{% endif %}
+<div class="les-wrap">
+  <a class="les-back" href="/lessons/{{ topic.id }}">← Back to {{ topic.title }}</a>
+
+  {% set score_disp = score|round(1) %}
+  {% set score_disp = score_disp|int if score_disp == score_disp|int else score_disp %}
+  {% set pct = (score * 100 / total)|round|int if total else 0 %}
+  {% set mins = (elapsed_seconds // 60) if elapsed_seconds else 0 %}
+  {% set secs = (elapsed_seconds % 60) if elapsed_seconds else 0 %}
+  <div class="les-score {{ 'dist' if distinction else ('pass' if passed else 'fail') }}">
+    <h2>
+      <span class="emoji">{{ '🏆' if distinction else ('🎉' if passed else '💪') }}</span>
+      {{ 'Distinction — outstanding!' if distinction else ('Passed — nicely done!' if passed else "Not yet — but you're close") }}
+    </h2>
+    <div class="pct">You scored <b>{{ score_disp }} / {{ total|int }}</b> · {{ pct }}%</div>
+    {% if distinction %}
+    <span class="les-dist-badge">🏆 Distinction · {{ distinction_pct }}%+</span>
+    {% endif %}
+    <div class="meta">
+      <span class="chip">🎯 {{ pass_pct }}% to pass · {{ distinction_pct }}% for distinction</span>
+      {% if elapsed_seconds %}<span class="chip">⏱️ {{ mins }}m {{ '%02d'|format(secs) }}s</span>{% endif %}
+      <span class="chip">📋 {{ questions_shown }} questions</span>
+    </div>
+    {% if questions_shown and total|int < questions_shown %}
+    <p class="note">Note: {{ questions_shown - total|int }} question(s) couldn't be auto-graded right now and weren't counted.</p>
+    {% endif %}
+    {% if distinction %}
+    <p class="note">Top marks — you cleared the {{ distinction_pct }}% distinction bar. This lesson is marked <b>complete</b> on your lessons page. 🏆 Your readiness ring just ticked up.</p>
+    {% elif passed %}
+    <p class="note">This lesson is now marked <b>complete</b> on your lessons page. ✅ Your readiness ring just ticked up. Push for {{ distinction_pct }}%+ next time to earn a distinction!</p>
+    {% else %}
+    <p class="note">You need {{ pass_pct }}% to pass. Review the misses below, rewatch the video, then try again — you'll get fresh questions first. You've got this. 💡</p>
+    {% endif %}
+  </div>
+
+  <div class="les-revbar">
+    <h3 class="les-sec-h" style="margin:0;">🔎 Review</h3>
+    <button type="button" class="les-toggle" id="lesWrongToggle">✗ Review incorrect answers</button>
+  </div>
+
+  {% for r in results %}
+  {# ---- multiple choice ---- #}
+  {% if r.type == 'mc' %}
+  <div class="les-rev {{ 'ok' if r.correct else 'no' }}">
+    <p class="les-rev-q">{{ loop.index }}. {{ r.q.prompt }}</p>
+    <span class="les-rev-tag {{ 'ok' if r.correct else 'no' }}">{{ '✓ Correct' if r.correct else '✗ Incorrect' }}</span>
+    <p class="les-rev-line ans"><b>Answer:</b> {{ r.q.choices[r.q.answer_idx] }}</p>
+    {% if r.selected_original is not none and not r.correct %}
+    <p class="les-rev-line mine"><b>Your choice:</b> {{ r.q.choices[r.selected_original] }}</p>
+    {% endif %}
+    <p class="les-rev-exp">{{ r.q.explanation }}</p>
+  </div>
+
+  {# ---- fill in the blank ---- #}
+  {% elif r.type == 'fill_blank' %}
+  <div class="les-rev {{ 'ok' if r.graded.correct else 'no' }}">
+    <span class="les-rev-pts">{{ r.graded.score|int }} / 1</span>
+    <p class="les-rev-q">{{ loop.index }}. {{ r.q.prompt }}</p>
+    <span class="les-rev-tag fmt">Fill in the blank</span>
+    <span class="les-rev-tag {{ 'ok' if r.graded.correct else 'no' }}">{{ '✓ Correct' if r.graded.correct else '✗ Incorrect' }}</span>
+    <p class="les-rev-line {{ 'ans' if r.graded.correct else 'mine' }}"><b>You typed:</b> {{ r.answer_text or '(blank)' }}</p>
+    {% if not r.graded.correct %}
+    <p class="les-rev-line ans"><b>Accepted:</b> {{ r.graded.accepted|join(' · ') }}</p>
+    {% endif %}
+    {% if r.q.explanation %}<p class="les-rev-exp">{{ r.q.explanation }}</p>{% endif %}
+  </div>
+
+  {# ---- match the following ---- #}
+  {% elif r.type == 'match' %}
+  {% set allok = r.graded.correct_count == r.graded.total %}
+  {% set partial = r.graded.correct_count > 0 and not allok %}
+  <div class="les-rev {{ 'ok' if allok else ('part' if partial else 'no') }}">
+    <span class="les-rev-pts">{{ r.graded.correct_count }} / {{ r.graded.total }}</span>
+    <p class="les-rev-q">{{ loop.index }}. {{ r.q.prompt }}</p>
+    <span class="les-rev-tag fmt">Match the following</span>
+    <span class="les-rev-tag {{ 'ok' if allok else ('part' if partial else 'no') }}">
+      {{ '✓ All matched' if allok else ('◐ ' ~ r.graded.correct_count ~ ' of ' ~ r.graded.total ~ ' correct' if partial else '✗ None matched') }}
+    </span>
+    {% for row in r.graded.rows %}
+    <div class="les-mrow">
+      <span class="ml">{{ row.left }}</span>
+      <span class="mi">{{ '✓' if row.correct else '✗' }}</span>
+      {% if row.correct %}
+      <span class="mv good">{{ row.right }}</span>
+      {% else %}
+      <span class="mv bad">{{ row.chosen or '(none)' }}</span>
+      <span style="color:#8a93a3;">→</span>
+      <span class="mv good">{{ row.right }}</span>
+      {% endif %}
+    </div>
+    {% endfor %}
+    {% if r.q.explanation %}<p class="les-rev-exp">{{ r.q.explanation }}</p>{% endif %}
+  </div>
+
+  {# ---- open question, grading unavailable ---- #}
+  {% elif r.grade is none %}
+  <div class="les-rev skip">
+    <span class="les-rev-pts">— / 1</span>
+    <p class="les-rev-q">{{ loop.index }}. {{ r.q.prompt }}</p>
+    <span class="les-rev-tag skip">⏸ Not graded</span>
+    {% if r.answer_text %}<div class="les-rev-mine-box">{{ r.answer_text }}</div>{% endif %}
+    <p class="les-rev-exp">Automated grading was unavailable, so this question wasn't counted toward your score.</p>
+  </div>
+
+  {# ---- AI-graded open question ---- #}
+  {% else %}
+  {% set v = r.grade.verdict %}
+  {% set cls = 'ok' if v == 'correct' else ('part' if v == 'partial' else 'no') %}
+  {% set vlabel = '✓ Correct' if v == 'correct' else ('◐ Partial credit' if v == 'partial' else '✗ Incorrect') %}
+  <div class="les-rev {{ cls }}">
+    <span class="les-rev-pts">{{ r.grade.score|round(1) }} / 1</span>
+    <p class="les-rev-q">{{ loop.index }}. {{ r.q.prompt }}</p>
+    <span class="les-rev-tag ai">✨ AI-graded</span>
+    <span class="les-rev-tag {{ cls }}">{{ vlabel }}</span>
+    {% if r.answer_text %}<div class="les-rev-mine-box">{{ r.answer_text }}</div>{% endif %}
+    <p class="les-rev-fb">💬 {{ r.grade.feedback }}</p>
+    {% if r.grade.covered or r.grade.missed %}
+    <div class="les-chips">
+      {% for c in r.grade.covered %}<span class="les-chip got">✓ {{ c }}</span>{% endfor %}
+      {% for m in r.grade.missed %}<span class="les-chip miss">✗ {{ m }}</span>{% endfor %}
+    </div>
+    {% endif %}
+    {% if r.q.model_answer %}<p class="les-rev-exp"><b>Model answer:</b> {{ r.q.model_answer }}</p>
+    {% elif r.q.explanation %}<p class="les-rev-exp">{{ r.q.explanation }}</p>{% endif %}
+  </div>
+  {% endif %}
+  {% endfor %}
+
+  <p class="les-empty-note show-when-clean">🎯 Nothing to review here — every question was correct. Outstanding!</p>
+
+  <div class="les-actions" style="margin-top:24px;">
+    {% if passed %}
+    <a class="les-btn les-btn-primary" href="/lessons/{{ topic.id }}/certificate">🏅 View certificate</a>
+    {% else %}
+    <a class="les-btn les-btn-primary" href="/lessons/{{ topic.id }}/quiz">🔁 Try again</a>
+    {% endif %}
+    <a class="les-btn les-btn-ghost" href="/lessons">All lessons</a>
+  </div>
+</div>
+
+<script>
+  // Review-incorrect toggle: hides the correct cards, keeps misses/partials/skips.
+  (function () {
+    var btn = document.getElementById('lesWrongToggle');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      var on = document.body.classList.toggle('les-only-wrong');
+      btn.classList.toggle('active', on);
+      btn.textContent = on ? '↩ Show all answers' : '✗ Review incorrect answers';
+    });
+  })();
+</script>
+
+{% if passed %}
+<script>
+  // Self-contained canvas confetti — no external deps. A pass gets a burst; a
+  // distinction ({{ distinction_pct }}%+) gets a bigger, gold-heavy, longer one.
+  (function () {
+    var canvas = document.getElementById('lesConfetti');
+    if (!canvas || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var DISTINCTION = {{ 'true' if distinction else 'false' }};
+    var ctx = canvas.getContext('2d');
+    var W, H;
+    function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+    resize(); window.addEventListener('resize', resize);
+    var colors = DISTINCTION
+      ? ['#f5b800', '#ffe25a', '#ffd24d', '#c98a00', '#fff3b0', '#00A651', '#0046AD']
+      : ['#0046AD', '#00A651', '#38ef7d', '#0a7bd0', '#f7971e', '#8f5cff', '#fc6767'];
+    var count    = DISTINCTION ? 340 : 160;
+    var duration = DISTINCTION ? 8500 : 5500;
+    var pieces = [];
+    function spawn(n, burst) {
+      for (var i = 0; i < n; i++) {
+        pieces.push({
+          x: Math.random() * W, y: burst ? H * 0.5 + Math.random() * 40 : Math.random() * -H,
+          r: 5 + Math.random() * 7, c: colors[Math.floor(Math.random() * colors.length)],
+          vy: burst ? -(6 + Math.random() * 6) : 2 + Math.random() * 4,
+          vx: -1.5 + Math.random() * 3,
+          rot: Math.random() * 6.28, vr: -0.2 + Math.random() * 0.4, tilt: Math.random() * 0.8
+        });
+      }
+    }
+    spawn(count, false);
+    // Distinction gets two upward burst volleys for extra fanfare.
+    if (DISTINCTION) { setTimeout(function () { spawn(120, true); }, 250); setTimeout(function () { spawn(120, true); }, 1400); }
+    var t0 = Date.now();
+    function frame() {
+      ctx.clearRect(0, 0, W, H);
+      var live = false;
+      for (var i = 0; i < pieces.length; i++) {
+        var p = pieces[i];
+        p.vy += 0.12;  // gravity (lets burst pieces arc back down)
+        p.y += p.vy; p.x += p.vx; p.rot += p.vr;
+        if (p.y < H + 20) live = true;
+        ctx.save();
+        ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+        ctx.fillStyle = p.c;
+        ctx.fillRect(-p.r / 2, -p.r / 2, p.r, p.r * p.tilt + p.r * 0.5);
+        ctx.restore();
+      }
+      if (live && Date.now() - t0 < duration) { requestAnimationFrame(frame); }
+      else { ctx.clearRect(0, 0, W, H); }
+    }
+    requestAnimationFrame(frame);
+  })();
+</script>
+{% endif %}
+{% endblock %}

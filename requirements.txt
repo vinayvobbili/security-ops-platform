@@ -128,3 +128,9 @@ attestq>=0.2.0
 # Refute-first two-LLM code vulnerability scanner — the Code Security feature
 # delegates its scan engine to this package through its provider seam.
 refutescan>=0.1.0
+
+# Training-engine kernel — vendor-neutral question-bank generate / mixed-format
+# sample / deterministic + LLM grade. Powers the lessons feature (quiz grading,
+# bank generation, time-limit/anti-cheat policy) through thin adapters that
+# inject the local LLM.
+quizforge>=0.2.0

@@ -56,6 +56,8 @@ from .hunt_workbench import hunt_workbench_bp
 from .detection_as_code import detection_as_code_bp
 from .code_security import code_security_bp
 from .third_party_risk import third_party_risk_bp
+from .lessons import lessons_bp
+from .admin_lessons import admin_lessons_bp
 
 __all__ = [
     'utilities_bp',
@@ -110,6 +112,8 @@ __all__ = [
     'detection_as_code_bp',
     'code_security_bp',
     'third_party_risk_bp',
+    'lessons_bp',
+    'admin_lessons_bp',
 ]
 
 
@@ -172,3 +176,5 @@ def register_all_blueprints(app):
     app.register_blueprint(detection_as_code_bp)
     app.register_blueprint(code_security_bp)
     app.register_blueprint(third_party_risk_bp)
+    app.register_blueprint(lessons_bp)
+    app.register_blueprint(admin_lessons_bp)

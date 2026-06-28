@@ -1,0 +1,242 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'Mythos Lessons' %}
+{% set page_title_left_icon = '🎓' %}
+{% set page_title_right_icon = '🛡️' %}
+{% block body_classes %}les-body{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ---- Colorful page backdrop (light + REQUIRED dark) ---- */
+  body.les-body { background:
+      radial-gradient(1100px 520px at 10% -6%, #dbe7ff 0%, transparent 55%),
+      radial-gradient(1000px 560px at 96% 2%, #e7dcff 0%, transparent 52%),
+      radial-gradient(1200px 700px at 50% 118%, #d6f5e6 0%, transparent 55%),
+      linear-gradient(160deg, #eef3ff 0%, #f4eefe 48%, #eafaf2 100%) !important;
+      background-attachment: fixed !important; min-height: 100vh; }
+  body.les-body.dark-mode { background:
+      linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%) !important;
+      color: #e2e8f0; }
+
+  /* ---- Thick multi-color page scrollbar ---- */
+  html { scrollbar-gutter: stable; }
+  ::-webkit-scrollbar { width: 16px; height: 16px; }
+  ::-webkit-scrollbar-track { border-radius: 10px;
+      background: linear-gradient(180deg, rgba(78,84,200,.08), rgba(10,143,214,.10) 50%, rgba(56,239,125,.08)); }
+  ::-webkit-scrollbar-thumb { border-radius: 10px; border: 2px solid transparent; background-clip: padding-box;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
+      background: linear-gradient(180deg, #ffd200 0%, #fc6767 22%, #ec008c 42%, #8f94fb 62%, #0a8fd6 80%, #38ef7d 100%); }
+  ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, #38ef7d 0%, #0a8fd6 20%, #8f94fb 38%, #ec008c 58%, #fc6767 78%, #ffd200 100%); }
+  ::-webkit-scrollbar-corner { background: transparent; }
+  body.dark-mode ::-webkit-scrollbar-track {
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.10) 50%, rgba(255,255,255,.06)); }
+
+  .les-wrap { max-width: 1180px; margin: 0 auto; padding: 8px 18px 70px; }
+
+  /* ---- Hero band ---- */
+  .les-hero { position: relative; overflow: hidden; border-radius: 22px; padding: 32px 36px;
+      margin: 8px 0 26px; color: #fff;
+      background: linear-gradient(120deg, #2a0a52 0%, #0046ad 52%, #00a651 116%);
+      box-shadow: 0 20px 50px rgba(20,10,70,.36);
+      display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 30px; }
+  .les-hero::before { content:""; position:absolute; inset:0; pointer-events:none;
+      background: radial-gradient(820px 360px at 86% -40%, rgba(141,211,255,.42), transparent 60%),
+                  radial-gradient(560px 320px at -6% 130%, rgba(70,224,138,.40), transparent 60%),
+                  radial-gradient(420px 280px at 50% 140%, rgba(236,0,140,.28), transparent 60%); }
+  .les-hero-l { position: relative; z-index: 1; }
+  .les-eyebrow { font-size: .76rem; letter-spacing: 2.4px; text-transform: uppercase;
+      font-weight: 700; color: #b9d6ff; margin-bottom: 12px; display:flex; align-items:center; gap:9px; }
+  .les-pip { width: 9px; height: 9px; border-radius: 50%; background: #46e08a;
+      box-shadow: 0 0 0 0 rgba(70,224,138,.7); animation: lespulse 2s infinite; }
+  @keyframes lespulse { 0%{box-shadow:0 0 0 0 rgba(70,224,138,.7)} 70%{box-shadow:0 0 0 12px rgba(70,224,138,0)} 100%{box-shadow:0 0 0 0 rgba(70,224,138,0)} }
+  .les-hero h1 { font-size: 2.05rem; line-height: 1.16; margin: 0 0 12px; font-weight: 800; letter-spacing: -.7px; }
+  .les-hero h1 .accent { background: linear-gradient(90deg,#8fd3ff,#46e08a); -webkit-background-clip: text;
+      background-clip: text; -webkit-text-fill-color: transparent; }
+  .les-hero p { font-size: 1.04rem; line-height: 1.55; margin: 0; color: #e2ecfb; max-width: 640px; }
+  .les-hero p b { color: #fff; }
+  .les-userchip { display:inline-flex; align-items:center; gap:9px; margin-top:16px;
+      background: rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.22); border-radius: 999px;
+      padding: 5px 13px 5px 5px; font-size:.82rem; font-weight:600; color:#eaf2ff; backdrop-filter: blur(3px); }
+  .les-avatar { width:26px; height:26px; border-radius:50%; display:grid; place-items:center; font-size:.78rem;
+      font-weight:800; color:#16204a; background: linear-gradient(135deg,#8fd3ff,#46e08a); }
+
+  /* ---- Progress ring ---- */
+  .les-ring { position: relative; z-index: 1; width: 168px; height: 168px; flex: none; }
+  .les-ring svg { transform: rotate(-90deg); }
+  .les-ring .track { fill: none; stroke: rgba(255,255,255,.16); stroke-width: 13; }
+  .les-ring .prog  { fill: none; stroke: url(#lesGrad); stroke-width: 13; stroke-linecap: round;
+      transition: stroke-dashoffset 1.4s cubic-bezier(.22,1,.36,1); filter: drop-shadow(0 0 6px rgba(70,224,138,.5)); }
+  .les-ring .lbl { position: absolute; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; }
+  .les-ring .pct { font-size: 2.3rem; font-weight: 800; letter-spacing: -1px; }
+  .les-ring .cap { font-size: .68rem; color: #cfe1f9; margin-top: 2px; text-transform: uppercase; letter-spacing: 1px; }
+
+  /* ---- Stat strip ---- */
+  .les-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 30px; }
+  .les-stat { position: relative; overflow: hidden; border-radius: 18px; padding: 18px 20px 16px; color:#fff;
+      box-shadow: 0 10px 26px rgba(20,35,63,.20); transition: transform .18s, box-shadow .18s; }
+  .les-stat:hover { transform: translateY(-4px) scale(1.015); box-shadow: 0 16px 34px rgba(20,35,63,.28); }
+  .les-stat::before { content:""; position:absolute; right:-26px; top:-26px; width:120px; height:120px;
+      border-radius:50%; background: rgba(255,255,255,.14); }
+  .les-s1 { background: linear-gradient(135deg,#4e54c8,#8f94fb); }
+  .les-s2 { background: linear-gradient(135deg,#11998e,#38ef7d); }
+  .les-s3 { background: linear-gradient(135deg,#f7971e,#ffd200); }
+  .les-s4 { background: linear-gradient(135deg,#ec008c,#fc6767); }
+  .les-stat .ico { font-size: 1.5rem; }
+  .les-stat .num { font-size: 2.2rem; font-weight: 800; line-height: 1.05; letter-spacing: -1px; margin-top: 4px;
+      text-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  .les-stat .lbl { font-size: .82rem; margin-top: 4px; font-weight: 700; opacity:.97; }
+
+  /* ---- Section header ---- */
+  .les-sec { display: flex; align-items: center; justify-content: space-between;
+      margin: 4px 0 16px; flex-wrap: wrap; gap: 10px; }
+  .les-sec h2 { font-size: 1.4rem; color: #1a1340; margin: 0; display:flex; align-items:center; gap:10px; font-weight:800; }
+  body.dark-mode .les-sec h2 { color: #e2e8f0; }
+  .les-method { background: linear-gradient(135deg,#0046ad,#0a8fd6); border: none; color: #fff;
+      border-radius: 10px; padding: 9px 16px; font-size: .85rem; cursor: pointer; font-weight: 700;
+      box-shadow: 0 6px 16px rgba(0,70,173,.28); }
+  .les-method:hover { filter: brightness(1.08); transform: translateY(-1px); }
+
+  /* ---- Topic cards ---- */
+  .les-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 18px; }
+  .les-card { position: relative; overflow: hidden; display: block; text-decoration: none; color: inherit;
+      background: #fff; border: 1px solid #e6e9ef; border-radius: 18px; padding: 20px 20px 18px;
+      box-shadow: 0 6px 18px rgba(16,24,40,.06); transition: transform .16s, box-shadow .16s, border-color .16s; }
+  body.dark-mode .les-card { background: #161b22; border-color: #30363d; box-shadow: none; }
+  .les-card::before { content:""; position:absolute; left:0; top:0; bottom:0; width:6px;
+      background: linear-gradient(180deg,#0046AD,#00A651); }
+  .les-card:hover { transform: translateY(-5px); box-shadow: 0 18px 38px rgba(16,24,40,.16); border-color:#bcd0ff; }
+  body.dark-mode .les-card:hover { border-color:#4493f8; box-shadow: 0 18px 38px rgba(56,139,253,.20); }
+  .les-card-top { display:flex; align-items:flex-start; gap:13px; }
+  .les-iconchip { width:50px; height:50px; flex:none; border-radius:14px; display:grid; place-items:center;
+      font-size:1.6rem; background: linear-gradient(135deg,#eaf1ff,#e6fbf0); border:1px solid #d7e3ff; }
+  body.dark-mode .les-iconchip { background: linear-gradient(135deg,#1d2740,#16291f); border-color:#2b3b57; }
+  .les-card h3 { margin: 2px 0 4px; font-size: 1.18rem; font-weight: 800; }
+  .les-badges { display:flex; flex-wrap:wrap; gap:6px; }
+  .les-pill { font-size: .68rem; font-weight: 800; letter-spacing:.04em; text-transform: uppercase;
+      padding: 3px 9px; border-radius: 999px; color:#fff; }
+  .les-pill.pass { background: linear-gradient(135deg,#11998e,#38ef7d); }
+  .les-pill.prog { background: linear-gradient(135deg,#f7971e,#ffd200); color:#5a3d00; }
+  .les-pill.tier { background: linear-gradient(135deg,#cf222e,#fc6767); }
+  .les-pill.fresh { background: rgba(0,70,173,.10); color:#0046ad; }
+  body.dark-mode .les-pill.fresh { background: rgba(68,147,248,.18); color:#7cb7ff; }
+  .les-card p.sum { color: #4b5563; margin: 13px 0 0; font-size: .9rem; line-height: 1.5; }
+  body.dark-mode .les-card p.sum { color: #9aa5b1; }
+  .les-prog { margin-top: 15px; }
+  .les-prog-bar { height: 8px; border-radius: 999px; background: #eef1f6; overflow: hidden; }
+  body.dark-mode .les-prog-bar { background: #21262d; }
+  .les-prog-fill { height: 100%; border-radius: 999px;
+      background: linear-gradient(90deg,#0046AD,#00A651); transition: width 1s cubic-bezier(.22,1,.36,1); }
+  .les-prog-meta { display:flex; justify-content:space-between; font-size: .72rem; color:#7a8699; margin-top: 6px; font-weight:600; }
+  .les-empty { grid-column: 1/-1; text-align:center; color:#8a93a3; padding: 40px; font-size:.95rem;
+      background:#fff; border:1px dashed #cfd6e2; border-radius:16px; }
+  body.dark-mode .les-empty { background:#161b22; border-color:#30363d; }
+
+  /* ---- Methodology modal ---- */
+  .les-modal { position: fixed; inset: 0; background: rgba(8,12,28,.55); backdrop-filter: blur(3px);
+      display: none; align-items: center; justify-content: center; z-index: 50000; padding: 20px; }
+  .les-modal.open { display: flex; }
+  .les-modal-box { background: #fff; border-radius: 18px; max-width: 580px; width: 100%; padding: 28px 30px;
+      box-shadow: 0 30px 70px rgba(0,0,0,.4); max-height: 84vh; overflow:auto; }
+  body.dark-mode .les-modal-box { background: #161b22; color:#e2e8f0; }
+  .les-modal-box h3 { margin: 0 0 14px; font-size: 1.3rem; font-weight: 800; display:flex; align-items:center; gap:9px; }
+  .les-step { display:flex; gap:13px; margin-bottom: 15px; }
+  .les-step .n { width:30px; height:30px; flex:none; border-radius:50%; display:grid; place-items:center;
+      font-weight:800; color:#fff; background: linear-gradient(135deg,#0046ad,#00a651); font-size:.9rem; }
+  .les-step .t b { display:block; margin-bottom:2px; }
+  .les-step .t span { color:#5b6675; font-size:.9rem; line-height:1.45; }
+  body.dark-mode .les-step .t span { color:#9aa5b1; }
+  .les-modal-close { margin-top: 8px; background: linear-gradient(135deg,#0046ad,#0a8fd6); color:#fff; border:none;
+      border-radius: 10px; padding: 10px 20px; font-weight: 700; cursor: pointer; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="les-wrap">
+
+  <!-- Hero -->
+  <div class="les-hero">
+    <div class="les-hero-l">
+      <div class="les-eyebrow"><span class="les-pip"></span> Mythos readiness · SOC analyst prep</div>
+      <h1>Master the platforms attackers <span class="accent">love to break</span>.</h1>
+      <p>Each lesson: watch the <b>2-minute video</b>, talk it through with the <b>built-in assistant</b>, then pass the quiz at <b>60%+</b> (<b>80%+</b> earns a 🏆 distinction). Bite-sized, hands-on, built for the floor.</p>
+    </div>
+    <div class="les-ring">
+      <svg width="168" height="168" viewBox="0 0 168 168">
+        <defs><linearGradient id="lesGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#8fd3ff"/><stop offset="100%" stop-color="#46e08a"/>
+        </linearGradient></defs>
+        <circle class="track" cx="84" cy="84" r="70"/>
+        <circle class="prog" cx="84" cy="84" r="70"
+                stroke-dasharray="439.8"
+                stroke-dashoffset="{{ 439.8 * (1 - stats.overall_pct / 100) }}"/>
+      </svg>
+      <div class="lbl"><div class="pct">{{ stats.overall_pct }}%</div><div class="cap">Passed</div></div>
+    </div>
+  </div>
+
+  <!-- Stat strip -->
+  <div class="les-stats">
+    <div class="les-stat les-s1"><div class="ico">📚</div><div class="num">{{ stats.total }}</div><div class="lbl">Prep topics</div></div>
+    <div class="les-stat les-s2"><div class="ico">✅</div><div class="num">{{ stats.passed }}</div><div class="lbl">Completed</div></div>
+    <div class="les-stat les-s3"><div class="ico">⏳</div><div class="num">{{ stats.in_progress }}</div><div class="lbl">In progress</div></div>
+    <div class="les-stat les-s4"><div class="ico">🎯</div><div class="num">{{ stats.pass_rate }}%</div><div class="lbl">Pass rate</div></div>
+  </div>
+
+  <!-- Topics -->
+  <div class="les-sec">
+    <h2>🧭 Prep topics</h2>
+    <button class="les-method" onclick="document.getElementById('lesHow').classList.add('open')">💡 How does this work?</button>
+  </div>
+
+  <div class="les-grid">
+    {% for t in topics %}
+    <a class="les-card" href="/lessons/{{ t.id }}">
+      <div class="les-card-top">
+        <div class="les-iconchip">{{ t.icon }}</div>
+        <div style="flex:1; min-width:0;">
+          <h3>{{ t.title }}</h3>
+          <div class="les-badges">
+            {% if t.passed %}<span class="les-pill pass">✓ Complete</span>
+            {% elif t.attempts > 0 %}<span class="les-pill prog">In progress</span>
+            {% else %}<span class="les-pill fresh">Not started</span>{% endif %}
+            {% if t.tier %}<span class="les-pill tier">Tier {{ t.tier }}</span>{% endif %}
+          </div>
+        </div>
+      </div>
+      <p class="sum">{{ t.summary[:150] }}{% if t.summary|length > 150 %}…{% endif %}</p>
+      {% if t.passed %}
+      <div class="les-prog">
+        <div class="les-prog-bar"><div class="les-prog-fill" style="width: 100%;"></div></div>
+        <div class="les-prog-meta"><span>✓ Complete</span><span>{{ t.attempts }} attempt{{ 's' if t.attempts != 1 else '' }}</span></div>
+      </div>
+      {% elif t.attempts > 0 %}
+      <div class="les-prog">
+        <div class="les-prog-bar"><div class="les-prog-fill" style="width: 0%;"></div></div>
+        <div class="les-prog-meta"><span>Not passed yet — keep going</span><span>{{ t.attempts }} attempt{{ 's' if t.attempts != 1 else '' }}</span></div>
+      </div>
+      {% else %}
+      <div class="les-prog">
+        <div class="les-prog-bar"><div class="les-prog-fill" style="width: 0%;"></div></div>
+        <div class="les-prog-meta"><span>Not attempted yet</span><span>Start →</span></div>
+      </div>
+      {% endif %}
+    </a>
+    {% else %}
+    <div class="les-empty">No topics published yet — check back soon. 🌱</div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Methodology modal -->
+<div class="les-modal" id="lesHow" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="les-modal-box">
+    <h3>💡 How Mythos lessons work</h3>
+    <div class="les-step"><div class="n">1</div><div class="t"><b>Watch the video</b><span>A focused ~2-minute walkthrough of the platform — what it is, why attackers target it, and what shows up in your detections.</span></div></div>
+    <div class="les-step"><div class="n">2</div><div class="t"><b>Talk it through with the assistant</b><span>Open the topic and tap the 💬 chat in the corner. It's seeded with the lesson and teaches one question at a time — until the concepts stick.</span></div></div>
+    <div class="les-step"><div class="n">3</div><div class="t"><b>Pass the quiz</b><span>A fresh mix of question types — multiple choice, fill-in-the-blank, match, and short written answers — sampled from a large bank, so no two attempts (or analysts) get the same test. Score 60%+ to earn the ✓ Complete badge; 80%+ earns a 🏆 distinction.</span></div></div>
+    <div class="les-step"><div class="n">4</div><div class="t"><b>Track your readiness</b><span>The ring up top is your overall Mythos progress. Each card shows whether you've passed, so you know exactly what's left.</span></div></div>
+    <button class="les-modal-close" onclick="document.getElementById('lesHow').classList.remove('open')">Got it</button>
+  </div>
+</div>
+{% endblock %}

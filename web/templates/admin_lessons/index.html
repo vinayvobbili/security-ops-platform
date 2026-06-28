@@ -1,0 +1,398 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'Lessons Command Center' %}
+{% set page_title_left_icon = '📊' %}
+{% set page_title_right_icon = '🎓' %}
+{% block body_classes %}adl-body{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ---- Colorful page backdrop (light + REQUIRED dark) ---- */
+  body.adl-body { background:
+      radial-gradient(1100px 520px at 8% -6%, #dbe7ff 0%, transparent 55%),
+      radial-gradient(1000px 560px at 96% 2%, #e7dcff 0%, transparent 52%),
+      radial-gradient(1200px 700px at 50% 120%, #d6f5e6 0%, transparent 55%),
+      linear-gradient(160deg, #eef3ff 0%, #f4eefe 48%, #eafaf2 100%) !important;
+      background-attachment: fixed !important; min-height: 100vh; }
+  body.adl-body.dark-mode { background:
+      linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%) !important;
+      color: #e2e8f0; }
+
+  /* ---- Thick multi-color page scrollbar ---- */
+  html { scrollbar-gutter: stable; }
+  ::-webkit-scrollbar { width: 16px; height: 16px; }
+  ::-webkit-scrollbar-track { border-radius: 10px;
+      background: linear-gradient(180deg, rgba(78,84,200,.08), rgba(10,143,214,.10) 50%, rgba(56,239,125,.08)); }
+  ::-webkit-scrollbar-thumb { border-radius: 10px; border: 2px solid transparent; background-clip: padding-box;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
+      background: linear-gradient(180deg, #ffd200 0%, #fc6767 22%, #ec008c 42%, #8f94fb 62%, #0a8fd6 80%, #38ef7d 100%); }
+  ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, #38ef7d 0%, #0a8fd6 20%, #8f94fb 38%, #ec008c 58%, #fc6767 78%, #ffd200 100%); }
+  ::-webkit-scrollbar-corner { background: transparent; }
+  body.dark-mode ::-webkit-scrollbar-track {
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.10) 50%, rgba(255,255,255,.06)); }
+
+  .adl-wrap { max-width: 1180px; margin: 0 auto; padding: 8px 18px 70px; }
+
+  /* ---- Hero band ---- */
+  .adl-hero { position: relative; overflow: hidden; border-radius: 22px; padding: 30px 34px;
+      margin: 8px 0 22px; color: #fff;
+      background: linear-gradient(120deg, #2a0a52 0%, #0046ad 52%, #00a651 116%);
+      box-shadow: 0 20px 50px rgba(20,10,70,.36); }
+  .adl-hero::before { content:""; position:absolute; right:-60px; top:-80px; width:300px; height:300px; border-radius:50%;
+      background: radial-gradient(circle, rgba(255,255,255,.18), transparent 68%); }
+  .adl-hero::after { content:""; position:absolute; left:-50px; bottom:-90px; width:260px; height:260px; border-radius:50%;
+      background: radial-gradient(circle, rgba(56,239,125,.30), transparent 70%); }
+  .adl-eyebrow { position:relative; z-index:1; text-transform:uppercase; letter-spacing:2px; font-size:.74rem;
+      font-weight:800; opacity:.92; margin-bottom:8px; }
+  .adl-hero h1 { position:relative; z-index:1; margin:0 0 8px; font-size:2.0rem; font-weight:850; letter-spacing:-.5px; }
+  .adl-hero p { position:relative; z-index:1; margin:0; font-size:1.02rem; color:#e9f1ff; max-width:680px; line-height:1.5; }
+  .adl-hero-actions { position:relative; z-index:1; margin-top:16px; display:flex; gap:10px; flex-wrap:wrap; }
+  .adl-howbtn { background:rgba(255,255,255,.16); color:#fff; border:1.5px solid rgba(255,255,255,.4);
+      border-radius:11px; padding:9px 16px; font-weight:700; font-size:.92rem; cursor:pointer; transition:background .15s; }
+  .adl-howbtn:hover { background:rgba(255,255,255,.28); }
+
+  /* ---- Overall KPI cards ---- */
+  .adl-kpis { display:grid; grid-template-columns:repeat(5,1fr); gap:16px; margin-bottom:24px; }
+  .adl-kpi { position:relative; overflow:hidden; border-radius:18px; padding:18px 20px; color:#fff;
+      box-shadow:0 12px 30px rgba(16,24,40,.18); }
+  .adl-kpi.k1 { background:linear-gradient(135deg,#0046ad,#0a7bd0); }
+  .adl-kpi.k2 { background:linear-gradient(135deg,#6d28d9,#a855f7); }
+  .adl-kpi.k3 { background:linear-gradient(135deg,#0f9d58,#38ef7d); }
+  .adl-kpi.k4 { background:linear-gradient(135deg,#f59e0b,#fc6767); }
+  .adl-kpi.k5 { background:linear-gradient(135deg,#475569,#64748b); }
+  .adl-kpi.k5.alert { background:linear-gradient(135deg,#e0524d,#f59e0b); }
+  .adl-kpi .ic { font-size:1.7rem; }
+  .adl-kpi .v { font-size:2.1rem; font-weight:850; line-height:1.05; margin:6px 0 2px; }
+  .adl-kpi .l { font-size:.84rem; font-weight:600; opacity:.93; text-transform:uppercase; letter-spacing:.6px; }
+
+  /* ---- Lesson picker ---- */
+  .adl-picker { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin:0 0 22px;
+      background:#fff; border:1px solid #e6e9ef; border-radius:16px; padding:16px 20px;
+      box-shadow:0 6px 18px rgba(16,24,40,.07); }
+  body.dark-mode .adl-picker { background:#161b22; border-color:#30363d; box-shadow:none; }
+  .adl-picker label { font-weight:800; font-size:1.0rem; color:#1a1340; display:flex; align-items:center; gap:8px; }
+  body.dark-mode .adl-picker label { color:#e2e8f0; }
+  .adl-select { flex:1; min-width:260px; font-size:1.02rem; font-weight:700; color:#0046ad;
+      padding:11px 16px; border:2px solid #cdd9f3; border-radius:12px; background:#f7faff; cursor:pointer;
+      appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%230046ad' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat:no-repeat; background-position:right 14px center; padding-right:40px; }
+  .adl-select:focus { outline:none; border-color:#0046ad; box-shadow:0 0 0 3px rgba(0,70,173,.18); }
+  body.dark-mode .adl-select { background:#0f172a; color:#7cc4ff; border-color:#33415e; }
+
+  /* ---- Lesson panel ---- */
+  .adl-panel { display:none; }
+  .adl-panel.active { display:block; animation:adlFade .25s ease; }
+  @keyframes adlFade { from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;} }
+
+  .adl-lhead { display:flex; align-items:center; gap:14px; margin:0 0 16px; }
+  .adl-lhead .lic { font-size:2.2rem; flex:none;
+      filter:drop-shadow(0 4px 10px rgba(0,0,0,.18)); }
+  .adl-lhead h2 { margin:0; font-size:1.5rem; font-weight:850; color:#1a1340; letter-spacing:-.3px; }
+  body.dark-mode .adl-lhead h2 { color:#e2e8f0; }
+
+  /* ---- Per-lesson metric cards ---- */
+  .adl-metrics { display:grid; grid-template-columns:repeat(6,1fr); gap:12px; margin-bottom:22px; }
+  .adl-mcard { background:#fff; border:1px solid #e6e9ef; border-radius:15px; padding:15px 14px; text-align:center;
+      box-shadow:0 4px 12px rgba(16,24,40,.06); border-top:4px solid #0046ad; }
+  body.dark-mode .adl-mcard { background:#161b22; border-color:#30363d; box-shadow:none; }
+  .adl-mcard.m-att { border-top-color:#0a7bd0; }
+  .adl-mcard.m-pass { border-top-color:#0f9d58; }
+  .adl-mcard.m-rate { border-top-color:#00a651; }
+  .adl-mcard.m-dist { border-top-color:#f5b301; }
+  .adl-mcard.m-avg { border-top-color:#8f5cf7; }
+  .adl-mcard.m-tot { border-top-color:#fc6767; }
+  .adl-mcard .mic { font-size:1.3rem; }
+  .adl-mcard .mv { font-size:1.7rem; font-weight:850; color:#1a1340; line-height:1.1; margin:4px 0 1px; }
+  body.dark-mode .adl-mcard .mv { color:#f0f4fa; }
+  .adl-mcard .ml { font-size:.74rem; font-weight:700; color:#5b6675; text-transform:uppercase; letter-spacing:.5px; }
+  body.dark-mode .adl-mcard .ml { color:#9aa5b1; }
+
+  /* ---- Analyst breakdown ---- */
+  .adl-tablecard { background:#fff; border:1px solid #e6e9ef; border-radius:16px; overflow:hidden;
+      box-shadow:0 6px 18px rgba(16,24,40,.07); }
+  body.dark-mode .adl-tablecard { background:#161b22; border-color:#30363d; box-shadow:none; }
+  .adl-table { width:100%; border-collapse:collapse; }
+  .adl-table thead th { text-align:left; padding:13px 16px; font-size:.78rem; font-weight:800; text-transform:uppercase;
+      letter-spacing:.6px; color:#5b6675;
+      background:linear-gradient(135deg, rgba(0,70,173,.08), rgba(0,166,81,.08)); border-bottom:1px solid #e6e9ef; }
+  body.dark-mode .adl-table thead th { color:#9aa5b1; border-color:#30363d;
+      background:linear-gradient(135deg, rgba(0,70,173,.22), rgba(0,166,81,.18)); }
+  .adl-table td { padding:13px 16px; border-bottom:1px solid #f0f2f6; font-size:.95rem; color:#2a2f3a; vertical-align:middle; }
+  body.dark-mode .adl-table td { border-color:#23282f; color:#cbd5e1; }
+  .adl-table tbody tr:last-child td { border-bottom:none; }
+  .adl-table tbody tr:hover { background:rgba(0,70,173,.04); }
+  body.dark-mode .adl-table tbody tr:hover { background:rgba(124,196,255,.06); }
+  .adl-who { display:flex; align-items:center; gap:11px; }
+  .adl-av { width:36px; height:36px; border-radius:10px; flex:none; display:grid; place-items:center; color:#fff;
+      font-weight:800; font-size:.92rem; background:linear-gradient(135deg,#0046ad,#00a651); }
+  .adl-who a { color:#0046ad; font-weight:800; text-decoration:none; font-size:.97rem; }
+  body.dark-mode .adl-who a { color:#7cc4ff; }
+  .adl-who a:hover { text-decoration:underline; }
+  .adl-who .em { display:block; font-size:.78rem; color:#8a93a3; font-weight:500; }
+
+  .adl-badge { display:inline-block; padding:4px 12px; border-radius:11px; font-size:.82rem; font-weight:800; color:#fff; }
+  .adl-badge.dist { background:linear-gradient(135deg,#f5b301,#ff8c00); }
+  .adl-badge.pass { background:#0f9d58; }
+  .adl-badge.fail { background:#e0524d; }
+  .adl-badge.warn { background:linear-gradient(135deg,#f59e0b,#fb923c); }
+  .adl-badge.warnhi { background:linear-gradient(135deg,#e0524d,#b91c1c); }
+  .adl-ok { color:#16a34a; font-weight:800; font-size:.9rem; }
+  .adl-score { font-weight:850; font-size:1.0rem; }
+  .adl-score.hi { color:#0f9d58; } .adl-score.mid { color:#e08a00; } .adl-score.lo { color:#e0524d; }
+  body.dark-mode .adl-score.mid { color:#ffc24d; }
+  .adl-att { display:inline-block; min-width:30px; text-align:center; background:rgba(0,70,173,.10); color:#0046ad;
+      border-radius:8px; padding:3px 9px; font-weight:800; font-size:.9rem; }
+  body.dark-mode .adl-att { background:rgba(124,196,255,.14); color:#7cc4ff; }
+  .adl-when { color:#7a8494; font-size:.86rem; }
+  body.dark-mode .adl-when { color:#8a93a3; }
+
+  .adl-empty { background:#fff; border:1px dashed #c7d2e8; border-radius:16px; padding:42px 24px; text-align:center;
+      color:#6b7585; }
+  body.dark-mode .adl-empty { background:#161b22; border-color:#33415e; color:#9aa5b1; }
+  .adl-empty .big { font-size:2.4rem; display:block; margin-bottom:8px; }
+
+  /* ---- Export buttons ---- */
+  .adl-exp { display:inline-flex; align-items:center; gap:7px; text-decoration:none;
+      background:linear-gradient(135deg,#0046ad,#00a651); color:#fff; font-weight:800; font-size:.9rem;
+      padding:10px 16px; border-radius:11px; box-shadow:0 8px 18px rgba(0,70,173,.24); transition:transform .12s, box-shadow .12s; }
+  .adl-exp:hover { transform:translateY(-2px); box-shadow:0 12px 24px rgba(0,70,173,.32); }
+  .adl-exp.ghost { background:#fff; color:#0046ad; border:1.5px solid #cdd9f3; box-shadow:none; }
+  body.dark-mode .adl-exp.ghost { background:#0f172a; color:#7cc4ff; border-color:#33415e; }
+
+  /* ---- Per-lesson trend card ---- */
+  .adl-trend { background:#fff; border:1px solid #e6e9ef; border-radius:16px; padding:18px 20px 14px; margin-bottom:18px;
+      box-shadow:0 6px 18px rgba(16,24,40,.07); }
+  body.dark-mode .adl-trend { background:#161b22; border-color:#30363d; box-shadow:none; }
+  .adl-trend-h { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+  .adl-trend-h .t { font-weight:850; font-size:1.02rem; color:#1a1340; display:flex; align-items:center; gap:8px; }
+  body.dark-mode .adl-trend-h .t { color:#e2e8f0; }
+  .adl-trend-h .sum { font-size:.86rem; color:#5b6675; font-weight:600; }
+  body.dark-mode .adl-trend-h .sum { color:#9aa5b1; }
+  .adl-delta { display:inline-block; padding:2px 9px; border-radius:9px; font-weight:800; font-size:.8rem; }
+  .adl-delta.up { background:rgba(15,157,88,.14); color:#0f9d58; }
+  .adl-delta.dn { background:rgba(224,82,77,.14); color:#e0524d; }
+  .adl-delta.flat { background:rgba(120,132,148,.16); color:#7a8494; }
+  .adl-sparks { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .adl-spark { border:1px solid #eef1f6; border-radius:13px; padding:12px 14px 10px;
+      background:linear-gradient(180deg, rgba(0,70,173,.03), rgba(0,166,81,.03)); }
+  body.dark-mode .adl-spark { border-color:#23282f; background:rgba(124,196,255,.04); }
+  .adl-spark .lab { font-size:.74rem; font-weight:800; text-transform:uppercase; letter-spacing:.6px; color:#5b6675; }
+  body.dark-mode .adl-spark .lab { color:#9aa5b1; }
+  .adl-spark svg { display:block; width:100%; height:46px; margin-top:6px; overflow:visible; }
+  .adl-spark .ends { display:flex; justify-content:space-between; font-size:.7rem; color:#9aa5b1; margin-top:2px; }
+  .adl-trend-empty { text-align:center; color:#8a93a3; font-size:.9rem; padding:14px 0 6px; }
+  @media (max-width:720px) { .adl-sparks { grid-template-columns:1fr; } }
+
+  /* ---- Methodology modal ---- */
+  .adl-modal { display:none; position:fixed; inset:0; z-index:2000; background:rgba(12,16,28,.55);
+      backdrop-filter:blur(3px); align-items:center; justify-content:center; padding:20px; }
+  .adl-modal.open { display:flex; }
+  .adl-modal-card { background:#fff; border-radius:18px; max-width:600px; width:100%; max-height:84vh; overflow:auto;
+      padding:28px 30px; box-shadow:0 30px 80px rgba(0,0,0,.4); }
+  body.dark-mode .adl-modal-card { background:#161b22; color:#e2e8f0; }
+  .adl-modal-card h3 { margin:0 0 14px; font-size:1.35rem; font-weight:850; color:#0046ad; }
+  body.dark-mode .adl-modal-card h3 { color:#7cc4ff; }
+  .adl-modal-card p, .adl-modal-card li { line-height:1.6; color:#3a4150; font-size:.95rem; }
+  body.dark-mode .adl-modal-card p, body.dark-mode .adl-modal-card li { color:#cbd5e1; }
+  .adl-modal-close { float:right; background:#eef2f9; border:none; border-radius:9px; width:34px; height:34px;
+      font-size:1.1rem; cursor:pointer; color:#5b6675; }
+  body.dark-mode .adl-modal-close { background:#23282f; color:#cbd5e1; }
+
+  @media (max-width:980px) { .adl-kpis,.adl-metrics { grid-template-columns:repeat(2,1fr); } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="adl-wrap">
+
+  <div class="adl-hero">
+    <div class="adl-eyebrow">Mythos readiness · analyst training</div>
+    <h1>Lessons Command Center 🎯</h1>
+    <p>Track how the SOC team is progressing through each readiness lesson — who's attempted it, who's passed, and where the gaps are. Pick a lesson below to drill in.</p>
+    <div class="adl-hero-actions">
+      <button class="adl-howbtn" onclick="document.getElementById('adlModal').classList.add('open')">❓ How does this work?</button>
+    </div>
+  </div>
+
+  <div class="adl-kpis">
+    <div class="adl-kpi k1"><div class="ic">👥</div><div class="v">{{ overall.analysts }}</div><div class="l">Analysts active</div></div>
+    <div class="adl-kpi k2"><div class="ic">📚</div><div class="v">{{ overall.lessons }}</div><div class="l">Lessons live</div></div>
+    <div class="adl-kpi k3"><div class="ic">✅</div><div class="v">{{ overall.pass_rate }}%</div><div class="l">Overall pass rate</div></div>
+    <div class="adl-kpi k4"><div class="ic">📝</div><div class="v">{{ overall.attempts }}</div><div class="l">Total attempts</div></div>
+    <div class="adl-kpi k5 {{ 'alert' if overall.flagged else '' }}"><div class="ic">{{ '⚠️' if overall.flagged else '🛡️' }}</div><div class="v">{{ overall.flagged }}</div><div class="l">Integrity flags</div></div>
+  </div>
+
+  {% if lessons %}
+  <div class="adl-picker">
+    <label for="adlLesson">📂 Lesson</label>
+    <select id="adlLesson" class="adl-select" onchange="adlShow(this.value)">
+      {% for l in lessons %}
+      <option value="{{ l.id }}">{{ l.icon }}  {{ l.title }} — {{ l.metrics.attempted }} analyst{{ '' if l.metrics.attempted == 1 else 's' }}</option>
+      {% endfor %}
+    </select>
+    <a class="adl-exp" href="/admin-lessons/export.xlsx">⬇️ Export all (Excel)</a>
+  </div>
+
+  {% for l in lessons %}
+  <div class="adl-panel" id="panel-{{ l.id }}" data-lesson="{{ l.id }}">
+    <div class="adl-lhead">
+      <span class="lic">{{ l.icon }}</span>
+      <h2>{{ l.title }}</h2>
+      <a class="adl-exp ghost" style="margin-left:auto" href="/admin-lessons/export.xlsx?lesson={{ l.id }}">⬇️ Export this lesson</a>
+    </div>
+
+    <div class="adl-metrics">
+      <div class="adl-mcard m-att"><div class="mic">👥</div><div class="mv">{{ l.metrics.attempted }}</div><div class="ml">Attempted</div></div>
+      <div class="adl-mcard m-pass"><div class="mic">🏅</div><div class="mv">{{ l.metrics.passed }}</div><div class="ml">Passed</div></div>
+      <div class="adl-mcard m-rate"><div class="mic">📈</div><div class="mv">{{ l.metrics.pass_rate }}%</div><div class="ml">Pass rate</div></div>
+      <div class="adl-mcard m-dist"><div class="mic">🏆</div><div class="mv">{{ l.metrics.distinctions }}</div><div class="ml">Distinctions</div></div>
+      <div class="adl-mcard m-avg"><div class="mic">🎯</div><div class="mv">{{ l.metrics.avg_best }}%</div><div class="ml">Avg best</div></div>
+      <div class="adl-mcard m-tot"><div class="mic">🔁</div><div class="mv">{{ l.metrics.total_attempts }}</div><div class="ml">Attempts</div></div>
+    </div>
+
+    <div class="adl-trend">
+      <div class="adl-trend-h">
+        <span class="t">📉 Trend · last {{ trend_weeks }} weeks</span>
+        {% if l.trend.has_data %}
+        <span class="sum">{{ l.trend.total_recent }} attempt{{ '' if l.trend.total_recent == 1 else 's' }} ·
+          this week {{ l.trend.this_week }}
+          {% if l.trend.delta > 0 %}<span class="adl-delta up">▲ {{ l.trend.delta }}</span>
+          {% elif l.trend.delta < 0 %}<span class="adl-delta dn">▼ {{ -l.trend.delta }}</span>
+          {% else %}<span class="adl-delta flat">●</span>{% endif %}
+        </span>
+        {% endif %}
+      </div>
+      {% if l.trend.has_data %}
+      <div class="adl-sparks">
+        <div class="adl-spark">
+          <div class="lab">📝 Weekly attempts</div>
+          <svg viewBox="0 0 240 46" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="gAtt{{ l.id }}" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#0a7bd0" stop-opacity="0.34"/>
+                <stop offset="100%" stop-color="#0a7bd0" stop-opacity="0.02"/>
+              </linearGradient>
+            </defs>
+            <polygon points="{{ l.trend.spark_att.area }}" fill="url(#gAtt{{ l.id }})"/>
+            <polyline points="{{ l.trend.spark_att.line }}" fill="none" stroke="#0a7bd0" stroke-width="2.4"
+                stroke-linejoin="round" stroke-linecap="round"/>
+            <circle cx="{{ l.trend.spark_att.last_x }}" cy="{{ l.trend.spark_att.last_y }}" r="3.4" fill="#0046ad"/>
+          </svg>
+          <div class="ends"><span>{{ l.trend.labels[0] }}</span><span>now</span></div>
+        </div>
+        <div class="adl-spark">
+          <div class="lab">✅ Weekly pass rate</div>
+          <svg viewBox="0 0 240 46" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="gPr{{ l.id }}" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#00a651" stop-opacity="0.34"/>
+                <stop offset="100%" stop-color="#00a651" stop-opacity="0.02"/>
+              </linearGradient>
+            </defs>
+            <polygon points="{{ l.trend.spark_pr.area }}" fill="url(#gPr{{ l.id }})"/>
+            <polyline points="{{ l.trend.spark_pr.line }}" fill="none" stroke="#00a651" stroke-width="2.4"
+                stroke-linejoin="round" stroke-linecap="round"/>
+            <circle cx="{{ l.trend.spark_pr.last_x }}" cy="{{ l.trend.spark_pr.last_y }}" r="3.4" fill="#0f9d58"/>
+          </svg>
+          <div class="ends"><span>0%</span><span>100%</span></div>
+        </div>
+      </div>
+      {% else %}
+      <div class="adl-trend-empty">🌱 Not enough history yet — the trend builds as analysts attempt this lesson.</div>
+      {% endif %}
+    </div>
+
+    {% if l.analysts %}
+    <div class="adl-tablecard">
+      <table class="adl-table">
+        <thead>
+          <tr>
+            <th>Analyst</th>
+            <th>Attempts</th>
+            <th>Best score</th>
+            <th>Status</th>
+            <th>Integrity</th>
+            <th>Last attempt</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in l.analysts %}
+          <tr>
+            <td>
+              <div class="adl-who">
+                <span class="adl-av">{{ a.name[:1]|upper }}</span>
+                <span>
+                  <a href="/admin-lessons/{{ a.email }}">{{ a.name }}</a>
+                  <span class="em">{{ a.email }}</span>
+                </span>
+              </div>
+            </td>
+            <td><span class="adl-att">{{ a.attempts }}</span></td>
+            <td><span class="adl-score {{ 'hi' if a.best_pct >= dist_pct else ('mid' if a.best_pct >= pass_pct else 'lo') }}">{{ a.best_pct }}%</span></td>
+            <td>
+              {% if a.distinction %}<span class="adl-badge dist">🏆 Distinction</span>
+              {% elif a.passed %}<span class="adl-badge pass">✓ Passed</span>
+              {% else %}<span class="adl-badge fail">In progress</span>{% endif %}
+            </td>
+            <td>
+              {% if a.fast_passes %}
+                <span class="adl-badge {{ 'warnhi' if a.flag_severity == 'high' else 'warn' }}"
+                      title="Passed faster than it realistically takes to read and answer the questions — possible answer-sharing or automation. Click the analyst to review.">
+                  ⚠️ {{ 'Too fast' if a.flag_severity == 'high' else 'Review' }}{% if a.fast_passes > 1 %} ×{{ a.fast_passes }}{% endif %}
+                </span>
+              {% else %}<span class="adl-ok">✓</span>{% endif %}
+            </td>
+            <td><span class="adl-when">{{ a.last_ts }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="adl-empty"><span class="big">🌱</span>No analyst has attempted this lesson yet.</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  {% else %}
+  <div class="adl-empty"><span class="big">📭</span><b>No lessons are published yet.</b><br>Add a topic YAML under data/training/topics to get started.</div>
+  {% endif %}
+</div>
+
+<!-- Methodology modal -->
+<div class="adl-modal" id="adlModal" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="adl-modal-card">
+    <button class="adl-modal-close" onclick="document.getElementById('adlModal').classList.remove('open')">✕</button>
+    <h3>📖 How this dashboard works</h3>
+    <p>Every quiz an analyst submits is logged with its <b>score as a percentage</b>, the questions they were shown, and a timestamp. This page rolls those attempts up <b>per lesson</b>.</p>
+    <ul>
+      <li><b>Best score</b> — the analyst's highest percentage across all their attempts on that lesson.</li>
+      <li><b>Passed</b> — scored <b>{{ pass_pct }}%</b> or higher at least once.</li>
+      <li><b>🏆 Distinction</b> — best score reached <b>{{ dist_pct }}%</b> or higher.</li>
+      <li><b>Pass rate</b> — share of analysts who attempted the lesson and passed it.</li>
+      <li><b>Avg best</b> — average of every attempting analyst's best score.</li>
+      <li><b>⚠️ Integrity</b> — a <b>passing</b> attempt finished faster than it realistically takes to read and answer that test's mix of questions (open written answers count for much more time than multiple-choice). It flags possible answer-sharing or automation, not a verdict — <b>Too fast</b> is well under a quarter of the realistic floor, <b>Review</b> is under half. Failed attempts and attempts logged before timing was captured are never flagged.</li>
+    </ul>
+    <p>Each lesson draws a fresh random set of questions from a large bank every attempt, so two analysts rarely see the same test — re-attempts are encouraged and only the best result counts. Click any analyst to see their full attempt history.</p>
+    <p style="font-size:.82rem; color:#8a93a3;">Times shown in US Eastern.</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function adlShow(id) {
+    document.querySelectorAll('.adl-panel').forEach(function (p) { p.classList.remove('active'); });
+    var panel = document.getElementById('panel-' + id);
+    if (panel) panel.classList.add('active');
+  }
+  // Show the first lesson on load.
+  (function () {
+    var sel = document.getElementById('adlLesson');
+    if (sel) adlShow(sel.value);
+  })();
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') document.getElementById('adlModal').classList.remove('open');
+  });
+</script>
+{% endblock %}

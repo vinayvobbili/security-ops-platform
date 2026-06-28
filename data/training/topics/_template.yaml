@@ -1,0 +1,134 @@
+# =============================================================================
+# LESSON TEMPLATE — copy this file to author a new lesson.
+#
+#   cp data/training/topics/_template.yaml data/training/topics/<your_id>.yaml
+#
+# Files beginning with "_" are scaffolding and are NEVER shown as a lesson
+# (the loader skips them), so this template stays out of the catalog.
+#
+# After filling it in:
+#   1. Lesson appears automatically at /lessons/<your_id>.
+#   2. Generate the training video:  python scripts/gen_training_video.py <your_id>
+#   3. (Optional) grow the question bank with the LLM generator, then spot-check.
+#
+# A test draws a fresh, shuffled, mixed-format set each attempt per the blueprint
+# in web/routes/lessons.py (TEST_BLUEPRINT). Aim for a deep bank (~100 Qs) so two
+# analysts rarely see the same test — that's what defeats answer-sharing.
+# =============================================================================
+
+id: your_id                       # lowercase, matches the filename (no spaces)
+title: "Your Lesson Title"
+icon: "🎓"                        # emoji shown on the card + hero
+tier: 1                           # optional priority/grouping tier
+summary: "One-line description shown on the lessons catalog card."
+
+# --- Video script source (scripts/gen_training_video.py renders these) -------
+intro_bullets:                    # title + concept-intro slides (bullets only)
+  - "Punchy framing of what this lesson covers"
+  - "Why an analyst should care"
+risk_bullets:                     # the "why it's risky" slide
+  - "The core danger in one line"
+  - "What an attacker gains"
+
+why_risky: >
+  2-4 sentences shown in the "Why it's risky" panel on the topic page. Plain
+  prose; this is the stakes paragraph an analyst reads before the quiz.
+
+key_concepts:                     # rendered as the numbered "Key concepts" list
+  - title: "First concept"
+    body: "1-2 sentences explaining it in analyst terms."
+    bullets:                      # optional per-concept slide bullets for the video
+      - "Supporting point"
+      - "Supporting point"
+  - title: "Second concept"
+    body: "Keep each concept self-contained."
+
+# =============================================================================
+# QUESTION BANK
+# Each question needs: id (unique), type, difficulty (easy|medium|hard).
+# Five formats are supported. Mix them — variety tests recall differently AND
+# makes copying a neighbor useless.
+#
+#   Deterministic, no LLM call (fast/free):  mc · fill_blank · match
+#   AI-graded by the LLM with partial credit:  short · freetext   (keep these few)
+# =============================================================================
+questions:
+
+  # ---- multiple choice -----------------------------------------------------
+  - id: q1
+    type: mc                      # default if omitted
+    difficulty: easy
+    prompt: "The question stem goes here?"
+    choices:                      # order is shuffled at render time
+      - "Wrong option"
+      - "Correct option"
+      - "Wrong option"
+      - "Wrong option"
+    answer_idx: 1                 # 0-based index into choices (the correct one)
+    explanation: >
+      Shown on the result page. Explain WHY the answer is right — this is a
+      teaching moment, not just a verdict.
+
+  # ---- fill in the blank ---------------------------------------------------
+  # Single blank, graded deterministically (case/whitespace-insensitive) against
+  # accepted_answers. List every acceptable spelling/synonym/abbreviation.
+  - id: q2
+    type: fill_blank
+    difficulty: easy
+    prompt: "Write the sentence with a ______ where the answer belongs."
+    accepted_answers:
+      - "primary answer"
+      - "ACCEPTABLE-SYNONYM"
+      - "abbr"
+    explanation: >
+      Optional, shown on review. Reinforce the term.
+
+  # ---- match the following -------------------------------------------------
+  # Each left item gets a dropdown of all the right labels. Graded per row with
+  # partial credit (correct rows / total rows). Use 3-5 pairs.
+  - id: q3
+    type: match
+    difficulty: medium
+    prompt: "Match each item to its description."
+    pairs:
+      - left: "Term A"
+        right: "What term A is"
+      - left: "Term B"
+        right: "What term B is"
+      - left: "Term C"
+        right: "What term C is"
+    explanation: >
+      Optional, shown on review.
+
+  # ---- short answer (AI-graded) --------------------------------------------
+  # the LLM scores 0..1 against model_answer + rubric. Keep prompts to 1-2
+  # sentences of expected output. Use sparingly — each one is an LLM call.
+  - id: q4
+    type: short
+    difficulty: medium
+    prompt: "In one or two sentences, explain X."
+    model_answer: >
+      A strong, concise answer covering the key points. The grader credits
+      concepts, not phrasing.
+    rubric:
+      - "Key point the answer must hit"
+      - "Second key point"
+      - "Third key point"
+
+  # ---- free response (AI-graded) -------------------------------------------
+  # Same grading as short, but a roomier textarea — use for "walk me through
+  # how you'd triage…" style questions.
+  - id: q5
+    type: freetext
+    difficulty: hard
+    prompt: >
+      A scenario prompt asking the analyst to reason through a situation —
+      what it means, what they'd check, and their next move.
+    model_answer: >
+      What a thorough response covers: the interpretation, the first checks,
+      the blast-radius thinking, and the containment/escalation call.
+    rubric:
+      - "Correctly interprets the scenario"
+      - "Names the right first checks"
+      - "Scopes blast radius"
+      - "Proposes containment / escalation"

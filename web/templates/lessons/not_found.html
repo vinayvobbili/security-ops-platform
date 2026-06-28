@@ -1,0 +1,21 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'Topic not found' %}
+{% set page_title_left_icon = '❓' %}
+{% block body_classes %}les-body{% endblock %}
+
+{% block extra_css %}
+{% include 'lessons/_base.html' %}
+{% endblock %}
+
+{% block content %}
+<div class="les-wrap" style="max-width:620px;">
+  <div class="les-panel" style="text-align:center; padding:46px 30px; margin-top:30px;">
+    <div style="font-size:3rem; line-height:1;">🧭</div>
+    <h2 class="les-sec-h" style="justify-content:center; margin:18px 0 8px;">Topic not found</h2>
+    <p style="color:#5b6675;">No lesson exists for <b>{{ topic_id }}</b>.</p>
+    <div class="les-actions" style="justify-content:center; margin-top:18px;">
+      <a class="les-btn les-btn-primary" href="/lessons">← Back to all lessons</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

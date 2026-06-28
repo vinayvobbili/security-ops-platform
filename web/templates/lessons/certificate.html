@@ -1,0 +1,106 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = topic.title ~ ' Certificate' %}
+{% set page_title_left_icon = '🏅' %}
+{% block body_classes %}les-body{% endblock %}
+
+{% block extra_css %}
+{% include 'lessons/_base.html' %}
+<style>
+  .cert-wrap { max-width:920px; margin:0 auto; }
+  .cert-actions { display:flex; gap:12px; justify-content:center; margin:22px 0 30px; flex-wrap:wrap; }
+  .cert-btn { display:inline-flex; align-items:center; gap:9px; padding:13px 24px; border-radius:13px;
+      font-weight:800; font-size:1rem; text-decoration:none; border:0; cursor:pointer;
+      box-shadow:0 10px 26px rgba(0,70,173,.28); }
+  .cert-btn.pdf { color:#fff; background:linear-gradient(135deg,#0046AD,#00A651); }
+  .cert-btn.ghost { color:#0046AD; background:#fff; border:2px solid #d7e2f4; box-shadow:none; }
+  body.dark-mode .cert-btn.ghost { color:#9ec5ff; background:#16203a; border-color:#27406e; }
+
+  /* The certificate "paper". */
+  .cert-paper { position:relative; background:#fff; border-radius:18px; overflow:hidden;
+      box-shadow:0 26px 70px rgba(16,24,40,.34); border:1px solid #e7ecf5; }
+  .cert-paper::after { content:""; position:absolute; inset:14px; border:2px solid var(--accent,#00A651);
+      border-radius:12px; pointer-events:none; opacity:.55; }
+  .cert-band { padding:26px 30px 22px; text-align:center; color:#fff;
+      background:linear-gradient(120deg,#0046AD 0%,#0a7bd0 52%,#00A651 130%); }
+  .cert-issuer { font-size:1.15rem; font-weight:850; letter-spacing:.5px; }
+  .cert-program { font-size:.86rem; opacity:.92; margin-top:3px; text-transform:uppercase; letter-spacing:1.5px; }
+  .cert-body { padding:34px 40px 30px; text-align:center; }
+  .cert-h { font-size:2.3rem; font-weight:850; color:#0046AD; margin:4px 0 10px; letter-spacing:.3px; }
+  .cert-sub { color:#5b6473; font-size:1.02rem; }
+  .cert-name { font-size:2.5rem; font-weight:850; color:#0d2a52; margin:14px 0 4px;
+      font-family:Georgia, 'Times New Roman', serif; }
+  .cert-rule { width:min(340px,70%); height:3px; margin:6px auto 18px; border-radius:3px;
+      background:linear-gradient(90deg,transparent,var(--accent,#00A651),transparent); }
+  .cert-topic { font-size:1.45rem; font-weight:800; color:#0046AD; margin:6px 0 16px; }
+  .cert-chip { display:inline-flex; align-items:center; gap:9px; padding:9px 20px; border-radius:999px;
+      font-weight:850; font-size:1rem; }
+  .cert-chip.dist { color:#5a3d00; background:linear-gradient(135deg,#ffe98a,#ffd24d);
+      box-shadow:0 8px 22px rgba(180,130,0,.34); }
+  .cert-chip.pass { color:#fff; background:linear-gradient(135deg,#0f9d58,#16c172); }
+  .cert-foot { display:flex; justify-content:space-between; align-items:flex-end; gap:18px;
+      margin-top:30px; padding-top:20px; border-top:1px dashed #d7dde8; }
+  .cert-foot .lbl { font-size:.74rem; text-transform:uppercase; letter-spacing:1px; color:#8a93a3; }
+  .cert-foot .val { font-size:1.04rem; font-weight:800; color:#0d2a52; margin-top:3px; }
+  .cert-foot .l { text-align:left; } .cert-foot .r { text-align:right; }
+  .cert-seal { width:62px; height:62px; border-radius:50%; flex:0 0 auto;
+      display:flex; align-items:center; justify-content:center; font-size:1.7rem; color:#fff;
+      background:radial-gradient(circle at 35% 30%, #ffd970, var(--accent,#00A651));
+      box-shadow:0 8px 22px rgba(0,0,0,.22); }
+  .cert-note { text-align:center; color:#8a93a3; font-size:.85rem; margin-top:16px; }
+
+  /* Distinction palette swaps the green accents to gold. */
+  .cert-paper.dist { --accent:#D4A017; }
+  .cert-paper.dist .cert-seal { background:radial-gradient(circle at 35% 30%, #fff1bf, #D4A017); }
+
+  @media print {
+    .cert-actions, .cert-note, .page-title-bar, .sidebar, nav, header { display:none !important; }
+    .cert-paper { box-shadow:none; border:1px solid #ccc; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set is_dist = cert.level == 'distinction' %}
+<div class="cert-wrap">
+  <div class="cert-actions">
+    <a class="cert-btn pdf" href="/lessons/{{ topic.id }}/certificate.pdf">⬇️ Download PDF</a>
+    <a class="cert-btn ghost" href="/lessons/{{ topic.id }}">← Back to lesson</a>
+  </div>
+
+  <div class="cert-paper {{ 'dist' if is_dist else '' }}">
+    <div class="cert-band">
+      <div class="cert-issuer">🛡️ Cyber Security Detection &amp; Response</div>
+      <div class="cert-program">Mythos Readiness Program</div>
+    </div>
+    <div class="cert-body">
+      <div class="cert-h">Certificate of Completion</div>
+      <div class="cert-sub">This certifies that</div>
+      <div class="cert-name">{{ cert.learner_name }}</div>
+      <div class="cert-rule"></div>
+      <div class="cert-sub">has {{ 'completed with distinction' if is_dist else 'successfully completed' }} the training lesson</div>
+      <div class="cert-topic">{{ topic.icon }} {{ cert.topic_title }}</div>
+      <div>
+        {% if is_dist %}
+        <span class="cert-chip dist">🏆 Distinction · Score {{ cert.score_pct }}%</span>
+        {% else %}
+        <span class="cert-chip pass">✓ Passed · Score {{ cert.score_pct }}%</span>
+        {% endif %}
+      </div>
+
+      <div class="cert-foot">
+        <div class="l">
+          <div class="lbl">Awarded</div>
+          <div class="val">{{ cert.awarded_on }}</div>
+        </div>
+        <div class="cert-seal">★</div>
+        <div class="r">
+          <div class="lbl">Verification code</div>
+          <div class="val">{{ cert.verification_code }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cert-note">🔒 The verification code is derived from your name, lesson, score and award date — it changes if any detail is altered.</div>
+</div>
+{% endblock %}
