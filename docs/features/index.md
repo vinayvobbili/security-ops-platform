@@ -23,7 +23,7 @@ Explore the core capabilities of the Security Operations Automation Platform.
 | [Vulnerability Deep Dive](vulnerability-deep-dive) | CVE → P1–P4 verdict (EPSS/KEV/pre-auth) + which apps are affected |
 | [Threat Hunt Workbench](hunt-workbench) | Paste CTI → IOC fan-out + behavioral SIEM hunts + ATT&CK coverage |
 | [Detection as Code](detection-as-code) | Sigma → lint → compile → live dry-run → review → MR (powered by `detflow`) |
-| [Advisory Triage](advisory-triage) | Advisory queue → ATT&CK + Sigma/YARA/Suricata + STIX/Navigator + blast radius → escalation (powered by `detflow`) |
+| [Advisory Triage](advisory-triage) | Triage command center → "Affects us" verdict + ATT&CK + Sigma/YARA/Suricata + STIX/Navigator → verify-remediation → escalation (powered by `detflow`) |
 | [Customer Assurance](customer-assurance) | LLM-assisted questionnaire drafting with `.xlsx` round-trip |
 | [Code Security Scanner](code-security) | Agentic read-only repo vuln audit — navigate → refute false positives → container-jailed (powered by `refutescan`) |
 | [Third-Party Risk](third-party-risk) | Vendor cyber due-diligence workspace — drafts control answers from evidence (powered by `attestq`) |
@@ -136,10 +136,13 @@ Sigma → reviewed, packaged merge request:
 
 ### [Security Advisory Triage →](advisory-triage)
 
-A standing queue that works advisories instead of just listing them:
+A triage command center that works advisories instead of just listing them:
+- Dense queue with an "Affects us" verdict on every row, saved views, and
+  bulk assign / close / escalate
 - Per-advisory ATT&CK mapping + generated Sigma / YARA / Suricata rules
 - STIX 2.1 bundle and ATT&CK Navigator layer exports
-- Blast radius: app ownership, fleet posture, attack-surface exposure
+- Exposure at a glance via Veracode SCA + fleet posture, with one-click
+  verify-remediation re-checks
 - Cross-source corroboration, campaign clustering, and one-click escalation
 - Built on the open-source `detflow` analysis core
 

@@ -161,8 +161,9 @@ advisories into prioritized, owned work:
 - **Per-advisory threat analysis** — generates ATT&CK techniques, ready-to-tune
   Sigma / YARA / Suricata rules, an audience-tuned brief, and STIX 2.1 +
   ATT&CK Navigator layer exports, all from the advisory text + CVEs.
-- **Blast-radius capabilities** — which apps own the affected component, fleet
-  patch posture, attack-surface exposure, and cross-source corroboration.
+- **Exposure at a glance** — a Veracode SCA verdict on every row showing which
+  of our apps carry the affected component, plus fleet patch posture and
+  cross-source corroboration.
 - **One-click escalation** — packaged tickets and notifications with leadership
   tempo KPIs, built on top of the open-source
   [detflow](https://pypi.org/project/detflow/) analysis core.

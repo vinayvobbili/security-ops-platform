@@ -11,23 +11,35 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/gh_advisory.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/chat_widget.css') }}">
 <style>
-  /* Risk KPI stat-card strip */
-  .gha-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:14px 0 6px;}
-  .gha-kpi{position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:flex-start;
-    gap:2px;padding:14px 16px 13px;border:1px solid #e6e9ef;border-radius:14px;background:#fff;
+  /* Risk KPI stat-rail — one tight clickable row (triage command center) */
+  .gha-kpis{display:flex;gap:10px;margin:2px 0 12px;flex-wrap:wrap;}
+  .gha-kpi{flex:1 1 0;min-width:140px;position:relative;overflow:hidden;display:flex;flex-direction:row;align-items:center;
+    gap:10px;padding:10px 14px;border:1px solid #e6e9ef;border-radius:13px;background:#fff;
     cursor:pointer;text-align:left;font:inherit;transition:transform .14s,box-shadow .14s,border-color .14s;
     box-shadow:0 1px 3px rgba(16,24,40,.05);}
-  .gha-kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;border-radius:14px 0 0 14px;
+  .gha-kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;border-radius:13px 0 0 13px;
     background:linear-gradient(180deg,#0046AD,#00A651);}
   .gha-kpi:hover{transform:translateY(-3px);box-shadow:0 10px 24px rgba(16,24,40,.12);}
   .gha-kpi.active{border-color:#0046AD;box-shadow:0 8px 22px rgba(0,70,173,.18);}
-  .gha-kpi-ic{font-size:20px;line-height:1;}
-  .gha-kpi-n{font-size:30px;font-weight:800;line-height:1.05;color:#0a2540;letter-spacing:-.02em;}
-  .gha-kpi-l{font-size:12px;font-weight:600;color:#57606a;text-transform:uppercase;letter-spacing:.03em;}
+  .gha-kpi-ic{font-size:20px;line-height:1;flex:0 0 auto;}
+  .gha-kpi-n{font-size:23px;font-weight:800;line-height:1;color:#0a2540;letter-spacing:-.02em;flex:0 0 auto;}
+  .gha-kpi-l{font-size:11px;font-weight:700;color:#57606a;text-transform:uppercase;letter-spacing:.03em;line-height:1.15;}
+  .gha-kpi.k-new::before{background:linear-gradient(180deg,#ff5d5d,#cf222e);}
+  .gha-kpi.k-new{background:linear-gradient(135deg,rgba(207,34,46,.07),#fff);}
+  .gha-kpi.k-new .gha-kpi-n{color:#cf222e;}
+  body.dark-mode .gha-kpi.k-new{background:linear-gradient(135deg,rgba(207,34,46,.16),#161b22);}
+  body.dark-mode .gha-kpi.k-new .gha-kpi-n{color:#ff8087;}
+  .gha-kpi.k-aging{background:linear-gradient(135deg,rgba(245,179,1,.1),#fff);}
+  body.dark-mode .gha-kpi.k-aging{background:linear-gradient(135deg,rgba(245,179,1,.16),#161b22);}
+  .gha-kpi.k-exposure{background:linear-gradient(135deg,rgba(207,34,46,.07),#fff);}
+  body.dark-mode .gha-kpi.k-exposure{background:linear-gradient(135deg,rgba(207,34,46,.14),#161b22);}
   .gha-kpi.k-kev::before{background:linear-gradient(180deg,#ff7a18,#cf222e);}
   .gha-kpi.k-critical::before{background:linear-gradient(180deg,#cf222e,#a40e26);}
   .gha-kpi.k-aging::before{background:linear-gradient(180deg,#f5b301,#bf8700);}
   .gha-kpi.k-escalated::before{background:linear-gradient(180deg,#8250df,#5a32a3);}
+  .gha-kpi.k-exposure::before{background:linear-gradient(180deg,#ff5d5d,#cf222e);}
+  .gha-kpi.k-exposure .gha-kpi-n{color:#cf222e;}
+  body.dark-mode .gha-kpi.k-exposure .gha-kpi-n{color:#ff8087;}
   .gha-kpi.k-kev .gha-kpi-n{color:#cf222e;}
   .gha-kpi.k-critical .gha-kpi-n{color:#a40e26;}
   .gha-kpi.k-aging .gha-kpi-n{color:#9a6700;}
@@ -40,7 +52,7 @@
   body.dark-mode .gha-kpi.k-critical .gha-kpi-n{color:#ff8087;}
   body.dark-mode .gha-kpi.k-aging .gha-kpi-n{color:#f0c674;}
   body.dark-mode .gha-kpi.k-escalated .gha-kpi-n{color:#c4a7f5;}
-  @media (max-width:1100px){.gha-kpis{grid-template-columns:repeat(3,1fr);}}
+  @media (max-width:1100px){.gha-kpi{min-width:30%;}}
   .gha-src{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;
     letter-spacing:.03em;padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle;
     background:#eef1f5;color:#4b5563;}
@@ -53,38 +65,54 @@
     padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle;
     background:linear-gradient(135deg,#fff4d6,#ffe08a);color:#9a6700;border:1px solid #f0c75e;}
   body.dark-mode .gha-corrob{background:rgba(191,135,0,.22);color:#f0c674;border-color:rgba(240,199,94,.3);}
-  .gha-tempo{display:flex;flex-wrap:wrap;gap:14px;align-items:stretch;margin:6px 0 10px;padding:14px 16px;
-    border-radius:14px;background:linear-gradient(135deg,#0046AD,#00A651);color:#fff;}
-  .gha-tempo-stats{display:flex;flex-wrap:wrap;gap:22px;flex:1;align-items:center;}
-  .gha-tempo-card{display:flex;flex-direction:column;gap:2px;min-width:120px;}
-  .gha-tempo-n{font-size:24px;font-weight:800;line-height:1;}
-  .gha-tempo-l{font-size:11.5px;font-weight:600;opacity:.92;}
-  .gha-tempo-l small{opacity:.8;font-weight:500;}
-  .gha-tempo-trend{display:flex;flex-direction:column;gap:4px;min-width:220px;
-    background:rgba(255,255,255,.13);border-radius:10px;padding:8px 12px;}
-  .gha-tempo-trend-l{font-size:11.5px;font-weight:700;opacity:.95;}
-  .gha-spark{display:flex;align-items:flex-end;gap:3px;height:54px;}
-  .gha-spark-bar{flex:1;min-width:4px;background:rgba(255,255,255,.85);border-radius:2px 2px 0 0;transition:height .4s;}
+  /* Thin de-emphasized operating-tempo line with inline mini-sparkline */
+  .gha-tempo{display:flex;flex-wrap:wrap;align-items:center;gap:18px;margin:0 0 14px;padding:6px 4px 13px;
+    border-bottom:1px solid #e2e8f0;font-size:12.5px;color:#64748b;font-weight:600;}
+  .gha-tempo-stat{display:inline-flex;align-items:baseline;gap:5px;white-space:nowrap;}
+  .gha-tempo-stat b{color:#0a2540;font-weight:800;}
+  .gha-tempo-stat small{opacity:.8;font-weight:600;}
+  .gha-tempo-trend{display:flex;align-items:center;gap:9px;margin-left:auto;}
+  .gha-tempo-trend-l{font-size:11px;font-weight:600;color:#94a3b8;white-space:nowrap;}
+  .gha-spark{display:flex;align-items:flex-end;gap:2px;height:26px;}
+  .gha-spark-bar{width:5px;background:linear-gradient(180deg,#0046AD,#00A651);border-radius:2px 2px 0 0;transition:height .4s;}
   .gha-spark-bar:hover{background:#f6be00;}
-  .gha-spark-x{display:flex;justify-content:space-between;font-size:9.5px;opacity:.85;}
-  .gha-campaigns{margin:8px 0;border:1px solid #e0c3f5;border-radius:12px;background:linear-gradient(135deg,#faf4ff,#f3eaff);padding:6px 14px;}
-  body.dark-mode .gha-campaigns{background:rgba(130,80,223,.12);border-color:#30363d;}
-  .gha-campaigns-sum{cursor:pointer;font-size:14px;font-weight:800;color:#6b21a8;padding:6px 0;}
-  body.dark-mode .gha-campaigns-sum{color:#c99dff;}
-  .gha-campaigns-n{display:inline-block;background:#8250df;color:#fff;font-size:12px;border-radius:999px;padding:1px 9px;margin-left:4px;}
-  .gha-campaigns-hint{font-size:11.5px;font-weight:500;color:#8b7aa8;}
-  .gha-campaigns-body{display:flex;flex-direction:column;gap:8px;padding:6px 0 8px;}
-  .gha-campaign{padding:10px 12px;border-radius:10px;background:#fff;border:1px solid #ead9fb;}
-  body.dark-mode .gha-campaign{background:#161b22;border-color:#30363d;}
-  .gha-campaign-head{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:6px;}
-  .gha-campaign-size{font-size:12px;font-weight:800;color:#fff;background:#8250df;border-radius:999px;padding:2px 10px;}
-  .gha-campaign-tok{font-size:12.5px;font-weight:700;color:#6b21a8;}
-  body.dark-mode .gha-campaign-tok{color:#c99dff;}
-  .gha-campaign-meta{font-size:11.5px;color:#8b7aa8;}
-  .gha-campaign-members{display:flex;flex-wrap:wrap;gap:6px;}
-  .gha-campaign-pkg{font-size:11.5px;font-weight:600;color:#6b21a8;text-decoration:none;background:#f6eeff;border:1px solid #e0c3f5;border-radius:8px;padding:2px 8px;word-break:break-all;}
-  .gha-campaign-pkg:hover{background:#8250df;color:#fff;border-color:#8250df;}
-  body.dark-mode .gha-campaign-pkg{background:rgba(130,80,223,.18);color:#c99dff;border-color:#30363d;}
+  body.dark-mode .gha-tempo{color:#9aa5b1;border-bottom-color:#30363d;}
+  body.dark-mode .gha-tempo-stat b{color:#e6edf3;}
+  body.dark-mode .gha-tempo-trend-l{color:#6b7686;}
+  /* ===== Command line (lead + utility tools) ===== */
+  .gha-cmd{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:4px 0 14px;}
+  .gha-cmd-lead{font-size:19px;font-weight:800;color:#0a2540;line-height:1.25;}
+  .gha-cmd-hot{display:inline-block;background:linear-gradient(135deg,#cf222e,#a40e26);color:#fff;
+    padding:2px 11px;border-radius:9px;box-shadow:0 2px 8px rgba(207,34,46,.28);}
+  .gha-cmd-allclear{display:inline-block;background:linear-gradient(135deg,#00A651,#0d9488);color:#fff;
+    padding:2px 11px;border-radius:9px;box-shadow:0 2px 8px rgba(0,166,81,.28);}
+  .gha-cmd-rest{font-weight:700;color:#36506b;}
+  .gha-cmd-sub{display:block;font-size:13px;font-weight:600;color:#64748b;margin-top:4px;}
+  .gha-cmd-tools{display:flex;gap:8px;flex-wrap:wrap;flex-shrink:0;}
+  body.dark-mode .gha-cmd-lead{color:#e6edf3;}
+  body.dark-mode .gha-cmd-rest{color:#c2cbd6;}
+  body.dark-mode .gha-cmd-sub{color:#9aa5b1;}
+  /* ===== Single control bar ===== */
+  .gha-ctrl{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px;}
+  .gha-seg{display:inline-flex;align-items:center;background:#fff;border:1.5px solid #d4d9e6;border-radius:12px;
+    overflow:hidden;box-shadow:0 1px 3px rgba(16,24,40,.05);}
+  .gha-seg .gha-preset{border:none;border-radius:0;background:transparent;box-shadow:none;color:#36506b;
+    padding:8px 13px;margin:0;border-right:1px solid #eef2f9;}
+  .gha-seg .gha-preset:last-child{border-right:none;}
+  .gha-seg .gha-preset:hover{transform:none;box-shadow:none;background:rgba(0,70,173,.06);color:#0046AD;}
+  .gha-seg .gha-preset.active{background:linear-gradient(135deg,#0046AD,#00A651);color:#fff;box-shadow:none;}
+  .gha-seg .gha-preset.active .gha-preset-n{background:rgba(255,255,255,.25);color:#fff;}
+  .gha-dd{font-size:12.5px;font-weight:700;color:#1e293b;padding:8px 11px;border-radius:10px;
+    border:1.5px solid #c5cae9;background:#fff;cursor:pointer;font-family:inherit;}
+  .gha-dd:focus{outline:none;border-color:#0046AD;}
+  body.dark-mode .gha-seg{background:#161b22;border-color:#2b3340;box-shadow:none;}
+  body.dark-mode .gha-seg .gha-preset{color:#c2cbd6;border-right-color:#21262d;}
+  body.dark-mode .gha-seg .gha-preset:hover{background:rgba(56,139,253,.12);color:#79b8ff;}
+  body.dark-mode .gha-seg .gha-preset.active{background:linear-gradient(135deg,#1f6feb,#2ea043);color:#fff;}
+  body.dark-mode .gha-dd{background:#161b22;color:#e2e8f0;border-color:#334155;}
+  .gha-campaigns-n{display:inline-block;background:linear-gradient(135deg,#0046AD,#00A651);color:#fff;font-size:12px;border-radius:999px;padding:1px 9px;margin-left:4px;}
+  .gha-campaigns-hint{font-size:11.5px;font-weight:500;color:#64748b;}
+  .gha-campaign-new{font-size:11px;font-weight:800;color:#fff;background:linear-gradient(135deg,#00A651,#0046AD);border-radius:999px;padding:2px 9px;}
   .gha-toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:8px 0 4px;}
   .gha-tool-sort{font-size:12.5px;color:#57606a;font-weight:600;display:flex;align-items:center;gap:6px;}
   .gha-tool-sort select{font-size:12.5px;padding:4px 8px;border-radius:8px;border:1.5px solid #c5cae9;background:#fff;color:#1e293b;}
@@ -97,6 +125,27 @@
   body.dark-mode .gha-tool-sort select{background:#1e293b;color:#e2e8f0;border-color:#334155;}
   body.dark-mode .gha-tool-toggle{background:rgba(191,135,0,.18);color:#f0c674;border-color:rgba(240,199,94,.3);}
   body.dark-mode .gha-tool-csv{background:rgba(0,166,81,.18);color:#7ee2a8;border-color:rgba(0,166,81,.4);}
+  /* ---- saved-view preset chips ---- */
+  .gha-presets{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:14px 0 2px;}
+  .gha-presets-lbl{font-size:11.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#8a94a6;margin-right:2px;}
+  .gha-preset{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:700;cursor:pointer;
+    padding:7px 14px;border-radius:999px;border:1.5px solid #d4d9e6;background:#fff;color:#36506b;
+    transition:transform .08s ease,box-shadow .15s ease,background .15s ease,color .15s ease,border-color .15s ease;}
+  .gha-preset:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,70,173,.16);border-color:#0046AD;}
+  .gha-preset .gha-preset-n{font-size:11.5px;font-weight:800;color:#36506b;background:#eef2f9;
+    border-radius:999px;padding:1px 8px;min-width:18px;text-align:center;}
+  .gha-preset.active{background:linear-gradient(135deg,#0046AD,#00A651);color:#fff;border-color:transparent;
+    box-shadow:0 6px 18px rgba(0,70,173,.30);}
+  .gha-preset.active .gha-preset-n{background:rgba(255,255,255,.25);color:#fff;}
+  .gha-preset-clear{font-size:12px;font-weight:700;color:#8a94a6;background:none;border:none;cursor:pointer;
+    text-decoration:underline;padding:4px 6px;}
+  .gha-preset-clear:hover{color:#0046AD;}
+  body.dark-mode .gha-presets-lbl{color:#6b7686;}
+  body.dark-mode .gha-preset{background:#161b22;color:#c2cbd6;border-color:#2b3340;}
+  body.dark-mode .gha-preset .gha-preset-n{background:#21262d;color:#c2cbd6;}
+  body.dark-mode .gha-preset:hover{border-color:#79b8ff;}
+  body.dark-mode .gha-preset.active{background:linear-gradient(135deg,#1f6feb,#2ea043);color:#fff;}
+  body.dark-mode .gha-preset.active .gha-preset-n{background:rgba(255,255,255,.22);color:#fff;}
   .gha-assessbadge{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:10px;
     margin-left:8px;vertical-align:middle;color:#fff;}
   .gha-assessbadge.a-assessing{background:#bf8700;} .gha-assessbadge.a-no_exposure{background:#1a7f37;}
@@ -111,6 +160,11 @@
   .src-row .cnt{font-size:12px;color:#8b949e;}
   .src-row .spacer{flex:1;}
   .src-row .rm{border:none;background:transparent;color:#cf222e;cursor:pointer;font-size:13px;}
+  .src-row.src-soon{opacity:.72;}
+  .src-row.src-soon .name{color:#57606a;}
+  .soon-pill{font-size:11px;font-weight:700;letter-spacing:.02em;padding:2px 10px;border-radius:999px;
+    color:#fff;background:linear-gradient(135deg,#0046AD,#00A651);box-shadow:0 1px 4px rgba(0,70,173,.25);}
+  body.dark-mode .src-row.src-soon .name{color:#9da7b3;}
   .src-add{margin-top:14px;padding-top:12px;border-top:1px solid #eef0f3;}
   .src-add h4{margin:10px 0 6px;font-size:13px;color:#24292e;}
   .src-add input,.src-add select,.src-add textarea{width:100%;padding:7px 9px;border:1px solid #d0d7de;border-radius:7px;font-size:13px;margin-bottom:6px;box-sizing:border-box;}
@@ -144,50 +198,216 @@
   .gha-owner-chip{display:inline-block;margin-left:8px;padding:1px 9px;border-radius:999px;font-size:11.5px;
     font-weight:600;color:#0046AD;background:rgba(0,70,173,.1);border:1px solid rgba(0,70,173,.18);}
   body.dark-mode .gha-owner-chip{color:#79b8ff;background:rgba(0,70,173,.25);border-color:rgba(120,160,255,.25);}
-  /* Search bar */
-  .gha-searchbar{display:flex;align-items:center;gap:12px;margin:14px 0 6px;}
-  .gha-searchbar input{flex:1;padding:11px 16px;border:2px solid transparent;border-radius:12px;font-size:14px;
+  /* Per-row age + auto-archive countdown + inline claim */
+  .gha-age{font-size:11px;color:#94a3b8;margin-top:2px;font-weight:600;}
+  .gha-arch{display:inline-block;margin-top:4px;padding:1px 8px;border-radius:999px;font-size:10.5px;
+    font-weight:800;letter-spacing:.01em;white-space:nowrap;
+    color:#b45309;background:rgba(217,119,6,.12);border:1px solid rgba(217,119,6,.28);}
+  .gha-arch.urgent{color:#dc2626;background:rgba(220,38,38,.12);border-color:rgba(220,38,38,.30);}
+  .gha-arch.overdue{color:#fff;background:linear-gradient(135deg,#dc2626,#b91c1c);border-color:#b91c1c;}
+  body.dark-mode .gha-arch{color:#fbbf24;background:rgba(217,119,6,.18);border-color:rgba(251,191,36,.28);}
+  body.dark-mode .gha-arch.urgent{color:#fca5a5;background:rgba(220,38,38,.20);border-color:rgba(248,113,113,.32);}
+  body.dark-mode .gha-arch.overdue{color:#fff;background:linear-gradient(135deg,#dc2626,#991b1b);}
+  .gha-claim{display:inline-block;margin-top:5px;padding:2px 10px;border-radius:999px;font-size:11px;
+    font-weight:800;cursor:pointer;color:#fff;border:none;line-height:1.5;
+    background:linear-gradient(135deg,#0046AD,#00A651);box-shadow:0 1px 3px rgba(0,70,173,.25);
+    transition:filter .12s,transform .12s;}
+  .gha-claim:hover{filter:brightness(1.08);transform:translateY(-1px);}
+  .gha-claim:disabled{opacity:.6;cursor:default;transform:none;}
+  /* Search bar — inline in the control bar */
+  .gha-searchbar{display:flex;align-items:center;gap:10px;margin:0;flex:1 1 240px;min-width:200px;}
+  .gha-searchbar input{flex:1;padding:8px 14px;border:2px solid transparent;border-radius:11px;font-size:13px;
     background:linear-gradient(#fff,#fff) padding-box,linear-gradient(135deg,#0046AD,#00A651) border-box;
     box-shadow:0 2px 10px rgba(0,70,173,.08);transition:box-shadow .2s,transform .1s;}
   .gha-searchbar input:focus{outline:none;box-shadow:0 4px 18px rgba(0,70,173,.22);}
   .gha-search-count{font-size:12.5px;color:#00A651;font-weight:600;white-space:nowrap;}
   body.dark-mode .gha-searchbar input{background:linear-gradient(#0d1117,#0d1117) padding-box,linear-gradient(135deg,#0046AD,#00A651) border-box;color:#e6edf3;}
   body.dark-mode .gha-search-count{color:#3fb950;}
+  /* Tabs — slim Advisories | Campaigns toggle directly above the table */
+  .gha-tabs{display:flex;gap:4px;margin:2px 0 0;border-bottom:2px solid #e6e9ef;}
+  .gha-tab{position:relative;border:none;background:transparent;cursor:pointer;font:inherit;
+    font-size:13px;font-weight:800;color:#57606a;padding:7px 13px 9px;border-radius:8px 8px 0 0;
+    display:flex;align-items:center;gap:7px;transition:color .15s,background .15s;}
+  .gha-tab:hover{color:#0046AD;background:rgba(0,70,173,.05);}
+  .gha-tab.active{color:#0046AD;}
+  .gha-tab.active::after{content:"";position:absolute;left:0;right:0;bottom:-2px;height:3px;
+    border-radius:3px 3px 0 0;background:linear-gradient(90deg,#0046AD,#00A651);}
+  .gha-tab-n{font-size:12px;font-weight:800;color:#fff;background:linear-gradient(135deg,#0046AD,#00A651);
+    border-radius:999px;padding:1px 9px;min-width:14px;text-align:center;}
+  body.dark-mode .gha-tabs{border-bottom-color:#30363d;}
+  body.dark-mode .gha-tab{color:#9aa5b1;}
+  body.dark-mode .gha-tab:hover,body.dark-mode .gha-tab.active{color:#79b8ff;}
+  body.dark-mode .gha-tab:hover{background:rgba(56,139,253,.12);}
+  .gha-tabpanel[hidden]{display:none;}
+  .gha-campaigns-static{margin-top:10px;}
+  .gha-campaigns-sum-static{font-size:14px;font-weight:800;color:#0046AD;padding:8px 0;}
+  body.dark-mode .gha-campaigns-sum-static{color:#79b8ff;}
+  /* Campaigns table (brand palette, matches the advisory table) */
+  .gha-camp-table{width:100%;border-collapse:collapse;margin-top:6px;font-size:13px;}
+  .gha-camp-table thead th{text-align:left;font-size:10.5px;font-weight:800;text-transform:uppercase;
+    letter-spacing:.04em;color:#57606a;padding:9px 12px;border-bottom:2px solid #e6e9ef;
+    white-space:nowrap;background:#f8fafc;}
+  .gha-camp-table tbody td{padding:11px 12px;border-bottom:1px solid #eef0f3;vertical-align:top;}
+  .gha-camp-row{border-left:3px solid transparent;transition:background .12s;}
+  .gha-camp-row:hover{background:linear-gradient(110deg,rgba(0,70,173,.05),rgba(0,166,81,.05));}
+  .gha-camp-tok{font-size:13px;font-weight:700;color:#0046AD;}
+  .gha-camp-tok-mixed{color:#64748b;font-weight:600;}
+  .gha-camp-size{display:inline-block;font-size:12px;font-weight:800;color:#fff;
+    background:linear-gradient(135deg,#0046AD,#00A651);border-radius:999px;padding:2px 11px;white-space:nowrap;}
+  .gha-camp-meta{font-size:12px;color:#475569;}
+  .gha-camp-src{font-size:11px;color:#94a3b8;margin-top:2px;}
+  .gha-camp-when{font-size:12px;color:#475569;white-space:nowrap;}
+  .gha-camp-age{font-size:11px;color:#94a3b8;margin-top:2px;}
+  .gha-camp-members{display:flex;flex-wrap:wrap;gap:6px;max-width:540px;}
+  .gha-camp-pkg{font-size:11.5px;font-weight:600;color:#0046AD;text-decoration:none;
+    background:rgba(0,70,173,.08);border:1px solid rgba(0,70,173,.18);border-radius:8px;padding:2px 8px;word-break:break-all;}
+  .gha-camp-pkg:hover{background:linear-gradient(135deg,#0046AD,#00A651);color:#fff;border-color:transparent;}
+  body.dark-mode .gha-camp-table thead th{background:#0d1117;color:#9aa5b1;border-bottom-color:#30363d;}
+  body.dark-mode .gha-camp-table tbody td{border-bottom-color:#21262d;}
+  body.dark-mode .gha-camp-row:hover{background:linear-gradient(110deg,#1f2f4a,#16301f);}
+  body.dark-mode .gha-camp-tok{color:#79b8ff;}
+  body.dark-mode .gha-camp-meta,body.dark-mode .gha-camp-when{color:#cbd5e1;}
+  body.dark-mode .gha-camp-pkg{background:rgba(56,139,253,.14);color:#79b8ff;border-color:rgba(56,139,253,.3);}
+  /* Dense advisory table (replaces sparse cards) */
+  .gha-table{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px;}
+  .gha-table thead th{text-align:left;font-size:10.5px;font-weight:800;text-transform:uppercase;
+    letter-spacing:.04em;color:#57606a;padding:9px 12px;border-bottom:2px solid #e6e9ef;
+    white-space:nowrap;background:#f8fafc;}
+  .gha-table tbody td{padding:11px 12px;border-bottom:1px solid #eef0f3;vertical-align:top;}
+  .gha-trow{cursor:pointer;border-left:3px solid transparent;transition:background .12s;}
+  .gha-trow:hover{background:linear-gradient(110deg,rgba(0,70,173,.05),rgba(0,166,81,.05));}
+  .gha-trow.s-new{border-left-color:#dc2626;}
+  .gha-trow.s-under_review{border-left-color:#d97706;}
+  .gha-trow.s-reported{border-left-color:#00A651;}
+  .gha-trow.s-closed_not_reported{border-left-color:#64748b;}
+  .gha-cell-adv .gha-id{font-size:13.5px;}
+  .gha-cell-adv .gha-cve{font-size:11.5px;display:block;margin-top:1px;}
+  .gha-cell-sum{max-width:520px;}
+  .gha-cell-sum .s{color:#1f2937;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;
+    -webkit-box-orient:vertical;overflow:hidden;}
+  .gha-cell-sum .pk{font-size:11px;color:#6b7280;margin-top:4px;white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis;max-width:520px;}
+  .gha-cell-date{font-size:12px;color:#64748b;white-space:nowrap;}
+  .gha-cell-date .gha-added{font-size:11px;color:#94a3b8;margin-top:2px;}
+  .gha-dash{color:#cbd5e1;}
+  .gha-sevpill{display:inline-block;font-size:10.5px;font-weight:800;text-transform:uppercase;
+    letter-spacing:.03em;padding:2px 8px;border-radius:8px;white-space:nowrap;}
+  .sev-crit{background:#ffebe9;color:#cf222e;} .sev-high{background:#fff1e5;color:#bc4c00;}
+  .sev-mod{background:#fff8e6;color:#9a6700;} .sev-low{background:#eef2f7;color:#57606a;}
+  .sev-na{background:#f1f3f5;color:#8b949e;}
+  .gha-exp-badge{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.02em;
+    padding:2px 9px;border-radius:8px;white-space:nowrap;}
+  .exp-exposed{background:linear-gradient(135deg,#cf222e,#a40e26);color:#fff;}
+  .exp-clear{background:#e6f7ee;color:#137547;border:1px solid #abe0c2;}
+  .gha-exp-na{font-size:10.5px;font-weight:600;color:#b0b8c1;white-space:nowrap;}
+  /* ---- escalation outcome (XSOAR ticket state pulled back onto the row) ---- */
+  .gha-outcome{display:inline-block;margin-top:3px;font-size:10px;font-weight:800;letter-spacing:.02em;
+    padding:2px 8px;border-radius:8px;white-space:nowrap;}
+  .oc-open{background:#e7f0ff;color:#0046AD;border:1px solid #b9d2ff;}
+  .oc-in_progress{background:linear-gradient(135deg,#ffe08a,#f6be00);color:#5c4a00;}
+  .oc-resolved{background:#e6f7ee;color:#137547;border:1px solid #abe0c2;}
+  body.dark-mode .oc-open{background:rgba(0,70,173,.2);color:#79b8ff;border-color:rgba(121,184,255,.3);}
+  body.dark-mode .oc-in_progress{background:rgba(191,135,0,.22);color:#f0c674;}
+  body.dark-mode .oc-resolved{background:rgba(0,166,81,.16);color:#7ee2a8;border-color:rgba(0,166,81,.3);}
+  body.dark-mode .exp-clear{background:rgba(0,166,81,.16);color:#7ee2a8;border-color:rgba(0,166,81,.3);}
+  body.dark-mode .gha-exp-na{color:#6b7682;}
+  body.dark-mode .gha-table thead th{background:#0d1117;color:#9aa5b1;border-bottom-color:#30363d;}
+  body.dark-mode .gha-table tbody td{border-bottom-color:#21262d;}
+  body.dark-mode .gha-trow:hover{background:linear-gradient(110deg,#1f2f4a,#16301f);}
+  body.dark-mode .gha-cell-sum .s{color:#e2e8f0;}
+  body.dark-mode .gha-cell-date,body.dark-mode .gha-cell-sum .pk{color:#94a3b8;}
+  body.dark-mode .sev-crit{background:rgba(207,34,46,.2);color:#ff8087;}
+  body.dark-mode .sev-high{background:rgba(188,76,0,.22);color:#ffab70;}
+  body.dark-mode .sev-mod{background:rgba(154,103,0,.22);color:#f0c674;}
+  body.dark-mode .sev-low,body.dark-mode .sev-na{background:#21262d;color:#9aa5b1;}
+  /* Bulk multi-select */
+  .gha-selcol,.gha-selcell{width:34px;text-align:center;padding-right:0!important;}
+  .gha-rowsel,#gha-selectall{width:16px;height:16px;cursor:pointer;accent-color:#0046AD;}
+  .gha-trow:has(.gha-rowsel:checked){background:linear-gradient(110deg,rgba(0,70,173,.10),rgba(0,166,81,.08));}
+  body.dark-mode .gha-trow:has(.gha-rowsel:checked){background:linear-gradient(110deg,#1c3556,#163826);}
+  .gha-bulkbar{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:100015;
+    display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:14px;
+    background:linear-gradient(135deg,#0046AD,#00A651);color:#fff;
+    box-shadow:0 10px 30px rgba(0,70,173,.4);animation:ghaSlideIn .25s ease;}
+  .gha-bulkbar-n{font-size:13.5px;font-weight:600;white-space:nowrap;margin-right:2px;}
+  .gha-bulkbar-n b{font-size:15px;}
+  .gha-bulk-btn{font:inherit;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;
+    padding:7px 13px;border-radius:10px;border:1px solid rgba(255,255,255,.55);
+    background:rgba(255,255,255,.16);color:#fff;transition:background .14s,transform .1s;}
+  .gha-bulk-btn:hover{background:rgba(255,255,255,.3);transform:translateY(-1px);}
+  .gha-bulk-danger{border-color:#ffd7b0;background:rgba(255,255,255,.22);}
+  .gha-bulk-danger:hover{background:#ffedd5;color:#9a3412;}
+  .gha-bulk-clear{border-color:transparent;background:transparent;font-size:15px;padding:7px 9px;opacity:.85;}
+  .gha-bulk-clear:hover{background:rgba(255,255,255,.2);opacity:1;}
+  /* Pagination */
+  .gha-pager{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center;margin:18px 0 6px;}
+  .gha-pager button{min-width:38px;border:1px solid #d7e3f4;background:#fff;color:#0046AD;font:inherit;
+    font-weight:700;font-size:13px;padding:7px 11px;border-radius:9px;cursor:pointer;transition:all .14s;}
+  .gha-pager button:hover:not(:disabled){background:rgba(0,70,173,.08);border-color:#0046AD;}
+  .gha-pager button.active{background:linear-gradient(135deg,#0046AD,#00A651);color:#fff;border-color:transparent;}
+  .gha-pager button:disabled{opacity:.4;cursor:not-allowed;}
+  .gha-pager-gap{color:#94a3b8;padding:0 2px;}
+  body.dark-mode .gha-pager button{background:#161b22;border-color:#30363d;color:#79b8ff;}
+  body.dark-mode .gha-pager button:hover:not(:disabled){background:rgba(56,139,253,.12);}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="gha-container">
-    <div class="gha-header-strip" style="display:flex;gap:10px;flex-wrap:wrap;">
-        <button class="gha-info-btn" onclick="document.getElementById('ghaInfoModal').style.display='flex'" title="How does this work?">
-            <span class="gha-info-btn-icon">✦</span> How does this work?
-        </button>
-        <button class="gha-info-btn" onclick="document.getElementById('ghaSourcesModal').style.display='flex'" title="Manage sources">
-            <span class="gha-info-btn-icon">⚙</span> Sources
-        </button>
-        <a class="gha-info-btn" href="{{ url_for('github_advisories.advisory_metrics') }}" title="Volume, severity, tempo & coverage dashboard">
-            <span class="gha-info-btn-icon">📊</span> Metrics
-        </a>
-        <button id="gha-subscribe-btn" class="gha-info-btn" style="display:none;" title="Get an email when new critical advisories land">
-            <span class="gha-info-btn-icon">🔔</span> Sign up for email notifications
-        </button>
-        <span id="gha-subscribed-pill" class="gha-sub-pill" style="display:none;">
-            <span>✅ Subscribed to email alerts</span>
-            <a href="#" id="gha-unsubscribe-link">Unsubscribe</a>
-        </span>
-    </div>
+    {# Lead numbers for the command line — derived from the rows already in context (no extra route work) #}
+    {% set ns = namespace(triage=0, agingout=0) %}
+    {% for a in advisories %}{% if a.status == 'new' %}{% set ns.triage = ns.triage + 1 %}{% endif %}{% if a.archive_in_days is not none and a.archive_in_days <= 0 %}{% set ns.agingout = ns.agingout + 1 %}{% endif %}{% endfor %}
 
-    <div class="gha-hero">
-        <h2>🚨 Cyber Security Advisories</h2>
-        <p>Critical security advisories affecting our stack — pulled hourly by the Detection Engineering poller from <b>GitHub</b> (reviewed + malware), <b>OSV</b> (malicious packages), <b>CISA KEV</b>, and any feeds you add under <b>Sources</b>. Review each one, record your assessment, then either close it as not worth reporting or escalate it to the Package Compromise Assessment Teams channel — duplicate-safe.</p>
+    <div class="gha-cmd">
+        <div class="gha-cmd-lead">
+            {% if archived_view %}🗄️ Archive view
+                <span class="gha-cmd-sub">Past advisories — open one to restore it to the live queue</span>
+            {% else %}
+                {% if ns.triage %}<span class="gha-cmd-hot">{{ ns.triage }} need triage</span>{% else %}<span class="gha-cmd-allclear">All triaged ✅</span>{% endif %}{% if ns.agingout %}<span class="gha-cmd-rest"> · {{ ns.agingout }} aging out today</span>{% elif exposure_count %}<span class="gha-cmd-rest"> · {{ exposure_count }} affect{{ '' if exposure_count == 1 else 's' }} us</span>{% endif %}
+                <span class="gha-cmd-sub">Critical advisories affecting our stack · pulled hourly from GitHub, OSV &amp; CISA KEV</span>
+            {% endif %}
+        </div>
+        <div class="gha-header-strip gha-cmd-tools">
+            <button class="gha-info-btn" onclick="document.getElementById('ghaInfoModal').style.display='flex'" title="How does this work?">
+                <span class="gha-info-btn-icon">✦</span> How it works
+            </button>
+            <button class="gha-info-btn" onclick="document.getElementById('ghaSourcesModal').style.display='flex'" title="Manage sources">
+                <span class="gha-info-btn-icon">⚙</span> Sources
+            </button>
+            <a class="gha-info-btn" href="{{ url_for('github_advisories.advisory_metrics') }}" title="Volume, severity, tempo & coverage dashboard">
+                <span class="gha-info-btn-icon">📊</span> Metrics
+            </a>
+            <button id="gha-subscribe-btn" class="gha-info-btn" style="display:none;" title="Get an email when new critical advisories land">
+                <span class="gha-info-btn-icon">🔔</span> Notify me
+            </button>
+            <span id="gha-subscribed-pill" class="gha-sub-pill" style="display:none;">
+                <span>✅ Subscribed to email alerts</span>
+                <a href="#" id="gha-unsubscribe-link">Unsubscribe</a>
+            </span>
+        </div>
     </div>
 
     {% if not archived_view %}
     <div class="gha-kpis">
-        <button class="gha-kpi k-total" data-kpi="total" title="All advisories in the live queue">
-            <span class="gha-kpi-ic">📋</span>
-            <span class="gha-kpi-n">{{ kpis.total }}</span>
-            <span class="gha-kpi-l">Live queue</span>
+        <button class="gha-kpi k-new" data-kpi="new" title="New advisories that still need a human triage decision">
+            <span class="gha-kpi-ic">🆕</span>
+            <span class="gha-kpi-n">{{ counts.get('new', 0) }}</span>
+            <span class="gha-kpi-l">Need triage</span>
+        </button>
+        <button class="gha-kpi k-aging" data-kpi="aging" title="Unowned and past the 3-day cutoff — auto-archives soon. Assign an owner to keep.">
+            <span class="gha-kpi-ic">⏳</span>
+            <span class="gha-kpi-n">{{ kpis.aging }}</span>
+            <span class="gha-kpi-l">Aging &amp; unowned</span>
+        </button>
+        <button class="gha-kpi k-exposure" data-kpi="exposure" title="Confirmed to affect the company — Veracode SCA, app owners or attack surface flagged exposure. Click to see only these. (Counts only advisories whose exposure has been checked.)">
+            <span class="gha-kpi-ic">🎯</span>
+            <span class="gha-kpi-n">{{ exposure_count }}</span>
+            <span class="gha-kpi-l">Affects us</span>
+        </button>
+        <button class="gha-kpi k-escalated" data-kpi="escalated" title="Escalated to the Package Compromise Assessment Teams channel">
+            <span class="gha-kpi-ic">📣</span>
+            <span class="gha-kpi-n">{{ kpis.escalated }}</span>
+            <span class="gha-kpi-l">Escalated · open</span>
         </button>
         <button class="gha-kpi k-kev" data-kpi="kev" title="Known-exploited in the wild (CISA KEV) — top priority">
             <span class="gha-kpi-ic">🔥</span>
@@ -199,47 +419,21 @@
             <span class="gha-kpi-n">{{ kpis.critical }}</span>
             <span class="gha-kpi-l">Critical</span>
         </button>
-        <button class="gha-kpi k-aging" data-kpi="aging" title="Unowned and past the 3-day cutoff — auto-archives soon. Assign an owner to keep.">
-            <span class="gha-kpi-ic">⏳</span>
-            <span class="gha-kpi-n">{{ kpis.aging }}</span>
-            <span class="gha-kpi-l">Aging &amp; unowned</span>
-        </button>
-        <button class="gha-kpi k-escalated" data-kpi="escalated" title="Escalated to the Package Compromise Assessment Teams channel">
-            <span class="gha-kpi-ic">📣</span>
-            <span class="gha-kpi-n">{{ kpis.escalated }}</span>
-            <span class="gha-kpi-l">Escalated</span>
-        </button>
     </div>
 
     {% if posture %}
+    {% set _co = ((outcome_counts.resolved / outcome_counts.ticketed * 100)|round|int) if outcome_counts and outcome_counts.ticketed else None %}
     <div class="gha-tempo">
-        <div class="gha-tempo-stats">
-            <div class="gha-tempo-card">
-                <span class="gha-tempo-n">{{ ('%.1f'|format(posture.mtt_triage_h) ~ 'h') if posture.mtt_triage_h is not none else '—' }}</span>
-                <span class="gha-tempo-l">⏱️ Median time to pick up</span>
-            </div>
-            <div class="gha-tempo-card">
-                <span class="gha-tempo-n">{{ ('%.1f'|format(posture.mtt_notify_h) ~ 'h') if posture.mtt_notify_h is not none else '—' }}</span>
-                <span class="gha-tempo-l">📣 Median time to escalate</span>
-            </div>
-            <div class="gha-tempo-card">
-                <span class="gha-tempo-n">{{ posture.notified_rate }}%</span>
-                <span class="gha-tempo-l">✅ Escalated rate</span>
-            </div>
-            <div class="gha-tempo-card">
-                <span class="gha-tempo-n">{{ (posture.exposure_confirmed_pct ~ '%') if posture.exposure_confirmed_pct is not none else '—' }}</span>
-                <span class="gha-tempo-l">🎯 Exposure-confirmed{% if posture.exposure_checked %} <small>of {{ posture.exposure_checked }} checked</small>{% endif %}</span>
-            </div>
-        </div>
+        <span class="gha-tempo-stat" title="Median time from an advisory landing to someone picking it up">⏱️ Median pickup <b>{{ ('%.1f'|format(posture.mtt_triage_h) ~ 'h') if posture.mtt_triage_h is not none else '—' }}</b></span>
+        <span class="gha-tempo-stat" title="Share of advisories escalated to the Package Compromise Assessment Teams channel">📣 Escalated <b>{{ posture.notified_rate }}%</b></span>
+        <span class="gha-tempo-stat" title="Of the advisories escalated into an XSOAR ticket, the share whose ticket is now resolved — the close-the-loop rate.">🎫 Ticket close-out <b>{% if outcome_counts and outcome_counts.ticketed %}{{ outcome_counts.resolved }}/{{ outcome_counts.ticketed }}{% else %}—{% endif %}</b></span>
+        <span class="gha-tempo-stat" title="Of advisories whose exposure was checked, the share confirmed to affect us">🎯 Exposure-confirmed <b>{{ posture.exposure_confirmed_pct if posture.exposure_confirmed_pct is not none else '—' }}{% if posture.exposure_confirmed_pct is not none %}%{% endif %}</b>{% if posture.exposure_checked %} <small>of {{ posture.exposure_checked }}</small>{% endif %}</span>
         <div class="gha-tempo-trend">
-            <div class="gha-tempo-trend-l">📈 New advisories · last {{ posture.intake_trend|length }} days</div>
+            <span class="gha-tempo-trend-l">📈 New · last {{ posture.intake_trend|length }}d</span>
             {% set maxc = (posture.intake_trend | map(attribute='count') | max) or 1 %}
             <div class="gha-spark">
-                {% for d in posture.intake_trend %}
-                <div class="gha-spark-bar" style="height:{{ (6 + (d.count / maxc * 46))|round(0,'floor')|int }}px" title="{{ d.date }}: {{ d.count }}"></div>
-                {% endfor %}
+                {% for d in posture.intake_trend %}<div class="gha-spark-bar" style="height:{{ (4 + (d.count / maxc * 20))|round(0,'floor')|int }}px" title="{{ d.date }}: {{ d.count }}"></div>{% endfor %}
             </div>
-            <div class="gha-spark-x"><span>{{ posture.intake_trend[0].date }}</span><span>{{ posture.intake_trend[-1].date }}</span></div>
         </div>
     </div>
     {% endif %}
@@ -252,26 +446,92 @@
     </div>
     {% endif %}
 
-    {% if campaigns %}
-    <details class="gha-campaigns" open>
-        <summary class="gha-campaigns-sum">🧬 Likely campaigns <span class="gha-campaigns-n">{{ campaigns|length }}</span> <span class="gha-campaigns-hint">— clusters of related malicious packages across sources</span></summary>
-        <div class="gha-campaigns-body">
-            {% for c in campaigns %}
-            <div class="gha-campaign">
-                <div class="gha-campaign-head">
-                    <span class="gha-campaign-size">{{ c.size }} packages</span>
-                    {% if c.common_tokens %}<span class="gha-campaign-tok">{{ c.common_tokens|join(' · ') }}</span>{% endif %}
-                    <span class="gha-campaign-meta">{{ c.ecosystems|join(', ') or 'mixed' }}{% if c.span_days %} · over {{ c.span_days }}d{% endif %} · {{ c.sources|join(', ') }}</span>
-                </div>
-                <div class="gha-campaign-members">
-                    {% for m in c.members %}<a class="gha-campaign-pkg" href="/cs-advisories/{{ m.source_id }}" title="{{ m.source_id }} · {{ m.first_seen }}">{{ (m.packages[0] if m.packages else m.source_id)|truncate(42) }}</a>{% endfor %}
-                </div>
-            </div>
-            {% endfor %}
+    {# ===== One control bar — views (primary segmented), status/source dropdowns, search, sort, export ===== #}
+    <div class="gha-ctrl">
+        <div class="gha-seg" id="gha-presets" role="group" aria-label="Saved views">
+            <button type="button" class="gha-preset gha-seg-all active" id="gha-seg-all" title="All advisories in the queue">📋 All <span class="gha-preset-n">{{ advisories|length }}</span></button>
+            <button type="button" class="gha-preset" data-preset="new_today" title="Advisories that landed in the queue today">🆕 New today <span class="gha-preset-n" data-cnt></span></button>
+            <button type="button" class="gha-preset" data-preset="aging" title="Unowned and past the 3-day cutoff — auto-archives soon. Assign an owner to keep.">⏳ Aging <span class="gha-preset-n" data-cnt></span></button>
+            <button type="button" class="gha-preset" data-preset="exposure" title="Confirmed to affect the company (Veracode SCA, app owners or attack surface)">🎯 Affects us <span class="gha-preset-n" data-cnt></span></button>
+            <button type="button" class="gha-preset" data-preset="escalated" title="Escalated to the Package Compromise Assessment Teams channel">📣 Escalated <span class="gha-preset-n" data-cnt></span></button>
+            {% if is_authenticated %}<button type="button" class="gha-preset" data-preset="mine" title="Advisories you own">👤 Mine <span class="gha-preset-n" data-cnt></span></button>{% endif %}
         </div>
-    </details>
+        <button type="button" class="gha-preset-clear" id="gha-preset-clear" style="display:none;">✕ Clear view</button>
+
+        <select id="gha-status-filter" class="gha-dd" title="Filter by triage status" aria-label="Status filter">
+            <option value="all">Status · All ({{ advisories|length }})</option>
+            <option value="new">New ({{ counts.get('new', 0) }})</option>
+            <option value="under_review">Under review ({{ counts.get('under_review', 0) }})</option>
+            <option value="reported">Reported ({{ counts.get('reported', 0) }})</option>
+            <option value="closed_not_reported">Closed ({{ counts.get('closed_not_reported', 0) }})</option>
+        </select>
+
+        {% if source_labels %}
+        <select id="gha-source-filter" class="gha-dd" title="Filter by source" aria-label="Source filter">
+            <option value="all">Source · All</option>
+            {% for src, label in source_labels.items() %}<option value="{{ src }}">{{ label }} ({{ source_counts.get(src, 0) }})</option>{% endfor %}
+        </select>
+        {% endif %}
+
+        <div class="gha-searchbar">
+            <input type="search" id="gha-search" autocomplete="off"
+                   placeholder="🔍 Search — ID, CVE, package, summary, owner…">
+            <span class="gha-search-count" id="gha-search-count"></span>
+        </div>
+
+        <label class="gha-tool-sort">Sort
+            <select id="gha-sort">
+                <option value="default">Default</option>
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="severity">Severity</option>
+                <option value="corrob">Most corroborated</option>
+                <option value="source">Source</option>
+            </select>
+        </label>
+        <button type="button" class="gha-tool-toggle" id="gha-corrob-toggle" data-on="0" title="Show only advisories confirmed by 2+ sources">🔗 Corroborated</button>
+        {% if is_authenticated %}<button type="button" class="gha-tool-toggle" id="gha-sync-outcomes" title="Pull the latest XSOAR ticket state onto escalated rows (open / in progress / resolved)">🎫 Sync tickets</button>{% endif %}
+        <a class="gha-tool-csv" href="{{ url_for('github_advisories.advisory_export_csv', archived=1 if archived_view else None) }}" title="Download the queue as CSV">⬇ Export</a>
+        {% if not archived_view %}<a class="gha-archive-link" href="{{ url_for('github_advisories.advisory_list', archived=1) }}" title="View archived advisories">🗄️ Archived <b>{{ archived_count }}</b></a>{% endif %}
+    </div>
+
+    <div class="gha-tabs" role="tablist">
+        <button class="gha-tab active" data-tab="advisories" role="tab">📋 Advisories <span class="gha-tab-n">{{ advisories|length }}</span></button>
+        {% if campaigns %}
+        <button class="gha-tab" data-tab="campaigns" role="tab">🧬 {% if archived_view %}Past campaigns{% else %}Likely campaigns{% endif %} <span class="gha-tab-n">{{ campaigns|length }}</span></button>
+        {% endif %}
+    </div>
+
+    {% if campaigns %}
+    <section class="gha-tabpanel" data-panel="campaigns" role="tabpanel" hidden>
+        <div class="gha-campaigns-sum-static">🧬 {% if archived_view %}Past campaigns{% else %}Likely campaigns{% endif %} <span class="gha-campaigns-n">{{ campaigns|length }}</span> <span class="gha-campaigns-hint">— clusters of related malicious packages across sources{% if archived_view %}, reconstructed from the archive{% endif %}</span></div>
+        <table class="gha-camp-table">
+            <thead>
+                <tr><th>Campaign</th><th>Packages</th><th>Scope</th><th>Last activity</th><th>Members</th></tr>
+            </thead>
+            <tbody>
+            {% for c in campaigns %}
+            <tr class="gha-camp-row">
+                <td>
+                    {% if c.common_tokens %}<span class="gha-camp-tok">{{ c.common_tokens|join(' · ') }}</span>{% else %}<span class="gha-camp-tok gha-camp-tok-mixed">mixed cluster</span>{% endif %}
+                    {% if c.age_days is not none and c.age_days <= 1 %} <span class="gha-campaign-new">🆕 New</span>{% endif %}
+                </td>
+                <td><span class="gha-camp-size">{{ c.size }}</span></td>
+                <td class="gha-camp-meta">{{ c.ecosystems|join(', ') or 'mixed' }}{% if c.span_days %} · over {{ c.span_days }}d{% endif %}<div class="gha-camp-src">{{ c.sources|join(', ') }}</div></td>
+                <td class="gha-camp-when">{% if c.last_seen %}🕒 {{ c.last_seen }}{% if c.age_days is not none %}<div class="gha-camp-age">{% if c.age_days == 0 %}today{% elif c.age_days == 1 %}yesterday{% else %}{{ c.age_days }}d ago{% endif %}</div>{% endif %}{% else %}—{% endif %}</td>
+                <td>
+                    <div class="gha-camp-members">
+                        {% for m in c.members %}<a class="gha-camp-pkg" href="/cs-advisories/{{ m.source_id }}" title="{{ m.source_id }} · {{ m.first_seen }}">{{ (m.packages[0] if m.packages else m.source_id)|truncate(42) }}</a>{% endfor %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </section>
     {% endif %}
 
+    <section class="gha-tabpanel" data-panel="advisories" role="tabpanel">
     <style>
         .gha-pkggroup{margin:14px 0;border:1px solid #d7e3f4;border-radius:14px;background:linear-gradient(135deg,rgba(0,70,173,.05),rgba(0,166,81,.05));}
         body.dark-mode .gha-pkggroup{border-color:#334155;background:linear-gradient(135deg,rgba(0,70,173,.16),rgba(0,166,81,.14));}
@@ -303,6 +563,22 @@
         .grp-clearrow select{border:1px solid #cbd5e1;border-radius:9px;padding:8px 10px;font:inherit;}
         body.dark-mode .grp-clearrow select{background:#0f172a;color:#e2e8f0;border-color:#475569;}
         .grp-caveat{font-size:.78rem;color:#94a3b8;margin-top:8px;}
+        .gha-live-lookup-wrap{margin:10px 0 2px;}
+        .gha-live-lookup-wrap>summary{display:inline-flex;align-items:center;gap:6px;cursor:pointer;width:fit-content;
+            font-size:.82rem;font-weight:600;color:#0046AD;list-style:none;padding:3px 0;opacity:.85;
+            transition:opacity .15s;}
+        .gha-live-lookup-wrap>summary:hover{opacity:1;text-decoration:underline;}
+        .gha-live-lookup-wrap>summary::-webkit-details-marker{display:none;}
+        .gha-live-lookup-wrap[open]>summary{margin-bottom:2px;}
+        body.dark-mode .gha-live-lookup-wrap>summary{color:#79b8ff;}
+        .gha-live-lookup{display:flex;align-items:center;gap:8px;margin:6px 0;max-width:680px;background:rgba(255,255,255,.7);border:1px solid #cbd5e1;border-radius:12px;padding:6px 8px 6px 12px;}
+        body.dark-mode .gha-live-lookup{background:rgba(15,23,42,.6);border-color:#475569;}
+        .gha-live-lookup-icon{font-size:1.05rem;}
+        .gha-live-lookup input{flex:1;border:none;background:transparent;font:inherit;padding:7px 4px;color:inherit;outline:none;}
+        .gha-live-lookup input::placeholder{color:#94a3b8;}
+        .gha-live-lookup button{font-weight:700;cursor:pointer;border-radius:9px;padding:8px 16px;border:1px solid #0046AD;background:linear-gradient(135deg,#0046AD,#00A651);color:#fff;white-space:nowrap;}
+        .gha-live-lookup-hint{font-size:.8rem;color:#64748b;margin:2px 0 0;max-width:680px;}
+        body.dark-mode .gha-live-lookup-hint{color:#94a3b8;}
     </style>
     <details class="gha-pkggroup" id="gha-pkggroup">
         <summary>🧬 Group &amp; bulk-clear packages <span class="gha-pkggroup-hint">— search a scope (e.g. @mastra) to check a whole campaign against our environment and clear it in one click</span></summary>
@@ -330,51 +606,19 @@
         </div>
     </details>
 
-    <div class="gha-counts">
-        <a class="gha-chip active" href="#" data-filter="all">All <b>{{ advisories|length }}</b></a>
-        <a class="gha-chip" href="#" data-filter="new">New <b>{{ counts.get('new', 0) }}</b></a>
-        <a class="gha-chip" href="#" data-filter="under_review">Under review <b>{{ counts.get('under_review', 0) }}</b></a>
-        <a class="gha-chip" href="#" data-filter="reported">Reported <b>{{ counts.get('reported', 0) }}</b></a>
-        <a class="gha-chip" href="#" data-filter="closed_not_reported">Closed <b>{{ counts.get('closed_not_reported', 0) }}</b></a>
-        {% if not archived_view %}
-        <a class="gha-archive-link" href="{{ url_for('github_advisories.advisory_list', archived=1) }}" title="View archived advisories">🗄️ Archived <b>{{ archived_count }}</b></a>
-        {% endif %}
-    </div>
-
-    {% if source_labels %}
-    <div class="gha-srcfilter">
-        <span class="lbl">Source</span>
-        <a class="gha-chip gha-srcchip active" href="#" data-source="all">All</a>
-        {% for src, label in source_labels.items() %}
-            <a class="gha-chip gha-srcchip" href="#" data-source="{{ src }}">{{ label }} <b>{{ source_counts.get(src, 0) }}</b></a>
-        {% endfor %}
-    </div>
-    {% endif %}
-
-    <div class="gha-searchbar">
-        <input type="search" id="gha-search" autocomplete="off"
-               placeholder="🔍 Search — ID, CVE, package, summary, owner…">
-        <span class="gha-search-count" id="gha-search-count"></span>
-    </div>
-
-    <div class="gha-toolbar">
-        <label class="gha-tool-sort">Sort
-            <select id="gha-sort">
-                <option value="default">Default</option>
-                <option value="newest">Newest first</option>
-                <option value="oldest">Oldest first</option>
-                <option value="severity">Severity</option>
-                <option value="corrob">Most corroborated</option>
-                <option value="source">Source</option>
-            </select>
-        </label>
-        <button type="button" class="gha-tool-toggle" id="gha-corrob-toggle" data-on="0" title="Show only advisories confirmed by 2+ sources">🔗 Corroborated only</button>
-        <a class="gha-tool-csv" href="{{ url_for('github_advisories.advisory_export_csv', archived=1 if archived_view else None) }}" title="Download the queue as CSV">⬇ Export CSV</a>
-    </div>
-
     {% if advisories %}
+        <table class="gha-table">
+            <thead>
+                <tr>
+                    {% if is_authenticated %}<th class="gha-selcol"><input type="checkbox" id="gha-selectall" title="Select all shown"></th>{% endif %}
+                    <th>Status</th><th>Severity</th><th>Exposure</th><th>Source</th><th>Advisory</th>
+                    <th>Summary</th><th>Date</th><th>Owner</th>
+                </tr>
+            </thead>
+            <tbody>
         {% for a in advisories %}
-        <a class="gha-row s-{{ a.status }}" data-status="{{ a.status }}" data-source="{{ a.source }}"
+        {% set sv = a.severity or '' %}
+        <tr class="gha-trow s-{{ a.status }}" data-status="{{ a.status }}" data-source="{{ a.source }}"
            data-severity="{{ a.severity or '' }}"
            data-kev="{{ '1' if (a.source == 'cisa_kev' or a.severity == 'known_exploited') else '0' }}"
            data-aging="{{ '1' if (not a.owner and a.status != 'reported' and a.first_seen_at and a.first_seen_at < aging_cutoff) else '0' }}"
@@ -382,25 +626,51 @@
            data-published="{{ (a.published_at or a.first_seen_at or '')[:10] }}"
            data-sevrank="{{ {'critical':4,'malicious':4,'known_exploited':4,'high':3,'moderate':2,'medium':2,'low':1}.get(a.severity, 0) }}"
            data-corrobcount="{{ a.corroboration.source_count if a.corroboration else 0 }}"
-           href="/cs-advisories/{{ a.source_id }}">
-            <span class="gha-badge b-{{ a.status }}">{{ a.status.replace('_', ' ') }}</span>
-            <span class="gha-src src-fam-{{ src_family(a.source)|trim }}">{{ a.source_label }}</span>
-            {% if a.corroboration %}<span class="gha-corrob" title="Confirmed across {{ a.corroboration.source_count }} sources: {{ a.corroboration.sources|join(', ') }}{% if a.corroboration.via %} · via {{ a.corroboration.via|join(', ') }}{% endif %}">🔗 {{ a.corroboration.source_count }} sources</span>{% endif %}
-            {% if a.assessment_status and a.assessment_status in assessment_statuses %}<span class="gha-assessbadge a-{{ a.assessment_status }}" title="Assessment team: {{ assessment_statuses[a.assessment_status].label }}{% if a.assessment_by %} (by {{ a.assessment_by }}){% endif %}">{{ assessment_statuses[a.assessment_status].emoji }} {{ assessment_statuses[a.assessment_status].label }}</span>{% endif %}
-            <div class="gha-id">{{ a.source_id }} <span class="gha-cve">{{ a.cve_id or 'no CVE' }}</span></div>
-            <div class="gha-summary">{{ a.summary or '(no summary)' }}</div>
-            {% if a.packages %}<div class="gha-pkgline">📦 {{ a.packages|join(', ') }}</div>{% endif %}
-            <div class="gha-meta">Published {{ (a.published_at or '')[:10] or 'unknown' }}
-                {% if a.reviewed_by %} · reviewed by {{ a.reviewed_by }}{% endif %}
-                {% if a.reported_at %} · reported {{ a.reported_at[:10] }}{% endif %}
-                {% if a.owner %}<span class="gha-owner-chip">👤 {{ a.owner }}</span>{% endif %}
-            </div>
-        </a>
+           data-exposure="{{ a.exposure.state }}"
+           data-outcome="{{ a.xsoar_status or '' }}"
+           data-owner="{{ (a.owner or '')|lower }}"
+           data-firstseen="{{ (a.first_seen_at or '')[:10] }}"
+           data-href="/cs-advisories/{{ a.source_id }}">
+            {% if is_authenticated %}<td class="gha-selcell"><input type="checkbox" class="gha-rowsel" data-key="{{ a.source_id }}"></td>{% endif %}
+            <td><span class="gha-badge b-{{ a.status }}">{{ a.status.replace('_', ' ') }}</span>
+                {% if a.xsoar_status %}{% set _oc = {'open':('🎫','Open'),'in_progress':('🔧','In progress'),'resolved':('✅','Resolved')}.get(a.xsoar_status) %}
+                {% if _oc %}<br><span class="gha-outcome oc-{{ a.xsoar_status }}" title="XSOAR ticket {{ a.xsoar_ticket_id }} — {{ _oc[1] }}{% if a.xsoar_close_reason %}: {{ a.xsoar_close_reason }}{% endif %}">{{ _oc[0] }} {{ _oc[1] }}</span>{% endif %}{% endif %}
+            </td>
+            <td><span class="gha-sevpill sev-{{ {'critical':'crit','malicious':'crit','known_exploited':'crit','high':'high','moderate':'mod','medium':'mod','low':'low'}.get(sv, 'na') }}">{{ sv.replace('_', ' ') or '—' }}</span></td>
+            <td>
+                {% if a.exposure.state == 'exposed' %}<span class="gha-exp-badge exp-exposed" title="Confirmed to affect the company">⛔ {% if a.exposure.apps %}{{ a.exposure.apps }} app{{ 's' if a.exposure.apps != 1 else '' }}{% else %}Affects us{% endif %}</span>
+                {% elif a.exposure.state == 'clear' %}<span class="gha-exp-badge exp-clear" title="Checked — no known exposure in our environment">✅ Clear</span>
+                {% else %}<span class="gha-exp-na" title="Exposure not checked yet — open the advisory to run the checks">— not checked</span>{% endif %}
+            </td>
+            <td><span class="gha-src src-fam-{{ src_family(a.source)|trim }}">{{ a.source_label }}</span></td>
+            <td class="gha-cell-adv">
+                <span class="gha-id">{{ a.source_id }}</span>
+                <span class="gha-cve">{{ a.cve_id or 'no CVE' }}</span>
+                {% if a.corroboration %}<span class="gha-corrob" title="Confirmed across {{ a.corroboration.source_count }} sources: {{ a.corroboration.sources|join(', ') }}{% if a.corroboration.via %} · via {{ a.corroboration.via|join(', ') }}{% endif %}">🔗 {{ a.corroboration.source_count }}</span>{% endif %}
+                {% if a.assessment_status and a.assessment_status in assessment_statuses %}<span class="gha-assessbadge a-{{ a.assessment_status }}" title="Assessment team: {{ assessment_statuses[a.assessment_status].label }}{% if a.assessment_by %} (by {{ a.assessment_by }}){% endif %}">{{ assessment_statuses[a.assessment_status].emoji }} {{ assessment_statuses[a.assessment_status].label }}</span>{% endif %}
+            </td>
+            <td class="gha-cell-sum">
+                <div class="s">{{ a.summary or '(no summary)' }}</div>
+                {% if a.packages %}<div class="pk">📦 {{ a.packages|join(', ') }}</div>{% endif %}
+            </td>
+            <td class="gha-cell-date">
+                {{ (a.published_at or '')[:10] or 'unknown' }}
+                {% set _seen = (a.first_seen_at or '')[:10] %}
+                {% if _seen and _seen != (a.published_at or '')[:10] %}<div class="gha-added">🕒 added {{ _seen }}</div>{% endif %}
+                {% if a.reported_at %}<div class="gha-added">📣 reported {{ a.reported_at[:10] }}</div>{% endif %}
+                {% if a.age_days is not none %}<div class="gha-age">⏳ {% if a.age_days == 0 %}new today{% elif a.age_days == 1 %}1 day in queue{% else %}{{ a.age_days }} days in queue{% endif %}</div>{% endif %}
+            </td>
+            <td class="gha-owner-cell">{% if a.owner %}<span class="gha-owner-chip">👤 {{ a.owner }}</span>{% else %}<span class="gha-dash">—</span>{% if a.archive_in_days is not none %}{% if a.archive_in_days <= 0 %}<div><span class="gha-arch overdue" title="Past the 3-day cutoff — the next daily auto-archive (03:30 ET) will move this out of the queue. Claim it to keep it.">🗄 archiving soon</span></div>{% elif a.archive_in_days == 1 %}<div><span class="gha-arch urgent" title="Auto-archives tomorrow unless someone takes ownership">🗄 archives in ~1d</span></div>{% else %}<div><span class="gha-arch" title="Auto-archives once it has sat unowned for 3 days">🗄 archives in ~{{ a.archive_in_days }}d</span></div>{% endif %}{% endif %}{% if is_authenticated %}<div><button type="button" class="gha-claim" data-key="{{ a.source_id }}" title="Assign this advisory to yourself">✋ Assign to me</button></div>{% endif %}{% endif %}</td>
+        </tr>
         {% endfor %}
+            </tbody>
+        </table>
         <div class="gha-empty" id="gha-no-match" style="display:none;">No advisories in this view.</div>
+        <nav class="gha-pager" id="gha-pager" style="display:none;" aria-label="Advisory pages"></nav>
     {% else %}
         <div class="gha-empty">No advisories recorded yet. The hourly Detection Engineering poller will populate this queue.</div>
     {% endif %}
+    </section>
 </div>
 
 <!-- How Does This Work? Modal -->
@@ -411,6 +681,16 @@
             <button class="gha-info-close" onclick="document.getElementById('ghaInfoModal').style.display='none'">&times;</button>
         </div>
         <div class="gha-info-body">
+            <p style="margin:0 0 14px;font-size:13.5px;color:#475569;line-height:1.55;">Critical security advisories affecting our stack — pulled hourly by the Detection Engineering poller from <b>GitHub</b> (reviewed + malware), <b>OSV</b> (malicious packages), <b>CISA KEV</b>, and any feeds you add under <b>Sources</b>. Review each one, record your assessment, then either close it as not worth reporting or escalate it to the Package Compromise Assessment Teams channel — duplicate-safe.</p>
+            <details class="gha-live-lookup-wrap" open>
+                <summary>🔎 Look up a CVE or GHSA that isn't in the queue</summary>
+                <form class="gha-live-lookup" onsubmit="event.preventDefault(); var v=document.getElementById('ghaLiveLookup').value.trim(); if(v){location.href='/cs-advisories/'+encodeURIComponent(v);}">
+                    <span class="gha-live-lookup-icon">🔎</span>
+                    <input id="ghaLiveLookup" type="text" placeholder="e.g. CVE-2026-48170 or GHSA-…" autocomplete="off" spellcheck="false">
+                    <button type="submit">Look it up live</button>
+                </form>
+                <p class="gha-live-lookup-hint">GitHub can take weeks to publish a GHSA after a CVE is assigned. This fetches it on demand from GitHub → NVD → OSV and adds it to the queue.</p>
+            </details>
             <div class="gha-info-section">
                 <div class="gha-info-icon">🎯</div>
                 <div>
@@ -469,6 +749,14 @@
                     {% if not s.builtin %}<button class="rm" data-key="{{ s.key }}" title="Remove source">Remove</button>{% endif %}
                 </div>
                 {% endfor %}
+                <!-- Teaser: not yet wired (paid Flashpoint API creds pending) -->
+                <div class="src-row src-soon" title="Flashpoint VulnDB — commercial vulnerability intelligence; coming soon">
+                    <label class="switch"><input type="checkbox" disabled><span class="sl"></span></label>
+                    <span class="name">Flashpoint VulnDB</span>
+                    <span class="tag">vulndb</span>
+                    <span class="spacer"></span>
+                    <span class="soon-pill">✨ Coming soon</span>
+                </div>
             </div>
 
             <div class="src-add">
@@ -496,6 +784,15 @@
     </div>
 </div>
 
+{% if is_authenticated %}
+<div id="gha-bulkbar" class="gha-bulkbar" style="display:none;">
+    <span class="gha-bulkbar-n">🗂️ <b id="gha-bulk-count">0</b> selected</span>
+    <button type="button" class="gha-bulk-btn" data-bulk="assign" title="Claim ownership of the selected advisories">👤 Assign to me</button>
+    <button type="button" class="gha-bulk-btn" data-bulk="close" title="Close the selected as not worth reporting">✅ Close…</button>
+    <button type="button" class="gha-bulk-btn gha-bulk-danger" data-bulk="escalate" title="Escalate the selected to the Package Compromise Assessment Teams channel">📣 Escalate…</button>
+    <button type="button" class="gha-bulk-btn gha-bulk-clear" data-bulk="clear" title="Clear selection">✕</button>
+</div>
+{% endif %}
 {% include '_chat_widget.html' %}
 <div id="gha-toast" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#24292e;color:#fff;padding:10px 16px;border-radius:8px;font-size:13px;opacity:0;transition:.25s;pointer-events:none;z-index:100020;"></div>
 {% endblock %}
@@ -506,63 +803,231 @@
 <script>
 const CHAT_CTX = {{ chat_context|tojson }};
 (function () {
-    // ---- status + source filtering ----
-    const statusChips = document.querySelectorAll('.gha-chip:not(.gha-srcchip)');
-    const sourceChips = document.querySelectorAll('.gha-srcchip');
-    const rows = document.querySelectorAll('.gha-row');
+    // ---- status + source filtering (now compact dropdowns; same state engine) ----
+    const statusSel = document.getElementById('gha-status-filter');
+    const sourceSel = document.getElementById('gha-source-filter');
+    const rows = document.querySelectorAll('.gha-trow');
     const empty = document.getElementById('gha-no-match');
     const kpiCards = document.querySelectorAll('.gha-kpi');
     const CRIT = {critical: 1, malicious: 1, known_exploited: 1};
     let curStatus = 'all', curSource = 'all', curSearch = '', curKpi = '', corrobOnly = false;
+    let curView = '';                 // extra preset dimension: '' | 'today' | 'mine'
+    const ME = {{ current_owner|default('')|tojson }};
+    const TODAY = new Date().toISOString().slice(0, 10);  // UTC, matches first_seen stamping
     const searchInput = document.getElementById('gha-search');
     const searchCount = document.getElementById('gha-search-count');
+    function viewMatch(r) {
+        if (curView === 'today') return r.dataset.firstseen === TODAY;
+        if (curView === 'mine')  return !!ME && r.dataset.owner === ME;
+        return true;
+    }
     function kpiMatch(r) {
         switch (curKpi) {
+            case 'new':       return r.dataset.status === 'new';
             case 'kev':       return r.dataset.kev === '1';
             case 'critical':  return !!CRIT[r.dataset.severity];
             case 'aging':     return r.dataset.aging === '1';
             case 'escalated': return r.dataset.status === 'reported';
+            case 'exposure':  return r.dataset.exposure === 'exposed';
             default:          return true;  // 'total' or none
         }
     }
-    function apply() {
-        let shown = 0;
-        rows.forEach(r => {
-            const match = (curStatus === 'all' || r.dataset.status === curStatus)
-                       && (curSource === 'all' || r.dataset.source === curSource)
-                       && kpiMatch(r)
-                       && (!corrobOnly || r.dataset.corroborated === '1')
-                       && (!curSearch || r.textContent.toLowerCase().indexOf(curSearch) !== -1);
-            r.style.display = match ? '' : 'none';
-            if (match) shown++;
-        });
-        if (empty) empty.style.display = shown ? 'none' : 'block';
-        if (searchCount) searchCount.textContent = curSearch ? (shown + ' match' + (shown === 1 ? '' : 'es')) : '';
+    // ---- pagination over the filtered set ----
+    const PAGE_SIZE = 25;
+    let curPage = 1;
+    let order = Array.from(rows);   // current display order (mutated by sort)
+    let matched = [];               // rows passing the active filters
+    const pager = document.getElementById('gha-pager');
+    const listTop = document.querySelector('.gha-ctrl');
+    function computeMatched() {
+        matched = order.filter(r =>
+               (curStatus === 'all' || r.dataset.status === curStatus)
+            && (curSource === 'all' || r.dataset.source === curSource)
+            && kpiMatch(r)
+            && viewMatch(r)
+            && (!corrobOnly || r.dataset.corroborated === '1')
+            && (!curSearch || r.textContent.toLowerCase().indexOf(curSearch) !== -1));
     }
+    function pageWindow(cur, total) {
+        const out = [], range = 2;
+        out.push(1);
+        if (cur - range > 2) out.push('…');
+        for (let p = Math.max(2, cur - range); p <= Math.min(total - 1, cur + range); p++) out.push(p);
+        if (cur + range < total - 1) out.push('…');
+        if (total > 1) out.push(total);
+        return out;
+    }
+    function renderPager(totalPages) {
+        if (!pager) return;
+        if (totalPages <= 1) { pager.innerHTML = ''; pager.style.display = 'none'; return; }
+        pager.style.display = 'flex';
+        const parts = ['<button data-pg="prev"' + (curPage === 1 ? ' disabled' : '') + '>‹ Prev</button>'];
+        pageWindow(curPage, totalPages).forEach(p => {
+            parts.push(p === '…' ? '<span class="gha-pager-gap">…</span>'
+                : '<button data-pg="' + p + '"' + (p === curPage ? ' class="active"' : '') + '>' + p + '</button>');
+        });
+        parts.push('<button data-pg="next"' + (curPage === totalPages ? ' disabled' : '') + '>Next ›</button>');
+        pager.innerHTML = parts.join('');
+    }
+    function renderPage() {
+        const totalPages = Math.max(1, Math.ceil(matched.length / PAGE_SIZE));
+        if (curPage > totalPages) curPage = totalPages;
+        if (curPage < 1) curPage = 1;
+        const start = (curPage - 1) * PAGE_SIZE, end = start + PAGE_SIZE;
+        order.forEach(r => r.style.display = 'none');
+        matched.slice(start, end).forEach(r => r.style.display = '');
+        if (empty) empty.style.display = matched.length ? 'none' : 'block';
+        if (searchCount) searchCount.textContent = curSearch ? (matched.length + ' match' + (matched.length === 1 ? '' : 'es')) : '';
+        renderPager(totalPages);
+    }
+    function apply() { curPage = 1; computeMatched(); renderPage(); }
+    if (pager) pager.addEventListener('click', e => {
+        const b = e.target.closest('button'); if (!b || b.disabled) return;
+        const totalPages = Math.max(1, Math.ceil(matched.length / PAGE_SIZE));
+        const v = b.dataset.pg;
+        if (v === 'prev') curPage = Math.max(1, curPage - 1);
+        else if (v === 'next') curPage = Math.min(totalPages, curPage + 1);
+        else curPage = parseInt(v, 10);
+        renderPage();
+        if (listTop) listTop.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    // ---- row click → open advisory (whole row is the link, except the
+    //      select checkbox, which drives bulk actions) ----
+    rows.forEach(r => r.addEventListener('click', (e) => {
+        if (e.target.closest('.gha-selcell')) return;
+        if (e.target.closest('.gha-claim')) return;   // inline claim handles its own action
+        if (r.dataset.href) location.href = r.dataset.href;
+    }));
+
+    // ---- tabs (Advisories | Campaigns) ----
+    const tabs = document.querySelectorAll('.gha-tab');
+    const panels = document.querySelectorAll('.gha-tabpanel');
+    function activateTab(name) {
+        tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+        panels.forEach(p => { p.hidden = (p.dataset.panel !== name); });
+    }
+    tabs.forEach(t => t.addEventListener('click', () => activateTab(t.dataset.tab)));
+
+    const listAnchor = document.querySelector('.gha-searchbar');
     kpiCards.forEach(c => c.addEventListener('click', () => {
         const k = c.dataset.kpi;
         // toggle: clicking the active card (or 'total') clears the KPI filter
         if (curKpi === k || k === 'total') { curKpi = ''; kpiCards.forEach(x => x.classList.remove('active')); if (k === 'total') c.classList.add('active'); }
         else { curKpi = k; kpiCards.forEach(x => x.classList.remove('active')); c.classList.add('active'); }
         apply();
+        // A KPI card is a question ("show me the known-exploited ones") — make
+        // sure the Advisories tab is the one showing, then bring the matching
+        // rows on screen. Clearing the filter stays put.
+        if (curKpi) { activateTab('advisories'); if (listAnchor) listAnchor.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+        unmarkPreset();   // a manual KPI choice diverges from any named view
     }));
+
+    // ---- saved-view presets (one-click stakeholder slices, deep-linkable) ----
+    // Each preset snaps the existing filters to a known combination; aging /
+    // exposure / escalated reuse the KPI predicates, new_today / mine add a view
+    // dimension. Composing on top of the same client-side engine = no reload.
+    const presetBtns = document.querySelectorAll('.gha-preset[data-preset]');
+    const presetClear = document.getElementById('gha-preset-clear');
+    const segAll = document.getElementById('gha-seg-all');   // primary "All" segment (clears the view)
+    function syncSegAll() { if (segAll) segAll.classList.toggle('active', !activePreset); }
+    const PRESETS = {
+        new_today: { kpi: '',          view: 'today' },
+        aging:     { kpi: 'aging',     view: ''      },
+        exposure:  { kpi: 'exposure',  view: ''      },
+        escalated: { kpi: 'escalated', view: ''      },
+        mine:      { kpi: '',          view: 'mine'  },
+    };
+    let activePreset = '';
+    function predicateFor(p) {
+        // standalone predicate for counting (independent of current filters)
+        const cfg = PRESETS[p]; if (!cfg) return () => false;
+        return (r) => {
+            if (cfg.kpi === 'aging')      return r.dataset.aging === '1';
+            if (cfg.kpi === 'exposure')   return r.dataset.exposure === 'exposed';
+            if (cfg.kpi === 'escalated')  return r.dataset.status === 'reported';
+            if (cfg.view === 'today')     return r.dataset.firstseen === TODAY;
+            if (cfg.view === 'mine')      return !!ME && r.dataset.owner === ME;
+            return true;
+        };
+    }
+    function unmarkPreset() {
+        // drop the named-view highlight WITHOUT touching filter state (e.g. when
+        // the analyst hand-tweaks a chip while inside a preset)
+        if (!activePreset) return;
+        activePreset = '';
+        presetBtns.forEach(b => b.classList.remove('active'));
+        if (presetClear) presetClear.style.display = 'none';
+        syncSegAll();
+        syncUrl('');
+    }
+    function syncUrl(view) {
+        if (!window.history || !history.replaceState) return;
+        const u = new URL(window.location.href);
+        if (view) u.searchParams.set('view', view); else u.searchParams.delete('view');
+        history.replaceState(null, '', u.toString());
+    }
+    function applyPreset(p, opts) {
+        const cfg = PRESETS[p]; if (!cfg) return;
+        opts = opts || {};
+        // reset the orthogonal filters so the view is exactly what its label says
+        curStatus = 'all'; curSource = 'all'; corrobOnly = false;
+        if (statusSel) statusSel.value = 'all';
+        if (sourceSel) sourceSel.value = 'all';
+        if (corrobBtn) corrobBtn.classList.remove('on');
+        curKpi = cfg.kpi; curView = cfg.view;
+        kpiCards.forEach(x => x.classList.toggle('active', x.dataset.kpi === cfg.kpi));
+        activePreset = p;
+        presetBtns.forEach(b => b.classList.toggle('active', b.dataset.preset === p));
+        if (presetClear) presetClear.style.display = '';
+        syncSegAll();
+        apply();
+        activateTab('advisories');
+        syncUrl(p);
+        if (!opts.silent && listAnchor) listAnchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    function clearPreset() {
+        curKpi = ''; curView = '';
+        kpiCards.forEach(x => x.classList.remove('active'));
+        activePreset = '';
+        presetBtns.forEach(b => b.classList.remove('active'));
+        if (presetClear) presetClear.style.display = 'none';
+        syncSegAll();
+        syncUrl('');
+        apply();
+    }
+    presetBtns.forEach(b => b.addEventListener('click', () => {
+        const p = b.dataset.preset;
+        if (activePreset === p) clearPreset(); else applyPreset(p);
+    }));
+    if (presetClear) presetClear.addEventListener('click', clearPreset);
+    if (segAll) segAll.addEventListener('click', clearPreset);   // "All" segment = clear the active view
+    // count each preset's slice (over all rows, like the KPI cards)
+    function refreshPresetCounts() {
+        presetBtns.forEach(b => {
+            const cnt = b.querySelector('[data-cnt]'); if (!cnt) return;
+            const pred = predicateFor(b.dataset.preset);
+            cnt.textContent = Array.from(rows).filter(pred).length;
+        });
+    }
+    refreshPresetCounts();
+
     if (searchInput) searchInput.addEventListener('input', () => {
         curSearch = searchInput.value.trim().toLowerCase(); apply();
     });
-    statusChips.forEach(c => c.addEventListener('click', e => {
-        e.preventDefault(); statusChips.forEach(x => x.classList.remove('active'));
-        c.classList.add('active'); curStatus = c.dataset.filter; apply();
-    }));
-    sourceChips.forEach(c => c.addEventListener('click', e => {
-        e.preventDefault(); sourceChips.forEach(x => x.classList.remove('active'));
-        c.classList.add('active'); curSource = c.dataset.source; apply();
-    }));
+    if (statusSel) statusSel.addEventListener('change', () => {
+        curStatus = statusSel.value; unmarkPreset(); apply();
+    });
+    if (sourceSel) sourceSel.addEventListener('change', () => {
+        curSource = sourceSel.value; unmarkPreset(); apply();
+    });
 
     // ---- corroborated-only toggle ----
     const corrobBtn = document.getElementById('gha-corrob-toggle');
     if (corrobBtn) corrobBtn.addEventListener('click', () => {
         corrobOnly = !corrobOnly;
         corrobBtn.classList.toggle('on', corrobOnly);
+        unmarkPreset();
         apply();
     });
 
@@ -582,8 +1047,16 @@ const CHAT_CTX = {{ chat_context|tojson }};
             else if (mode === 'corrob') arr.sort((a, b) => num(b, 'corrobcount') - num(a, 'corrobcount'));
             else if (mode === 'source') arr.sort((a, b) => (a.dataset.source || '').localeCompare(b.dataset.source || ''));
             arr.forEach(r => container.appendChild(r));
+            order = arr;        // pagination follows the new order
+            apply();
         });
     }
+    apply();   // initial paginate (page 1 of the default order)
+    // deep-link: ?view=<preset> opens straight into that stakeholder slice
+    (function () {
+        const v = new URL(window.location.href).searchParams.get('view');
+        if (v && PRESETS[v]) applyPreset(v, { silent: true });
+    })();
     document.addEventListener('keydown', e => {
         if (e.key === 'Escape') ['ghaInfoModal','ghaSourcesModal'].forEach(id => {
             const m = document.getElementById(id); if (m) m.style.display = 'none';
@@ -607,6 +1080,35 @@ const CHAT_CTX = {{ chat_context|tojson }};
         if (!r.ok || d.ok === false) { showToast(d.error || ('Failed: ' + r.status), true); return null; }
         return d;
     }
+    // ---- manual escalation-outcome sync (pull XSOAR ticket state) ----
+    const syncBtn = document.getElementById('gha-sync-outcomes');
+    if (syncBtn) syncBtn.addEventListener('click', async () => {
+        if (syncBtn.disabled) return;
+        const orig = syncBtn.textContent;
+        syncBtn.disabled = true; syncBtn.textContent = '⏳ Syncing…';
+        const d = await postJSON('/api/cs-advisories/sync-outcomes', {});
+        if (!d) { syncBtn.disabled = false; syncBtn.textContent = orig; return; }
+        if (!d.checked) { showToast('No escalated tickets to sync yet.'); syncBtn.disabled = false; syncBtn.textContent = orig; return; }
+        showToast('Synced ' + d.checked + ' ticket' + (d.checked === 1 ? '' : 's') + ' · ' + d.updated + ' updated, ' + d.resolved + ' resolved. Refreshing…');
+        setTimeout(() => location.reload(), 1100);
+    });
+    // ---- inline "Assign to me" — claim a row without opening it ----
+    document.querySelectorAll('.gha-claim').forEach(btn => btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (btn.disabled) return;
+        const key = btn.dataset.key;
+        btn.disabled = true; btn.textContent = '⏳ Claiming…';
+        const d = await postJSON('/api/cs-advisories/' + encodeURIComponent(key) + '/assign', {});
+        if (!d) { btn.disabled = false; btn.textContent = '✋ Assign to me'; return; }
+        const owner = (d.advisory && d.advisory.owner) || ME || 'you';
+        const row = btn.closest('.gha-trow');
+        const cell = btn.closest('.gha-owner-cell');
+        if (cell) cell.innerHTML = '<span class="gha-owner-chip">👤 ' + owner + '</span>';
+        if (row) { row.dataset.owner = (owner || '').toLowerCase(); row.dataset.aging = '0'; }
+        showToast('Claimed — you now own ' + key + '. ✅');
+        apply();  // drop it out of aging/unowned views, refresh counts via re-filter
+        refreshPresetCounts();
+    }));
     document.querySelectorAll('.src-toggle').forEach(cb => cb.addEventListener('change', async () => {
         const d = await postJSON('/api/cs-advisories/sources/' + encodeURIComponent(cb.dataset.key), {enabled: cb.checked});
         if (!d) { cb.checked = !cb.checked; return; }
@@ -717,6 +1219,61 @@ const CHAT_CTX = {{ chat_context|tojson }};
             const d = await postJSON('/api/cs-advisories/unsubscribe', {});
             if (d) { render({subscribed:false}); showToast('Unsubscribed from email alerts.'); }
         });
+    })();
+
+    // ---- bulk multi-select actions (assign / close / escalate) ----
+    (function () {
+        const bar = document.getElementById('gha-bulkbar');
+        if (!bar) return;  // anonymous viewers have no checkboxes / bar
+        const countEl = document.getElementById('gha-bulk-count');
+        const selectAll = document.getElementById('gha-selectall');
+        const boxes = () => Array.from(document.querySelectorAll('.gha-rowsel'));
+        const selected = () => boxes().filter(c => c.checked);
+        const visBoxes = () => boxes().filter(c => { const tr = c.closest('tr'); return tr && tr.style.display !== 'none'; });
+        function refresh() {
+            const n = selected().length;
+            countEl.textContent = n;
+            bar.style.display = n ? 'flex' : 'none';
+            if (selectAll) {
+                const vis = visBoxes(), on = vis.filter(c => c.checked).length;
+                selectAll.checked = vis.length > 0 && on === vis.length;
+                selectAll.indeterminate = on > 0 && on < vis.length;
+            }
+        }
+        boxes().forEach(c => {
+            c.addEventListener('change', refresh);
+            c.addEventListener('click', e => e.stopPropagation());  // don't open the row
+        });
+        if (selectAll) selectAll.addEventListener('change', () => {
+            visBoxes().forEach(c => { c.checked = selectAll.checked; });
+            refresh();
+        });
+        async function run(action) {
+            const keys = selected().map(c => c.dataset.key);
+            if (!keys.length) return;
+            const noun = 'advisor' + (keys.length === 1 ? 'y' : 'ies');
+            let note = null;
+            if (action === 'close') {
+                note = prompt('Close ' + keys.length + ' ' + noun + ' as not worth reporting.\nOptional reason (recorded on each):', '');
+                if (note === null) return;  // cancelled
+            } else if (action === 'escalate') {
+                if (!confirm('Escalate ' + keys.length + ' ' + noun + ' to the Package Compromise Assessment Teams channel?\nThis posts one card per advisory; already-reported ones are skipped.')) return;
+            }
+            const d = await postJSON('/api/cs-advisories/bulk', {action, keys, note});
+            if (!d) return;
+            const c = d.counts || {};
+            const verb = {assign: 'assigned', close: 'closed', escalate: 'escalated'}[action] || action;
+            showToast('✅ ' + c.done + ' ' + verb +
+                (c.skipped ? ' · ' + c.skipped + ' skipped' : '') +
+                (c.errors ? ' · ' + c.errors + ' failed' : ''));
+            setTimeout(() => location.reload(), 950);
+        }
+        bar.querySelectorAll('.gha-bulk-btn').forEach(b => b.addEventListener('click', () => {
+            const a = b.dataset.bulk;
+            if (a === 'clear') { selected().forEach(c => { c.checked = false; }); refresh(); return; }
+            run(a);
+        }));
+        refresh();
     })();
 
     // ---- chat widget ----

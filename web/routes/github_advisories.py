@@ -29,6 +29,7 @@ Routes:
 from __future__ import annotations
 
 import logging
+import math
 import re
 from datetime import datetime, timedelta, timezone
 from functools import wraps
@@ -43,12 +44,24 @@ from services import github_advisories as ga
 from services import github_advisories_db as db
 from src.utils.logging_utils import log_web_activity
 from web.auth.helpers import current_user, is_admin, login_required
-from web.auth.rbac import require_capability, SEND_EXTERNAL
+from web.auth.rbac import require_capability, has_capability, SEND_EXTERNAL
 
 logger = logging.getLogger(__name__)
 CONFIG = get_config()
 
 github_advisories_bp = Blueprint("github_advisories", __name__)
+
+
+def _parse_iso(raw):
+    """Parse an ISO-8601 timestamp (with or without a trailing Z) to an aware
+    UTC datetime, or None if it can't be parsed."""
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
 def _owner_block(key):
@@ -96,6 +109,41 @@ def _label_for(source: str) -> str:
     return ga.source_labels_map().get(source, source or "—")
 
 
+def _vc_app_count(vc):
+    """Mirror the detail page's vcCount(): how many of our apps carry the
+    affected package per Veracode SCA — the explicit count if present, else
+    derived from the cve/package→application sets. None when Veracode never ran."""
+    if not isinstance(vc, dict):
+        return None
+    n = vc.get("affected_app_count")
+    if isinstance(n, int):
+        return n
+    apps = set()
+    for group in ("cves", "packages"):
+        for arr in (vc.get(group) or {}).values():
+            for a in (arr or []):
+                if isinstance(a, dict) and a.get("application"):
+                    apps.add(a["application"])
+    return len(apps)
+
+
+def _exposure_verdict(adv: dict) -> dict:
+    """Server-side twin of the detail page's exposure-band verdict, from the
+    cached Veracode SCA signal ONLY (no lens is run here). Returns
+    ``{"state": "exposed"|"clear"|"unchecked", "apps": int}``.
+
+    - exposed:  Veracode SCA shows >=1 affected app.
+    - clear:    Veracode SCA ran and found no affected app.
+    - unchecked: Veracode hasn't run yet (the common case for a row nobody has
+      opened) — we deliberately never imply "safe" from a non-check.
+    """
+    vc = adv.get("veracode_enrichment")
+    vc_apps = _vc_app_count(vc)
+    if (vc_apps or 0) > 0:
+        return {"state": "exposed", "apps": int(vc_apps)}
+    return {"state": "clear" if vc is not None else "unchecked", "apps": 0}
+
+
 # ---------------------------------------------------------------------------
 # Legacy redirects — the page was renamed /gh-advisory → /cs-advisories.
 # Old email/Webex links and bookmarks 301 to the new path so they keep working.
@@ -123,9 +171,29 @@ def advisory_list():
     # the filtered view) so a row still shows it was confirmed elsewhere.
     corr_corpus = advisories if archived_view else db.list_advisories()
     corr = ga.compute_corroboration(corr_corpus)
+    # Exposure verdict surfaced at the list level from the cached Veracode SCA
+    # signal on each row (no lens re-run), so the "How does this affect us?"
+    # answer is visible without opening every advisory.
+    exposure_count = 0
+    _now = datetime.now(timezone.utc)
     for a in advisories:
         a["source_label"] = labels.get(a.get("source"), a.get("source") or "—")
         a["corroboration"] = corr.get(a.get("uid") or a.get("source_id"))
+        a["exposure"] = _exposure_verdict(a)
+        if a["exposure"]["state"] == "exposed":
+            exposure_count += 1
+        # Per-row age + auto-archive countdown. Age is from first_seen_at; the
+        # countdown only applies to rows the daily job will actually archive
+        # (unowned, not seeded/reported) — cutoff = first_seen + 3 days.
+        a["age_days"] = a["archive_in_days"] = None
+        _seen = _parse_iso(a.get("first_seen_at"))
+        if _seen:
+            a["age_days"] = max(0, (_now - _seen).days)
+            archivable = (not (a.get("owner") or "").strip()
+                          and a.get("status") not in ("seeded", "reported"))
+            if archivable and not archived_view:
+                a["archive_in_days"] = math.ceil(
+                    (_seen + timedelta(days=3) - _now).total_seconds() / 86400)
     src_counts = db.source_counts()
     sources_state = _sources_state()
     # Source-filter chips: only sources that actually have visible rows.
@@ -144,8 +212,15 @@ def advisory_list():
         assessment_statuses=ASSESSMENT_STATUSES,
         signoff_teams=db.list_signoff_teams(),
         kpis=db.risk_kpis(),
+        exposure_count=exposure_count,
+        outcome_counts=db.escalation_outcome_counts(),
+        is_authenticated=bool(current_user()),
+        current_owner=((_user_email() or "").strip().lower() if current_user() else ""),
         posture=db.posture_kpis(),
-        campaigns=([] if archived_view else ga.compute_campaigns(corr_corpus)),
+        # Campaigns over the active corpus on the live queue; over the archived
+        # corpus in the archive view so past/expired campaigns stay viewable
+        # (list_advisories caps at 500, so the clustering stays cheap).
+        campaigns=ga.compute_campaigns(corr_corpus),
         aging_cutoff=(datetime.now(timezone.utc) - timedelta(days=3)).isoformat(
             timespec="seconds").replace("+00:00", "Z"),
         chat_context=_list_chat_context(advisories, counts),
@@ -231,10 +306,76 @@ def advisory_metrics_json():
     return jsonify(_metrics_payload())
 
 
+def _detail_ribbon(adv: dict, cvss: dict, vulns: list, cap_results: dict) -> list[dict]:
+    """Decision ribbon for the detail masthead — the few facts that drive the
+    triage call (EPSS · CISA KEV · exploited-in-wild · patch · internet-facing).
+    Derived ONLY from data already loaded for this page; makes no new network
+    calls. EPSS is recovered from a cached CAPD scorecard's evidence text when
+    one exists, otherwise it shows '—' (unknown, never a fabricated number)."""
+    def _cap(name):
+        c = cap_results.get(name) if isinstance(cap_results, dict) else None
+        return c.get("result") if isinstance(c, dict) else None
+
+    sc = _cap("capd_scorecard")
+    cats: dict[str, dict] = {}
+    if isinstance(sc, dict):
+        for c in (sc.get("categories") or []):
+            if isinstance(c, dict) and c.get("key"):
+                cats[c["key"]] = c
+
+    # EPSS — parse "EPSS 38%" out of the cached exploitability evidence.
+    epss_v, epss_tone = "—", "neutral"
+    ev = (cats.get("exploitability") or {}).get("evidence") or ""
+    m = re.search(r"EPSS\s+(\d+)\s*%", ev)
+    if m:
+        p = int(m.group(1))
+        epss_v = f"{p}%"
+        epss_tone = "hot" if p >= 70 else "warm" if p >= 40 else "cool"
+
+    # CISA KEV — source/severity, corroborated by a cached scorecard.
+    kev = adv.get("source") == "cisa_kev" or adv.get("severity") == "known_exploited"
+    for k in ("exploitability", "active_threat"):
+        c = cats.get(k) or {}
+        if c.get("source") == "CISA KEV" and c.get("score") == 4:
+            kev = True
+    kev_v, kev_tone = ("Yes", "hot") if kev else ("No", "cool")
+
+    # Exploited in wild — KEV is definitive; else the active-threat category.
+    at = cats.get("active_threat") or {}
+    if kev:
+        exp_v, exp_tone = "Yes", "hot"
+    elif isinstance(at.get("score"), (int, float)):
+        s = at["score"]
+        exp_v, exp_tone = ("Yes", "hot") if s >= 3 else ("Likely", "warm") if s == 2 else ("No", "cool")
+    else:
+        exp_v, exp_tone = "—", "neutral"
+
+    # Patch availability — note "—" is the advisory's "no fix" sentinel.
+    has_fix = any((v or {}).get("first_patched") not in (None, "", "—") for v in (vulns or []))
+    if has_fix:
+        patch_v, patch_tone = "Available", "cool"
+    elif vulns:
+        patch_v, patch_tone = "None yet", "hot"
+    else:
+        patch_v, patch_tone = "—", "neutral"
+
+    return [
+        {"k": "EPSS", "v": epss_v, "tone": epss_tone},
+        {"k": "CISA KEV", "v": kev_v, "tone": kev_tone},
+        {"k": "Exploited in wild", "v": exp_v, "tone": exp_tone},
+        {"k": "Patch", "v": patch_v, "tone": patch_tone},
+    ]
+
+
 @github_advisories_bp.route("/cs-advisories/<key>")
 @log_web_activity
 def advisory_detail(key):
     adv = db.get_advisory(key)
+    if not adv:
+        # Publish-lag fallback: a GHSA/CVE not yet pulled by the poller. Fetch it
+        # live from GitHub/NVD/OSV, ingest it, then render the freshly-added card.
+        if ga.live_lookup(key):
+            adv = db.get_advisory(key)
     if not adv:
         abort(404)
     adv["source_label"] = _label_for(adv.get("source"))
@@ -250,10 +391,12 @@ def advisory_detail(key):
     cwes = _cwes(adv)
     _u = current_user()
     is_owner = bool(is_admin() or (_u and adv.get("owner") and _u.get("email") == adv.get("owner")))
+    capability_results = db.get_capability_results(key)
     return render_template(
         "gh_advisory_detail.html",
         adv=adv,
         is_owner=is_owner,
+        is_authenticated=bool(_u),
         corroboration=corroboration,
         assessment_statuses=ASSESSMENT_STATUSES,
         signoff_teams=db.list_signoff_teams(),
@@ -271,7 +414,8 @@ def advisory_detail(key):
         package_links=ga.advisory_package_links(adv),
         comments=db.list_comments(key),
         capability_links=ga.advisory_capability_links(adv),
-        capability_results=db.get_capability_results(key),
+        capability_results=capability_results,
+        ribbon=_detail_ribbon(adv, cvss, vulns, capability_results),
         ta_audiences=_ta_audiences(),
         chat_context=_detail_chat_context(adv, vulns, cvss, references, cwes),
     )
@@ -854,6 +998,56 @@ def api_veracode_check(key):
     return jsonify({"ok": True, "veracode": result})
 
 
+@github_advisories_bp.route("/api/cs-advisories/<key>/verify-remediation", methods=["POST"])
+@login_required
+@owner_required
+def api_verify_remediation(key):
+    """Confirm (or refute) an app team's remediation claim. Re-runs the exposure
+    lenses live, persists the result as a durable snapshot, and diffs it against
+    the previous snapshot — so the page can show "N apps cleared (was X, now Y)"
+    with the specific apps that cleared vs. those that remain. Closes the loop on
+    the assessment side, mirroring how the XSOAR sync closes it on the ticket side."""
+    adv = db.get_advisory(key)
+    if not adv:
+        return jsonify({"ok": False, "error": "advisory not found"}), 404
+    # Grab the prior snapshot BEFORE inserting this one, so the diff is before/after.
+    prev = db.latest_exposure_snapshot(key)
+    try:
+        snap = ga.exposure_snapshot(adv)
+    except Exception as e:  # ga.exposure_snapshot already degrades, belt-and-suspenders
+        logger.error("[Advisories] Verify-remediation failed for %s: %s", key, e, exc_info=True)
+        return jsonify({"ok": False, "error": f"exposure re-check failed: {e}"}), 502
+    user = _user_email()
+    snap["taken_at"] = datetime.now(timezone.utc).isoformat(
+        timespec="seconds").replace("+00:00", "Z")
+    snap["taken_by"] = user
+    db.add_exposure_snapshot(key, snap)
+    diff = ga.diff_exposure_snapshots(prev, snap)
+    payload = {
+        "current": snap,
+        "previous": prev,
+        "diff": diff,
+        "checked_at": snap["taken_at"],
+        "checked_by": user,
+        "history_count": db.exposure_snapshot_count(key),
+    }
+    # Persist the latest verdict so it re-renders on reload and flows into reports.
+    db.save_capability_result(key, "verify_remediation", payload, user)
+    logger.info("[Advisories] Verify-remediation %s by %s → %s",
+                key, user, diff.get("verdict"))
+    return jsonify({"ok": True, **payload})
+
+
+@github_advisories_bp.route("/api/cs-advisories/<key>/verify-remediation/history")
+@log_web_activity
+def api_verify_remediation_history(key):
+    """Full remediation-verification snapshot history for an advisory (public
+    read, like the rest of the queue views)."""
+    if not db.get_advisory(key):
+        return jsonify({"ok": False, "error": "advisory not found"}), 404
+    return jsonify({"ok": True, "snapshots": db.list_exposure_snapshots(key, limit=50)})
+
+
 @github_advisories_bp.route("/api/cs-advisories/<key>/report", methods=["POST"])
 @require_capability(SEND_EXTERNAL)
 @owner_required
@@ -912,6 +1106,105 @@ def api_report(key):
 
     logger.info("[Advisories] %s escalated to Teams channel %r by %s", adv.get("uid"), channel, user)
     return jsonify({"ok": True, "teams_sent": True, "advisory": db.get_advisory(key)})
+
+
+MAX_BULK = 100  # safety cap on advisories acted on in one bulk request
+
+
+def _send_advisory_to_teams(adv: dict, user: str) -> bool:
+    """Post a single advisory's escalation card to the Package Compromise
+    Assessment Teams channel. Returns True if sent. Raises on send failure so
+    the bulk loop records it per-advisory. Mirrors the single-advisory path."""
+    channel = CONFIG.package_compromise_teams_channel
+    if not channel:
+        logger.warning("[Advisories] PACKAGE_COMPROMISE_TEAMS_CHANNEL not set — marked reported without Teams send")
+        return False
+    from services.xsoar_teams import send_teams_message  # lazy: pulls XSOAR client
+    send_teams_message(_teams_message(adv, user), channel=channel,
+                       team=CONFIG.package_compromise_teams_team or None)
+    return True
+
+
+@github_advisories_bp.route("/api/cs-advisories/bulk", methods=["POST"])
+@login_required
+def api_bulk_action():
+    """Apply one action to several advisories at once for fast triage.
+
+    Body: ``{"action": "assign"|"close"|"escalate", "keys": [...], "note": "?"}``.
+
+    - assign:   claim each (current user becomes owner).
+    - close:    claim-if-needed then close as not-reported, recording the shared
+                note — so a batch of new/unowned rows can be cleared in one pass.
+    - escalate: idempotent Teams escalation of each (already-reported are
+                skipped); outward-facing, so prod-only + the SEND_EXTERNAL
+                capability, same gate as the single-advisory report.
+
+    Always returns 200 with per-key done/skipped/errors so a partial batch is
+    reported faithfully rather than failing the whole request."""
+    body = request.get_json(silent=True) or {}
+    action = (body.get("action") or "").strip()
+    keys = body.get("keys")
+    note = body.get("note")
+    if action not in ("assign", "close", "escalate"):
+        return jsonify({"ok": False, "error": f"unknown action {action!r}"}), 400
+    if not isinstance(keys, list) or not keys:
+        return jsonify({"ok": False, "error": "no advisories selected"}), 400
+    keys = [str(k) for k in keys][:MAX_BULK]
+    user = _user_email()
+    note_clean = note.strip()[:MAX_NOTES_LEN] if isinstance(note, str) and note.strip() else None
+
+    # Escalation is outward-facing — guard the bulk path exactly like the single
+    # report endpoint (capability + prod-only) before doing any work.
+    if action == "escalate":
+        if not has_capability(current_user(), SEND_EXTERNAL):
+            return jsonify({"ok": False, "error": "forbidden",
+                            "warning": "You don't have permission to escalate."}), 403
+        if not CONFIG.is_production:
+            return jsonify({"ok": False, "error": "escalation_disabled_in_dev",
+                            "warning": f"Teams escalation is disabled on the {CONFIG.environment} instance."}), 403
+
+    def _owns(adv):
+        return is_admin() or (adv.get("owner") or "").strip().lower() == (user or "").strip().lower()
+
+    done, skipped, errors = [], [], []
+    for key in keys:
+        adv = db.get_advisory(key)
+        if not adv:
+            errors.append({"key": key, "error": "not found"})
+            continue
+        try:
+            if action == "assign":
+                db.assign_owner(key, user)
+                done.append(key)
+            elif action == "close":
+                if not _owns(adv):
+                    db.assign_owner(key, user)  # claim so the close is permitted
+                if note_clean:
+                    db.save_notes(key, note_clean, user)
+                db.set_status(key, "closed_not_reported", user)
+                done.append(key)
+            elif action == "escalate":
+                if adv.get("status") == "reported":
+                    skipped.append(key)  # idempotent — never double-post
+                    continue
+                if not _owns(adv):
+                    db.assign_owner(key, user)
+                if note_clean:
+                    db.save_notes(key, note_clean, user)
+                adv = db.get_advisory(key)
+                if not db.mark_reported(key, user):
+                    skipped.append(key)
+                    continue
+                _send_advisory_to_teams(adv, user)
+                done.append(key)
+        except Exception as e:  # one bad advisory shouldn't sink the batch
+            logger.error("[Advisories] bulk %s failed for %s: %s", action, key, e, exc_info=True)
+            errors.append({"key": key, "error": str(e)})
+    logger.info("[Advisories] bulk %s by %s — done=%d skipped=%d errors=%d",
+                action, user, len(done), len(skipped), len(errors))
+    return jsonify({"ok": True, "action": action, "done": done, "skipped": skipped,
+                    "errors": errors,
+                    "counts": {"done": len(done), "skipped": len(skipped), "errors": len(errors)}})
 
 
 @github_advisories_bp.route("/api/cs-advisories/<key>/report-draft", methods=["GET"])
@@ -974,9 +1267,26 @@ def api_create_xsoar_ticket(key):
     base = (CONFIG.xsoar_prod_ui_base_url or "").rstrip("/")
     ticket_url = f"{base}/Custom/caseinfoid/{tid}" if base else ""
     db.set_xsoar_ticket(key, tid, ticket_url, user)
+    # Seed the outcome as 'open' so the row closes the loop immediately; the
+    # periodic sync then advances it (in progress / resolved) as the case moves.
+    db.set_xsoar_status(adv["uid"], "open")
     logger.info("[Advisories] %s -> XSOAR incident #%s by %s", adv.get("uid"), tid, user)
     return jsonify({"ok": True, "ticket_id": tid, "ticket_url": ticket_url,
                     "advisory": db.get_advisory(key)})
+
+
+@github_advisories_bp.route("/api/cs-advisories/sync-outcomes", methods=["POST"])
+@login_required
+def api_sync_outcomes():
+    """Force-refresh escalation outcomes (XSOAR ticket state) on demand instead of
+    waiting for the hourly sync. Read-only against XSOAR Prod; on non-prod the
+    sync degrades to a no-op (no client), so it's safe to expose everywhere."""
+    try:
+        result = ga.sync_xsoar_outcomes()
+    except Exception as e:  # noqa: BLE001
+        logger.error("[Advisories] manual outcome sync failed: %s", e, exc_info=True)
+        return jsonify({"ok": False, "error": str(e)}), 502
+    return jsonify({"ok": True, **result, "counts": db.escalation_outcome_counts()})
 
 
 # ---------------------------------------------------------------------------

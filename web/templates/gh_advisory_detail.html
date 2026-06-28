@@ -226,6 +226,79 @@
   body.dark-mode .faq-item{background:#161b22;border-color:#30363d;}
   body.dark-mode .faq-item summary{color:#e6edf3;}
   body.dark-mode .faq-a{color:#c9d1d9;}
+  /* ===== Triage dossier redesign (re-skin / re-layout only) ===== */
+  .gha-mono{font-family:ui-monospace,'Cascadia Code','JetBrains Mono','IBM Plex Mono',Consolas,monospace;}
+  .gha-dossier{position:relative;margin:14px 0 6px;border-radius:18px;overflow:hidden;
+    border:1px solid #d7e3f4;background:#fff;box-shadow:0 10px 30px rgba(16,24,40,.08);}
+  body.dark-mode .gha-dossier{border-color:#26303d;background:#11161d;box-shadow:0 10px 30px rgba(0,0,0,.45);}
+  .gha-spine{position:absolute;left:0;top:0;bottom:0;width:7px;background:linear-gradient(#cf222e,#a40e26);}
+  .gha-spine.sev-high{background:linear-gradient(#e36209,#bc4c00);}
+  .gha-spine.sev-medium,.gha-spine.sev-moderate{background:linear-gradient(#bf8700,#9a6700);}
+  .gha-spine.sev-low{background:linear-gradient(#1a7f37,#116329);}
+  .gha-mast{padding:20px 24px 18px 30px;}
+  .gha-eyebrow{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:11px;font-weight:700;
+    letter-spacing:.1em;text-transform:uppercase;color:#5b6b7e;}
+  body.dark-mode .gha-eyebrow{color:#9aa5b1;}
+  .gha-eyebrow .ey-sev{color:#cf222e;}
+  .gha-eyebrow .ey-sev.s-high{color:#bc4c00;}.gha-eyebrow .ey-sev.s-medium,.gha-eyebrow .ey-sev.s-moderate{color:#9a6700;}
+  .gha-eyebrow .ey-sev.s-low{color:#1a7f37;}
+  body.dark-mode .gha-eyebrow .ey-sev{color:#ff8087;}
+  body.dark-mode .gha-eyebrow .ey-sev.s-high{color:#f0a04b;}body.dark-mode .gha-eyebrow .ey-sev.s-medium,body.dark-mode .gha-eyebrow .ey-sev.s-moderate{color:#e3b341;}body.dark-mode .gha-eyebrow .ey-sev.s-low{color:#56d364;}
+  .gha-eyebrow .ey-dot{opacity:.55;}
+  .gha-idline{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin:10px 0 3px;}
+  .gha-idline .id-ghsa{font-size:26px;font-weight:700;letter-spacing:-.5px;color:#0a2540;}
+  body.dark-mode .gha-idline .id-ghsa{color:#e6edf3;}
+  .gha-idline .gha-cve{font-size:14px;font-weight:600;color:#5b6b7e;margin-left:0;}
+  body.dark-mode .gha-idline .gha-cve{color:#9aa5b1;}
+  .mast-verdict{font-size:20px;font-weight:800;letter-spacing:-.2px;margin:9px 0 3px;color:#0a2540;line-height:1.3;}
+  body.dark-mode .mast-verdict{color:#e6edf3;}
+  .mast-verdict .x{color:#cf222e;}.mast-verdict .ok{color:#1a7f37;}
+  body.dark-mode .mast-verdict .x{color:#ff8087;}body.dark-mode .mast-verdict .ok{color:#56d364;}
+  .mast-verdict.wait{color:#64748b;font-weight:700;}body.dark-mode .mast-verdict.wait{color:#9aa5b1;}
+  .mast-pkgline{font-size:13.5px;font-weight:600;color:#5b6b7e;line-height:1.5;}
+  body.dark-mode .mast-pkgline{color:#9aa5b1;}
+  .mast-pkgline b{color:#0a2540;}body.dark-mode .mast-pkgline b{color:#e6edf3;}
+  .gha-ribbon{display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid #d7e3f4;}
+  body.dark-mode .gha-ribbon{border-top-color:#26303d;}
+  .gha-inst{padding:12px 16px;border-right:1px solid #d7e3f4;}
+  body.dark-mode .gha-inst{border-right-color:#26303d;}
+  .gha-inst:last-child{border-right:none;}
+  .gha-inst .inst-k{font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#5b6b7e;}
+  body.dark-mode .gha-inst .inst-k{color:#9aa5b1;}
+  .gha-inst .inst-v{font-size:18px;font-weight:700;margin-top:5px;color:#0a2540;}
+  body.dark-mode .gha-inst .inst-v{color:#e6edf3;}
+  .gha-inst .inst-v.hot{color:#cf222e;}.gha-inst .inst-v.warm{color:#b45309;}.gha-inst .inst-v.cool{color:#1a7f37;}
+  body.dark-mode .gha-inst .inst-v.hot{color:#ff8087;}body.dark-mode .gha-inst .inst-v.warm{color:#f0b357;}body.dark-mode .gha-inst .inst-v.cool{color:#56d364;}
+  /* numbered triage-sequence sections */
+  .gha-sec{margin-top:18px;}
+  .gha-sec-h{display:flex;align-items:center;gap:9px;font-size:12px;font-weight:800;letter-spacing:.06em;
+    text-transform:uppercase;color:#5b6b7e;margin:0 0 10px 2px;}
+  body.dark-mode .gha-sec-h{color:#9aa5b1;}
+  .gha-sec-h .step{color:#0046AD;}
+  body.dark-mode .gha-sec-h .step{color:#79b8ff;}
+  .gha-flow2{display:grid;grid-template-columns:1.12fr .88fr;gap:16px;align-items:start;}
+  @media(max-width:980px){.gha-flow2{grid-template-columns:1fr;}.gha-ribbon{grid-template-columns:repeat(3,1fr);}}
+  .gha-act-card{display:flex;flex-direction:column;gap:11px;}
+  .gha-act-card .act-notes{width:100%;box-sizing:border-box;min-height:62px;resize:vertical;padding:9px 11px;
+    border:1px solid #d0d7de;border-radius:10px;font:inherit;font-size:13px;color:#1b2330;}
+  body.dark-mode .gha-act-card .act-notes{background:#0d1117;border-color:#30363d;color:#e6edf3;}
+  /* "Investigate deeper" drawer — folds every other capability tile below the fold */
+  .gha-invest{margin-top:18px;border-radius:14px;border:1px solid #d7e3f4;background:#fff;overflow:hidden;}
+  body.dark-mode .gha-invest{border-color:#26303d;background:#11161d;}
+  .gha-invest>summary{display:flex;align-items:center;gap:12px;padding:14px 18px;cursor:pointer;list-style:none;}
+  .gha-invest>summary::-webkit-details-marker{display:none;}
+  .gha-invest>summary::marker{content:"";}
+  .gha-invest>summary .iv-ic{font-size:20px;line-height:1;}
+  .gha-invest>summary .iv-t{font-size:13.5px;font-weight:800;color:#0a2540;}
+  body.dark-mode .gha-invest>summary .iv-t{color:#e6edf3;}
+  .gha-invest>summary .iv-d{font-size:12px;color:#5b6b7e;}
+  body.dark-mode .gha-invest>summary .iv-d{color:#9aa5b1;}
+  .gha-invest>summary .iv-chev{margin-left:auto;color:#5b6b7e;font-weight:800;font-size:13px;transition:transform .2s;}
+  .gha-invest[open]>summary .iv-chev{transform:rotate(180deg);}
+  .gha-invest-body{padding:2px 18px 16px;}
+  .iv-chips{display:flex;gap:7px;flex-wrap:wrap;}
+  .iv-chip{font-size:11px;font-weight:700;color:#5b6b7e;padding:4px 10px;border-radius:999px;border:1px solid #d7e3f4;}
+  body.dark-mode .iv-chip{color:#9aa5b1;border-color:#26303d;}
 </style>
 {% endblock %}
 
@@ -237,25 +310,43 @@
             <span class="gha-info-btn-icon">✦</span> How does this work?
         </button>
     </div>
-
-    <div class="gha-head">
-        <h1>{{ adv.source_id }} <span class="gha-cve">{{ adv.cve_id or 'no CVE' }}</span>
-            <span class="gha-src src-fam-{{ src_fam }}">{{ adv.source_label }}</span></h1>
-        <span class="gha-badge b-{{ adv.status }}" id="status-badge">{{ adv.status.replace('_', ' ') }}</span>
+    {% set _sev = (adv.severity or 'critical')|lower %}
+    {% set _vc = adv.veracode_enrichment %}
+    {% set _vc_count = (_vc.get('affected_app_count') if _vc else None) %}
+    {% set _exposed = (_vc_count and _vc_count > 0) %}
+    {% set _ncount = _vc_count or 0 %}
+    {% set _pkg = (adv.packages[0] if adv.packages else (vulns[0].package if vulns else None)) %}
+    {% set _fixedlist = (vulns|map(attribute='first_patched')|reject('equalto','—')|reject('equalto','')|list) if vulns else [] %}
+    {% set _fixed = _fixedlist[0] if _fixedlist else None %}
+    <div class="gha-dossier">
+        <div class="gha-spine sev-{{ _sev }}"></div>
+        <div class="gha-mast">
+            <div class="gha-eyebrow">
+                <span class="ey-sev s-{{ _sev }}">● {{ (adv.severity or 'critical')|replace('_',' ')|title }}</span>
+                <span class="ey-dot">·</span>
+                <span class="gha-src src-fam-{{ src_fam }}">{{ adv.source_label }}</span>
+                {% if adv.published_at %}<span class="ey-dot">·</span><span>published {{ adv.published_at[:10] }}</span>{% endif %}
+                <span class="gha-badge b-{{ adv.status }}" id="status-badge">{{ adv.status.replace('_', ' ') }}</span>
+            </div>
+            <div class="gha-idline">
+                <span class="id-ghsa gha-mono">{{ adv.source_id }}</span>
+                <span class="gha-cve gha-mono">{{ adv.cve_id or 'no CVE' }}</span>
+            </div>
+            {% if _exposed %}
+            <div class="mast-verdict" id="ghaMastVerdict"><span class="x">⛔ Affects us</span>{% if _ncount %} — {{ _ncount }} application{{ '' if _ncount == 1 else 's' }} carr{{ 'ies' if _ncount == 1 else 'y' }} this{% endif %}</div>
+            {% elif _vc %}
+            <div class="mast-verdict" id="ghaMastVerdict"><span class="ok">✅ No known exposure</span></div>
+            {% elif veracode_cves or veracode_packages %}
+            <div class="mast-verdict wait" id="ghaMastVerdict">{% if is_authenticated %}⏳ Checking our exposure…{% else %}🔒 Sign in to check exposure{% endif %}</div>
+            {% else %}
+            <div class="mast-verdict wait" id="ghaMastVerdict">🚨 {{ (adv.severity or 'critical')|replace('_',' ')|title }} advisory — triage &amp; decide</div>
+            {% endif %}
+            <div class="mast-pkgline">{{ adv.summary or '(no summary)' }}{% if _pkg %} · <b class="gha-mono">{{ _pkg }}</b>{% endif %}{% if _fixed %} · fixed in <b class="gha-mono">{{ _fixed }}</b>{% endif %}</div>
+        </div>
+        <div class="gha-ribbon">
+            {% for r in ribbon %}<div class="gha-inst"><div class="inst-k">{{ r.k }}</div><div class="inst-v {{ r.tone }} gha-mono">{{ r.v }}</div></div>{% endfor %}
+        </div>
     </div>
-
-    <div class="gha-owner-bar" id="owner-bar">
-        <span class="owner-state" id="owner-state">
-            {% if adv.owner %}👤 Owned by <b>{{ adv.owner }}</b>{% else %}🫥 Unassigned{% endif %}
-        </span>
-        {% set is_mine = current_user and adv.owner and adv.owner == current_user.email %}
-        <button class="btn btn-assign" id="btn-assign" {% if is_mine %}style="display:none;"{% endif %}>
-            🙋 {% if adv.owner %}Take over{% else %}Assign to me{% endif %}
-        </button>
-        <button class="btn btn-release" id="btn-release" {% if not is_mine %}style="display:none;"{% endif %}>↩️ Release</button>
-    </div>
-    <div class="gha-summary">{{ adv.summary or '(no summary)' }}</div>
-
     {% if corroboration %}
     <div class="gha-corrob-banner">
         <span class="gha-corrob-ic">🔗</span>
@@ -268,7 +359,232 @@
         </div>
     </div>
     {% endif %}
-
+    {% if veracode_cves or veracode_packages %}
+    <div class="gha-sec">
+        <div class="gha-sec-h"><span class="step">01</span> How does this affect the company?</div>
+    <style>
+        .gha-exposure{margin:14px 0;border-radius:16px;padding:16px 18px;border:1px solid #d7e3f4;
+            background:linear-gradient(135deg,rgba(0,70,173,.07),rgba(0,166,81,.07));}
+        body.dark-mode .gha-exposure{border-color:#30363d;background:linear-gradient(135deg,rgba(0,70,173,.18),rgba(0,166,81,.14));}
+        .gxp-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+        .gxp-title{font-size:16px;font-weight:800;color:#0a2540;}
+        body.dark-mode .gxp-title{color:#e6edf3;}
+        .gxp-verdict{font-size:13.5px;font-weight:800;padding:6px 14px;border-radius:999px;white-space:nowrap;}
+        .gxp-checking{background:#eef2f7;color:#475569;}
+        .gxp-exposed{background:linear-gradient(135deg,#cf222e,#a40e26);color:#fff;}
+        .gxp-clear{background:linear-gradient(135deg,#1a7f37,#00A651);color:#fff;}
+        .gxp-signin{background:#fff4e6;color:#9a5b00;}
+        body.dark-mode .gxp-checking{background:#1e293b;color:#cbd5e1;}
+        body.dark-mode .gxp-signin{background:rgba(246,135,0,.16);color:#f6c177;}
+        .gxp-lenses{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+        @media(max-width:900px){.gxp-lenses{grid-template-columns:repeat(2,1fr);}}
+        .gxp-lens{display:flex;align-items:flex-start;gap:9px;text-align:left;padding:11px 12px;border-radius:12px;
+            border:1px solid #e2e8f0;background:rgba(255,255,255,.78);cursor:pointer;font:inherit;transition:transform .12s,box-shadow .12s;}
+        .gxp-lens:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(16,24,40,.1);}
+        body.dark-mode .gxp-lens{background:rgba(15,23,42,.6);border-color:#30363d;}
+        .gxp-lens-ic{font-size:18px;line-height:1.2;flex:0 0 auto;}
+        .gxp-lens-body{display:flex;flex-direction:column;gap:2px;min-width:0;}
+        .gxp-lens-h{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:#57606a;}
+        body.dark-mode .gxp-lens-h{color:#9aa5b1;}
+        .gxp-lens-v{font-size:12.5px;font-weight:600;color:#0a2540;line-height:1.25;word-break:break-word;}
+        body.dark-mode .gxp-lens-v{color:#e6edf3;}
+        .gxp-lens-v.bad{color:#cf222e;}
+        .gxp-lens-v.good{color:#1a7f37;}
+        .gxp-lens-v.wait{color:#94a3b8;font-style:italic;}
+        .gxp-lens-v.muted{color:#64748b;}
+        body.dark-mode .gxp-lens-v.bad{color:#ff8087;}
+        body.dark-mode .gxp-lens-v.good{color:#56d364;}
+        .gxp-foot{font-size:11px;color:#8b94a3;margin-top:10px;}
+        /* Inline affected-app names — so "2 apps" is actually answerable here */
+        .gxp-apps{margin-top:12px;display:none;}
+        .gxp-apps.show{display:block;}
+        .gxp-apps-h{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:#57606a;margin-bottom:7px;}
+        body.dark-mode .gxp-apps-h{color:#9aa5b1;}
+        .gxp-app-chips{display:flex;flex-wrap:wrap;gap:7px;}
+        .gxp-app-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 11px;border-radius:999px;
+            font-size:12.5px;font-weight:700;border:1px solid #d7e3f4;background:rgba(255,255,255,.85);color:#0a2540;line-height:1.35;}
+        .gxp-app-chip .gxp-app-meta{font-weight:600;color:#64748b;font-size:11px;}
+        .gxp-app-chip.ext{border-color:rgba(207,34,46,.35);background:rgba(207,34,46,.08);color:#a40e26;}
+        .gxp-app-chip.ext .gxp-app-meta{color:#b4434f;}
+        .gxp-app-chip.unmatched{border-style:dashed;color:#64748b;background:transparent;}
+        .gxp-app-more{display:inline-flex;align-items:center;padding:4px 11px;border-radius:999px;font-size:12px;
+            font-weight:700;color:#0046AD;background:rgba(0,70,173,.08);border:1px solid rgba(0,70,173,.2);cursor:pointer;}
+        body.dark-mode .gxp-app-chip{background:rgba(15,23,42,.6);border-color:#30363d;color:#e6edf3;}
+        body.dark-mode .gxp-app-chip .gxp-app-meta{color:#9aa5b1;}
+        body.dark-mode .gxp-app-chip.ext{background:rgba(207,34,46,.18);border-color:rgba(255,128,135,.35);color:#ff8087;}
+        body.dark-mode .gxp-app-chip.unmatched{color:#9aa5b1;background:transparent;}
+        body.dark-mode .gxp-app-more{color:#79b8ff;background:rgba(0,70,173,.22);border-color:rgba(120,160,255,.28);}
+        /* Verify-remediation: re-check exposure + before/after diff */
+        .gxp-verify{margin-top:14px;padding-top:13px;border-top:1px dashed #d7e3f4;}
+        body.dark-mode .gxp-verify{border-top-color:#2a3645;}
+        .gxp-verify-bar{display:flex;align-items:center;flex-wrap:wrap;gap:10px;}
+        .gxp-verify-lead{font-size:12.5px;font-weight:800;color:#0a2540;}
+        body.dark-mode .gxp-verify-lead{color:#e6edf3;}
+        .gxp-verify-btn{font:inherit;font-size:12.5px;font-weight:700;color:#fff;border:none;cursor:pointer;
+            padding:7px 14px;border-radius:999px;background:linear-gradient(135deg,#0046AD,#00A651);
+            box-shadow:0 2px 8px rgba(0,70,173,.25);transition:transform .12s,box-shadow .12s;}
+        .gxp-verify-btn:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,70,173,.32);}
+        .gxp-verify-btn:disabled{opacity:.6;cursor:default;transform:none;box-shadow:none;}
+        .gxp-verify-hint{font-size:11.5px;color:#8b94a3;flex:1 1 220px;min-width:180px;}
+        .gxp-verify-hint em{color:#b45309;font-style:normal;font-weight:600;}
+        body.dark-mode .gxp-verify-hint em{color:#f0b357;}
+        .gxp-verify-result{margin-top:12px;border-radius:13px;border:1px solid #d7e3f4;background:rgba(255,255,255,.7);padding:14px 16px;}
+        body.dark-mode .gxp-verify-result{border-color:#26303d;background:rgba(15,23,42,.55);}
+        .gxp-vr-head{display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:800;line-height:1.35;}
+        .gxp-vr-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;
+            text-transform:uppercase;letter-spacing:.04em;padding:3px 10px;border-radius:999px;white-space:nowrap;}
+        .gxp-vr-badge.good{background:rgba(26,127,55,.12);color:#1a7f37;}
+        .gxp-vr-badge.warn{background:rgba(180,83,9,.13);color:#b45309;}
+        .gxp-vr-badge.bad{background:rgba(207,34,46,.12);color:#cf222e;}
+        .gxp-vr-badge.neutral{background:rgba(0,70,173,.1);color:#0046AD;}
+        body.dark-mode .gxp-vr-badge.good{background:rgba(63,185,80,.18);color:#56d364;}
+        body.dark-mode .gxp-vr-badge.warn{background:rgba(240,179,87,.18);color:#f0b357;}
+        body.dark-mode .gxp-vr-badge.bad{background:rgba(255,128,135,.18);color:#ff8087;}
+        body.dark-mode .gxp-vr-badge.neutral{background:rgba(121,184,255,.18);color:#79b8ff;}
+        .gxp-vr-headline{color:#0a2540;}
+        body.dark-mode .gxp-vr-headline{color:#e6edf3;}
+        .gxp-vr-groups{display:flex;flex-wrap:wrap;gap:16px;margin-top:11px;}
+        .gxp-vr-group{flex:1 1 200px;min-width:170px;}
+        .gxp-vr-glabel{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#57606a;margin-bottom:6px;}
+        body.dark-mode .gxp-vr-glabel{color:#9aa5b1;}
+        .gxp-vr-chips{display:flex;flex-wrap:wrap;gap:6px;}
+        .gxp-vr-chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;
+            padding:3px 10px;border-radius:999px;border:1px solid transparent;line-height:1.35;}
+        .gxp-vr-chip.cleared{background:rgba(26,127,55,.1);border-color:rgba(26,127,55,.3);color:#1a7f37;}
+        .gxp-vr-chip.remaining{background:rgba(207,34,46,.08);border-color:rgba(207,34,46,.32);color:#a40e26;}
+        .gxp-vr-chip.added{background:rgba(180,83,9,.1);border-color:rgba(180,83,9,.32);color:#b45309;}
+        body.dark-mode .gxp-vr-chip.cleared{background:rgba(63,185,80,.16);border-color:rgba(63,185,80,.34);color:#56d364;}
+        body.dark-mode .gxp-vr-chip.remaining{background:rgba(255,128,135,.15);border-color:rgba(255,128,135,.34);color:#ff8087;}
+        body.dark-mode .gxp-vr-chip.added{background:rgba(240,179,87,.15);border-color:rgba(240,179,87,.34);color:#f0b357;}
+        .gxp-vr-foot{font-size:11px;color:#8b94a3;margin-top:11px;display:flex;flex-wrap:wrap;gap:5px 12px;align-items:center;}
+        .gxp-vr-foot b{color:#57606a;font-weight:700;}
+        body.dark-mode .gxp-vr-foot b{color:#9aa5b1;}
+    </style>
+    <div class="gha-exposure" id="ghaExposure" data-auth="{{ '1' if is_authenticated else '0' }}">
+        <div class="gxp-head">
+            <span class="gxp-title">🎯 How does this affect the company?</span>
+            <span class="gxp-verdict gxp-checking" id="gxpVerdict">⏳ Checking our exposure…</span>
+        </div>
+        <div class="gxp-lenses">
+            <button class="gxp-lens" type="button" data-jump=".veracode-card" title="Which of our applications carry the affected open-source component (Veracode SCA)">
+                <span class="gxp-lens-ic">🛡️</span>
+                <span class="gxp-lens-body"><span class="gxp-lens-h">Software exposure</span><span class="gxp-lens-v" id="gxpVcV">…</span></span>
+            </button>
+            <button class="gxp-lens" type="button" data-jump="#cap-result-fleet_posture" title="Current fleet posture relevant to this advisory (Power BI)">
+                <span class="gxp-lens-ic">🛰️</span>
+                <span class="gxp-lens-body"><span class="gxp-lens-h">Fleet posture</span><span class="gxp-lens-v" id="gxpFpV">…</span></span>
+            </button>
+        </div>
+        <div class="gxp-apps" id="gxpApps">
+            <div class="gxp-apps-h">Affected applications</div>
+            <div class="gxp-app-chips" id="gxpAppChips"></div>
+        </div>
+        <div class="gxp-foot" id="gxpFoot">Auto-checked against Veracode SCA &amp; fleet posture — tap a tile for the detail.</div>
+        <div class="gxp-verify" id="gxpVerify">
+            <div class="gxp-verify-bar">
+                <span class="gxp-verify-lead">🩺 App team says they fixed it?</span>
+                {% if is_owner %}
+                <button class="gxp-verify-btn" id="gxpVerifyBtn" type="button">🔁 Verify remediation</button>
+                {% endif %}
+                <span class="gxp-verify-hint" id="gxpVerifyHint">Re-checks live against Veracode SCA, then shows what cleared vs. what still remains.{% if not is_owner %} <em>Assign this advisory to yourself to run it.</em>{% endif %}</span>
+            </div>
+            <div class="gxp-verify-result" id="gxpVerifyResult" hidden></div>
+        </div>
+    </div>
+    <script type="application/json" id="gxpInitial">{{ {
+        "veracode": adv.veracode_enrichment or None,
+        "fleet_posture": (capability_results.fleet_posture.result if capability_results.get('fleet_posture') else None),
+        "verify": (capability_results.verify_remediation.result if capability_results.get('verify_remediation') else None)
+    }|tojson }}</script>
+    </div>
+    {% endif %}
+    <div class="gha-sec gha-flow2">
+        <div>
+            <div class="gha-sec-h"><span class="step">02</span> Should we declare a CAPD?</div>
+    {% set sc = capability_results.capd_scorecard.result if capability_results.get('capd_scorecard') else None %}
+    <div class="gha-card gha-scorecard">
+        <h3>🧭 CAPD Scorecard</h3>
+        <p class="cap-sub">A grounded <em>“do we declare a CAPD?”</em> verdict — scored from EPSS, CISA KEV, CVSS, our software exposure (Veracode/JFrog), active-threat intel, and patch availability. No worst-case guessing.</p>
+        {% if sc %}<script type="application/json" id="capd-initial">{{ sc|tojson }}</script>{% endif %}
+        <div id="capd-body" {% if not sc %}style="display:none;"{% endif %}></div>
+        <div id="capd-empty" class="ai-empty" {% if sc %}style="display:none;"{% endif %}>No scorecard yet — compute a grounded CAPD verdict from the signals we already pull.</div>
+        <div class="ai-actions">
+            <button class="btn cap-run-capd" id="btn-capd">🧭 {% if sc %}Recompute scorecard{% else %}Compute CAPD Scorecard{% endif %}</button>
+        </div>
+    </div>
+        </div>
+        <div>
+            <div class="gha-sec-h"><span class="step">03</span> Act</div>
+            <div class="gha-card gha-act-card">
+    <div class="gha-owner-bar" id="owner-bar">
+        <span class="owner-state" id="owner-state">
+            {% if adv.owner %}👤 Owned by <b>{{ adv.owner }}</b>{% else %}🫥 Unassigned{% endif %}
+        </span>
+        {% set is_mine = current_user and adv.owner and adv.owner == current_user.email %}
+        <button class="btn btn-assign" id="btn-assign" {% if is_mine %}style="display:none;"{% endif %}>
+            🙋 {% if adv.owner %}Take over{% else %}Assign to me{% endif %}
+        </button>
+        <button class="btn btn-release" id="btn-release" {% if not is_mine %}style="display:none;"{% endif %}>↩️ Release</button>
+    </div>
+        <textarea id="notes" placeholder="Add review notes — what this affects, exposure assessment, decision rationale…">{{ adv.notes or '' }}</textarea>
+        <div class="gha-actions">
+            <button class="btn btn-save"   id="btn-save">Save notes</button>
+            <button class="btn btn-close"  id="btn-close">Close — not worth reporting</button>
+            <button class="btn btn-reopen" id="btn-reopen" style="display:none;">Reopen</button>
+            <button class="btn btn-report" id="btn-report"
+                    {% if config.is_dev %}disabled title="Teams escalation is disabled on the {{ config.environment }} instance — promote to prod to use it"{% endif %}>
+                {% if config.is_dev %}Notify disabled in {{ config.environment }}{% else %}Notify {{ teams_channel }} →{% endif %}
+            </button>
+            {% if adv.xsoar_ticket_id %}
+            <a class="btn btn-xsoar" id="xsoar-ticket-link" href="{{ adv.xsoar_ticket_url or '#' }}" target="_blank" rel="noopener"
+               title="Created by {{ adv.xsoar_ticket_by }}{% if adv.xsoar_ticket_at %} on {{ adv.xsoar_ticket_at|et }}{% endif %}">
+                🎫 XSOAR #{{ adv.xsoar_ticket_id }} ↗
+            </a>
+            {% else %}
+            <button class="btn btn-xsoar" id="btn-xsoar"
+                    {% if config.is_dev %}disabled title="XSOAR ticket creation is disabled on the {{ config.environment }} instance — promote to prod to use it"{% endif %}>
+                {% if config.is_dev %}XSOAR disabled in {{ config.environment }}{% else %}🎫 Create XSOAR ticket{% endif %}
+            </button>
+            {% endif %}
+            <button class="btn btn-archive" id="btn-archive">
+                {% if adv.archived_at %}♻️ Restore from archive{% else %}🗄️ Archive{% endif %}
+            </button>
+        </div>
+        <div class="gha-owner-note" id="owner-note">🔒 Only the owner can act on this advisory — click <strong>Assign to me</strong> to take it over. Anyone signed in can still join the discussion below.</div>
+        <div class="gha-status-line" id="status-line">
+            {% if adv.reported_at %}Reported to Teams by {{ adv.reported_by }} on {{ adv.reported_at|et }}.
+            {% elif adv.reviewed_by %}Last reviewed by {{ adv.reviewed_by }}{% if adv.reviewed_at %} on {{ adv.reviewed_at|et }}{% endif %}.
+            {% else %}Not yet reviewed.{% endif %}
+        </div>
+            </div>
+        </div>
+    </div>
+    <details class="gha-invest" id="ghaInvest">
+        <summary>
+            <span class="iv-ic">🔬</span>
+            <span><span class="iv-t">Investigate deeper</span><br><span class="iv-d">Veracode SCA · attack surface · threat intel · QRadar · JFrog · sign-offs · AI assessment · notes · discussion</span></span>
+            <span class="iv-chips"><span class="iv-chip">SCA</span><span class="iv-chip">ASM</span><span class="iv-chip">RF intel</span><span class="iv-chip">+5</span></span>
+            <span class="iv-chev">▾</span>
+        </summary>
+        <div class="gha-invest-body">
+    <div class="gha-assess" id="gha-assess">
+        <div class="gha-assess-head">
+            <span class="gha-assess-title">🧑‍🔬 Assessment status</span>
+            <span class="gha-assess-current" id="assess-current">
+                {% if adv.assessment_status and adv.assessment_status in assessment_statuses %}
+                <span class="assess-badge a-{{ adv.assessment_status }}">{{ assessment_statuses[adv.assessment_status].emoji }} {{ assessment_statuses[adv.assessment_status].label }}</span>
+                <span class="assess-meta">by {{ adv.assessment_by }}{% if adv.assessment_at %} · {{ adv.assessment_at[:10] }}{% endif %}</span>
+                {% else %}<span class="assess-meta">Not started — the assessment team can flag progress here.</span>{% endif %}
+            </span>
+        </div>
+        <div class="gha-assess-controls">
+            {% for k, v in assessment_statuses.items() %}
+            <button class="assess-btn a-{{ k }}{% if adv.assessment_status == k %} active{% endif %}" data-status="{{ k }}">{{ v.emoji }} {{ v.label }}</button>
+            {% endfor %}
+            <button class="assess-btn assess-clear" data-status="">Clear</button>
+        </div>
+        <textarea id="assess-note" class="gha-assess-note" rows="2" placeholder="Optional note for the SOC (what you found, ETA, ticket #)…">{{ adv.assessment_note or '' }}</textarea>
+    </div>
     {% if signoff_teams %}
     <style>
         .signoff{background:linear-gradient(135deg,rgba(0,70,173,.06),rgba(0,166,81,.06));border:1px solid #d7e3f4;border-radius:14px;padding:16px 18px;margin:14px 0;}
@@ -314,26 +630,6 @@
         {% endfor %}
     </div>
     {% endif %}
-
-    <div class="gha-assess" id="gha-assess">
-        <div class="gha-assess-head">
-            <span class="gha-assess-title">🧑‍🔬 Assessment status</span>
-            <span class="gha-assess-current" id="assess-current">
-                {% if adv.assessment_status and adv.assessment_status in assessment_statuses %}
-                <span class="assess-badge a-{{ adv.assessment_status }}">{{ assessment_statuses[adv.assessment_status].emoji }} {{ assessment_statuses[adv.assessment_status].label }}</span>
-                <span class="assess-meta">by {{ adv.assessment_by }}{% if adv.assessment_at %} · {{ adv.assessment_at[:10] }}{% endif %}</span>
-                {% else %}<span class="assess-meta">Not started — the assessment team can flag progress here.</span>{% endif %}
-            </span>
-        </div>
-        <div class="gha-assess-controls">
-            {% for k, v in assessment_statuses.items() %}
-            <button class="assess-btn a-{{ k }}{% if adv.assessment_status == k %} active{% endif %}" data-status="{{ k }}">{{ v.emoji }} {{ v.label }}</button>
-            {% endfor %}
-            <button class="assess-btn assess-clear" data-status="">Clear</button>
-        </div>
-        <textarea id="assess-note" class="gha-assess-note" rows="2" placeholder="Optional note for the SOC (what you found, ETA, ticket #)…">{{ adv.assessment_note or '' }}</textarea>
-    </div>
-
     <div class="gha-card">
         <h3>Details</h3>
         <dl class="gha-kv">
@@ -348,7 +644,6 @@
             <dt>Advisory</dt><dd><a href="{{ adv.html_url }}" target="_blank" rel="noopener">{{ adv.html_url }}</a></dd>
         </dl>
     </div>
-
     {% if vulns %}
     <div class="gha-card">
         <h3>Affected packages</h3>
@@ -362,7 +657,6 @@
         </table>
     </div>
     {% endif %}
-
     {% if package_links %}
     <style>
         .pkglinks{display:flex;flex-direction:column;gap:8px;}
@@ -399,14 +693,12 @@
         <button type="button" class="pkglinks-copy" id="pkglinks-copy">⧉ Copy all package URLs</button>
     </div>
     {% endif %}
-
     {% if adv.description %}
     <div class="gha-card">
         <h3>Description</h3>
         <div class="gha-desc">{{ adv.description }}</div>
     </div>
     {% endif %}
-
     {% if references %}
     <div class="gha-card">
         <h3>References</h3>
@@ -415,9 +707,8 @@
         </div>
     </div>
     {% endif %}
-
     <div class="gha-card ai-card">
-        <h3>✦ AI assessment <span class="ai-sub">MetIQ</span></h3>
+        <h3>✦ AI assessment <span class="ai-sub">Local LLM</span></h3>
         {% set ai = adv.ai_assessment %}
         {% set has_intel = ai and (ai.iocs or ai.ttps or ai.threat_actors or ai.next_steps) %}
         <div id="ai-body" {% if not ai %}style="display:none;"{% endif %}>
@@ -474,15 +765,14 @@
                 <div class="ai-disclaimer">AI-extracted from the advisory text — verify indicators before acting on them.</div>
             </div>
 
-            <div class="ai-meta" id="ai-meta">{% if ai %}Generated by {{ 'Heuristic' if ai.model == 'heuristic' else 'MetIQ' }}{% if ai.generated_at %} · {{ ai.generated_at|et }}{% endif %}{% endif %}</div>
+            <div class="ai-meta" id="ai-meta">{% if ai %}Generated by {{ 'Heuristic' if ai.model == 'heuristic' else 'Local LLM' }}{% if ai.generated_at %} · {{ ai.generated_at|et }}{% endif %}{% endif %}</div>
         </div>
         <div class="ai-actions">
             <button class="btn" id="btn-ai">✦ {% if ai %}Regenerate{% else %}Generate AI assessment{% endif %}</button>
             <button class="btn btn-ai-use" id="btn-ai-use" {% if not ai %}style="display:none;"{% endif %}>Use suggested note ↓</button>
         </div>
-        <div id="ai-empty" class="ai-empty" {% if ai %}style="display:none;"{% endif %}>Ask MetIQ to assess our likely exposure, extract IOCs/TTPs, and recommend an action.</div>
+        <div id="ai-empty" class="ai-empty" {% if ai %}style="display:none;"{% endif %}>Ask the local LLM to assess our likely exposure, extract IOCs/TTPs, and recommend an action.</div>
     </div>
-
     {% if veracode_cves or veracode_packages %}
     <div class="gha-card veracode-card">
         <h3>🛡️ Veracode SCA exposure</h3>
@@ -525,19 +815,6 @@
         <div id="vc-empty" class="ai-empty" {% if vc %}style="display:none;"{% endif %}>Check whether any of our applications carry an open-source component matching this advisory{% if veracode_cves %} — CVE(s): {{ veracode_cves|join(', ') }}{% endif %}{% if veracode_packages %}{% if veracode_cves %};{% endif %} package(s): {{ veracode_packages|join(', ') }}{% endif %}.</div>
     </div>
     {% endif %}
-
-    {% set sc = capability_results.capd_scorecard.result if capability_results.get('capd_scorecard') else None %}
-    <div class="gha-card gha-scorecard">
-        <h3>🧭 CAPD Scorecard</h3>
-        <p class="cap-sub">A grounded <em>“do we declare a CAPD?”</em> verdict — scored from EPSS, CISA KEV, CVSS, our software exposure (Veracode/JFrog), active-threat intel, and patch availability. No worst-case guessing.</p>
-        {% if sc %}<script type="application/json" id="capd-initial">{{ sc|tojson }}</script>{% endif %}
-        <div id="capd-body" {% if not sc %}style="display:none;"{% endif %}></div>
-        <div id="capd-empty" class="ai-empty" {% if sc %}style="display:none;"{% endif %}>No scorecard yet — compute a grounded CAPD verdict from the signals we already pull.</div>
-        <div class="ai-actions">
-            <button class="btn cap-run-capd" id="btn-capd">🧭 {% if sc %}Recompute scorecard{% else %}Compute CAPD Scorecard{% endif %}</button>
-        </div>
-    </div>
-
     {% set ta = capability_results.threat_analysis.result if capability_results.get('threat_analysis') else None %}
     <style>
       .ta-card .cap-sub{margin-top:-4px;}
@@ -657,7 +934,7 @@
             <a class="ta-export-btn" href="/api/cs-advisories/{{ adv.source_id }}/threat-analysis/export/navigator" download>🗺️ ATT&amp;CK Navigator layer</a>
             <a class="ta-export-btn" href="/api/cs-advisories/{{ adv.source_id }}/threat-analysis/export/brief" download>📝 Brief (Markdown)</a>
         </div>
-        <div class="ta-meta">Generated {{ ta.generated_at or '' }} · native engine (MetIQ GPT-4.1, m1 fallback). Always validate rules before deployment.</div>
+        <div class="ta-meta">Generated {{ ta.generated_at or '' }} · native engine (local LLM). Always validate rules before deployment.</div>
         {% elif ta and ta.error %}
         <div class="cap-res-box neutral" id="cap-result-threat_analysis">{{ ta.error }}</div>
         {% else %}
@@ -675,7 +952,6 @@
             <button class="btn cap-run-ta" id="btn-threat_analysis">🛡️ {% if ta and not ta.error %}Re-run analysis{% else %}Run Threat Analysis{% endif %}</button>
         </div>
     </div>
-
     {% set jf = capability_results.jfrog.result if capability_results.get('jfrog') else None %}
     <div class="gha-card gha-capabilities">
         <h3>🧰 Capabilities</h3>
@@ -749,7 +1025,6 @@
 
         </div>
     </div>
-
     {% set faqc = capability_results.faq.result if capability_results.get('faq') else None %}
     <div class="gha-card gha-faq">
         <h3>❓ CAPD decision FAQ</h3>
@@ -762,41 +1037,6 @@
         <button class="btn cap-run" id="btn-faq">{% if faqc %}↻ Regenerate answers{% else %}✨ Answer these{% endif %}</button>
         {% if not faqc %}<div class="faq-empty" id="faq-empty">e.g. Should we declare a CAPD? · Is this easy to exploit? · Are we likely affected?</div>{% endif %}
     </div>
-
-    <div class="gha-card">
-        <h3>Triage</h3>
-        <textarea id="notes" placeholder="Add review notes — what this affects, exposure assessment, decision rationale…">{{ adv.notes or '' }}</textarea>
-        <div class="gha-actions">
-            <button class="btn btn-save"   id="btn-save">Save notes</button>
-            <button class="btn btn-close"  id="btn-close">Close — not worth reporting</button>
-            <button class="btn btn-reopen" id="btn-reopen" style="display:none;">Reopen</button>
-            <button class="btn btn-report" id="btn-report"
-                    {% if config.is_dev %}disabled title="Teams escalation is disabled on the {{ config.environment }} instance — promote to prod to use it"{% endif %}>
-                {% if config.is_dev %}Notify disabled in {{ config.environment }}{% else %}Notify {{ teams_channel }} →{% endif %}
-            </button>
-            {% if adv.xsoar_ticket_id %}
-            <a class="btn btn-xsoar" id="xsoar-ticket-link" href="{{ adv.xsoar_ticket_url or '#' }}" target="_blank" rel="noopener"
-               title="Created by {{ adv.xsoar_ticket_by }}{% if adv.xsoar_ticket_at %} on {{ adv.xsoar_ticket_at|et }}{% endif %}">
-                🎫 XSOAR #{{ adv.xsoar_ticket_id }} ↗
-            </a>
-            {% else %}
-            <button class="btn btn-xsoar" id="btn-xsoar"
-                    {% if config.is_dev %}disabled title="XSOAR ticket creation is disabled on the {{ config.environment }} instance — promote to prod to use it"{% endif %}>
-                {% if config.is_dev %}XSOAR disabled in {{ config.environment }}{% else %}🎫 Create XSOAR ticket{% endif %}
-            </button>
-            {% endif %}
-            <button class="btn btn-archive" id="btn-archive">
-                {% if adv.archived_at %}♻️ Restore from archive{% else %}🗄️ Archive{% endif %}
-            </button>
-        </div>
-        <div class="gha-owner-note" id="owner-note">🔒 Only the owner can act on this advisory — click <strong>Assign to me</strong> to take it over. Anyone signed in can still join the discussion below.</div>
-        <div class="gha-status-line" id="status-line">
-            {% if adv.reported_at %}Reported to Teams by {{ adv.reported_by }} on {{ adv.reported_at|et }}.
-            {% elif adv.reviewed_by %}Last reviewed by {{ adv.reviewed_by }}{% if adv.reviewed_at %} on {{ adv.reviewed_at|et }}{% endif %}.
-            {% else %}Not yet reviewed.{% endif %}
-        </div>
-    </div>
-
     <div class="gha-card gha-discussion">
         <h3>💬 Discussion</h3>
         <div class="gha-comments" id="gha-comments">
@@ -818,7 +1058,8 @@
             <button class="btn btn-comment" id="btn-comment">💬 Post comment</button>
         </div>
     </div>
-
+        </div>
+    </details>
     <div class="gha-report-row">
         <a class="btn btn-report-dl" href="/cs-advisories/{{ adv.source_id }}/report.pdf" target="_blank" rel="noopener">
             📄 Download PDF report
@@ -1544,7 +1785,7 @@ const CHAT_CTX = {{ chat_context|tojson }};
         document.getElementById('ai-intel').style.display = any ? '' : 'none';
 
         document.getElementById('ai-meta').textContent =
-            'Generated by ' + (a.model === 'heuristic' ? 'Heuristic' : 'MetIQ') + (a.generated_at ? ' · ' + a.generated_at.slice(0,16).replace('T',' ') + ' UTC' : '');
+            'Generated by ' + (a.model === 'heuristic' ? 'Heuristic' : 'Local LLM') + (a.generated_at ? ' · ' + a.generated_at.slice(0,16).replace('T',' ') + ' UTC' : '');
         aiBody.style.display = ''; aiEmpty.style.display = 'none';
         btnAiUse.style.display = ''; btnAi.textContent = '✦ Regenerate';
     }
@@ -1642,6 +1883,259 @@ const CHAT_CTX = {{ chat_context|tojson }};
             if (btnVc.textContent === '🛡️ Checking…') btnVc.textContent = '🛡️ Check Veracode SCA';
         }
     });
+
+    // ---- "How does this affect the company?" exposure band ------------------
+    // Auto-runs our exposure lenses on load (authenticated only — the page is
+    // public-read) and leads with a verdict. Results persist server-side, so a
+    // lens only actually re-runs the first time an advisory is opened; later
+    // views read the cached result instantly. Carefully distinguishes
+    // "checked and clear" from "couldn't check" so we never imply safety.
+    (function exposureBand() {
+        const band = document.getElementById('ghaExposure');
+        if (!band) return;
+        const authed = band.dataset.auth === '1';
+        let init = {};
+        try { init = JSON.parse(document.getElementById('gxpInitial').textContent || '{}'); } catch (e) {}
+
+        const state = { veracode: init.veracode || null, fleet_posture: init.fleet_posture || null };
+        const okk = {}, done = {};            // okk = got real data; done = settled
+        Object.keys(state).forEach(k => { if (state[k]) { okk[k] = true; done[k] = true; } });
+
+        const $ = id => document.getElementById(id);
+        const setLens = (id, txt, cls) => { const el = $(id); if (el) { el.textContent = txt; el.className = 'gxp-lens-v' + (cls ? ' ' + cls : ''); } };
+        const pend = () => authed ? ['checking…', 'wait'] : ['🔒 sign in to check', 'muted'];
+
+        function vcCount(v) {
+            if (!v) return null;
+            if (typeof v.affected_app_count === 'number') return v.affected_app_count;
+            const s = new Set();
+            ['cves', 'packages'].forEach(g => Object.values(v[g] || {}).forEach(arr => (arr || []).forEach(a => a && a.application && s.add(a.application))));
+            return s.size;
+        }
+
+        // Collect the actual affected application names from Veracode SCA, so
+        // "2 apps" is answerable right here, not a tile down.
+        function collectApps() {
+            const byName = new Map();
+            const add = (name) => {
+                const nm = (name || '').trim(); if (!nm) return;
+                byName.set(nm.toLowerCase(), { app: nm });
+            };
+            const vc = state.veracode;
+            if (vc) ['cves', 'packages'].forEach(g => Object.values(vc[g] || {})
+                .forEach(arr => (arr || []).forEach(a => a && a.application && add(a.application))));
+            const list = Array.from(byName.values());
+            list.sort((a, b) => a.app.localeCompare(b.app));
+            return list;
+        }
+
+        function renderApps() {
+            const wrap = $('gxpApps'), box = $('gxpAppChips');
+            if (!wrap || !box) return;
+            const apps = collectApps();
+            if (!apps.length) { wrap.classList.remove('show'); return; }
+            const MAX = 12;
+            const shown = apps.slice(0, MAX);
+            box.innerHTML = shown.map(a =>
+                '<span class="gxp-app-chip" title="Affected application">' + esc(a.app) + '</span>'
+            ).join('');
+            if (apps.length > MAX) {
+                const more = document.createElement('span');
+                more.className = 'gxp-app-more';
+                more.textContent = '+' + (apps.length - MAX) + ' more';
+                box.appendChild(more);
+            }
+            wrap.classList.add('show');
+        }
+
+        function render() {
+            if (okk.veracode) { const n = vcCount(state.veracode);
+                if (n > 0) setLens('gxpVcV', n + (n === 1 ? ' app carries it' : ' apps carry it'), 'bad');
+                else setLens('gxpVcV', 'No affected apps', 'good');
+            } else if (done.veracode) setLens('gxpVcV', 'check unavailable', 'muted');
+            else setLens('gxpVcV', ...pend());
+
+            if (okk.fleet_posture) { const t = (state.fleet_posture.summary_text || '').replace(/^🛰️\s*/, '').trim();
+                setLens('gxpFpV', t ? (t.length > 80 ? t.slice(0, 80) + '…' : t) : 'Posture retrieved', 'muted');
+            } else if (done.fleet_posture) setLens('gxpFpV', 'unavailable', 'muted');
+            else setLens('gxpFpV', authed ? 'checking…' : '🔒 sign in to check', authed ? 'wait' : 'muted');
+
+            renderApps();
+            renderVerdict();
+        }
+
+        function renderVerdict() {
+            const v = $('gxpVerdict');
+            const core = ['veracode'];
+            const exposed = (vcCount(state.veracode) > 0);
+            const coreOk = core.every(c => okk[c]);
+            const corePending = authed && core.some(c => !done[c]);
+            if (exposed) {
+                const n = vcCount(state.veracode) || 0;
+                v.textContent = '⛔ Exposed' + (n ? ' — ' + n + (n === 1 ? ' app' : ' apps') : '');
+                v.className = 'gxp-verdict gxp-exposed';
+            } else if (coreOk) {
+                v.textContent = '✅ No known exposure';
+                v.className = 'gxp-verdict gxp-clear';
+            } else if (corePending) {
+                v.textContent = '⏳ Checking our exposure…';
+                v.className = 'gxp-verdict gxp-checking';
+            } else if (!authed) {
+                v.textContent = '🔒 Sign in to check exposure';
+                v.className = 'gxp-verdict gxp-signin';
+            } else {
+                v.textContent = '⚠️ Couldn’t complete checks — retry below';
+                v.className = 'gxp-verdict gxp-signin';
+            }
+            // Mirror the live verdict into the dossier masthead headline.
+            const mv = document.getElementById('ghaMastVerdict');
+            if (mv) {
+                if (exposed) {
+                    const mn = vcCount(state.veracode) || 0;
+                    mv.innerHTML = '<span class="x">⛔ Affects us</span>'
+                        + (mn ? ' — ' + mn + ' application' + (mn === 1 ? ' carries' : 's carry') + ' this' : '');
+                    mv.className = 'mast-verdict';
+                } else if (coreOk) {
+                    mv.innerHTML = '<span class="ok">✅ No known exposure</span>';
+                    mv.className = 'mast-verdict';
+                } else if (corePending) {
+                    mv.textContent = '⏳ Checking our exposure…';
+                    mv.className = 'mast-verdict wait';
+                } else if (!authed) {
+                    mv.textContent = '🔒 Sign in to check exposure';
+                    mv.className = 'mast-verdict wait';
+                } else {
+                    mv.textContent = '⚠️ Couldn’t complete checks — retry below';
+                    mv.className = 'mast-verdict wait';
+                }
+            }
+        }
+
+        async function runVc() {
+            try {
+                const resp = await fetch('/api/cs-advisories/' + ghsa + '/veracode-check', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: '{}' });
+                const data = await resp.json().catch(() => ({}));
+                done.veracode = true;
+                if (resp.ok && data.ok !== false && data.veracode) {
+                    state.veracode = data.veracode; okk.veracode = true;
+                    if (typeof renderVeracode === 'function') renderVeracode(data.veracode);
+                }
+            } catch (e) { done.veracode = true; }
+            render();
+        }
+        async function runFleet() {
+            try {
+                const s = await fetch('/api/cs-advisories/' + ghsa + '/capability/fleet_posture/start', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: '{}' });
+                const sd = await s.json().catch(() => ({}));
+                if (!s.ok || sd.ok === false) { done.fleet_posture = true; render(); return; }
+                let tries = 0;
+                const poll = async () => {
+                    tries++;
+                    try {
+                        const r = await fetch('/api/cs-advisories/' + ghsa + '/capability/fleet_posture/status', { credentials: 'same-origin' });
+                        const d = await r.json().catch(() => ({}));
+                        if (d.state === 'done') {
+                            state.fleet_posture = d.result || null; okk.fleet_posture = !!d.result; done.fleet_posture = true;
+                            const box = $('cap-result-fleet_posture'); if (box && d.result) renderCapResult(box, d.result);
+                            const b = $('cap-fleet_posture-btn'); if (b) b.textContent = 'Re-check';
+                            render(); return;
+                        }
+                        if (d.state === 'error' || tries > 30) { done.fleet_posture = true; render(); return; }
+                        setTimeout(poll, 4000);
+                    } catch (e) { done.fleet_posture = true; render(); }
+                };
+                setTimeout(poll, 4000);
+            } catch (e) { done.fleet_posture = true; render(); }
+        }
+
+        // A jump target now usually lives inside the "Investigate deeper" drawer —
+        // open any collapsed <details> ancestor before scrolling so it's visible.
+        function openAncestorDrawers(el){ let p = el; while (p) { if (p.tagName === 'DETAILS' && !p.open) p.open = true; p = p.parentElement; } }
+        band.querySelectorAll('.gxp-lens').forEach(b => b.addEventListener('click', () => {
+            const sel = b.dataset.jump; if (!sel) return;
+            const t = document.querySelector(sel); if (!t) return;
+            openAncestorDrawers(t);
+            t.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            t.style.transition = 'box-shadow .3s'; t.style.boxShadow = '0 0 0 3px rgba(0,70,173,.35)';
+            setTimeout(() => { t.style.boxShadow = ''; }, 1400);
+        }));
+
+        // ---- Verify remediation: re-check exposure + before/after diff -----
+        const VR_TONE = { verified: 'good', still_clear: 'good', partial: 'warn',
+                          baseline: 'neutral', unchanged: 'bad', regressed: 'bad' };
+        const VR_LABEL = { verified: 'Verified', still_clear: 'Clear', partial: 'Partial',
+                           baseline: 'Baseline', unchanged: 'No change', regressed: 'Regressed' };
+        function vrFmt(iso) {
+            if (!iso) return '';
+            try { return new Date(iso).toLocaleString('en-US', { timeZone: 'America/New_York',
+                month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+            catch (e) { return iso; }
+        }
+        function vrChips(list, cls, icon) {
+            return (list || []).map(a => '<span class="gxp-vr-chip ' + cls + '">' + icon + esc(a) + '</span>').join('');
+        }
+        function renderVerify(p) {
+            const box = $('gxpVerifyResult');
+            if (!box || !p || !p.diff) return;
+            const d = p.diff;
+            const tone = VR_TONE[d.verdict] || 'neutral';
+            const label = VR_LABEL[d.verdict] || 'Checked';
+            let groups = '';
+            if ((d.cleared || []).length) groups += '<div class="gxp-vr-group"><div class="gxp-vr-glabel">✅ Cleared since last check</div><div class="gxp-vr-chips">' + vrChips(d.cleared, 'cleared', '✓ ') + '</div></div>';
+            if ((d.remaining || []).length) groups += '<div class="gxp-vr-group"><div class="gxp-vr-glabel">⛔ Still exposed</div><div class="gxp-vr-chips">' + vrChips(d.remaining, 'remaining', '') + '</div></div>';
+            if ((d.added || []).length) groups += '<div class="gxp-vr-group"><div class="gxp-vr-glabel">🔺 Newly affected</div><div class="gxp-vr-chips">' + vrChips(d.added, 'added', '') + '</div></div>';
+            const foot = [];
+            if (p.checked_at) foot.push('<span>Checked <b>' + esc(vrFmt(p.checked_at)) + '</b>' + (p.checked_by ? ' by ' + esc(p.checked_by) : '') + '</span>');
+            if (d.prev_count != null) foot.push('<span>Was <b>' + d.prev_count + '</b> → now <b>' + d.cur_count + '</b></span>');
+            else foot.push('<span>First check — <b>' + d.cur_count + '</b> app(s) now affected</span>');
+            if (p.history_count) foot.push('<span><b>' + p.history_count + '</b> check' + (p.history_count === 1 ? '' : 's') + ' on record</span>');
+            box.innerHTML = '<div class="gxp-vr-head"><span class="gxp-vr-badge ' + tone + '">' + esc(label) + '</span>'
+                + '<span class="gxp-vr-headline">' + esc(d.headline || '') + '</span></div>'
+                + (groups ? '<div class="gxp-vr-groups">' + groups + '</div>' : '')
+                + '<div class="gxp-vr-foot">' + foot.join('') + '</div>';
+            box.hidden = false;
+        }
+        const vbtn = $('gxpVerifyBtn');
+        if (vbtn) vbtn.addEventListener('click', async () => {
+            const orig = vbtn.textContent;
+            vbtn.disabled = true; vbtn.textContent = '⏳ Re-checking…';
+            try {
+                const r = await fetch('/api/cs-advisories/' + ghsa + '/verify-remediation', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin', body: '{}' });
+                const d = await r.json().catch(() => ({}));
+                if (r.ok && d.ok !== false) {
+                    renderVerify(d);
+                    if (typeof showToast === 'function') showToast((d.diff && d.diff.headline) || 'Remediation re-checked.');
+                } else if (typeof showToast === 'function') {
+                    showToast(d.warning || d.error || 'Verify failed', true);
+                }
+            } catch (e) {
+                if (typeof showToast === 'function') showToast('Verify failed: ' + e, true);
+            } finally {
+                vbtn.disabled = false; vbtn.textContent = orig;
+            }
+        });
+        if (init.verify) renderVerify(init.verify);
+
+        render();
+        if (authed) {
+            const coreRuns = [];
+            if (!done.veracode) coreRuns.push(runVc());
+            if (!done.fleet_posture) {
+                // Fleet posture queries Power BI — only worth it if we actually
+                // run the affected software. Wait for the core lens, then run
+                // it only when there's exposure; otherwise it's N/A.
+                Promise.allSettled(coreRuns).then(() => {
+                    const exposed = (vcCount(state.veracode) > 0);
+                    if (exposed) runFleet();
+                    else { done.fleet_posture = true; setLens('gxpFpV', 'no exposed software — n/a', 'muted'); render(); }
+                });
+            }
+        }
+    })();
 })();
 </script>
 {% endblock %}

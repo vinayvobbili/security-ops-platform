@@ -141,6 +141,15 @@ def init_db() -> None:
             conn.execute("ALTER TABLE advisories ADD COLUMN xsoar_ticket_at TEXT")
         if "xsoar_ticket_by" not in cols:
             conn.execute("ALTER TABLE advisories ADD COLUMN xsoar_ticket_by TEXT")
+        # Escalation OUTCOME (the loop-closer): the XSOAR ticket's current state
+        # pulled back so the row shows what happened next — open / in_progress /
+        # resolved — instead of a terminal "reported". Synced periodically.
+        if "xsoar_status" not in cols:
+            conn.execute("ALTER TABLE advisories ADD COLUMN xsoar_status TEXT")
+        if "xsoar_close_reason" not in cols:
+            conn.execute("ALTER TABLE advisories ADD COLUMN xsoar_close_reason TEXT")
+        if "xsoar_status_at" not in cols:
+            conn.execute("ALTER TABLE advisories ADD COLUMN xsoar_status_at TEXT")
         # Assessment-team back-channel: their work status, distinct from the SOC's
         # triage `status`. Lets the Package Compromise Assessment team flag where
         # they are (assessing / no exposure / remediating / closed).
@@ -214,6 +223,26 @@ def init_db() -> None:
             )
             """
         )
+        # Remediation-verification history: one row per "verify remediation" run,
+        # a durable point-in-time snapshot of WHICH apps carry this advisory's
+        # component (and which are internet-facing). Keeping every snapshot lets
+        # the before/after delta survive — so "N apps cleared since the team's fix"
+        # is auditable rather than a one-shot in-memory compare.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS advisory_exposure_snapshots (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                uid           TEXT NOT NULL,
+                taken_at      TEXT NOT NULL,
+                taken_by      TEXT,
+                exposed       INTEGER NOT NULL DEFAULT 0,
+                app_count     INTEGER NOT NULL DEFAULT 0,
+                ext_count     INTEGER NOT NULL DEFAULT 0,
+                snapshot_json TEXT
+            )
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_exposure_snap_uid ON advisory_exposure_snapshots(uid)")
         # Multi-team validation sign-off: each validating team independently marks
         # whether it has cleared this advisory, with its own note (editable by any
         # verified user). Supersedes the single-owner model for "who has checked".
@@ -477,6 +506,102 @@ def get_capability_results(key: str) -> dict[str, dict[str, Any]]:
         except (json.JSONDecodeError, TypeError):
             result = None
         out[r["capability"]] = {"result": result, "run_by": r["run_by"], "run_at": r["run_at"]}
+    return out
+
+
+def add_exposure_snapshot(key: str, snapshot: dict[str, Any]) -> Optional[int]:
+    """Persist one remediation-verification snapshot. Returns the new row id, or
+    None if the advisory doesn't exist. ``snapshot`` is the dict produced by
+    ``services.github_advisories.exposure_snapshot`` (already stamped with
+    ``taken_at`` / ``taken_by``)."""
+    adv = get_advisory(key)
+    if not adv:
+        return None
+    with get_connection() as conn:
+        cur = conn.execute(
+            "INSERT INTO advisory_exposure_snapshots "
+            "(uid, taken_at, taken_by, exposed, app_count, ext_count, snapshot_json) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (adv["uid"], snapshot.get("taken_at") or _now_iso(),
+             snapshot.get("taken_by") or "", 1 if snapshot.get("exposed") else 0,
+             int(snapshot.get("app_count") or 0), int(snapshot.get("ext_count") or 0),
+             json.dumps(snapshot)),
+        )
+        return cur.lastrowid
+
+
+def list_exposure_snapshots(key: str, limit: int = 20) -> list[dict[str, Any]]:
+    """Remediation-verification snapshots for an advisory, newest first."""
+    adv = get_advisory(key)
+    if not adv:
+        return []
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT id, taken_at, taken_by, snapshot_json FROM advisory_exposure_snapshots "
+            "WHERE uid = ? ORDER BY taken_at DESC, id DESC LIMIT ?",
+            (adv["uid"], limit),
+        ).fetchall()
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        try:
+            snap = json.loads(r["snapshot_json"] or "{}")
+        except (json.JSONDecodeError, TypeError):
+            snap = {}
+        if not isinstance(snap, dict):
+            snap = {}
+        snap.setdefault("taken_at", r["taken_at"])
+        snap.setdefault("taken_by", r["taken_by"])
+        snap["id"] = r["id"]
+        out.append(snap)
+    return out
+
+
+def latest_exposure_snapshot(key: str) -> Optional[dict[str, Any]]:
+    """The most recent remediation-verification snapshot, or None if none yet."""
+    rows = list_exposure_snapshots(key, limit=1)
+    return rows[0] if rows else None
+
+
+def exposure_snapshot_count(key: str) -> int:
+    """How many remediation-verification snapshots exist for this advisory."""
+    adv = get_advisory(key)
+    if not adv:
+        return 0
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS c FROM advisory_exposure_snapshots WHERE uid = ?",
+            (adv["uid"],),
+        ).fetchone()
+    return int(row["c"]) if row else 0
+
+
+def exposure_signals(capabilities: tuple[str, ...] = ()) -> dict[str, dict[str, Any]]:
+    """Batch-fetch cached exposure-relevant capability results for EVERY
+    advisory, keyed by uid: ``{uid: {capability: result, ...}}``.
+
+    Used to surface the "How does this affect us?" verdict at the list level
+    without re-running any lens (one query for the whole page instead of N+1 via
+    :func:`get_capability_results`). The primary exposure signal — Veracode SCA —
+    lives on the advisory row itself (``veracode_enrichment``), so the default is
+    no extra capabilities; pass capability names here only to batch additional
+    cached lenses. Only advisories actually checked appear; the rest are treated
+    as unchecked by callers."""
+    if not capabilities:
+        return {}
+    out: dict[str, dict[str, Any]] = {}
+    placeholders = ",".join("?" * len(capabilities))
+    with get_connection() as conn:
+        rows = conn.execute(
+            f"SELECT uid, capability, result_json FROM advisory_capability_results "
+            f"WHERE capability IN ({placeholders})",
+            capabilities,
+        ).fetchall()
+    for r in rows:
+        try:
+            result = json.loads(r["result_json"] or "null")
+        except (json.JSONDecodeError, TypeError):
+            result = None
+        out.setdefault(r["uid"], {})[r["capability"]] = result
     return out
 
 
@@ -1260,6 +1385,50 @@ def set_xsoar_ticket(key: str, ticket_id: str, ticket_url: str, user: str) -> bo
             (str(ticket_id), ticket_url or "", _now_iso(), user, adv["uid"]),
         )
     return True
+
+
+def set_xsoar_status(uid: str, status: str, close_reason: Optional[str] = None) -> bool:
+    """Cache the pulled-back XSOAR ticket outcome on the advisory row. Keyed by
+    uid (the sync loop already holds uids), set to one of open / in_progress /
+    resolved. ``close_reason`` is only meaningful when resolved."""
+    with get_connection() as conn:
+        cur = conn.execute(
+            "UPDATE advisories SET xsoar_status = ?, xsoar_close_reason = ?, "
+            "xsoar_status_at = ? WHERE uid = ?",
+            (status, (close_reason or None), _now_iso(), uid),
+        )
+        return cur.rowcount > 0
+
+
+def advisories_with_xsoar_tickets(include_resolved: bool = False) -> list[dict[str, Any]]:
+    """Rows that have an XSOAR ticket, for the outcome-sync loop. By default skips
+    those already cached as ``resolved`` (terminal — no need to re-poll a closed
+    case every cycle); pass include_resolved=True for a full refresh."""
+    sql = ("SELECT uid, xsoar_ticket_id, xsoar_status FROM advisories "
+           "WHERE xsoar_ticket_id IS NOT NULL AND xsoar_ticket_id != ''")
+    if not include_resolved:
+        sql += " AND (xsoar_status IS NULL OR xsoar_status != 'resolved')"
+    with get_connection() as conn:
+        return [dict(r) for r in conn.execute(sql).fetchall()]
+
+
+def escalation_outcome_counts() -> dict[str, int]:
+    """Close-the-loop tallies for leadership: of everything escalated, how many
+    have a ticket and where those tickets stand. Over the live (non-archived,
+    non-seeded) queue."""
+    base = "FROM advisories WHERE archived_at IS NULL AND status != 'seeded'"
+    with get_connection() as conn:
+        def _n(sql: str, *args) -> int:
+            row = conn.execute(sql, args).fetchone()
+            return row["c"] if row else 0
+
+        return {
+            "escalated": _n(f"SELECT COUNT(*) c {base} AND status = 'reported'"),
+            "ticketed": _n(f"SELECT COUNT(*) c {base} AND xsoar_ticket_id IS NOT NULL AND xsoar_ticket_id != ''"),
+            "open": _n(f"SELECT COUNT(*) c {base} AND xsoar_status = 'open'"),
+            "in_progress": _n(f"SELECT COUNT(*) c {base} AND xsoar_status = 'in_progress'"),
+            "resolved": _n(f"SELECT COUNT(*) c {base} AND xsoar_status = 'resolved'"),
+        }
 
 
 def save_ai_assessment(key: str, assessment: dict) -> bool:

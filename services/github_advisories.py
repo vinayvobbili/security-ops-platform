@@ -2,7 +2,7 @@
 
 Hourly poller for newly published advisories across several supply-chain /
 vulnerability feeds. On detecting advisories not seen before it posts a Webex
-digest (Aide bot) and emails the AppSec team. Nothing is sent when there is
+digest (Toodles bot) and emails the AppSec team. Nothing is sent when there is
 nothing new.
 
 Sources are a mix of code-defined built-ins and user-added ones (managed from
@@ -110,8 +110,13 @@ def get_source_specs() -> list[dict[str, Any]]:
     return specs
 
 
+# Labels for sources that only ever arrive via the on-demand live lookup
+# (live_lookup), so they have no entry in the configured source list.
+_LIVE_LOOKUP_LABELS = {"nvd": "NVD", "osv": "OSV"}
+
+
 def source_labels_map() -> dict[str, str]:
-    return {s["key"]: s["label"] for s in get_source_specs()}
+    return {**_LIVE_LOOKUP_LABELS, **{s["key"]: s["label"] for s in get_source_specs()}}
 
 
 def _fetcher_for(spec: dict[str, Any]) -> Callable[[], list[dict[str, Any]]]:
@@ -210,6 +215,156 @@ def _packages_from_github(adv: dict[str, Any]) -> tuple[list[str], str | None]:
             packages.append(f"{name} ({eco})" if eco else name)
             ecosystem = ecosystem or eco
     return packages, ecosystem
+
+
+# ---------------------------------------------------------------------------
+# On-demand live lookup — close the publish-lag gap.
+#
+# Our hourly poller only ingests GitHub's *reviewed + critical* feed, and GitHub
+# adds a reviewed GHSA to that feed days-to-weeks after the CVE is assigned (e.g.
+# CVE-2026-48170 / GHSA-9m6g-wc8r-q59c: CVE assigned 2026-05-21, GitHub-published
+# 2026-06-22). So a hot CVE can be searched before our poller would ever see it.
+# When the local queue misses a GHSA/CVE the page asks for, we fetch it live from
+# GitHub → NVD → OSV, normalize it through the same pipeline, and drop it into the
+# queue so it's there from then on.
+# ---------------------------------------------------------------------------
+_GHSA_RE = re.compile(r"^GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}$", re.I)
+_CVE_RE = re.compile(r"^CVE-\d{4}-\d{3,}$", re.I)
+NVD_CVE_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+OSV_VULN_URL = "https://api.osv.dev/v1/vulns/{id}"
+
+
+def _github_api_get(url: str, params: dict | None = None):
+    """GET the public GitHub Advisory API with the optional public PAT, falling
+    back to unauthenticated on a 401 (mirrors ``_fetch_github``). Returns the
+    ``requests`` response (caller checks status)."""
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    token = CONFIG.github_advisories_token
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    resp = requests.get(url, params=params, headers=headers, timeout=REQUEST_TIMEOUT)
+    if resp.status_code == 401 and token:
+        headers.pop("Authorization", None)
+        resp = requests.get(url, params=params, headers=headers, timeout=REQUEST_TIMEOUT)
+    return resp
+
+
+def _fetch_github_one(*, ghsa: str | None = None, cve: str | None = None) -> dict[str, Any] | None:
+    """Fetch a single GitHub advisory by GHSA id or CVE id (any severity/type)."""
+    try:
+        if ghsa:
+            resp = _github_api_get(f"{GITHUB_ADVISORIES_URL}/{ghsa}")
+        else:
+            resp = _github_api_get(GITHUB_ADVISORIES_URL, {"cve_id": cve, "per_page": 1})
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        data = resp.json()
+        adv = (data[0] if data else None) if isinstance(data, list) else data
+        if not adv or not adv.get("ghsa_id"):
+            return None
+        source = "github_malware" if adv.get("type") == "malware" else "github"
+        return _normalize_github(adv, source)
+    except Exception as e:  # noqa: BLE001 — best-effort live lookup
+        logger.warning("[Advisories] live GitHub lookup failed for %s: %s", ghsa or cve, e)
+        return None
+
+
+def _nvd_cvss(cve_obj: dict[str, Any]) -> tuple[str | None, float | None, str | None]:
+    """Pull (severity, base score, vector) from an NVD CVE's metrics, newest
+    CVSS version first."""
+    metrics = cve_obj.get("metrics") or {}
+    for key in ("cvssMetricV31", "cvssMetricV30", "cvssMetricV2"):
+        for m in metrics.get(key) or []:
+            d = m.get("cvssData") or {}
+            sev = (m.get("baseSeverity") or d.get("baseSeverity") or "").lower() or None
+            return sev, d.get("baseScore"), d.get("vectorString")
+    return None, None, None
+
+
+def _fetch_nvd_one(cve: str) -> dict[str, Any] | None:
+    """Fetch a single CVE from the NVD 2.0 API (authoritative severity)."""
+    try:
+        resp = requests.get(NVD_CVE_URL, params={"cveId": cve}, timeout=REQUEST_TIMEOUT)
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        vulns = resp.json().get("vulnerabilities") or []
+        if not vulns:
+            return None
+        c = vulns[0].get("cve") or {}
+        cid = c.get("id") or cve
+        desc = next((d.get("value") for d in c.get("descriptions") or []
+                     if d.get("lang") == "en" and d.get("value")), "")
+        sev, _score, _vector = _nvd_cvss(c)
+        return {
+            "source": "nvd",
+            "source_id": cid,
+            "cve_id": cid,
+            "aliases": [cid],
+            "summary": (desc[:200] or cid),
+            "description": desc,
+            "severity": sev,
+            "ecosystem": None,
+            "packages": [],
+            "published_at": c.get("published"),
+            "html_url": f"https://nvd.nist.gov/vuln/detail/{cid}",
+            "raw": vulns[0],
+        }
+    except Exception as e:  # noqa: BLE001 — best-effort live lookup
+        logger.warning("[Advisories] live NVD lookup failed for %s: %s", cve, e)
+        return None
+
+
+def _fetch_osv_one(cve: str) -> dict[str, Any] | None:
+    """Fetch a single vulnerability from OSV.dev by id (CVEs resolve directly)."""
+    try:
+        resp = requests.get(OSV_VULN_URL.format(id=cve), timeout=REQUEST_TIMEOUT)
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        data = resp.json()
+        if not data or not data.get("id"):
+            return None
+        rec = _normalize_osv(data, fallback_eco="", source_key="osv")
+        # _normalize_osv assumes the MAL-* malicious-package feed; a plain CVE
+        # record isn't inherently malicious, so don't mislabel its severity.
+        rec["severity"] = None
+        rec["source_id"] = cve  # key by the searched id so the page resolves it
+        rec["html_url"] = f"https://osv.dev/vulnerability/{data.get('id')}"
+        return rec
+    except Exception as e:  # noqa: BLE001 — best-effort live lookup
+        logger.warning("[Advisories] live OSV lookup failed for %s: %s", cve, e)
+        return None
+
+
+def live_lookup(query: str) -> bool:
+    """On-demand fetch for a GHSA/CVE the local queue doesn't have yet.
+
+    Tries GitHub (richest: GHSA + CVE + affected packages), then NVD
+    (authoritative CVE severity), then OSV. The first hit is normalized through
+    the standard pipeline and upserted into the queue (status 'new') so the page
+    can render it and it's tracked from then on. Returns True if something was
+    ingested (or already present via a learned alias), False otherwise. The
+    query itself rides along in the record's aliases, so a subsequent
+    ``db.get_advisory(query)`` resolves it.
+    """
+    q = (query or "").strip()
+    if _GHSA_RE.match(q):
+        rec = _fetch_github_one(ghsa=q.upper())
+    elif _CVE_RE.match(q):
+        cve = q.upper()
+        rec = _fetch_github_one(cve=cve) or _fetch_nvd_one(cve) or _fetch_osv_one(cve)
+    else:
+        return False
+    if not rec or not rec.get("source_id"):
+        return False
+    db.upsert_advisory(rec, initial_status="new")
+    logger.info("[Advisories] live lookup ingested %s via %s", q, rec.get("source"))
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -538,7 +693,7 @@ def _rss_record(source_key: str, entry: dict[str, str], verdict: dict[str, Any])
 def notify_source_request(description: str, requested_by: str = "") -> bool:
     """Ping the team on Webex that a reviewer wants a source we can't add from
     the modal (i.e. it needs a real fetcher). Returns True if the ping was sent."""
-    token = CONFIG.webex_bot_access_token_aide
+    token = CONFIG.webex_bot_access_token_toodles
     room_id = CONFIG.webex_room_id_dev_test_space
     if not token or not room_id:
         logger.warning("[Advisories] Cannot send source request — Webex not configured")
@@ -555,7 +710,7 @@ def notify_source_request(description: str, requested_by: str = "") -> bool:
 
 
 # ---------------------------------------------------------------------------
-# AI triage assist (per-advisory, local LLM with fallback)
+# AI triage assist (per-advisory, local LLM)
 # ---------------------------------------------------------------------------
 def _now_z() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
@@ -672,7 +827,7 @@ def generate_ai_triage(adv: dict[str, Any]) -> dict[str, Any]:
                 "ttps": _intel_rows(data.get("ttps"), ("id", "name")),
                 "threat_actors": _intel_rows(data.get("threat_actors"), ("name", "note")),
                 "next_steps": _intel_steps(data.get("next_steps")),
-                "model": "llm",
+                "model": "local-llm",
                 "generated_at": _now_z(),
             }
     except Exception as e:
@@ -713,7 +868,7 @@ ADVISORY_FAQ_QUESTIONS = [
 
 
 def generate_advisory_faq(adv: dict[str, Any]) -> dict[str, Any]:
-    """Answer a fixed set of CAPD-decision questions about an advisory via the LLM,
+    """Answer a fixed set of CAPD-decision questions about an advisory via the local LLM,
     grounded in the advisory facts (+ any cached AI assessment). Returns
     ``{items: [{q, a}], model, generated_at}``."""
     pkgs = ", ".join(adv.get("packages") or []) or "n/a"
@@ -755,7 +910,7 @@ def generate_advisory_faq(adv: dict[str, Any]) -> dict[str, Any]:
                     items.append({"q": str(row.get("q") or "").strip()[:300],
                                   "a": str(row.get("a") or "").strip()[:1500]})
         if items:
-            return {"items": items, "model": "llm", "generated_at": _now_z()}
+            return {"items": items, "model": "local-llm", "generated_at": _now_z()}
     except Exception as e:
         logger.warning("[Advisories] FAQ generation failed: %s", e)
     # Fallback: questions with a graceful "unavailable" note so the UI still renders.
@@ -806,9 +961,9 @@ def _notif_fields(rec: dict[str, Any], labels: dict[str, str]) -> dict[str, str]
 # Notification channels
 # ---------------------------------------------------------------------------
 def _post_webex(fields: list[dict[str, str]], room_id: str) -> None:
-    token = CONFIG.webex_bot_access_token_aide
+    token = CONFIG.webex_bot_access_token_toodles
     if not token:
-        logger.warning("[Advisories] No Aide bot token configured — skipping Webex")
+        logger.warning("[Advisories] No Toodles bot token configured — skipping Webex")
         return
     if not room_id:
         logger.warning("[Advisories] No Webex room configured — skipping Webex")
@@ -1262,7 +1417,9 @@ def compute_campaigns(advisories: list[dict[str, Any]], window_days: int = 14,
     """Cluster likely-related malicious-package advisories. Returns a list of
     clusters (size >= 2), largest first. Each: ``{size, sources, ecosystems,
     common_tokens, span_days, members:[{source_id, uid, packages, first_seen}]}``."""
-    from datetime import datetime as _dt
+    from datetime import datetime as _dt, timezone as _tz
+
+    _now = _dt.now(_tz.utc)
 
     # Only package/malware advisories participate.
     cand = [a for a in advisories if (a.get("packages") and (
@@ -1329,12 +1486,23 @@ def compute_campaigns(advisories: list[dict[str, Any]], window_days: int = 14,
                         key=lambda t: tok_counts[t], reverse=True)[:6]
         dates = [feats[i]["when"] for i in members if feats[i]["when"]]
         span = (max(dates) - min(dates)).days if len(dates) >= 2 else 0
+        # Aging: a campaign is only as fresh as its most recent member. Surface
+        # the first/last activity dates and a days-since-last-activity so the UI
+        # can tell a brand-new cluster from a stale one (and sort by recency).
+        last_dt = max(dates) if dates else None
+        first_dt = min(dates) if dates else None
+        if last_dt and last_dt.tzinfo is None:
+            last_dt = last_dt.replace(tzinfo=_tz.utc)
+        age_days = (_now - last_dt).days if last_dt else None
         clusters.append({
             "size": len(members),
             "sources": sorted({labels.get(a.get("source"), a.get("source") or "—") for a in advs}),
             "ecosystems": sorted({(a.get("ecosystem") or "").strip() for a in advs if a.get("ecosystem")}),
             "common_tokens": common,
             "span_days": span,
+            "first_seen": first_dt.date().isoformat() if first_dt else None,
+            "last_seen": last_dt.date().isoformat() if last_dt else None,
+            "age_days": age_days,
             "members": sorted([
                 {"source_id": a.get("source_id"), "uid": a.get("uid"),
                  "packages": a.get("packages") or [],
@@ -1342,7 +1510,9 @@ def compute_campaigns(advisories: list[dict[str, Any]], window_days: int = 14,
                 for a in advs
             ], key=lambda m: m["first_seen"]),
         })
-    clusters.sort(key=lambda c: c["size"], reverse=True)
+    # Newest activity first so a growing list stays scannable — a fresh campaign
+    # surfaces at the top; size breaks ties.
+    clusters.sort(key=lambda c: (c.get("last_seen") or "", c["size"]), reverse=True)
     return clusters
 
 
@@ -1875,6 +2045,119 @@ def get_capability_job(adv: dict[str, Any], capability: str) -> dict[str, Any] |
         return dict(job) if job else None
 
 
+# ---------------------------------------------------------------------------
+# Remediation verification — re-check exposure live + diff vs the last snapshot
+# ---------------------------------------------------------------------------
+def exposure_snapshot(adv: dict[str, Any]) -> dict[str, Any]:
+    """Live re-run of the exposure lens, distilled to a comparable snapshot of
+    WHICH of our applications carry this advisory's component.
+
+    Drives verify-remediation: an app team claims they fixed it, and we re-query
+    Veracode SCA *now* (not from cache) so the snapshot reflects the world after
+    their change. Returns
+    ``{exposed, app_count, ext_count, apps:[...], ext_apps:[...], owners:[...]}``.
+    Never raises — on failure it carries an ``error`` and an empty app set.
+    """
+    try:
+        vc = enrich_veracode(adv)
+    except Exception as e:  # noqa: BLE001 — degrade to an error snapshot
+        logger.warning("[Advisories] exposure_snapshot failed for %s: %s",
+                       adv.get("source_id"), e)
+        return {"exposed": False, "app_count": 0, "ext_count": 0,
+                "apps": [], "ext_apps": [], "owners": [],
+                "error": f"exposure re-check failed: {e}"}
+    # Union of every affected application name across the Veracode SCA axes — the
+    # set we diff. Case-folded for dedup, original casing kept for display.
+    by_name: dict[str, str] = {}
+    if isinstance(vc, dict):
+        for axis in ("cves", "packages"):
+            for _key, rows in (vc.get(axis) or {}).items():
+                for row in rows or []:
+                    nm = (row.get("application") or "").strip()
+                    if nm:
+                        by_name.setdefault(nm.lower(), nm)
+    apps = sorted(by_name.values(), key=str.lower)
+    return {
+        "exposed": bool(apps),
+        "app_count": len(apps),
+        "ext_count": 0,
+        "apps": apps,
+        "ext_apps": [],
+        "owners": [],
+    }
+
+
+def diff_exposure_snapshots(prev: dict[str, Any] | None,
+                            cur: dict[str, Any]) -> dict[str, Any]:
+    """Compare two exposure snapshots → a remediation verdict. ``prev`` may be
+    None (first check ⇒ baseline). App names are matched case-insensitively; the
+    displayed name comes from whichever snapshot still carries it.
+
+    Verdicts: ``baseline`` (no prior), ``verified`` (was exposed, now zero),
+    ``partial`` (some cleared, some remain), ``regressed`` (new apps appeared),
+    ``still_clear`` (clear before and after), ``unchanged`` (still exposed, no
+    movement). Returns the verdict plus the cleared / remaining / added app lists
+    and a human headline.
+    """
+    def _name_map(snap):
+        out: dict[str, str] = {}
+        for a in ((snap.get("apps") if isinstance(snap, dict) else None) or []):
+            a = (a or "").strip()
+            if a:
+                out.setdefault(a.lower(), a)
+        return out
+
+    cur_map = _name_map(cur)
+    cur_keys = set(cur_map)
+
+    if not isinstance(prev, dict):
+        return {
+            "verdict": "baseline",
+            "cleared": [], "added": [],
+            "remaining": sorted(cur_map.values(), key=str.lower),
+            "prev_count": None, "cur_count": len(cur_keys),
+            "headline": (f"Baseline recorded — {len(cur_keys)} app(s) currently affected."
+                         if cur_keys else "Baseline recorded — no affected apps found."),
+        }
+
+    prev_map = _name_map(prev)
+    prev_keys = set(prev_map)
+    cleared_keys = prev_keys - cur_keys
+    remaining_keys = cur_keys & prev_keys
+    added_keys = cur_keys - prev_keys
+    cleared = sorted((prev_map[k] for k in cleared_keys), key=str.lower)
+    remaining = sorted((cur_map[k] for k in remaining_keys), key=str.lower)
+    added = sorted((cur_map[k] for k in added_keys), key=str.lower)
+
+    if added_keys:
+        verdict = "regressed"
+    elif prev_keys and not cur_keys:
+        verdict = "verified"
+    elif cleared_keys and remaining_keys:
+        verdict = "partial"
+    elif not cur_keys and not prev_keys:
+        verdict = "still_clear"
+    else:
+        verdict = "unchanged"
+
+    pc, cc = len(prev_keys), len(cur_keys)
+    if verdict == "verified":
+        headline = f"Remediation verified — all {pc} app(s) cleared (was {pc}, now 0)."
+    elif verdict == "partial":
+        headline = (f"Partly remediated — {len(cleared)} cleared, {len(remaining)} still "
+                    f"exposed (was {pc}, now {cc}).")
+    elif verdict == "regressed":
+        headline = (f"Exposure grew — {len(added)} new app(s) now affected "
+                    f"(was {pc}, now {cc}).")
+    elif verdict == "still_clear":
+        headline = "Still clear — no affected apps before or after."
+    else:
+        headline = f"No change — still exposed ({cc} app(s)), nothing cleared yet."
+
+    return {"verdict": verdict, "cleared": cleared, "remaining": remaining,
+            "added": added, "prev_count": pc, "cur_count": cc, "headline": headline}
+
+
 def run_advisory_capability(adv: dict[str, Any], capability: str,
                             opts: dict[str, Any] | None = None) -> dict[str, Any]:
     """Run a server-side capability check for an advisory and return a normalized
@@ -1963,6 +2246,72 @@ def enrich_veracode(adv: dict[str, Any]) -> dict[str, Any] | None:
 
 
 # ---------------------------------------------------------------------------
+# Escalation outcome sync — pull XSOAR ticket state back onto the row
+# ---------------------------------------------------------------------------
+def _normalize_xsoar_status(case: dict) -> tuple[str, str | None]:
+    """Map an XSOAR incident dict to (status, close_reason) where status is one of
+    open / in_progress / resolved.
+
+    XSOAR's numeric ``status``: 0=Pending(new), 1=Active(in progress), 2=Closed.
+    The ``closed`` field is a timestamp, but unset cases carry the sentinel
+    ``0001-01-01...`` rather than empty, so a real close is "non-empty and not the
+    sentinel". We treat either signal (status 2 OR a real closed timestamp) as
+    resolved so a case closed out-of-band still reads correctly."""
+    closed_ts = str(case.get("closed") or "").strip()
+    closed = bool(closed_ts) and not closed_ts.startswith("0001")
+    try:
+        num = int(case.get("status"))
+    except (TypeError, ValueError):
+        num = None
+    if closed or num == 2:
+        return "resolved", (case.get("closeReason") or None)
+    if num == 1:
+        return "in_progress", None
+    return "open", None
+
+
+def sync_xsoar_outcomes(limit: int = 200, include_resolved: bool = False) -> dict:
+    """Pull each escalated advisory's XSOAR ticket state back onto its row so the
+    queue shows what happened next (open / in_progress / resolved) instead of a
+    terminal "reported". Never raises — a single bad ticket is logged and skipped.
+
+    Reads XSOAR Prod, so it's a no-op anywhere a client can't be built (e.g. the
+    data-isolated dev instance), degrading silently."""
+    rows = db.advisories_with_xsoar_tickets(include_resolved=include_resolved)[:limit]
+    out = {"checked": 0, "updated": 0, "resolved": 0, "errors": 0}
+    if not rows:
+        return out
+    try:
+        from services.xsoar.ticket_handler import TicketHandler
+        handler = TicketHandler()
+    except Exception as e:  # client not configured (dev / missing creds)
+        logger.info("[Advisories] XSOAR outcome sync skipped — client unavailable: %s", e)
+        return out
+    for r in rows:
+        tid = str(r.get("xsoar_ticket_id") or "").strip()
+        if not tid:
+            continue
+        out["checked"] += 1
+        try:
+            case = handler.get_case_data(tid) or {}
+            status, reason = _normalize_xsoar_status(case)
+            if status != (r.get("xsoar_status") or None):
+                db.set_xsoar_status(r["uid"], status, reason)
+                out["updated"] += 1
+            elif status == "resolved":
+                # keep close_reason fresh even when the bucket is unchanged
+                db.set_xsoar_status(r["uid"], status, reason)
+            if status == "resolved":
+                out["resolved"] += 1
+        except Exception as e:  # noqa: BLE001 — one bad ticket can't stop the sweep
+            out["errors"] += 1
+            logger.warning("[Advisories] XSOAR outcome sync failed for #%s (%s): %s",
+                           tid, r.get("uid"), e)
+    logger.info("[Advisories] XSOAR outcome sync: %s", out)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 def poll_critical_advisories(room_id: str | None = None,
@@ -2042,8 +2391,14 @@ def poll_critical_advisories(room_id: str | None = None,
     # Notify on both channels independently so one failure doesn't suppress the
     # other. Rows are already persisted above, so a notification failure never
     # loses the advisory — it just won't re-alert (it's no longer "new").
-    for channel, fn in (("Webex", lambda: _post_webex(fields, room_id)),
-                        ("email", lambda: _send_email(fields))):
+    # Email is the primary channel and always fires. The Webex digest merely
+    # duplicates it and is opt-in via ADVISORY_WEBEX_DIGEST (default off).
+    channels = [("email", lambda: _send_email(fields))]
+    if CONFIG.advisory_webex_digest:
+        channels.insert(0, ("Webex", lambda: _post_webex(fields, room_id)))
+    else:
+        logger.info("[Advisories] Webex digest disabled (ADVISORY_WEBEX_DIGEST!=true) — email only")
+    for channel, fn in channels:
         try:
             fn()
         except Exception as e:
