@@ -17,7 +17,7 @@ An enterprise-grade security operations platform that automates and orchestrates
 | **MCP Server Tools** | 31 |
 | **LLM Investigation Tools** | 41 |
 | **Production Chat Bots** | 10 (Webex + Teams) |
-| **Web App Pages** | 59 |
+| **Web App Pages** | 60 |
 | **n8n Automation Workflows** | 33 |
 
 ---
@@ -149,6 +149,8 @@ Three analyst-facing workbenches that turn raw input into a decision:
   + JFrog Xray).
 - **[Threat Hunt Workbench](features/hunt-workbench)** — paste CTI → IOC fan-out
   + LLM-authored behavioral SIEM hunts + ATT&CK coverage-vs-rules.
+- **[Active Threats Desk](features/active-threats)** — paste a report → LLM-extract
+  actor/IOCs/TTPs → enrich → plan a hunt → one-click contain, off a live RF feed.
 - **[Detection as Code](features/detection-as-code)** — Sigma → lint → compile →
   **real dry-run on the live SIEM** → review → packaged merge request, built on
   the open-source [detflow](https://pypi.org/project/detflow/) core.

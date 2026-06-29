@@ -22,6 +22,7 @@ Explore the core capabilities of the Security Operations Automation Platform.
 | [Domain Monitoring](domain-monitoring) | Discover → weaponization triage → exposure hunt → block/takedown → campaign clustering (powered by `domainflow`) |
 | [Vulnerability Deep Dive](vulnerability-deep-dive) | CVE → P1–P4 verdict (EPSS/KEV/pre-auth) + which apps are affected |
 | [Threat Hunt Workbench](hunt-workbench) | Paste CTI → IOC fan-out + behavioral SIEM hunts + ATT&CK coverage |
+| [Active Threats Desk](active-threats) | Paste a report → LLM-extract actor/IOCs/TTPs → enrich → plan a hunt → contain, off a live feed |
 | [Detection as Code](detection-as-code) | Sigma → lint → compile → live dry-run → review → MR (powered by `detflow`) |
 | [Advisory Triage](advisory-triage) | Triage command center → "Affects us" verdict + ATT&CK + Sigma/YARA/Suricata + STIX/Navigator → verify-remediation → escalation (powered by `detflow`) |
 | [Customer Assurance](customer-assurance) | LLM-assisted questionnaire drafting with `.xlsx` round-trip |
@@ -126,6 +127,15 @@ On-demand analyst hunting from a paste:
 - LLM-authored **behavioral** SIEM hunts ("were we touched?")
 - ATT&CK coverage-vs-rules ("can we detect this?")
 - Async worker + persisted hunt history
+
+### [Active Threats Desk →](active-threats)
+
+An adversary-centric intake desk that turns a report into work:
+- Paste a report → LLM extracts the actor, IOCs, and TTPs into one threat record
+  (deterministic IOC backstop so nothing is ever dropped)
+- IOC reputation enrichment across VirusTotal, AbuseIPDB, urlscan, Recorded Future
+- Pre-flight hunt plan via the shared hunt engine + one-click SOAR containment
+- Recorded Future auto-ingest feed so the desk works off a live feed
 
 ### [Detection as Code →](detection-as-code)
 
