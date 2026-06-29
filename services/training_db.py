@@ -47,17 +47,28 @@ def init_db() -> None:
                 score INTEGER NOT NULL,
                 max_score INTEGER NOT NULL,
                 passed INTEGER NOT NULL,
-                elapsed_seconds INTEGER NOT NULL DEFAULT 0
+                elapsed_seconds INTEGER NOT NULL DEFAULT 0,
+                paste_chars INTEGER NOT NULL DEFAULT 0,
+                paste_count INTEGER NOT NULL DEFAULT 0,
+                answer_chars INTEGER NOT NULL DEFAULT 0
             )
             """
         )
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_attempts_user_topic ON attempts(user_email, topic)"
         )
-        # Migrate older DBs created before the anti-cheat timing column existed.
+        # Migrate older DBs created before each anti-cheat column existed.
         cols = {r["name"] for r in conn.execute("PRAGMA table_info(attempts)").fetchall()}
         if "elapsed_seconds" not in cols:
             conn.execute("ALTER TABLE attempts ADD COLUMN elapsed_seconds INTEGER NOT NULL DEFAULT 0")
+        # paste_chars/paste_count = how much typed-answer text arrived by paste;
+        # answer_chars = total chars in the open-answer boxes (the denominator).
+        if "paste_chars" not in cols:
+            conn.execute("ALTER TABLE attempts ADD COLUMN paste_chars INTEGER NOT NULL DEFAULT 0")
+        if "paste_count" not in cols:
+            conn.execute("ALTER TABLE attempts ADD COLUMN paste_count INTEGER NOT NULL DEFAULT 0")
+        if "answer_chars" not in cols:
+            conn.execute("ALTER TABLE attempts ADD COLUMN answer_chars INTEGER NOT NULL DEFAULT 0")
 
 
 def record_attempt(
@@ -67,6 +78,9 @@ def record_attempt(
     score: float,
     max_score: float,
     elapsed_seconds: int = 0,
+    paste_chars: int = 0,
+    paste_count: int = 0,
+    answer_chars: int = 0,
 ) -> bool:
     """Insert an attempt; return whether it passed.
 
@@ -84,8 +98,9 @@ def record_attempt(
     passed = max_score > 0 and ratio >= PASS_THRESHOLD
     with get_connection() as conn:
         conn.execute(
-            "INSERT INTO attempts (user_email, topic, ts, sampled_q_ids, score, max_score, passed, elapsed_seconds) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO attempts (user_email, topic, ts, sampled_q_ids, score, max_score, passed, "
+            "elapsed_seconds, paste_chars, paste_count, answer_chars) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 user_email.lower(),
                 topic,
@@ -95,6 +110,9 @@ def record_attempt(
                 100,
                 1 if passed else 0,
                 max(0, int(elapsed_seconds or 0)),  # for the anti-cheat timing signal
+                max(0, int(paste_chars or 0)),      # chars that arrived by paste
+                max(0, int(paste_count or 0)),      # number of paste events
+                max(0, int(answer_chars or 0)),     # total open-answer chars (denominator)
             ),
         )
     return passed
@@ -171,7 +189,8 @@ def get_all_attempts() -> list[dict]:
     with get_connection() as conn:
         rows = conn.execute(
             "SELECT user_email, topic, ts, score, max_score, passed, "
-            "elapsed_seconds, sampled_q_ids FROM attempts ORDER BY ts"
+            "elapsed_seconds, paste_chars, paste_count, answer_chars, sampled_q_ids "
+            "FROM attempts ORDER BY ts"
         ).fetchall()
     return [dict(row) for row in rows]
 
@@ -180,7 +199,8 @@ def get_user_attempts(user_email: str) -> list[dict]:
     """Full attempt history for one user (admin drill-down)."""
     with get_connection() as conn:
         rows = conn.execute(
-            "SELECT topic, ts, score, max_score, passed, elapsed_seconds, sampled_q_ids "
+            "SELECT topic, ts, score, max_score, passed, elapsed_seconds, "
+            "paste_chars, paste_count, answer_chars, sampled_q_ids "
             "FROM attempts WHERE user_email = ? ORDER BY ts DESC",
             (user_email.lower(),),
         ).fetchall()

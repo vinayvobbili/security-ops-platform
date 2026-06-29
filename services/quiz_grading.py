@@ -13,7 +13,7 @@ per-question model answer + rubric.
 import logging
 from typing import Optional
 
-from quizforge import QuizGrade, grade_fill_blank, grade_match
+from quizforge import QuizGrade, difficulty_weight, grade_fill_blank, grade_match
 from quizforge import grade_open_answer as _grade_open_answer
 from quizforge.text import normalize as _normalize  # re-exported for back-compat
 
@@ -22,7 +22,8 @@ from my_bot.utils.llm_factory import create_llm
 logger = logging.getLogger(__name__)
 
 # Re-exports so existing imports keep working unchanged.
-__all__ = ["grade_fill_blank", "grade_match", "grade_open_answer", "QuizGrade", "_normalize"]
+__all__ = ["grade_fill_blank", "grade_match", "grade_open_answer", "difficulty_weight",
+           "QuizGrade", "_normalize"]
 
 # SOC-flavored override of quizforge's domain-neutral assessor prompt — keeps the
 # "security analyst, attacker tradecraft / detection signals / analyst actions"

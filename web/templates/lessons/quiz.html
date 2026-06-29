@@ -31,6 +31,12 @@
   body.dark-mode .les-ta { background:#0f141b; border-color:#30363d; color:#e6edf3; }
   body.dark-mode .les-ta:focus { border-color:#4493f8; box-shadow:0 0 0 3px rgba(68,147,248,.22); }
   .les-ta-hint { margin:7px 2px 0; font-size:.82rem; color:#8a93a3; }
+  .les-q-hint { margin:9px 0 7px; padding:8px 13px; font-size:.9rem; line-height:1.45; color:#0a5b3a;
+      background:linear-gradient(135deg,#eafff4,#eef6ff); border:1px solid #a7e8c8;
+      border-left:4px solid #00a651; border-radius:11px; }
+  .les-q-hint b { color:#067a45; }
+  body.dark-mode .les-q-hint { background:#11231b; border-color:#1f5e44; color:#7ce8b4; }
+  body.dark-mode .les-q-hint b { color:#5fe0a0; }
   /* difficulty + format badges on each question */
   .les-q-tags { display:flex; gap:7px; flex-wrap:wrap; margin:0 0 11px; }
   .les-tag { font-size:.68rem; font-weight:800; text-transform:uppercase; letter-spacing:.04em;
@@ -49,19 +55,43 @@
   .les-fill:focus { outline:none; border-color:#0046ad; box-shadow:0 0 0 3px rgba(0,70,173,.14); }
   body.dark-mode .les-fill { background:#0f141b; border-color:#30363d; color:#e6edf3; }
   body.dark-mode .les-fill:focus { border-color:#4493f8; box-shadow:0 0 0 3px rgba(68,147,248,.22); }
-  /* match the following */
-  .les-match-row { display:flex; align-items:center; gap:12px; padding:9px 0; border-bottom:1px dashed #e6e9ef; }
-  .les-match-row:last-child { border-bottom:none; }
-  body.dark-mode .les-match-row { border-color:#2a313c; }
-  .les-match-left { flex:0 0 44%; font-weight:600; font-size:.95rem; display:flex; align-items:center; gap:9px; }
-  .les-match-left .dot { width:9px; height:9px; border-radius:50%; flex:none;
-      background:linear-gradient(135deg,#0046ad,#00a651); }
-  .les-match-arrow { color:#b3bccb; flex:none; font-weight:800; }
-  .les-match-sel { flex:1; min-width:0; box-sizing:border-box; max-width:100%; border:1.5px solid #e6e9ef; border-radius:10px;
-      padding:10px 12px; font-size:.92rem; font-family:inherit; background:#fff; color:#1a2230; cursor:pointer; transition:border-color .14s; }
-  .les-match-sel:focus { outline:none; border-color:#0046ad; box-shadow:0 0 0 3px rgba(0,70,173,.14); }
-  .les-match-sel:invalid { color:#8a93a3; }
-  body.dark-mode .les-match-sel { background:#0f141b; border-color:#30363d; color:#e6edf3; }
+  /* match the following — drag colorful tags onto their match (or tap-to-place) */
+  .les-dnd-row { display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px dashed #e6e9ef; }
+  .les-dnd-row:last-child { border-bottom:none; }
+  body.dark-mode .les-dnd-row { border-color:#2a313c; }
+  .les-dnd-left { flex:0 0 42%; font-weight:600; font-size:.95rem; display:flex; align-items:center; gap:9px; }
+  .les-dnd-left .dot { width:9px; height:9px; border-radius:50%; flex:none; background:linear-gradient(135deg,#0046ad,#00a651); }
+  .les-dnd-arrow { color:#b3bccb; flex:none; font-weight:800; }
+  .les-dnd-slot { flex:1; min-width:0; min-height:48px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+      border:2px dashed #cfd6e4; border-radius:12px; padding:6px 10px; background:#f7f9fc;
+      transition:border-color .15s, background .15s, transform .12s, box-shadow .15s; }
+  .les-dnd-slot.over { border-color:#0046ad; background:#eaf1ff; transform:scale(1.015); box-shadow:0 0 0 3px rgba(0,70,173,.12); }
+  .les-dnd-slot.filled { border-style:solid; border-color:transparent; background:transparent; padding:4px; }
+  .les-dnd-slot.needfill { border-color:#e0466e; background:#fdeef2; animation:lesShake .3s; }
+  .les-dnd-slot-ph { color:#9aa5b6; font-size:.86rem; font-style:italic; padding-left:4px; pointer-events:none; }
+  body.dark-mode .les-dnd-slot { border-color:#39414e; background:#11161d; }
+  body.dark-mode .les-dnd-slot.over { border-color:#4493f8; background:#16243c; }
+  body.dark-mode .les-dnd-slot-ph { color:#6b7585; }
+  .les-dnd-pool { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; padding:14px; border-radius:14px;
+      background:linear-gradient(135deg,rgba(0,70,173,.05),rgba(0,166,81,.06)); border:1px solid #e6ecf5; }
+  body.dark-mode .les-dnd-pool { background:linear-gradient(135deg,rgba(68,147,248,.08),rgba(56,239,125,.07)); border-color:#262d38; }
+  .les-dnd-pill { display:inline-flex; align-items:center; gap:7px; border:none; border-radius:999px; padding:10px 18px;
+      font-size:.9rem; font-weight:700; font-family:inherit; color:#fff; cursor:grab; user-select:none; -webkit-user-select:none;
+      box-shadow:0 6px 16px rgba(8,17,35,.18); transition:transform .12s, box-shadow .12s, filter .12s; }
+  .les-dnd-pill::before { content:"\2807"; opacity:.65; letter-spacing:-2px; }
+  .les-dnd-pill:hover { transform:translateY(-2px) scale(1.03); box-shadow:0 10px 22px rgba(8,17,35,.26); filter:brightness(1.06); }
+  .les-dnd-pill:active { cursor:grabbing; transform:scale(.97); }
+  .les-dnd-pill.dragging { opacity:.4; }
+  .les-dnd-pill.selected { box-shadow:0 0 0 4px rgba(255,255,255,.9), 0 0 0 7px rgba(0,70,173,.4), 0 10px 22px rgba(8,17,35,.28);
+      transform:translateY(-2px) scale(1.04); }
+  .les-dnd-slot .les-dnd-pill { box-shadow:0 4px 12px rgba(8,17,35,.2); cursor:pointer; animation:lesPop .18s ease-out; }
+  @keyframes lesPop { from { transform:scale(.6); opacity:0; } to { transform:scale(1); opacity:1; } }
+  @keyframes lesShake { 0%,100%{transform:translateX(0);} 25%{transform:translateX(-5px);} 75%{transform:translateX(5px);} }
+  @media (prefers-reduced-motion: reduce) {
+    .les-dnd-slot, .les-dnd-pill, .les-dnd-pill:hover { transition:none; transform:none; }
+    .les-dnd-slot .les-dnd-pill { animation:none; }
+    .les-dnd-slot.needfill { animation:none; }
+  }
   .les-match-hint { margin:11px 2px 0; font-size:.82rem; color:#8a93a3; }
   /* floating countdown timer — fixed time limit, auto-submits at zero */
   .les-timer { position:fixed; top:84px; right:26px; z-index:60; display:flex; align-items:center; gap:10px;
@@ -135,13 +165,17 @@
   <form method="POST" action="/lessons/{{ topic.id }}/quiz/submit" id="lesQuizForm">
     <input type="hidden" name="n" value="{{ questions|length }}">
     <input type="hidden" name="elapsed_seconds" id="lesElapsed" value="0">
+    <input type="hidden" name="paste_chars" id="lesPasteChars" value="0">
+    <input type="hidden" name="paste_count" id="lesPasteCount" value="0">
     {% for q in questions %}
     {% set fmt_label = {'mc':'Multiple choice','fill_blank':'Fill in the blank','match':'Match the following','short':'Short answer','freetext':'Free response'} %}
+    {% set pts_map = {'easy':1,'medium':2,'hard':3} %}
+    {% set pts = pts_map.get(q.difficulty, 2) %}
     <div class="les-q">
       <p class="les-q-prompt"><span class="les-q-num">{{ loop.index }}</span><span>{{ q.prompt }}</span></p>
       <div class="les-q-tags">
         <span class="les-tag fmt">{{ fmt_label.get(q.type, q.type) }}</span>
-        <span class="les-tag diff-{{ q.difficulty }}">{{ q.difficulty }}</span>
+        <span class="les-tag diff-{{ q.difficulty }}">{{ q.difficulty }} · {{ pts }} pt{{ '' if pts == 1 else 's' }}</span>
       </div>
       <input type="hidden" name="q_id_{{ loop.index0 }}" value="{{ q.id }}">
       {% set qi = loop.index0 %}
@@ -158,21 +192,39 @@
              placeholder="Type your answer…">
       <p class="les-ta-hint">Spelling/case don't matter — just the right term.</p>
       {% elif q.type == 'match' %}
-      <div class="les-match">
-        {% for left in q.lefts %}
-        <div class="les-match-row">
-          <span class="les-match-left"><span class="dot"></span>{{ left }}</span>
-          <span class="les-match-arrow">→</span>
-          <select class="les-match-sel" name="answer_match_{{ qi }}_{{ loop.index0 }}" required>
-            <option value="" selected disabled>Choose a match…</option>
-            {% for opt in q.options %}<option value="{{ opt }}">{{ opt }}</option>{% endfor %}
-          </select>
+      {% set pill_grads = [
+        'linear-gradient(135deg,#0046AD,#3f7fe0)',
+        'linear-gradient(135deg,#00A651,#11998e)',
+        'linear-gradient(135deg,#7b2ff7,#9d50bb)',
+        'linear-gradient(135deg,#ec4899,#f472b6)',
+        'linear-gradient(135deg,#f7651e,#ff9a3c)',
+        'linear-gradient(135deg,#0891b2,#06b6d4)',
+        'linear-gradient(135deg,#e11d48,#fb7185)',
+        'linear-gradient(135deg,#4f46e5,#6366f1)'] %}
+      <div class="les-dnd">
+        <div class="les-dnd-rows">
+          {% for left in q.lefts %}
+          <div class="les-dnd-row">
+            <span class="les-dnd-left"><span class="dot"></span>{{ left }}</span>
+            <span class="les-dnd-arrow">→</span>
+            <div class="les-dnd-slot" data-q="{{ qi }}" data-row="{{ loop.index0 }}">
+              <span class="les-dnd-slot-ph">Drop or tap a match…</span>
+            </div>
+            <input type="hidden" name="answer_match_{{ qi }}_{{ loop.index0 }}" value="">
+          </div>
+          {% endfor %}
         </div>
-        {% endfor %}
+        <div class="les-dnd-pool" data-q="{{ qi }}">
+          {% for opt in q.options %}
+          <button type="button" class="les-dnd-pill" draggable="true" data-q="{{ qi }}"
+                  data-opt="{{ opt }}" style="background:{{ pill_grads[loop.index0 % pill_grads|length] }}">{{ opt }}</button>
+          {% endfor %}
+        </div>
       </div>
-      <p class="les-match-hint">Pick the best match for each item. Partial credit per correct row.</p>
+      <p class="les-match-hint">🎯 Drag each colorful tag onto its match — or tap a tag, then tap a slot. Partial credit per correct row.</p>
       {% else %}
       <span class="les-ai-tag">✨ AI-graded · answer in your own words</span>
+      {% if q.hint %}<p class="les-q-hint">💡 <b>Hint:</b> {{ q.hint }}</p>{% endif %}
       <textarea class="les-ta" name="answer_text_{{ qi }}" rows="{{ q.rows }}" required
                 placeholder="Type your answer — you're scored on the concepts, not the wording."></textarea>
       <p class="les-ta-hint">Partial credit applies. Explain your reasoning like you would to a teammate.</p>
@@ -245,15 +297,115 @@
     tick();  // paint immediately so it never flashes the placeholder
     var timer = setInterval(tick, 1000);
 
+    // Anti-cheat paste signal. We do NOT block paste — a teammate pasting one
+    // term is fine — we just record how much typed-answer text arrived via the
+    // clipboard so the admin integrity view can flag a wholesale paste. Counts
+    // only the open-answer boxes (fill-in + free-response); MC/match can't type.
+    var pasteChars = 0, pasteCount = 0;
+    var pasteCharsField = document.getElementById('lesPasteChars');
+    var pasteCountField = document.getElementById('lesPasteCount');
+    function onPaste(e) {
+      var text = '';
+      try {
+        text = (e.clipboardData || window.clipboardData).getData('text') || '';
+      } catch (err) { text = ''; }
+      pasteChars += text.replace(/\s+/g, ' ').trim().length;
+      pasteCount += 1;
+      if (pasteCharsField) pasteCharsField.value = pasteChars;
+      if (pasteCountField) pasteCountField.value = pasteCount;
+    }
+    form.querySelectorAll('.les-fill, .les-ta').forEach(function (box) {
+      box.addEventListener('paste', onPaste);
+    });
+
     // Normal (button) submit: record true elapsed, lock the button, show overlay.
     // Fires only after HTML5 validation passes, so it won't flash on an
     // incomplete form.
-    form.addEventListener('submit', function () {
+    form.addEventListener('submit', function (e) {
+      // Match questions place answers into hidden inputs (no HTML5 'required'),
+      // so check every drop-slot is filled before locking the form.
+      var firstEmpty = null;
+      form.querySelectorAll('.les-dnd-slot').forEach(function (slot) {
+        var inp = slot.parentNode.querySelector('input[type="hidden"]');
+        var filled = inp && inp.value;
+        slot.classList.toggle('needfill', !filled);
+        if (!filled && !firstEmpty) firstEmpty = slot;
+      });
+      if (firstEmpty) {
+        e.preventDefault();
+        firstEmpty.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
       if (submitted) return;
       submitted = true;
       clearInterval(timer);
       if (elapsedField) elapsedField.value = Math.floor((Date.now() - start) / 1000);
       showGrading('⏳ Grading…');
+    });
+  })();
+
+  // Match-the-following: drag a colorful tag onto a slot, or tap a tag then tap
+  // a slot. A tag in a slot can be tapped to send it back to the pool; dropping
+  // a second tag on a filled slot evicts the first. Each slot mirrors its tag's
+  // text into the row's hidden input, so the server grading is unchanged.
+  (function () {
+    var root = document.getElementById('lesQuizForm');
+    if (!root) return;
+    var dragged = null, selected = null;
+    function pool(q) { return root.querySelector('.les-dnd-pool[data-q="' + q + '"]'); }
+    function clearSel() { if (selected) selected.classList.remove('selected'); selected = null; }
+    function syncSlot(slot) {
+      var pill = slot.querySelector('.les-dnd-pill');
+      var ph = slot.querySelector('.les-dnd-slot-ph');
+      slot.classList.toggle('filled', !!pill);
+      if (pill) slot.classList.remove('needfill');
+      if (ph) ph.style.display = pill ? 'none' : '';
+      var inp = slot.parentNode.querySelector('input[type="hidden"]');
+      if (inp) inp.value = pill ? pill.dataset.opt : '';
+    }
+    function place(pill, slot) {
+      if (pill.dataset.q !== slot.dataset.q) return;  // can't cross questions
+      var existing = slot.querySelector('.les-dnd-pill');
+      var from = pill.closest('.les-dnd-slot');
+      if (existing && existing !== pill) pool(pill.dataset.q).appendChild(existing);
+      slot.appendChild(pill);
+      if (from && from !== slot) syncSlot(from);
+      syncSlot(slot);
+      clearSel();
+    }
+    function toPool(pill) {
+      var from = pill.closest('.les-dnd-slot');
+      pool(pill.dataset.q).appendChild(pill);
+      if (from) syncSlot(from);
+      clearSel();
+    }
+    root.querySelectorAll('.les-dnd-pill').forEach(function (pill) {
+      pill.addEventListener('dragstart', function (e) {
+        dragged = pill; pill.classList.add('dragging');
+        try { e.dataTransfer.setData('text/plain', pill.dataset.opt); e.dataTransfer.effectAllowed = 'move'; } catch (x) {}
+      });
+      pill.addEventListener('dragend', function () { pill.classList.remove('dragging'); dragged = null; });
+      pill.addEventListener('click', function () {
+        if (pill.closest('.les-dnd-slot')) { toPool(pill); return; }
+        if (selected === pill) { clearSel(); return; }
+        clearSel(); selected = pill; pill.classList.add('selected');
+      });
+    });
+    root.querySelectorAll('.les-dnd-slot').forEach(function (slot) {
+      slot.addEventListener('dragover', function (e) { e.preventDefault(); slot.classList.add('over'); });
+      slot.addEventListener('dragleave', function () { slot.classList.remove('over'); });
+      slot.addEventListener('drop', function (e) {
+        e.preventDefault(); slot.classList.remove('over');
+        if (dragged) place(dragged, slot);
+      });
+      slot.addEventListener('click', function () { if (selected) place(selected, slot); });
+    });
+    root.querySelectorAll('.les-dnd-pool').forEach(function (p) {
+      p.addEventListener('dragover', function (e) { e.preventDefault(); });
+      p.addEventListener('drop', function (e) {
+        e.preventDefault();
+        if (dragged && dragged.dataset.q === p.dataset.q) toPool(dragged);
+      });
     });
   })();
 </script>

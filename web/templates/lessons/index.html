@@ -161,6 +161,7 @@
       <h1>Master the platforms attackers <span class="accent">love to break</span>.</h1>
       <p>Each lesson: watch the <b>2-minute video</b>, talk it through with the <b>built-in assistant</b>, then pass the quiz at <b>60%+</b> (<b>80%+</b> earns a 🏆 distinction). Bite-sized, hands-on, built for the floor.</p>
     </div>
+    {% if authed %}
     <div class="les-ring">
       <svg width="168" height="168" viewBox="0 0 168 168">
         <defs><linearGradient id="lesGrad" x1="0" y1="0" x2="1" y2="1">
@@ -173,14 +174,26 @@
       </svg>
       <div class="lbl"><div class="pct">{{ stats.overall_pct }}%</div><div class="cap">Passed</div></div>
     </div>
+    {% endif %}
   </div>
 
   <!-- Stat strip -->
   <div class="les-stats">
     <div class="les-stat les-s1"><div class="ico">📚</div><div class="num">{{ stats.total }}</div><div class="lbl">Prep topics</div></div>
+    {% if authed %}
     <div class="les-stat les-s2"><div class="ico">✅</div><div class="num">{{ stats.passed }}</div><div class="lbl">Completed</div></div>
     <div class="les-stat les-s3"><div class="ico">⏳</div><div class="num">{{ stats.in_progress }}</div><div class="lbl">In progress</div></div>
     <div class="les-stat les-s4"><div class="ico">🎯</div><div class="num">{{ stats.pass_rate }}%</div><div class="lbl">Pass rate</div></div>
+    {% else %}
+    <a class="les-stat les-s2 les-signin" href="/login?next=/lessons"
+       style="grid-column: span 3; display:flex; align-items:center; gap:18px; text-decoration:none;">
+      <div class="ico" style="font-size:2rem;">🔑</div>
+      <div>
+        <div class="num" style="font-size:1.2rem;">Sign in to track your progress</div>
+        <div class="lbl" style="opacity:.95;">Browse every lesson freely — log in only to take a quiz, save scores, and earn certificates.</div>
+      </div>
+    </a>
+    {% endif %}
   </div>
 
   <!-- Topics -->

@@ -133,4 +133,4 @@ refutescan>=0.1.0
 # sample / deterministic + LLM grade. Powers the lessons feature (quiz grading,
 # bank generation, time-limit/anti-cheat policy) through thin adapters that
 # inject the local LLM.
-quizforge>=0.2.0
+quizforge>=0.3.0

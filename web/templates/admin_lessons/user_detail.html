@@ -135,7 +135,14 @@
                     title="Passed faster than it realistically takes to read and answer this test — possible answer-sharing or automation.">
                 ⚠️ {{ 'Too fast' if a.flag_severity == 'high' else 'Review' }}
               </span>
-            {% else %}<span class="adu-ok">✓</span>{% endif %}
+            {% endif %}
+            {% if a.paste_flagged %}
+              <span class="adl-badge warn"
+                    title="{{ a.paste_pct }}% of the typed answer text ({{ a.paste_chars }} chars over {{ a.paste_count }} paste{{ '' if a.paste_count == 1 else 's' }}) arrived via paste — possible copy from the lesson, another tab, or an LLM.">
+                📋 Pasted {{ a.paste_pct }}%
+              </span>
+            {% endif %}
+            {% if not a.flagged and not a.paste_flagged %}<span class="adu-ok">✓</span>{% endif %}
           </td>
         </tr>
         {% endfor %}

@@ -5,13 +5,15 @@ The /lessons feature draws a fresh, shuffled, mixed-format test from each topic'
 question bank (see web/routes/lessons.py TEST_BLUEPRINT). A deep bank — many more
 questions than any single test shows — is what makes two analysts rarely see the
 same test, which defeats answer-sharing. Hand-authoring 100 good questions is a
-slog, so this tool drafts them with the local LLM strictly from
+slog, so this tool drafts them with the LLM strictly from
 the topic's own material, validates each one, dedupes against what's already
 there, and appends to the topic YAML.
 
 The generation engine itself lives in the model-agnostic ``quizforge`` package;
-this script is the application seam — it builds the lesson material, injects the
-local LLM, and steers the prompt toward SOC attack-scenario coverage.
+this script is the seam — it builds the lesson material, injects the
+LLM (with a built-in local fallback), and steers the prompt toward
+SOC attack-scenario coverage. So a transient LLM outage degrades to local
+inference rather than failing the run.
 
 Usage:
     python scripts/gen_question_bank.py citrix                 # top up to defaults
@@ -43,22 +45,33 @@ logging.getLogger("quizforge").setLevel(logging.INFO)
 
 TOPICS_DIR = Path(__file__).resolve().parent.parent / "data" / "training" / "topics"
 
-# Override quizforge's domain-neutral prompts with SOC-content framing.
+# Overrides quizforge's domain-neutral prompts with SOC-content framing.
 _SOC_SYSTEM = (
     "You are a senior SOC training content author writing quiz questions for security "
     "analysts. Write questions STRICTLY grounded in the provided lesson material — do not "
-    "invent facts beyond it. Questions must be accurate, unambiguous, and test real "
-    "understanding (attacker tradecraft, detection signals, analyst actions), not trivia. "
-    "For multiple choice, exactly one option is correct and the distractors are plausible. "
-    "Vary difficulty as requested. Return strict JSON for the requested schema."
+    "invent facts beyond it. Every question must be a SOC ANALYST MAKING A DECISION from a "
+    "signal or scenario: given this telemetry/alert/situation, what do you conclude, what do "
+    "you do next, and why. Test reasoning and judgment — attacker tradecraft, detection "
+    "signals, triage and containment actions, prioritization, and what NOT to do. "
+    "Do NOT write recall/trivia: no 'which component is X', no 'what does <acronym> stand "
+    "for', no 'match the component to its definition', no 'name the product that does Y'. "
+    "The platform is only a worked EXAMPLE of a transferable pattern; favor questions whose "
+    "reasoning would carry to a similar system. For multiple choice, exactly one option is "
+    "correct and the distractors are plausible. For fill_blank, the blank must be a "
+    "CONCLUSION the analyst reaches, never a vocabulary term. For match, pair a "
+    "signal->action or an observation->kill-chain-phase, never a term->definition. Vary "
+    "difficulty as requested. Return strict JSON for the requested schema."
 )
 _SOC_COVERAGE = (
-    "at least HALF of these must be attack-scenario questions about how a real adversary "
-    "attacks THIS platform end-to-end — the edge->domain kill chain, the specific CVEs/TTPs "
-    "named above, post-exploitation, and (critically) the detection signals and the concrete "
-    "triage/containment actions a SOC analyst takes at each stage. The rest can cover core "
-    "platform knowledge. Frame scenarios as a real incident an analyst is working, not "
-    "abstract trivia. Do not invent CVEs or behaviors."
+    "EVERY question must be a SOC analyst working a real incident — given a signal, alert, or "
+    "scenario, reason to a conclusion and a next action. Cover the edge->domain kill chain, "
+    "the specific CVEs/TTPs named above, post-exploitation, the detection signals, and the "
+    "concrete triage/containment actions and tradeoffs at each stage. Pure platform-knowledge "
+    "recall (naming components, defining acronyms, matching terms to definitions) is BANNED — "
+    "do not write it. Where platform facts matter, embed them inside a decision (e.g. not "
+    "'what OS does the appliance run' but 'EDR is silent on this appliance — why, and what do "
+    "you pivot to'). Frame scenarios as a live incident, not abstract trivia. Do not invent "
+    "CVEs or behaviors."
 )
 
 

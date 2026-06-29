@@ -12,7 +12,7 @@ from pathlib import Path
 
 import yaml
 from flask import Blueprint, Response, redirect, render_template, request
-from quizforge import DEFAULT_TIME_LIMIT_SECONDS, sample_test
+from quizforge import sample_test
 
 from services import lesson_certificate, quiz_grading, training_db
 from web.auth.helpers import current_user, login_required
@@ -38,9 +38,14 @@ TEST_BLUEPRINT = {
 QUESTIONS_PER_ATTEMPT = sum(TEST_BLUEPRINT.values())  # 20
 
 # Wall-clock budget per attempt — the quiz page counts down from this and
-# auto-submits at zero. Sourced from quizforge so the limit policy lives with
-# the rest of the timing logic (anti-cheat fast-pass detection).
-QUIZ_TIME_LIMIT_SECONDS = DEFAULT_TIME_LIMIT_SECONDS  # 30 minutes
+# auto-submits at zero. quizforge's default (30 min) suited the old recall-heavy
+# banks; the reasoning rework makes a 20-question draw far heavier (6 written
+# answers, incl. 2 full triage walkthroughs), so a thorough honest pass runs
+# ~33 min. Give 45 so the timer doesn't auto-submit on the careful analysts we
+# want to reward. The ceiling is no integrity lever here — the speed flag is a
+# floor, the paste signal catches copying, and these reasoning prompts aren't
+# lookup-able.
+QUIZ_TIME_LIMIT_SECONDS = 45 * 60  # 45 minutes
 
 
 def _load_topic(topic_id: str) -> dict | None:
@@ -82,11 +87,13 @@ def _list_topics() -> list[dict]:
 # ---------------------------------------------------------------------------
 
 @lessons_bp.route('/lessons')
-@login_required
 def index():
+    # Reading/browsing the catalog is open on this internal-only app; login is
+    # required only to take a quiz or view a certificate (see those routes).
     training_db.init_db()
-    email = current_user()["email"]
-    progress = training_db.get_user_progress(email)
+    user = current_user()
+    email = user["email"] if user else None
+    progress = training_db.get_user_progress(email) if email else {}
     topics = _list_topics()
     for t in topics:
         p = progress.get(t["id"], {})
@@ -108,27 +115,31 @@ def index():
         "pass_rate": round(100 * passed_n / attempted_n) if attempted_n else 0,
     }
     # Friendly handle from the email local part — no raw work address on the page.
-    handle = email.split("@")[0]
-    display_name = handle.replace(".", " ").replace("_", " ").title()
+    display_name = None
+    if email:
+        handle = email.split("@")[0]
+        display_name = handle.replace(".", " ").replace("_", " ").title()
     return render_template(
         "lessons/index.html",
         topics=topics,
+        authed=bool(email),
         user_email=email,
         display_name=display_name,
-        user_initial=(display_name[:1] or "?").upper(),
+        user_initial=((display_name or "?")[:1]).upper(),
         stats=stats,
     )
 
 
 @lessons_bp.route('/lessons/<topic_id>')
-@login_required
 def topic_page(topic_id: str):
     topic = _load_topic(topic_id)
     if topic is None:
         return render_template("lessons/not_found.html", topic_id=topic_id), 404
     training_db.init_db()
-    email = current_user()["email"]
-    passed = training_db.has_passed(email, topic["id"])
+    # Open to read on this internal app; the quiz + certificate stay gated.
+    user = current_user()
+    email = user["email"] if user else None
+    passed = training_db.has_passed(email, topic["id"]) if email else False
     video_filename = f"{topic['id']}.mp4"
     video_path = Path(__file__).parent.parent / "static" / "videos" / video_filename
     has_video = video_path.is_file()
@@ -205,6 +216,8 @@ def quiz_page(topic_id: str):
         else:
             # Open question (short / freetext) — analyst types a response; the LLM grades it.
             item["rows"] = 6 if qtype == "freetext" else 3
+            # A nudge-hint (shape of a strong answer) — never the model answer/rubric.
+            item["hint"] = q.get("hint", "")
         rendered.append(item)
     return render_template(
         "lessons/quiz.html",
@@ -223,9 +236,11 @@ def quiz_submit(topic_id: str):
 
     by_id = {q["id"]: q for q in topic.get("questions", [])}
     n = int(request.form.get("n", "0"))
-    score = 0.0       # fractional credit earned
-    max_score = 0.0   # questions that counted (open Qs drop out if grading is down)
+    score = 0.0       # weighted credit earned (fraction-correct * difficulty weight)
+    max_score = 0.0   # weighted points available (open Qs drop out if grading is down)
+    counted = 0       # number of questions that counted (decoupled from points now)
     sampled_ids: list[str] = []
+    answer_chars = 0  # total chars typed into open-answer boxes (paste denominator)
     results = []
 
     for i in range(n):
@@ -235,56 +250,78 @@ def quiz_submit(topic_id: str):
         q = by_id[q_id]
         sampled_ids.append(q_id)
         qtype = q.get("type", "mc")
+        # Harder questions are worth more (easy 1 / medium 2 / hard 3); a question's
+        # earned points = its fraction-correct * its weight.
+        weight = quiz_grading.difficulty_weight(q)
 
         if qtype == "mc":
             perm_str = request.form.get(f"q_perm_{i}", "")
             answer_str = request.form.get(f"answer_{i}", "")
-            max_score += 1
+            max_score += weight
+            counted += 1
             try:
                 perm = [int(x) for x in perm_str.split(",")]
                 selected_original = perm[int(answer_str)]
             except (ValueError, IndexError):
-                results.append({"q": q, "type": "mc", "correct": False, "selected_original": None})
+                results.append({"q": q, "type": "mc", "correct": False, "selected_original": None, "points": weight})
                 continue
             correct = (selected_original == q["answer_idx"])
             if correct:
-                score += 1
-            results.append({"q": q, "type": "mc", "correct": correct, "selected_original": selected_original})
+                score += weight
+            results.append({"q": q, "type": "mc", "correct": correct, "selected_original": selected_original, "points": weight})
         elif qtype == "fill_blank":
             user_answer = request.form.get(f"answer_text_{i}", "")
+            answer_chars += len(user_answer.strip())
             graded = quiz_grading.grade_fill_blank(q, user_answer)
-            max_score += 1
-            score += graded["score"]
-            results.append({"q": q, "type": "fill_blank", "answer_text": user_answer, "graded": graded})
+            max_score += weight
+            counted += 1
+            score += graded["score"] * weight
+            results.append({"q": q, "type": "fill_blank", "answer_text": user_answer, "graded": graded, "points": weight})
         elif qtype == "match":
             # Collect the per-row dropdown picks: answer_match_{i}_{row}.
             selections = {}
             for row in range(len(q.get("pairs", []))):
                 selections[str(row)] = request.form.get(f"answer_match_{i}_{row}", "")
             graded = quiz_grading.grade_match(q, selections)
-            max_score += 1
-            score += graded["score"]
-            results.append({"q": q, "type": "match", "graded": graded})
+            max_score += weight
+            counted += 1
+            score += graded["score"] * weight
+            results.append({"q": q, "type": "match", "graded": graded, "points": weight})
         else:
             # Open-ended (short / freetext) — the LLM scores it 0..1 with feedback.
             user_answer = request.form.get(f"answer_text_{i}", "")
+            answer_chars += len(user_answer.strip())
             grade = quiz_grading.grade_open_answer(q, user_answer)
             if grade is None:
                 # Grading unavailable — don't penalize the learner; just don't count it.
-                results.append({"q": q, "type": qtype, "answer_text": user_answer, "grade": None})
+                results.append({"q": q, "type": qtype, "answer_text": user_answer, "grade": None, "points": weight})
                 continue
-            max_score += 1
-            score += grade.score
-            results.append({"q": q, "type": qtype, "answer_text": user_answer, "grade": grade})
+            max_score += weight
+            counted += 1
+            score += grade.score * weight
+            results.append({"q": q, "type": qtype, "answer_text": user_answer, "grade": grade, "points": weight})
 
     try:
         elapsed_seconds = max(0, int(request.form.get("elapsed_seconds", "0")))
     except ValueError:
         elapsed_seconds = 0
 
+    # Anti-cheat paste signal (client-captured, advisory only — never blocks or
+    # penalizes a submission; surfaced in the admin integrity drill-down).
+    try:
+        paste_chars = max(0, int(request.form.get("paste_chars", "0")))
+    except ValueError:
+        paste_chars = 0
+    try:
+        paste_count = max(0, int(request.form.get("paste_count", "0")))
+    except ValueError:
+        paste_count = 0
+
     email = current_user()["email"]
     passed = training_db.record_attempt(email, topic["id"], sampled_ids, score, max_score,
-                                        elapsed_seconds=elapsed_seconds)
+                                        elapsed_seconds=elapsed_seconds,
+                                        paste_chars=paste_chars, paste_count=paste_count,
+                                        answer_chars=answer_chars)
     # Distinction is a display-only tier (not persisted) — 80%+ earns extra fanfare.
     distinction = max_score > 0 and (score / max_score) >= training_db.DISTINCTION_THRESHOLD
     return render_template(
@@ -293,6 +330,7 @@ def quiz_submit(topic_id: str):
         score=score,
         total=max_score,
         questions_shown=len(sampled_ids),
+        questions_counted=counted,
         passed=passed,
         distinction=distinction,
         pass_pct=int(training_db.PASS_THRESHOLD * 100),

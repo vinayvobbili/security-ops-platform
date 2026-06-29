@@ -60,6 +60,9 @@
   .les-rev-tag.skip { background:linear-gradient(135deg,#5b6573,#8a93a3); }
   .les-rev-tag.ai { background:linear-gradient(135deg,#5b1f8f,#8f5cff); }
   .les-rev-tag.fmt { background:#5b6675; }
+  .les-rev-tag.diff-easy { background:linear-gradient(135deg,#0a8f5a,#46e08a); }
+  .les-rev-tag.diff-medium { background:linear-gradient(135deg,#0a4d8c,#0a8fd6); }
+  .les-rev-tag.diff-hard { background:linear-gradient(135deg,#7a1d6a,#c0399a); }
   .les-rev-pts { float:right; font-weight:800; font-size:.95rem; color:#4b5563; }
   body.dark-mode .les-rev-pts { color:#9aa5b1; }
   .les-rev-line { margin:5px 0; font-size:.92rem; }
@@ -112,7 +115,7 @@
       <span class="emoji">{{ '🏆' if distinction else ('🎉' if passed else '💪') }}</span>
       {{ 'Distinction — outstanding!' if distinction else ('Passed — nicely done!' if passed else "Not yet — but you're close") }}
     </h2>
-    <div class="pct">You scored <b>{{ score_disp }} / {{ total|int }}</b> · {{ pct }}%</div>
+    <div class="pct">You scored <b>{{ score_disp }} / {{ total|int }}</b> pts · {{ pct }}%</div>
     {% if distinction %}
     <span class="les-dist-badge">🏆 Distinction · {{ distinction_pct }}%+</span>
     {% endif %}
@@ -120,9 +123,10 @@
       <span class="chip">🎯 {{ pass_pct }}% to pass · {{ distinction_pct }}% for distinction</span>
       {% if elapsed_seconds %}<span class="chip">⏱️ {{ mins }}m {{ '%02d'|format(secs) }}s</span>{% endif %}
       <span class="chip">📋 {{ questions_shown }} questions</span>
+      <span class="chip">⚖️ Easy 1 · Medium 2 · Hard 3 pts</span>
     </div>
-    {% if questions_shown and total|int < questions_shown %}
-    <p class="note">Note: {{ questions_shown - total|int }} question(s) couldn't be auto-graded right now and weren't counted.</p>
+    {% if questions_shown and questions_counted < questions_shown %}
+    <p class="note">Note: {{ questions_shown - questions_counted }} question(s) couldn't be auto-graded right now and weren't counted.</p>
     {% endif %}
     {% if distinction %}
     <p class="note">Top marks — you cleared the {{ distinction_pct }}% distinction bar. This lesson is marked <b>complete</b> on your lessons page. 🏆 Your readiness ring just ticked up.</p>
@@ -142,7 +146,9 @@
   {# ---- multiple choice ---- #}
   {% if r.type == 'mc' %}
   <div class="les-rev {{ 'ok' if r.correct else 'no' }}">
+    <span class="les-rev-pts">{{ r.points if r.correct else 0 }} / {{ r.points }}</span>
     <p class="les-rev-q">{{ loop.index }}. {{ r.q.prompt }}</p>
+    <span class="les-rev-tag diff-{{ r.q.difficulty }}">{{ r.q.difficulty|capitalize }} · {{ r.points }} pt{{ '' if r.points == 1 else 's' }}</span>
     <span class="les-rev-tag {{ 'ok' if r.correct else 'no' }}">{{ '✓ Correct' if r.correct else '✗ Incorrect' }}</span>
     <p class="les-rev-line ans"><b>Answer:</b> {{ r.q.choices[r.q.answer_idx] }}</p>
     {% if r.selected_original is not none and not r.correct %}
@@ -154,12 +160,16 @@
   {# ---- fill in the blank ---- #}
   {% elif r.type == 'fill_blank' %}
   <div class="les-rev {{ 'ok' if r.graded.correct else 'no' }}">
-    <span class="les-rev-pts">{{ r.graded.score|int }} / 1</span>
+    <span class="les-rev-pts">{{ (r.graded.score * r.points)|int }} / {{ r.points }}</span>
     <p class="les-rev-q">{{ loop.index }}. {{ r.q.prompt }}</p>
     <span class="les-rev-tag fmt">Fill in the blank</span>
+    <span class="les-rev-tag diff-{{ r.q.difficulty }}">{{ r.q.difficulty|capitalize }} · {{ r.points }} pt{{ '' if r.points == 1 else 's' }}</span>
     <span class="les-rev-tag {{ 'ok' if r.graded.correct else 'no' }}">{{ '✓ Correct' if r.graded.correct else '✗ Incorrect' }}</span>
+    {% if r.graded.fuzzy %}<span class="les-rev-tag fmt">✓ typo forgiven</span>{% endif %}
     <p class="les-rev-line {{ 'ans' if r.graded.correct else 'mine' }}"><b>You typed:</b> {{ r.answer_text or '(blank)' }}</p>
-    {% if not r.graded.correct %}
+    {% if r.graded.fuzzy %}
+    <p class="les-rev-line ans"><b>Counted as:</b> {{ r.graded.accepted|join(' · ') }} <span style="opacity:.75">(close enough — mind the spelling)</span></p>
+    {% elif not r.graded.correct %}
     <p class="les-rev-line ans"><b>Accepted:</b> {{ r.graded.accepted|join(' · ') }}</p>
     {% endif %}
     {% if r.q.explanation %}<p class="les-rev-exp">{{ r.q.explanation }}</p>{% endif %}
@@ -170,9 +180,10 @@
   {% set allok = r.graded.correct_count == r.graded.total %}
   {% set partial = r.graded.correct_count > 0 and not allok %}
   <div class="les-rev {{ 'ok' if allok else ('part' if partial else 'no') }}">
-    <span class="les-rev-pts">{{ r.graded.correct_count }} / {{ r.graded.total }}</span>
+    <span class="les-rev-pts">{{ (r.graded.score * r.points)|round(1) }} / {{ r.points }}</span>
     <p class="les-rev-q">{{ loop.index }}. {{ r.q.prompt }}</p>
     <span class="les-rev-tag fmt">Match the following</span>
+    <span class="les-rev-tag diff-{{ r.q.difficulty }}">{{ r.q.difficulty|capitalize }} · {{ r.points }} pt{{ '' if r.points == 1 else 's' }}</span>
     <span class="les-rev-tag {{ 'ok' if allok else ('part' if partial else 'no') }}">
       {{ '✓ All matched' if allok else ('◐ ' ~ r.graded.correct_count ~ ' of ' ~ r.graded.total ~ ' correct' if partial else '✗ None matched') }}
     </span>
@@ -195,7 +206,7 @@
   {# ---- open question, grading unavailable ---- #}
   {% elif r.grade is none %}
   <div class="les-rev skip">
-    <span class="les-rev-pts">— / 1</span>
+    <span class="les-rev-pts">— / {{ r.points }}</span>
     <p class="les-rev-q">{{ loop.index }}. {{ r.q.prompt }}</p>
     <span class="les-rev-tag skip">⏸ Not graded</span>
     {% if r.answer_text %}<div class="les-rev-mine-box">{{ r.answer_text }}</div>{% endif %}
@@ -208,8 +219,9 @@
   {% set cls = 'ok' if v == 'correct' else ('part' if v == 'partial' else 'no') %}
   {% set vlabel = '✓ Correct' if v == 'correct' else ('◐ Partial credit' if v == 'partial' else '✗ Incorrect') %}
   <div class="les-rev {{ cls }}">
-    <span class="les-rev-pts">{{ r.grade.score|round(1) }} / 1</span>
+    <span class="les-rev-pts">{{ (r.grade.score * r.points)|round(1) }} / {{ r.points }}</span>
     <p class="les-rev-q">{{ loop.index }}. {{ r.q.prompt }}</p>
+    <span class="les-rev-tag diff-{{ r.q.difficulty }}">{{ r.q.difficulty|capitalize }} · {{ r.points }} pt{{ '' if r.points == 1 else 's' }}</span>
     <span class="les-rev-tag ai">✨ AI-graded</span>
     <span class="les-rev-tag {{ cls }}">{{ vlabel }}</span>
     {% if r.answer_text %}<div class="les-rev-mine-box">{{ r.answer_text }}</div>{% endif %}

@@ -381,6 +381,16 @@ def user_detail(user_email: str):
         a["flagged"] = flag.suspicious
         a["flag_severity"] = flag.severity
         a["elapsed_label"] = _fmt_duration(a.get("elapsed_seconds") or 0)
+        # Paste signal: what share of the typed-answer text arrived by paste.
+        # Advisory only — flags a wholesale paste (majority of a non-trivial
+        # answer), not a one-term paste. Older rows (no capture) read as 0.
+        paste_chars = int(a.get("paste_chars") or 0)
+        answer_chars = int(a.get("answer_chars") or 0)
+        ratio = (paste_chars / answer_chars) if answer_chars > 0 else 0.0
+        a["paste_pct"] = round(ratio * 100)
+        a["paste_chars"] = paste_chars
+        a["paste_count"] = int(a.get("paste_count") or 0)
+        a["paste_flagged"] = answer_chars > 0 and ratio >= 0.5 and paste_chars >= 25
 
     prog_rows = []
     for tid, p in progress.items():
