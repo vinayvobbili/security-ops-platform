@@ -15,9 +15,9 @@ An enterprise-grade security operations platform that automates and orchestrates
 |--------|-------|
 | **Security Tool Integrations** | 30+ |
 | **MCP Server Tools** | 31 |
-| **LLM Investigation Tools** | 40 |
+| **LLM Investigation Tools** | 41 |
 | **Production Chat Bots** | 10 (Webex + Teams) |
-| **Web App Pages** | 55+ |
+| **Web App Pages** | 59 |
 | **n8n Automation Workflows** | 33 |
 
 ---
@@ -173,15 +173,17 @@ advisories into prioritized, owned work:
 ### Security Training & Readiness
 
 Interactive analyst training that ends in a graded readiness check, not a
-slide deck:
+slide deck — questions read like a live incident (given this signal, what do you
+conclude and do next), not vocabulary recall:
 
-- **Fresh mixed-format quizzes** — multiple choice, fill-in-the-blank, match,
-  short and free-response, sampled and shuffled from a deep per-topic bank so
-  retakes stay novel and answer-sharing doesn't work.
-- **Concept-based grading** — open answers scored 0..1 with feedback by the
-  local LLM; 60% passes, 80% earns a distinction.
+- **Fresh mixed-format quizzes** — multiple choice, fill-in-the-blank,
+  drag-and-drop match, short and free-response, concept-spread so two analysts
+  rarely see the same test and answer-sharing doesn't work.
+- **Forgiving, fair grading** — typo-tolerant fill-in-the-blank, harder
+  questions worth more (1 / 2 / 3 points), open answers scored 0..1 on
+  understanding by the local LLM; 60% passes, 80% earns a distinction.
 - **Verifiable certificate + integrity** — branded web/PDF certificate with a
-  tamper-evident code, a 30-minute auto-submit timer, anti-cheat fast-pass
+  tamper-evident code, a 45-minute auto-submit timer, anti-cheat fast-pass
   detection, and an admin analytics view, all built on the open-source
   [quizforge](https://pypi.org/project/quizforge/) core.
 

@@ -31,10 +31,20 @@ the detection signals and analyst actions at each stage.
 
 ### Fresh, mixed-format quizzes
 Every attempt samples and shuffles a new test from the topic's question bank
-across five formats — multiple choice, fill-in-the-blank, match-the-following,
-short answer, and free response. Closed formats are graded deterministically;
-open answers are scored 0..1 with feedback by the local LLM, crediting the right
-understanding in the analyst's own words. 60% passes, 80% earns a distinction.
+across five formats — multiple choice, fill-in-the-blank, drag-and-drop
+match-the-following, short answer, and free response. The sampler spreads a test
+across distinct concepts so the same idea doesn't repeat three times in one
+attempt. Closed formats are graded deterministically — fill-in-the-blank forgives
+typos via bounded edit distance (while still holding short codes exact); open
+answers are scored 0..1 with feedback by the local LLM, crediting the right
+understanding in the analyst's own words. Harder questions are worth more (easy
+1 / medium 2 / hard 3 points). 60% passes, 80% earns a distinction.
+
+### Decision-first lessons
+Questions read like a live incident — given this telemetry, alert, or situation,
+what do you conclude and what do you do next — instead of vocabulary recall. The
+catalog and lesson reading are open to everyone; only the graded quiz and the
+certificate require an account.
 
 ### Completion certificate
 Passing issues a branded certificate as both a web page and a downloadable PDF,
@@ -42,7 +52,7 @@ carrying a tamper-evident verification code derived from the learner, topic,
 score, and award date — change any detail and the code no longer matches.
 
 ### Time limit + anti-cheat
-A 30-minute countdown auto-submits whatever's answered when it hits zero, and a
+A 45-minute countdown auto-submits whatever's answered when it hits zero, and a
 deterministic fast-pass check flags passes completed implausibly faster than it
 takes to genuinely read and answer the questions.
 
