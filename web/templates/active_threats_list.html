@@ -1,0 +1,282 @@
+{% extends 'base_layout.html' %}
+
+{% block page_title_plain %}Active Threat Intake{% endblock %}
+
+{% set page_title_text = 'Active Threat Intake' %}
+{% set page_title_left_icon = '🎯' %}
+
+{% macro tt_icon(t) %}{% if t == 'ransomware' %}🔒{% elif t == 'phishing' %}🎣{% elif t == 'malware' %}🦠{% elif t == 'apt' %}🕵️{% elif t == 'infostealer' %}🔑{% elif t == 'botnet' %}🤖{% elif t == 'vulnerability_exploitation' %}💥{% elif t == 'fraud' %}💳{% else %}⚠️{% endif %}{% endmacro %}
+
+{% block extra_css %}
+<style>
+  /* ---- Thick multi-color page scrollbar (brand status palette) ---- */
+  html { scrollbar-gutter: stable; }
+  ::-webkit-scrollbar { width: 16px; height: 16px; }
+  ::-webkit-scrollbar-track { background: linear-gradient(180deg, rgba(179,29,40,0.07), rgba(0,70,173,0.10) 50%, rgba(0,166,81,0.08)); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #b31d28 0%, #d97706 20%, #0046ad 42%, #2563eb 60%, #14b8a6 80%, #00a651 100%); border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35); }
+  ::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #00a651 0%, #14b8a6 20%, #2563eb 42%, #0046ad 60%, #d97706 80%, #b31d28 100%); background-clip: padding-box; }
+  ::-webkit-scrollbar-corner { background: transparent; }
+  body.dark-mode ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #fca5a5 0%, #fcd34d 20%, #60a5fa 42%, #4dabf7 60%, #5eead4 80%, #34d399 100%); background-clip: padding-box; }
+
+  .at-wrap { max-width: 1200px; margin: calc(var(--nav-height) + 16px) auto 56px; padding: 0 20px; }
+
+  /* ---- Hero ---- */
+  .at-hero { background: linear-gradient(135deg, #0046AD 0%, #00A651 100%); border-radius: 18px; padding: 22px 26px; color: #fff; box-shadow: 0 10px 30px rgba(0,70,173,0.28); position: relative; overflow: hidden; }
+  .at-hero::after { content: '🎯'; position: absolute; right: 18px; top: -10px; font-size: 120px; opacity: 0.10; transform: rotate(-12deg); }
+  .at-hero h1 { margin: 0 0 4px; font-size: 25px; font-weight: 800; letter-spacing: -0.4px; }
+  .at-hero p { margin: 0; font-size: 13.5px; opacity: 0.94; max-width: 760px; line-height: 1.5; }
+  .at-hero-actions { margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .at-btn { border: 0; cursor: pointer; border-radius: 10px; padding: 9px 16px; font-size: 13.5px; font-weight: 700; display: inline-flex; align-items: center; gap: 7px; text-decoration: none; transition: transform .08s, box-shadow .15s; }
+  .at-btn:hover { transform: translateY(-1px); }
+  .at-btn-primary { background: #fff; color: #0046AD; box-shadow: 0 4px 14px rgba(0,0,0,0.18); }
+  .at-btn-ghost { background: rgba(255,255,255,0.16); color: #fff; border: 1px solid rgba(255,255,255,0.4); }
+
+  /* ---- KPI rail ---- */
+  .at-kpis { display: flex; gap: 12px; flex-wrap: wrap; margin: 18px 0 6px; }
+  .at-kpi { flex: 1 1 150px; border-radius: 14px; padding: 14px 16px; color: #fff; box-shadow: 0 6px 18px rgba(0,0,0,0.12); position: relative; overflow: hidden; }
+  .at-kpi .n { font-size: 26px; font-weight: 800; line-height: 1; }
+  .at-kpi .l { font-size: 12px; font-weight: 600; opacity: 0.95; margin-top: 5px; letter-spacing: 0.2px; }
+  .at-kpi .e { position: absolute; right: 8px; top: 6px; font-size: 32px; opacity: 0.22; }
+  .at-kpi.k-total { background: linear-gradient(135deg, #0046AD, #2563eb); }
+  .at-kpi.k-new { background: linear-gradient(135deg, #7c3aed, #a855f7); }
+  .at-kpi.k-active { background: linear-gradient(135deg, #d97706, #f59e0b); }
+  .at-kpi.k-crit { background: linear-gradient(135deg, #b31d28, #ef4444); }
+  .at-kpi.k-ioc { background: linear-gradient(135deg, #0f766e, #14b8a6); }
+
+  /* ---- Filter chips ---- */
+  .at-filters { display: flex; gap: 8px; flex-wrap: wrap; margin: 18px 0 12px; align-items: center; }
+  .at-chip { border: 1px solid #d7deea; background: #fff; border-radius: 999px; padding: 6px 13px; font-size: 12.5px; font-weight: 600; color: #334; cursor: pointer; transition: all .12s; }
+  .at-chip:hover { border-color: #0046AD; color: #0046AD; }
+  .at-chip.active { background: linear-gradient(135deg,#0046AD,#00A651); color: #fff; border-color: transparent; }
+  .at-spacer { flex: 1; }
+  .at-link { font-size: 12.5px; color: #0046AD; text-decoration: none; font-weight: 600; }
+  .at-link:hover { text-decoration: underline; }
+
+  /* ---- Threat cards ---- */
+  .at-list { display: flex; flex-direction: column; gap: 12px; }
+  .at-card { display: block; text-decoration: none; color: inherit; background: #fff; border: 1px solid #e6ebf3; border-left: 5px solid #94a3b8; border-radius: 14px; padding: 15px 18px; box-shadow: 0 3px 10px rgba(16,38,76,0.05); transition: transform .08s, box-shadow .15s; }
+  .at-card:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(16,38,76,0.12); }
+  .at-card.sev-critical { border-left-color: #b31d28; }
+  .at-card.sev-high { border-left-color: #d97706; }
+  .at-card.sev-medium { border-left-color: #0046AD; }
+  .at-card.sev-low { border-left-color: #14b8a6; }
+  .at-card.sev-info { border-left-color: #94a3b8; }
+  .at-card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .at-tticon { font-size: 22px; }
+  .at-title { font-size: 16px; font-weight: 750; color: #0f1c33; flex: 1; line-height: 1.3; }
+  .at-card-sum { font-size: 13px; color: #4a5568; line-height: 1.5; margin: 2px 0 10px; }
+  .at-badges { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+  .at-pill { border-radius: 999px; padding: 3px 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.2px; display: inline-flex; align-items: center; gap: 4px; }
+  .pill-critical { background: #fee2e2; color: #b31d28; }
+  .pill-high { background: #ffedd5; color: #c2410c; }
+  .pill-medium { background: #dbeafe; color: #0046AD; }
+  .pill-low { background: #ccfbf1; color: #0f766e; }
+  .pill-info { background: #eef2f7; color: #475569; }
+  .pill-type { background: #ede9fe; color: #6d28d9; }
+  .pill-actor { background: #1e293b; color: #fff; }
+  .pill-ioc { background: #f0fdf4; color: #00A651; border: 1px solid #bbf7d0; }
+  .pill-ttp { background: #fff7ed; color: #b45309; border: 1px solid #fed7aa; }
+  .pill-status { background: #f1f5f9; color: #334155; border: 1px solid #e2e8f0; }
+  .pill-rf { background: linear-gradient(135deg,#0046AD,#00A651); color: #fff; }
+  .at-meta { font-size: 11.5px; color: #94a3b8; margin-left: auto; }
+
+  .at-empty { text-align: center; padding: 60px 20px; color: #64748b; }
+  .at-empty .big { font-size: 54px; margin-bottom: 10px; }
+
+  /* ---- Modal (intake + methodology) ---- */
+  .at-modal { position: fixed; inset: 0; background: rgba(8,20,40,0.55); backdrop-filter: blur(3px); display: none; align-items: flex-start; justify-content: center; z-index: 9000; padding: 60px 16px; overflow-y: auto; }
+  .at-modal.open { display: flex; }
+  .at-modal-box { background: #fff; border-radius: 16px; max-width: 720px; width: 100%; box-shadow: 0 24px 60px rgba(0,0,0,0.35); overflow: hidden; }
+  .at-modal-head { background: linear-gradient(135deg,#0046AD,#00A651); color: #fff; padding: 16px 22px; display: flex; align-items: center; justify-content: space-between; }
+  .at-modal-head h2 { margin: 0; font-size: 17px; font-weight: 750; }
+  .at-modal-x { background: rgba(255,255,255,0.2); border: 0; color: #fff; width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 16px; }
+  .at-modal-body { padding: 22px; }
+  .at-modal-body label { font-size: 12.5px; font-weight: 700; color: #334; display: block; margin-bottom: 6px; }
+  .at-ta { width: 100%; min-height: 220px; border: 1.5px solid #d7deea; border-radius: 12px; padding: 12px 14px; font-size: 13px; font-family: inherit; line-height: 1.5; resize: vertical; box-sizing: border-box; }
+  .at-ta:focus { outline: none; border-color: #0046AD; box-shadow: 0 0 0 3px rgba(0,70,173,0.12); }
+  .at-modal-foot { display: flex; gap: 10px; align-items: center; margin-top: 14px; }
+  .at-hint { font-size: 12px; color: #64748b; flex: 1; }
+  .at-status-msg { font-size: 12.5px; font-weight: 600; }
+  .at-mb { font-size: 13.5px; color: #334; line-height: 1.6; }
+  .at-mb h3 { font-size: 13.5px; color: #0046AD; margin: 16px 0 6px; }
+  .at-mb ul { margin: 6px 0; padding-left: 20px; }
+
+  /* ---- Dark mode (REQUIRED) ---- */
+  body.dark-mode .at-card { background: #161b22; border-color: #2d333b; }
+  body.dark-mode .at-title { color: #e6edf3; }
+  body.dark-mode .at-card-sum { color: #aeb9c5; }
+  body.dark-mode .at-chip { background: #1c2128; border-color: #30363d; color: #c9d3df; }
+  body.dark-mode .at-chip:hover { border-color: #4dabf7; color: #4dabf7; }
+  body.dark-mode .at-modal-box { background: #161b22; }
+  body.dark-mode .at-ta { background: #0d1117; border-color: #30363d; color: #e6edf3; }
+  body.dark-mode .at-modal-body label,
+  body.dark-mode .at-mb { color: #c9d3df; }
+  body.dark-mode .at-empty { color: #9aa5b1; }
+  body.dark-mode .pill-info { background: #21262d; color: #9aa5b1; }
+  body.dark-mode .pill-status { background: #21262d; color: #c9d3df; border-color: #30363d; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="at-wrap">
+
+  <div class="at-hero">
+    <h1>🎯 Active Threat Intake</h1>
+    <p>The adversary-centric desk. Where Cyber Security Advisories answers <em>"a CVE dropped — do we own it?"</em>, this answers <em>"an actor or campaign is active — are they in our environment?"</em> Paste any threat report and a local model pulls out the actor, campaign, IOCs, ATT&CK techniques, and the actions to take.</p>
+    <div class="at-hero-actions">
+      {% if is_authenticated %}<button type="button" class="at-btn at-btn-primary" id="at-open-intake">➕ Ingest a threat report</button>{% endif %}
+      <button type="button" class="at-btn at-btn-ghost" id="at-open-method">💡 How does this work?</button>
+      <a href="/cs-advisories" class="at-btn at-btn-ghost" title="Sibling desk — the asset axis: a CVE dropped, do we own it?">🚨 Cyber Security Advisories</a>
+      {% if archived_view %}<a href="/active-threats" class="at-btn at-btn-ghost">📋 Live queue</a>{% else %}<a href="/active-threats?closed=1" class="at-btn at-btn-ghost">🗄 Closed</a>{% endif %}
+    </div>
+  </div>
+
+  <div class="at-kpis">
+    <div class="at-kpi k-total"><span class="e">📊</span><div class="n">{{ counts.total }}</div><div class="l">Total threats</div></div>
+    <div class="at-kpi k-new"><span class="e">🆕</span><div class="n">{{ counts.new }}</div><div class="l">New / untriaged</div></div>
+    <div class="at-kpi k-active"><span class="e">🔄</span><div class="n">{{ counts.under_review + counts.hunting + counts.blocked }}</div><div class="l">In motion</div></div>
+    <div class="at-kpi k-crit"><span class="e">🔥</span><div class="n">{{ severities.critical + severities.high }}</div><div class="l">Critical / high (open)</div></div>
+    <div class="at-kpi k-ioc"><span class="e">🧬</span><div class="n">{{ ioc_total }}</div><div class="l">Distinct IOCs tracked</div></div>
+  </div>
+
+  <div class="at-filters">
+    <button type="button" class="at-chip active" data-filter="all">All</button>
+    {% for t in threat_types %}<button type="button" class="at-chip" data-filter="{{ t }}">{{ tt_icon(t) }} {{ t.replace('_',' ')|title }}</button>{% endfor %}
+    <span class="at-spacer"></span>
+    {% if archived_view %}<a class="at-link" href="/active-threats">← Back to live queue</a>{% endif %}
+  </div>
+
+  {% if threats %}
+  <div class="at-list" id="at-list">
+    {% for t in threats %}
+    <a href="/active-threats/{{ t.source_id }}" class="at-card sev-{{ t.severity }}" data-type="{{ t.threat_type }}">
+      <div class="at-card-top">
+        <span class="at-tticon">{{ tt_icon(t.threat_type) }}</span>
+        <span class="at-title">{{ t.title }}</span>
+        <span class="at-meta">{{ t.created_at[:10] }}</span>
+      </div>
+      {% if t.summary %}<div class="at-card-sum">{{ t.summary }}</div>{% endif %}
+      <div class="at-badges">
+        <span class="at-pill pill-{{ t.severity }}">{{ t.severity|upper }}</span>
+        <span class="at-pill pill-type">{{ tt_icon(t.threat_type) }} {{ t.threat_type.replace('_',' ')|title }}</span>
+        {% if t.actor %}<span class="at-pill pill-actor">🕵️ {{ t.actor }}</span>{% endif %}
+        {% if t.campaign %}<span class="at-pill pill-status">📛 {{ t.campaign }}</span>{% endif %}
+        {% if t.iocs %}<span class="at-pill pill-ioc">🧬 {{ t.iocs|length }} IOC{{ 's' if t.iocs|length != 1 else '' }}</span>{% endif %}
+        {% if t.ttps %}<span class="at-pill pill-ttp">🎲 {{ t.ttps|length }} TTP{{ 's' if t.ttps|length != 1 else '' }}</span>{% endif %}
+        <span class="at-pill pill-status">{{ t.status.replace('_',' ')|title }}</span>
+        {% if t.source == 'recorded_future' %}<span class="at-pill pill-rf">🛰️ Auto · RF</span>{% endif %}
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="at-empty">
+    <div class="big">🎯</div>
+    <div style="font-size:17px;font-weight:700;color:#475569;">{% if archived_view %}No closed threats yet.{% else %}The queue is clear.{% endif %}</div>
+    <p>{% if is_authenticated %}Paste a threat report to get started — actor write-ups, campaign bulletins, phishing or ransomware advisories all work.{% else %}Sign in to ingest a threat report.{% endif %}</p>
+    {% if is_authenticated and not archived_view %}<button type="button" class="at-btn at-btn-primary" id="at-open-intake-2" style="background:linear-gradient(135deg,#0046AD,#00A651);color:#fff;">➕ Ingest a threat report</button>{% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% if is_authenticated %}
+<!-- Intake modal -->
+<div class="at-modal" id="at-intake">
+  <div class="at-modal-box">
+    <div class="at-modal-head"><h2>➕ Ingest a threat report</h2><button type="button" class="at-modal-x" data-close>✕</button></div>
+    <div class="at-modal-body">
+      <label for="at-report">Paste the report — actor profile, campaign bulletin, phishing/ransomware advisory, or an intel note. Defanged IOCs (hxxp, [.]) are fine.</label>
+      <textarea class="at-ta" id="at-report" placeholder="e.g.  A new ransomware affiliate tracked as STORM-XXXX is targeting insurers with a phishing lure spoofing benefits enrollment. Payloads stage from hxxps://benefits-enroll[.]top/...  C2 at 203.0.113.44.  SHA256 ab12...  ATT&CK: T1566 Phishing, T1486 Data Encrypted for Impact ..."></textarea>
+      <div class="at-modal-foot">
+        <span class="at-hint at-status-msg" id="at-intake-msg">A local model extracts the structured threat — no data leaves the network.</span>
+        <button type="button" class="at-btn at-btn-ghost" data-close style="background:#eef2f7;color:#475569;border-color:#d7deea;">Cancel</button>
+        <button type="button" class="at-btn at-btn-primary" id="at-submit" style="background:linear-gradient(135deg,#0046AD,#00A651);color:#fff;">🔍 Extract &amp; queue</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Methodology modal -->
+<div class="at-modal" id="at-method">
+  <div class="at-modal-box">
+    <div class="at-modal-head"><h2>💡 How Active Threat Intake works</h2><button type="button" class="at-modal-x" data-close>✕</button></div>
+    <div class="at-modal-body at-mb">
+      <p>Three desks, three questions. This is the <strong>adversary</strong> desk.</p>
+      <h3>🎯 What it answers</h3>
+      <p>"An actor or campaign is active — what are their indicators, and are they already in our environment?" Cyber Security Advisories handles the asset axis (a vulnerable package we own); this handles the threat axis (an active adversary), regardless of whether a CVE is involved.</p>
+      <h3>🔬 How a report becomes a queue entry</h3>
+      <ul>
+        <li>You paste any threat report.</li>
+        <li>A local model extracts the actor, campaign, threat type, severity, a tight summary, the in-the-wild IOCs, the MITRE ATT&amp;CK techniques, and recommended actions.</li>
+        <li>A non-semantic backstop sweeps the raw text for any IOCs the model missed (defanged URLs, hashes, IPs) so nothing slips through.</li>
+        <li>The structured threat lands in the queue, deduped by content so re-pasting the same report doesn't stack.</li>
+      </ul>
+      <h3>🛣 What's coming next</h3>
+      <ul>
+        <li><strong>Enrichment</strong> — IOC reputation from VirusTotal / AbuseIPDB / urlscan / Recorded Future.</li>
+        <li><strong>Hunt wire</strong> — auto-queue a threat hunt to check whether those indicators touched our telemetry.</li>
+        <li><strong>Block wire</strong> — one-click block of confirmed-malicious indicators.</li>
+        <li><strong>Auto-ingest</strong> — pull active-actor intel automatically so the queue fills itself.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  function openModal(id){ var m=document.getElementById(id); if(m) m.classList.add('open'); }
+  function closeModal(m){ m.classList.remove('open'); }
+
+  document.querySelectorAll('[data-close]').forEach(function(b){
+    b.addEventListener('click', function(){ closeModal(b.closest('.at-modal')); });
+  });
+  document.querySelectorAll('.at-modal').forEach(function(m){
+    m.addEventListener('click', function(e){ if(e.target===m) closeModal(m); });
+  });
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape') document.querySelectorAll('.at-modal.open').forEach(closeModal); });
+
+  ['at-open-intake','at-open-intake-2'].forEach(function(id){ var el=document.getElementById(id); if(el) el.addEventListener('click', function(){ openModal('at-intake'); var ta=document.getElementById('at-report'); if(ta) ta.focus(); }); });
+  var om=document.getElementById('at-open-method'); if(om) om.addEventListener('click', function(){ openModal('at-method'); });
+
+  // Filter chips
+  document.querySelectorAll('.at-chip').forEach(function(c){
+    c.addEventListener('click', function(){
+      document.querySelectorAll('.at-chip').forEach(function(x){ x.classList.remove('active'); });
+      c.classList.add('active');
+      var f=c.dataset.filter;
+      document.querySelectorAll('#at-list .at-card').forEach(function(card){
+        card.style.display = (f==='all' || card.dataset.type===f) ? '' : 'none';
+      });
+    });
+  });
+
+  // Intake submit
+  var submit=document.getElementById('at-submit');
+  if(submit){
+    submit.addEventListener('click', function(){
+      var ta=document.getElementById('at-report'), msg=document.getElementById('at-intake-msg');
+      var text=(ta.value||'').trim();
+      if(text.length<20){ msg.textContent='⚠️ Paste at least a couple of sentences.'; msg.style.color='#b31d28'; return; }
+      submit.disabled=true; submit.textContent='⏳ Extracting…';
+      msg.textContent='Extracting the threat with a local model…'; msg.style.color='#0046AD';
+      fetch('/api/active-threats/intake', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({report:text})})
+        .then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+        .then(function(res){
+          if(res.ok && res.j.ok){
+            msg.textContent = res.j.new ? '✅ Threat queued — opening…' : '↩️ Already in the queue — opening…';
+            msg.style.color='#00A651';
+            window.location.href = res.j.url;
+          } else {
+            msg.textContent='⚠️ '+(res.j.error||'Extraction failed.'); msg.style.color='#b31d28';
+            submit.disabled=false; submit.textContent='🔍 Extract & queue';
+          }
+        })
+        .catch(function(){ msg.textContent='⚠️ Network error.'; msg.style.color='#b31d28'; submit.disabled=false; submit.textContent='🔍 Extract & queue'; });
+    });
+  }
+})();
+</script>
+{% endblock %}

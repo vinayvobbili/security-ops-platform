@@ -41,8 +41,8 @@ _MAX_CONCURRENT = 2
 _slots = threading.BoundedSemaphore(_MAX_CONCURRENT)
 
 # The verdict LLM summary is a "nice to have" on top of the deterministic floor.
-# create_llm carries a 600s HTTP timeout, so a saturated m1 could otherwise pin a
-# job for minutes — bound it tightly and fall back to the floor.
+# create_llm carries a 600s HTTP timeout, so a saturated local LLM could otherwise
+# pin a job for minutes — bound it tightly and fall back to the floor.
 _VERDICT_LLM_TIMEOUT = 75.0
 
 # run_behavioral_hunt defaults to a 1800s (30-min) deadline tuned for the hourly
@@ -353,11 +353,13 @@ def _extract(narrative: str):
 def _ioc_hunt(entities, job_id: str, title: str, tools: List[str], hours: int) -> dict:
     """Fan IOCs out across the selected tools. Never raises — degrades to errors."""
     try:
-        from src.components.tipper_analyzer.hunting import hunt_iocs
-        result = hunt_iocs(
-            entities, tipper_id=job_id, tipper_title=title,
-            qradar_hours=hours, crowdstrike_hours=hours, xsiam_hours=hours,
-            tools=tools,
+        # Reach the fan-out through the unified engine front door, not the tipper
+        # package directly (consolidation step 4, see project_hunt_engine_kernel).
+        # run_fanout returns the rich result so _compact_ioc still renders the
+        # full per-kind hit rows the workbench page shows.
+        from services import hunt_engine
+        result = hunt_engine.run_fanout(
+            entities, ref=job_id, label=title, window=hours, sources=tools,
         )
         return _compact_ioc(result)
     except Exception as e:
@@ -368,9 +370,40 @@ def _ioc_hunt(entities, job_id: str, title: str, tools: List[str], hours: int) -
 
 def _compact_ioc(r) -> dict:
     """Flatten an IOCHuntResult to a JSON-friendly summary the page can render."""
+    try:
+        from services import hunt_links
+    except Exception:
+        hunt_links = None
+
+    # Per-tool lookback (hours) so the Falcon console window matches what ran.
+    _hours = {
+        "QRadar": getattr(r, "search_hours_qradar", 720),
+        "CrowdStrike": getattr(r, "search_hours_crowdstrike", 720),
+        "XSIAM": getattr(r, "search_hours_xsiam", 720),
+    }
+
     def _tool(t):
         if not t:
             return None
+        # Attach a console deep-link to each query this tool actually ran, plus a
+        # per-source primary link, via the shared hunt_links builders (deep-link
+        # convergence — same wrap the engine's HuntResult gets). Best-effort.
+        queries = []
+        primary = None
+        for q in (t.queries or [])[:10]:
+            q = dict(q) if isinstance(q, dict) else q
+            if hunt_links and isinstance(q, dict) and q.get("query"):
+                try:
+                    url = hunt_links.console_url_for(
+                        t.tool_name, q["query"], query_type=q.get("query_type", ""),
+                        window_hours=_hours.get(t.tool_name, 720))
+                except Exception:
+                    url = None
+                if url:
+                    q["console_url"] = url
+                    if primary is None:
+                        primary = url
+            queries.append(q)
         return {
             "tool_name": t.tool_name,
             "total_hits": t.total_hits,
@@ -381,7 +414,8 @@ def _compact_ioc(r) -> dict:
             "hash_hits": (t.hash_hits or [])[:25],
             "email_hits": (t.email_hits or [])[:25],
             "errors": (t.errors or [])[:5],
-            "queries": (t.queries or [])[:10],
+            "queries": queries,
+            "console_url": primary,
         }
 
     return {

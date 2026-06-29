@@ -1,0 +1,733 @@
+{% extends 'base_layout.html' %}
+
+{% block page_title_plain %}{{ threat.title }} — Active Threat{% endblock %}
+
+{% set page_title_text = 'Active Threat' %}
+{% set page_title_left_icon = '🎯' %}
+
+{% macro tt_icon(t) %}{% if t == 'ransomware' %}🔒{% elif t == 'phishing' %}🎣{% elif t == 'malware' %}🦠{% elif t == 'apt' %}🕵️{% elif t == 'infostealer' %}🔑{% elif t == 'botnet' %}🤖{% elif t == 'vulnerability_exploitation' %}💥{% elif t == 'fraud' %}💳{% else %}⚠️{% endif %}{% endmacro %}
+{% macro ioc_icon(t) %}{% if t == 'domain' %}🌐{% elif t == 'ip' %}📡{% elif t == 'url' %}🔗{% elif t in ('sha256','sha1','md5') %}#️⃣{% elif t == 'email' %}✉️{% else %}🧩{% endif %}{% endmacro %}
+
+{% block extra_css %}
+<style>
+  html { scrollbar-gutter: stable; }
+  ::-webkit-scrollbar { width: 16px; height: 16px; }
+  ::-webkit-scrollbar-track { background: linear-gradient(180deg, rgba(179,29,40,0.07), rgba(0,70,173,0.10) 50%, rgba(0,166,81,0.08)); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #b31d28 0%, #d97706 20%, #0046ad 42%, #2563eb 60%, #14b8a6 80%, #00a651 100%); border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35); }
+  ::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #00a651 0%, #14b8a6 20%, #2563eb 42%, #0046ad 60%, #d97706 80%, #b31d28 100%); background-clip: padding-box; }
+  body.dark-mode ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #fca5a5 0%, #fcd34d 20%, #60a5fa 42%, #4dabf7 60%, #5eead4 80%, #34d399 100%); background-clip: padding-box; }
+
+  .atd-wrap { max-width: 1080px; margin: calc(var(--nav-height) + 16px) auto 56px; padding: 0 20px; }
+  .atd-back { display: inline-block; font-size: 12.5px; color: #0046AD; text-decoration: none; font-weight: 600; margin-bottom: 12px; }
+  .atd-back:hover { text-decoration: underline; }
+
+  .atd-hero { border-radius: 18px; padding: 22px 26px; color: #fff; box-shadow: 0 10px 30px rgba(0,70,173,0.24); position: relative; overflow: hidden; }
+  .atd-hero.sev-critical { background: linear-gradient(135deg, #b31d28, #ef4444); }
+  .atd-hero.sev-high { background: linear-gradient(135deg, #d97706, #f59e0b); }
+  .atd-hero.sev-medium { background: linear-gradient(135deg, #0046AD, #2563eb); }
+  .atd-hero.sev-low { background: linear-gradient(135deg, #0f766e, #14b8a6); }
+  .atd-hero.sev-info { background: linear-gradient(135deg, #475569, #64748b); }
+  .atd-hero .ic { font-size: 34px; }
+  .atd-hero h1 { margin: 6px 0 8px; font-size: 23px; font-weight: 800; letter-spacing: -0.3px; line-height: 1.25; }
+  .atd-hero-badges { display: flex; gap: 8px; flex-wrap: wrap; }
+  .atd-b { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.35); border-radius: 999px; padding: 4px 12px; font-size: 11.5px; font-weight: 700; display: inline-flex; gap: 5px; align-items: center; }
+
+  .atd-grid { display: grid; grid-template-columns: 1fr 320px; gap: 18px; margin-top: 18px; }
+  @media (max-width: 900px) { .atd-grid { grid-template-columns: 1fr; } }
+
+  .atd-card { background: #fff; border: 1px solid #e6ebf3; border-radius: 14px; padding: 18px 20px; box-shadow: 0 3px 10px rgba(16,38,76,0.05); margin-bottom: 16px; }
+  .atd-card h2 { font-size: 14px; font-weight: 750; color: #0046AD; margin: 0 0 12px; display: flex; align-items: center; gap: 7px; }
+  .atd-sum { font-size: 14px; line-height: 1.6; color: #2d3748; }
+
+  /* IOC table */
+  .atd-ioc { width: 100%; border-collapse: collapse; }
+  .atd-ioc td { padding: 8px 10px; border-bottom: 1px solid #eef2f7; font-size: 12.5px; vertical-align: top; }
+  .atd-ioc tr:last-child td { border-bottom: 0; }
+  .atd-ioc .ity { white-space: nowrap; color: #6d28d9; font-weight: 700; font-size: 11px; }
+  .atd-ioc .ival { font-family: ui-monospace, Menlo, Consolas, monospace; color: #0f1c33; word-break: break-all; }
+  .atd-ioc .inote { color: #64748b; font-size: 11.5px; }
+  .atd-copy { cursor: pointer; border: 1px solid #d7deea; background: #f8fafc; border-radius: 6px; padding: 2px 7px; font-size: 11px; color: #475569; }
+  .atd-copy:hover { border-color: #0046AD; color: #0046AD; }
+
+  .atd-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+  .atd-ttp { background: #fff7ed; color: #b45309; border: 1px solid #fed7aa; border-radius: 8px; padding: 5px 10px; font-size: 12px; font-weight: 600; }
+  .atd-ttp b { font-family: ui-monospace, monospace; color: #9a3412; }
+  .atd-actions-list { margin: 0; padding-left: 20px; }
+  .atd-actions-list li { font-size: 13px; line-height: 1.7; color: #2d3748; }
+  .atd-empty { color: #94a3b8; font-size: 12.5px; font-style: italic; }
+
+  /* Side rail */
+  .atd-status-btns { display: flex; flex-direction: column; gap: 8px; }
+  .atd-sbtn { border: 1px solid #d7deea; background: #fff; border-radius: 9px; padding: 9px 12px; font-size: 12.5px; font-weight: 600; color: #334; cursor: pointer; text-align: left; transition: all .12s; }
+  .atd-sbtn:hover { border-color: #0046AD; }
+  .atd-sbtn.cur { background: linear-gradient(135deg,#0046AD,#00A651); color: #fff; border-color: transparent; }
+  .atd-notes { width: 100%; min-height: 110px; border: 1.5px solid #d7deea; border-radius: 10px; padding: 10px 12px; font-size: 12.5px; font-family: inherit; resize: vertical; box-sizing: border-box; line-height: 1.5; }
+  .atd-notes:focus { outline: none; border-color: #0046AD; box-shadow: 0 0 0 3px rgba(0,70,173,0.1); }
+  .atd-save { margin-top: 8px; width: 100%; border: 0; border-radius: 9px; padding: 9px; font-size: 12.5px; font-weight: 700; background: linear-gradient(135deg,#0046AD,#00A651); color: #fff; cursor: pointer; }
+  .atd-save:hover { filter: brightness(1.06); }
+  .atd-msg { font-size: 11.5px; font-weight: 600; margin-top: 6px; min-height: 14px; }
+  .atd-soon { border: 1px dashed #cbd5e1; border-radius: 10px; padding: 12px; font-size: 12px; color: #64748b; background: #f8fafc; }
+  .atd-soon b { color: #475569; }
+
+  .atd-raw { margin-top: 8px; }
+  .atd-raw summary { cursor: pointer; font-size: 12.5px; color: #0046AD; font-weight: 600; }
+  .atd-raw pre { white-space: pre-wrap; word-break: break-word; background: #f8fafc; border: 1px solid #e6ebf3; border-radius: 10px; padding: 12px; font-size: 12px; line-height: 1.5; color: #334; margin-top: 8px; max-height: 360px; overflow: auto; }
+
+  /* Enrichment (slice 2) */
+  .atd-enr-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .atd-enr-roll { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; font-size: 11.5px; }
+  .atd-roll { border-radius: 999px; padding: 3px 11px; font-weight: 700; font-size: 11px; display: inline-flex; gap: 5px; align-items: center; }
+  .atd-roll.r-mal { background: #fee2e2; color: #b31d28; }
+  .atd-roll.r-susp { background: #fef3c7; color: #b45309; }
+  .atd-roll.r-clean { background: #dcfce7; color: #15803d; }
+  .atd-roll.r-unk { background: #eef2f7; color: #64748b; }
+  .atd-enr-btn { border: 0; border-radius: 9px; padding: 8px 15px; font-size: 12.5px; font-weight: 700; background: linear-gradient(135deg,#0046AD,#00A651); color: #fff; cursor: pointer; display: inline-flex; gap: 7px; align-items: center; }
+  .atd-enr-btn:hover { filter: brightness(1.07); }
+  .atd-enr-btn:disabled { opacity: .6; cursor: default; }
+  .atd-enr-note { font-size: 11.5px; color: #94a3b8; margin-top: 8px; }
+  .atd-spin { width: 13px; height: 13px; border: 2px solid rgba(255,255,255,0.45); border-top-color: #fff; border-radius: 50%; display: inline-block; animation: atd-rot .7s linear infinite; }
+  @keyframes atd-rot { to { transform: rotate(360deg); } }
+
+  .atd-ioc .iverd { white-space: nowrap; }
+  .vbadge { border-radius: 6px; padding: 2px 8px; font-size: 10.5px; font-weight: 800; letter-spacing: .3px; }
+  .vbadge.v-malicious { background: #b31d28; color: #fff; }
+  .vbadge.v-suspicious { background: #d97706; color: #fff; }
+  .vbadge.v-clean { background: #15803d; color: #fff; }
+  .vbadge.v-unknown { background: #e2e8f0; color: #64748b; }
+  .atd-prov { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .pchip { font-size: 10px; font-weight: 600; border-radius: 6px; padding: 1px 7px; text-decoration: none; border: 1px solid transparent; display: inline-flex; gap: 3px; align-items: center; }
+  .pchip.pc-malicious { background: #fee2e2; color: #b31d28; border-color: #fecaca; }
+  .pchip.pc-suspicious { background: #fef3c7; color: #b45309; border-color: #fde68a; }
+  .pchip.pc-clean { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
+  .pchip.pc-unknown { background: #f1f5f9; color: #64748b; border-color: #e2e8f0; }
+  .pchip:hover { filter: brightness(.97); text-decoration: none; }
+
+  .atd-actor { display: grid; gap: 9px; }
+  .atd-actor-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .atd-actor-score { background: linear-gradient(135deg,#b31d28,#ef4444); color: #fff; border-radius: 10px; padding: 6px 12px; font-weight: 800; font-size: 13px; }
+  .atd-actor-name { font-size: 15px; font-weight: 800; color: #0f1c33; }
+  .atd-actor-sec { font-size: 12px; color: #475569; }
+  .atd-actor-sec b { color: #0046AD; font-weight: 700; }
+
+  /* Telemetry hunt (slice 3) */
+  .atd-hunt-verdict { border-radius: 12px; padding: 13px 16px; margin: 4px 0 12px; display: flex; align-items: center; gap: 11px; font-weight: 700; font-size: 14px; }
+  .atd-hunt-verdict .hv-ic { font-size: 22px; }
+  .atd-hunt-verdict.hv-touched { background: linear-gradient(135deg,#fee2e2,#fecaca); color: #b31d28; border: 1px solid #fca5a5; }
+  .atd-hunt-verdict.hv-clear { background: linear-gradient(135deg,#dcfce7,#bbf7d0); color: #15803d; border: 1px solid #86efac; }
+  .atd-hunt-verdict.hv-inconclusive { background: linear-gradient(135deg,#fef3c7,#fde68a); color: #b45309; border: 1px solid #fcd34d; }
+  .atd-hunt-verdict small { font-weight: 600; opacity: .85; }
+  .atd-src { border: 1px solid #e6ebf3; border-radius: 10px; padding: 10px 13px; margin-bottom: 9px; }
+  .atd-src-top { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+  .atd-src-name { font-weight: 750; font-size: 13px; color: #0f1c33; }
+  .atd-src-hits { border-radius: 999px; padding: 2px 10px; font-size: 11px; font-weight: 800; }
+  .atd-src-hits.shit { background: #b31d28; color: #fff; }
+  .atd-src-hits.sclean { background: #dcfce7; color: #15803d; }
+  .atd-src-hits.serr { background: #fef3c7; color: #b45309; }
+  .atd-src-kinds { font-size: 11.5px; color: #64748b; margin-top: 5px; }
+  .atd-src-hosts { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+  .atd-host { font-family: ui-monospace, monospace; font-size: 11px; background: #fff1f2; color: #b31d28; border: 1px solid #fecdd3; border-radius: 6px; padding: 2px 8px; }
+  .atd-src-err { font-size: 11.5px; color: #b45309; margin-top: 5px; }
+  .atd-hunt-meta { font-size: 11.5px; color: #94a3b8; margin-top: 4px; }
+  .atd-src-link { margin-top: 8px; }
+  .atd-src-link a { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600; text-decoration: none; color: #0046AD; background: linear-gradient(135deg,#eaf1ff,#e6f7ee); border: 1px solid #cfe0ff; border-radius: 7px; padding: 4px 10px; }
+  .atd-src-link a:hover { filter: brightness(0.97); text-decoration: none; }
+  /* Pre-flight hunt plan (engine plan()) */
+  .atd-ghost-btn { border: 1px solid #0046AD; background: #fff; border-radius: 9px; padding: 8px 15px; font-size: 12.5px; font-weight: 700; color: #0046AD; cursor: pointer; display: inline-flex; gap: 7px; align-items: center; }
+  .atd-ghost-btn:hover { background: linear-gradient(135deg,#eaf1ff,#e6f7ee); }
+  .atd-ghost-btn:disabled { opacity: .6; cursor: default; }
+  .atd-plan { margin: 6px 0 12px; }
+  .atd-plan-head { font-size: 12.5px; font-weight: 700; color: #0f1c33; background: linear-gradient(135deg,#eaf1ff,#e6f7ee); border: 1px solid #d6e3ff; border-radius: 10px; padding: 10px 13px; margin-bottom: 10px; }
+  .atd-plan-head small { display: block; margin-top: 3px; font-weight: 600; font-size: 11px; color: #64748b; }
+  .atd-plan-src { border: 1px solid #e6ebf3; border-radius: 10px; padding: 10px 13px; margin-bottom: 9px; }
+  .atd-plan-srcname { font-weight: 750; font-size: 13px; color: #0f1c33; margin-bottom: 8px; }
+  .atd-plan-win { font-weight: 600; font-size: 11px; color: #64748b; margin-left: 6px; }
+  .atd-plan-q { margin-top: 8px; }
+  .atd-plan-qtop { display: flex; align-items: center; justify-content: space-between; gap: 9px; flex-wrap: wrap; }
+  .atd-plan-qtype { font-size: 11.5px; font-weight: 700; color: #0046AD; }
+  .atd-plan-link { font-size: 11px; font-weight: 700; text-decoration: none; color: #0046AD; background: linear-gradient(135deg,#eaf1ff,#e6f7ee); border: 1px solid #cfe0ff; border-radius: 7px; padding: 3px 9px; }
+  .atd-plan-link:hover { filter: brightness(0.97); text-decoration: none; }
+  .atd-plan-nolink { font-size: 10.5px; color: #94a3b8; }
+  .atd-plan-code { margin: 5px 0 0; font-family: ui-monospace,SFMono-Regular,Menlo,monospace; font-size: 11px; line-height: 1.45; color: #1f2937; background: #f6f8fc; border: 1px solid #e6ebf3; border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; word-break: break-word; max-height: 168px; overflow: auto; }
+
+  /* Containment block (slice 4) */
+  .atd-blk-row { display: flex; align-items: center; gap: 9px; padding: 7px 9px; border: 1px solid #e6ebf3; border-radius: 9px; margin-bottom: 7px; }
+  .atd-blk-row input[type=checkbox] { width: 15px; height: 15px; accent-color: #b31d28; cursor: pointer; }
+  .atd-blk-val { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: #0f1c33; word-break: break-all; flex: 1; }
+  .atd-blk-vd { font-size: 9.5px; font-weight: 800; border-radius: 5px; padding: 1px 6px; }
+  .atd-blk-vd.v-malicious { background: #b31d28; color: #fff; }
+  .atd-blk-vd.v-suspicious { background: #d97706; color: #fff; }
+  .atd-blk-vd.v-clean { background: #15803d; color: #fff; }
+  .atd-blk-vd.v-unknown { background: #e2e8f0; color: #64748b; }
+  .atd-blk-btn { border: 0; border-radius: 9px; padding: 9px 16px; font-size: 12.5px; font-weight: 700; background: linear-gradient(135deg,#b31d28,#ef4444); color: #fff; cursor: pointer; display: inline-flex; gap: 7px; align-items: center; margin-top: 4px; }
+  .atd-blk-btn:hover { filter: brightness(1.07); }
+  .atd-blk-btn:disabled { opacity: .55; cursor: default; filter: none; }
+  .atd-blk-dev { background: #fef3c7; border: 1px solid #fcd34d; color: #b45309; border-radius: 9px; padding: 9px 12px; font-size: 12px; font-weight: 600; margin-bottom: 10px; }
+  .atd-blk-done { border-radius: 9px; padding: 7px 11px; font-size: 12px; margin-bottom: 7px; display: flex; align-items: center; gap: 8px; }
+  .atd-blk-done.ok { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+  .atd-blk-done.fail { background: #fee2e2; color: #b31d28; border: 1px solid #fca5a5; }
+  .atd-blk-done a { color: inherit; font-weight: 700; text-decoration: underline; }
+  .atd-blk-ticket { display: inline-block; margin-top: 6px; font-size: 12.5px; font-weight: 700; color: #b31d28; text-decoration: none; }
+  .atd-blk-ticket:hover { text-decoration: underline; }
+
+  body.dark-mode .atd-blk-row { border-color: #30363d; }
+  body.dark-mode .atd-blk-val { color: #e6edf3; }
+  body.dark-mode .atd-blk-dev { background: #3a2a0a; border-color: #5a3f0e; color: #fcd34d; }
+  body.dark-mode .atd-blk-done.ok { background: #0f2a18; color: #86efac; border-color: #16432a; }
+  body.dark-mode .atd-blk-done.fail { background: #2a1115; color: #fca5a5; border-color: #5b2326; }
+
+  /* Dark mode (REQUIRED) */
+  body.dark-mode .atd-card { background: #161b22; border-color: #2d333b; }
+  body.dark-mode .atd-roll.r-mal { background: #3b1417; color: #fca5a5; }
+  body.dark-mode .atd-roll.r-susp { background: #3a2a0a; color: #fcd34d; }
+  body.dark-mode .atd-roll.r-clean { background: #0f2a18; color: #86efac; }
+  body.dark-mode .atd-roll.r-unk { background: #1c2128; color: #9aa5b1; }
+  body.dark-mode .vbadge.v-unknown { background: #30363d; color: #9aa5b1; }
+  body.dark-mode .pchip.pc-malicious { background: #3b1417; color: #fca5a5; border-color: #5b2326; }
+  body.dark-mode .pchip.pc-suspicious { background: #3a2a0a; color: #fcd34d; border-color: #5a3f0e; }
+  body.dark-mode .pchip.pc-clean { background: #0f2a18; color: #86efac; border-color: #16432a; }
+  body.dark-mode .pchip.pc-unknown { background: #1c2128; color: #9aa5b1; border-color: #30363d; }
+  body.dark-mode .atd-actor-name { color: #e6edf3; }
+  body.dark-mode .atd-actor-sec { color: #aeb9c5; }
+  body.dark-mode .atd-src { border-color: #30363d; }
+  body.dark-mode .atd-src-name { color: #e6edf3; }
+  body.dark-mode .atd-hunt-verdict.hv-touched { background: #2a1115; color: #fca5a5; border-color: #5b2326; }
+  body.dark-mode .atd-hunt-verdict.hv-clear { background: #0f2a18; color: #86efac; border-color: #16432a; }
+  body.dark-mode .atd-hunt-verdict.hv-inconclusive { background: #3a2a0a; color: #fcd34d; border-color: #5a3f0e; }
+  body.dark-mode .atd-host { background: #2a1115; color: #fca5a5; border-color: #5b2326; }
+  body.dark-mode .atd-src-link a { color: #79b8ff; background: #0d1f33; border-color: #1b3a5b; }
+  body.dark-mode .atd-ghost-btn { background: #161b22; color: #79b8ff; border-color: #1b3a5b; }
+  body.dark-mode .atd-ghost-btn:hover { background: #0d1f33; }
+  body.dark-mode .atd-plan-head { background: #0d1f33; color: #e6edf3; border-color: #1b3a5b; }
+  body.dark-mode .atd-plan-head small { color: #93a4bd; }
+  body.dark-mode .atd-plan-src { border-color: #30363d; }
+  body.dark-mode .atd-plan-srcname { color: #e6edf3; }
+  body.dark-mode .atd-plan-qtype, body.dark-mode .atd-plan-link { color: #79b8ff; }
+  body.dark-mode .atd-plan-link { background: #0d1f33; border-color: #1b3a5b; }
+  body.dark-mode .atd-plan-code { color: #c9d3df; background: #0d1320; border-color: #30363d; }
+  body.dark-mode .atd-sum, body.dark-mode .atd-actions-list li { color: #c9d3df; }
+  body.dark-mode .atd-ioc td { border-color: #21262d; }
+  body.dark-mode .atd-ioc .ival { color: #e6edf3; }
+  body.dark-mode .atd-copy { background: #1c2128; border-color: #30363d; color: #9aa5b1; }
+  body.dark-mode .atd-sbtn { background: #1c2128; border-color: #30363d; color: #c9d3df; }
+  body.dark-mode .atd-notes { background: #0d1117; border-color: #30363d; color: #e6edf3; }
+  body.dark-mode .atd-soon, body.dark-mode .atd-raw pre { background: #0d1117; border-color: #30363d; color: #aeb9c5; }
+  body.dark-mode .atd-ttp { background: #2a1c0a; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="atd-wrap" data-key="{{ threat.source_id }}">
+  <a href="/active-threats" class="atd-back">← Active Threat Intake</a>
+
+  <div class="atd-hero sev-{{ threat.severity }}">
+    <div class="ic">{{ tt_icon(threat.threat_type) }}</div>
+    <h1>{{ threat.title }}</h1>
+    <div class="atd-hero-badges">
+      <span class="atd-b">{{ threat.severity|upper }}</span>
+      <span class="atd-b">{{ tt_icon(threat.threat_type) }} {{ threat.threat_type.replace('_',' ')|title }}</span>
+      {% if threat.actor %}<span class="atd-b">🕵️ {{ threat.actor }}</span>{% endif %}
+      {% if threat.campaign %}<span class="atd-b">📛 {{ threat.campaign }}</span>{% endif %}
+      {% if threat.aliases %}<span class="atd-b">🔁 {{ threat.aliases|join(', ') }}</span>{% endif %}
+      <span class="atd-b">📅 {{ threat.created_at[:10] }}</span>
+    </div>
+  </div>
+
+  <div class="atd-grid">
+    <div class="atd-main">
+
+      <div class="atd-card">
+        <h2>📝 Summary</h2>
+        <div class="atd-sum">{{ threat.summary or 'No summary extracted.' }}</div>
+        {% if threat.raw_report %}
+        <details class="atd-raw"><summary>View the original report</summary><pre>{{ threat.raw_report }}</pre></details>
+        {% endif %}
+      </div>
+
+      <div class="atd-card" id="atd-ioc-card">
+        <div class="atd-enr-head">
+          <h2 style="margin:0;">🧬 Indicators of Compromise <span style="color:#94a3b8;font-weight:600;">({{ threat.iocs|length }})</span></h2>
+          {% if threat.iocs %}
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <div class="atd-enr-roll" id="atd-enr-roll"></div>
+            {% if is_authenticated %}
+            <button type="button" class="atd-enr-btn" id="atd-enr-btn">🔬 Enrich IOCs</button>
+            {% endif %}
+          </div>
+          {% endif %}
+        </div>
+        {% if threat.iocs %}
+        <table class="atd-ioc">
+          {% for ioc in threat.iocs %}
+          <tr data-ioc="{{ ioc.value|lower }}">
+            <td class="ity">{{ ioc_icon(ioc.type) }} {{ ioc.type|upper }}</td>
+            <td class="ival">{{ ioc.value }}{% if ioc.note %}<div class="inote">{{ ioc.note }}</div>{% endif %}<div class="atd-prov" data-prov></div></td>
+            <td class="iverd"><span class="vbadge v-unknown" data-verd>—</span></td>
+            <td style="text-align:right;"><button type="button" class="atd-copy" data-copy="{{ ioc.value }}">copy</button></td>
+          </tr>
+          {% endfor %}
+        </table>
+        <div class="atd-enr-note" id="atd-enr-note">{% if not is_authenticated %}Sign in to run live reputation enrichment.{% else %}Reputation across VirusTotal, AbuseIPDB, urlscan & Recorded Future. Worst provider wins.{% endif %}</div>
+        {% else %}<div class="atd-empty">No indicators extracted from this report.</div>{% endif %}
+      </div>
+
+      <div class="atd-card" id="atd-actor-card" {% if not enrichment.actor %}style="display:none;"{% endif %}>
+        <h2>🕵️ Adversary intel <span style="color:#94a3b8;font-weight:600;font-size:11px;">Recorded Future</span></h2>
+        <div class="atd-actor" id="atd-actor-body"></div>
+      </div>
+
+      <div class="atd-card">
+        <h2>🎲 MITRE ATT&CK Techniques</h2>
+        {% if threat.ttps %}
+        <div class="atd-chips">
+          {% for tt in threat.ttps %}<span class="atd-ttp">{% if tt.id %}<b>{{ tt.id }}</b>{% endif %}{% if tt.id and tt.name %} · {% endif %}{{ tt.name }}</span>{% endfor %}
+        </div>
+        {% else %}<div class="atd-empty">No ATT&CK techniques extracted.</div>{% endif %}
+      </div>
+
+      <div class="atd-card">
+        <h2>✅ Recommended Actions</h2>
+        {% if threat.recommended_actions %}
+        <ul class="atd-actions-list">{% for a in threat.recommended_actions %}<li>{{ a }}</li>{% endfor %}</ul>
+        {% else %}<div class="atd-empty">No recommended actions extracted.</div>{% endif %}
+      </div>
+
+      <div class="atd-card" id="atd-hunt-card">
+        <div class="atd-enr-head">
+          <h2 style="margin:0;">🔭 Telemetry hunt <span style="color:#94a3b8;font-weight:600;font-size:11px;">Were we hit?</span></h2>
+          {% if threat.iocs %}
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" class="atd-ghost-btn" id="atd-plan-btn">🔎 Preview hunt plan</button>
+            {% if is_authenticated %}
+            <button type="button" class="atd-enr-btn" id="atd-hunt-btn">🔭 Hunt our telemetry</button>
+            {% endif %}
+          </div>
+          {% endif %}
+        </div>
+        {% if threat.iocs %}
+        <div id="atd-plan-body" class="atd-plan" hidden></div>
+        <div id="atd-hunt-body"></div>
+        <div class="atd-enr-note" id="atd-hunt-note">{% if not is_authenticated %}Sign in to sweep our telemetry for these indicators.{% else %}Sweeps these IOCs across QRadar, CrowdStrike &amp; XSIAM for hits in our environment. Can take a minute.{% endif %}</div>
+        {% else %}<div class="atd-empty">No indicators to hunt.</div>{% endif %}
+      </div>
+
+      <div class="atd-card" id="atd-block-card">
+        <h2>🛑 Containment block <span style="color:#94a3b8;font-weight:600;font-size:11px;">domains &amp; URLs → XSOAR</span></h2>
+        {% if blockable %}
+        <div id="atd-block-done"></div>
+        {% if is_authenticated %}
+          {% if not is_production %}
+          <div class="atd-blk-dev">⚠️ Blocking is disabled on the dev instance — it acts on the production XSOAR tenant. Use the production app to block.</div>
+          {% endif %}
+          <div id="atd-block-picker">
+            {% for b in blockable %}
+            <label class="atd-blk-row">
+              <input type="checkbox" class="atd-blk-cb" value="{{ b.value }}" {% if b.verdict == 'malicious' %}checked{% endif %}>
+              <span class="atd-blk-val">{{ b.value }}</span>
+              <span class="atd-blk-vd v-{{ b.verdict }}">{{ b.verdict|upper }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          <button type="button" class="atd-blk-btn" id="atd-block-btn" {% if not is_production %}disabled title="Disabled on dev"{% endif %}>🛑 Block selected</button>
+          <div class="atd-enr-note" id="atd-block-note">Creates a CIRT case and fires the URL-block playbook, grouping every selected indicator into one ticket.</div>
+        {% else %}
+          <div class="atd-empty">Sign in to push these domains/URLs into containment.</div>
+        {% endif %}
+        {% else %}
+        <div class="atd-empty">No blockable domain or URL indicators on this threat. (IP/hash blocking uses a different control and isn’t wired here yet.)</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="atd-side">
+      {% if is_authenticated %}
+      <div class="atd-card">
+        <h2>🚦 Status</h2>
+        <div class="atd-status-btns">
+          {% for s in statuses %}
+          <button type="button" class="atd-sbtn {% if s == threat.status %}cur{% endif %}" data-status="{{ s }}">{{ s.replace('_',' ')|title }}</button>
+          {% endfor %}
+        </div>
+        <div class="atd-msg" id="atd-status-msg"></div>
+      </div>
+
+      <div class="atd-card">
+        <h2>🗒 Analyst notes</h2>
+        <textarea class="atd-notes" id="atd-notes" placeholder="Triage notes, attribution, decisions…">{{ threat.notes }}</textarea>
+        <button type="button" class="atd-save" id="atd-save-notes">💾 Save notes</button>
+        <div class="atd-msg" id="atd-notes-msg"></div>
+      </div>
+      {% else %}
+      <div class="atd-card">
+        <h2>🚦 Status</h2>
+        <div class="atd-empty">Current: <strong>{{ threat.status.replace('_',' ')|title }}</strong>. Sign in to triage.</div>
+      </div>
+      {% endif %}
+
+      {% if threat.source == 'recorded_future' %}
+      <div class="atd-card">
+        <h2>🛰️ Provenance</h2>
+        <div class="atd-soon">
+          Auto-ingested from the <b>Recorded Future</b> advisory feed and structured by the same extractor as a manual paste. No analyst keyed this in — the feed fills the queue on its own.
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var key = document.querySelector('.atd-wrap').dataset.key;
+
+  document.querySelectorAll('.atd-copy').forEach(function(b){
+    b.addEventListener('click', function(){
+      navigator.clipboard.writeText(b.dataset.copy).then(function(){ var o=b.textContent; b.textContent='✓'; setTimeout(function(){ b.textContent=o; }, 1000); });
+    });
+  });
+
+  document.querySelectorAll('.atd-sbtn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var st=btn.dataset.status, msg=document.getElementById('atd-status-msg');
+      fetch('/api/active-threats/'+encodeURIComponent(key)+'/status', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({status:st})})
+        .then(function(r){ return r.json(); })
+        .then(function(j){
+          if(j.ok){ document.querySelectorAll('.atd-sbtn').forEach(function(x){ x.classList.remove('cur'); }); btn.classList.add('cur'); msg.textContent='✅ Status updated.'; msg.style.color='#00A651'; }
+          else { msg.textContent='⚠️ '+(j.error||'Failed.'); msg.style.color='#b31d28'; }
+        })
+        .catch(function(){ msg.textContent='⚠️ Network error.'; msg.style.color='#b31d28'; });
+    });
+  });
+
+  var sn=document.getElementById('atd-save-notes');
+  if(sn){
+    sn.addEventListener('click', function(){
+      var notes=document.getElementById('atd-notes').value, msg=document.getElementById('atd-notes-msg');
+      sn.disabled=true;
+      fetch('/api/active-threats/'+encodeURIComponent(key)+'/notes', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({notes:notes})})
+        .then(function(r){ return r.json(); })
+        .then(function(j){ msg.textContent = j.ok ? '✅ Saved.' : '⚠️ Failed.'; msg.style.color = j.ok ? '#00A651' : '#b31d28'; sn.disabled=false; })
+        .catch(function(){ msg.textContent='⚠️ Network error.'; msg.style.color='#b31d28'; sn.disabled=false; });
+    });
+  }
+
+  /* ---- IOC reputation enrichment (slice 2) ---- */
+  var PROV_LABEL = {virustotal:'VT', abuseipdb:'AbuseIPDB', urlscan:'urlscan', recordedfuture:'RF'};
+  var btn = document.getElementById('atd-enr-btn');
+  var roll = document.getElementById('atd-enr-roll');
+  var note = document.getElementById('atd-enr-note');
+  var poll = null;
+
+  function esc(s){ var d=document.createElement('div'); d.textContent=(s==null?'':String(s)); return d.innerHTML; }
+
+  function renderRollup(sum){
+    if(!roll || !sum){ if(roll) roll.innerHTML=''; return; }
+    var bits=[];
+    if(sum.malicious) bits.push('<span class="atd-roll r-mal">🔴 '+sum.malicious+' malicious</span>');
+    if(sum.suspicious) bits.push('<span class="atd-roll r-susp">🟠 '+sum.suspicious+' suspicious</span>');
+    if(sum.clean) bits.push('<span class="atd-roll r-clean">🟢 '+sum.clean+' clean</span>');
+    if(sum.unknown) bits.push('<span class="atd-roll r-unk">⚪ '+sum.unknown+' unknown</span>');
+    roll.innerHTML = bits.join('');
+  }
+
+  function renderRow(item){
+    var tr = document.querySelector('tr[data-ioc="'+(item.value||'').toLowerCase().replace(/"/g,'')+'"]');
+    if(!tr){
+      // fallback: match by exact value text
+      var rows=document.querySelectorAll('tr[data-ioc]');
+      for(var i=0;i<rows.length;i++){ if(rows[i].getAttribute('data-ioc')===(item.value||'').toLowerCase()){ tr=rows[i]; break; } }
+    }
+    if(!tr) return;
+    var vb = tr.querySelector('[data-verd]');
+    if(vb){ vb.className='vbadge v-'+(item.verdict||'unknown'); vb.textContent=(item.verdict||'unknown').toUpperCase(); }
+    var pc = tr.querySelector('[data-prov]'); if(!pc) return;
+    var chips=[]; var provs=item.providers||{};
+    Object.keys(provs).forEach(function(k){
+      var c=provs[k]||{}; var v=c.verdict||'unknown';
+      var label=PROV_LABEL[k]||k; var det=c.detail?(' '+esc(c.detail)):'';
+      var inner='<b>'+esc(label)+'</b>'+det;
+      if(c.link){ chips.push('<a class="pchip pc-'+v+'" href="'+esc(c.link)+'" target="_blank" rel="noopener" title="'+esc(c.detail||label)+'">'+inner+'</a>'); }
+      else { chips.push('<span class="pchip pc-'+v+'" title="'+esc(c.detail||label)+'">'+inner+'</span>'); }
+    });
+    pc.innerHTML = chips.join('');
+  }
+
+  function renderActor(a){
+    var card=document.getElementById('atd-actor-card'); var body=document.getElementById('atd-actor-body');
+    if(!card||!body) return;
+    if(!a){ card.style.display='none'; return; }
+    card.style.display='';
+    var h='<div class="atd-actor-top">';
+    if(a.risk_score!=null && a.risk_score!=='') h+='<span class="atd-actor-score">RF '+esc(a.risk_score)+'</span>';
+    h+='<span class="atd-actor-name">'+esc(a.name)+'</span>';
+    if(a.link) h+='<a class="pchip pc-malicious" href="'+esc(a.link)+'" target="_blank" rel="noopener"><b>Intelligence Card ↗</b></a>';
+    h+='</div>';
+    if(a.aliases && a.aliases.length) h+='<div class="atd-actor-sec"><b>Aliases:</b> '+esc(a.aliases.join(', '))+'</div>';
+    if(a.categories && a.categories.length) h+='<div class="atd-actor-sec"><b>Categories:</b> '+esc(a.categories.join(', '))+'</div>';
+    if(a.target_industries && a.target_industries.length) h+='<div class="atd-actor-sec"><b>Targets:</b> '+esc(a.target_industries.join(', '))+'</div>';
+    body.innerHTML=h;
+  }
+
+  function applyEnrichment(blob){
+    if(!blob) return;
+    if(blob.status==='running'){
+      if(btn){ btn.disabled=true; btn.innerHTML='<span class="atd-spin"></span> Enriching…'; }
+      if(note) note.textContent='Running reputation checks across providers — this can take a minute on rate-limited sources.';
+      return;
+    }
+    if(btn){ btn.disabled=false; btn.innerHTML='🔁 Re-enrich'; }
+    if(blob.status==='error'){
+      if(note){ note.textContent='⚠️ Enrichment error: '+(blob.error||'unknown'); note.style.color='#b31d28'; }
+      return;
+    }
+    if(Array.isArray(blob.iocs)) blob.iocs.forEach(renderRow);
+    renderRollup(blob.summary);
+    renderActor(blob.actor);
+    if(note && blob.finished_at){
+      var extra = blob.capped ? (' · '+blob.capped+' lower-priority IOC(s) scored by Recorded Future only') : '';
+      note.style.color=''; note.textContent='Enriched '+blob.finished_at.replace('T',' ').replace('Z',' UTC')+extra;
+    }
+  }
+
+  function startPolling(){
+    if(poll) return;
+    poll=setInterval(function(){
+      fetch('/api/active-threats/'+encodeURIComponent(key)+'/enrichment')
+        .then(function(r){ return r.json(); })
+        .then(function(blob){
+          applyEnrichment(blob);
+          if(blob && blob.status!=='running'){ clearInterval(poll); poll=null; }
+        })
+        .catch(function(){ clearInterval(poll); poll=null; if(btn){ btn.disabled=false; btn.innerHTML='🔬 Enrich IOCs'; } });
+    }, 3000);
+  }
+
+  if(btn){
+    btn.addEventListener('click', function(){
+      btn.disabled=true; btn.innerHTML='<span class="atd-spin"></span> Enriching…';
+      fetch('/api/active-threats/'+encodeURIComponent(key)+'/enrich', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'})
+        .then(function(r){ return r.json(); })
+        .then(function(j){
+          if(!j.ok){ btn.disabled=false; btn.innerHTML='🔬 Enrich IOCs'; if(note){ note.textContent='⚠️ '+(j.error||'Failed to start.'); note.style.color='#b31d28'; } return; }
+          if(j.enrichment){ applyEnrichment(j.enrichment); } else { startPolling(); }
+        })
+        .catch(function(){ btn.disabled=false; btn.innerHTML='🔬 Enrich IOCs'; if(note){ note.textContent='⚠️ Network error.'; note.style.color='#b31d28'; } });
+    });
+  }
+
+  // Hydrate from any stored enrichment, and resume polling if a run is mid-flight.
+  var initial = {{ enrichment|tojson }};
+  if(initial && initial.status){ applyEnrichment(initial); if(initial.status==='running') startPolling(); }
+
+  /* ---- Telemetry hunt (slice 3) ---- */
+  var SRC_LABEL = {qradar:'QRadar', crowdstrike:'CrowdStrike', xsiam:'XSIAM', abnormal:'Abnormal'};
+  var hbtn = document.getElementById('atd-hunt-btn');
+  var hbody = document.getElementById('atd-hunt-body');
+  var hnote = document.getElementById('atd-hunt-note');
+  var hpoll = null;
+
+  function renderSource(name, s){
+    if(!s) return '';
+    var hits = s.total_hits||0;
+    var cls = s.error ? 'serr' : (hits>0 ? 'shit' : 'sclean');
+    var badge = s.error ? '⚠ error' : (hits>0 ? (hits+' hit'+(hits===1?'':'s')) : 'no hits');
+    var h='<div class="atd-src"><div class="atd-src-top"><span class="atd-src-name">'+esc(SRC_LABEL[name]||name)+'</span><span class="atd-src-hits '+cls+'">'+esc(badge)+'</span>';
+    if(s.access_denied) h+='<span class="pchip pc-suspicious">access denied</span>';
+    h+='</div>';
+    var bk=s.by_kind||{}; var kinds=Object.keys(bk).map(function(k){ return bk[k]+' '+k; });
+    if(kinds.length) h+='<div class="atd-src-kinds">matched: '+esc(kinds.join(' · '))+'</div>';
+    if(s.hosts && s.hosts.length){
+      h+='<div class="atd-src-hosts">'+s.hosts.slice(0,30).map(function(x){ return '<span class="atd-host">'+esc(x)+'</span>'; }).join('')+'</div>';
+    }
+    if(s.error) h+='<div class="atd-src-err">'+esc(s.error)+'</div>';
+    if(s.console_url){
+      h+='<div class="atd-src-link"><a href="'+esc(s.console_url)+'" target="_blank" rel="noopener">🔗 Open in '+esc(SRC_LABEL[name]||name)+' console</a></div>';
+    }
+    h+='</div>';
+    return h;
+  }
+
+  function applyHunt(blob){
+    if(!blob || !hbody) return;
+    if(blob.status==='running'){
+      if(hbtn){ hbtn.disabled=true; hbtn.innerHTML='<span class="atd-spin"></span> Hunting…'; }
+      if(hnote) hnote.textContent='Sweeping QRadar, CrowdStrike & XSIAM — this can take a minute on slower sources.';
+      return;
+    }
+    if(hbtn){ hbtn.disabled=false; hbtn.innerHTML='🔁 Re-hunt'; }
+    if(blob.status==='error'){
+      if(hnote){ hnote.textContent='⚠️ Hunt error: '+((blob.errors&&blob.errors[0])||blob.error||'unknown'); hnote.style.color='#b31d28'; }
+      return;
+    }
+    var v = blob.verdict||'clear'; var html='';
+    if(v==='touched'){
+      html+='<div class="atd-hunt-verdict hv-touched"><span class="hv-ic">🚨</span><div>We were touched — '+(blob.total_hits||0)+' hit'+((blob.total_hits===1)?'':'s')+' across '+(blob.unique_hosts||0)+' host'+((blob.unique_hosts===1)?'':'s')+'.<br><small>Escalate: pivot on the hosts below and consider blocking.</small></div></div>';
+    } else if(v==='inconclusive'){
+      html+='<div class="atd-hunt-verdict hv-inconclusive"><span class="hv-ic">⚠️</span><div>Inconclusive — no hits, but a source could not answer.<br><small>'+esc((blob.access_issues||[]).join('; ')||'Check source access below.')+'</small></div></div>';
+    } else {
+      html+='<div class="atd-hunt-verdict hv-clear"><span class="hv-ic">✅</span><div>No telemetry hits — we don’t appear to have been touched.<br><small>Searched '+(blob.total_iocs_searched||0)+' IOC(s) across our environment.</small></div></div>';
+    }
+    if(blob.note) html+='<div class="atd-empty">'+esc(blob.note)+'</div>';
+    var srcs=blob.sources||{};
+    Object.keys(srcs).forEach(function(n){ html+=renderSource(n, srcs[n]); });
+    hbody.innerHTML=html;
+    if(hnote && blob.hunt_time){
+      hnote.style.color='';
+      var w=blob.window||{};
+      var win = w.qradar ? (' · QRadar '+Math.round(w.qradar/24)+'d, CrowdStrike '+Math.round((w.crowdstrike||0)/24)+'d') : '';
+      hnote.textContent='Hunted '+esc(blob.hunt_time)+win;
+    }
+  }
+
+  function startHuntPolling(){
+    if(hpoll) return;
+    hpoll=setInterval(function(){
+      fetch('/api/active-threats/'+encodeURIComponent(key)+'/hunt')
+        .then(function(r){ return r.json(); })
+        .then(function(blob){
+          applyHunt(blob);
+          if(blob && blob.status!=='running'){ clearInterval(hpoll); hpoll=null; }
+        })
+        .catch(function(){ clearInterval(hpoll); hpoll=null; if(hbtn){ hbtn.disabled=false; hbtn.innerHTML='🔭 Hunt our telemetry'; } });
+    }, 4000);
+  }
+
+  if(hbtn){
+    hbtn.addEventListener('click', function(){
+      hbtn.disabled=true; hbtn.innerHTML='<span class="atd-spin"></span> Hunting…';
+      fetch('/api/active-threats/'+encodeURIComponent(key)+'/hunt', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'})
+        .then(function(r){ return r.json(); })
+        .then(function(j){
+          if(!j.ok){ hbtn.disabled=false; hbtn.innerHTML='🔭 Hunt our telemetry'; if(hnote){ hnote.textContent='⚠️ '+(j.error||'Failed to start.'); hnote.style.color='#b31d28'; } return; }
+          if(j.hunt){ applyHunt(j.hunt); } else { startHuntPolling(); }
+        })
+        .catch(function(){ hbtn.disabled=false; hbtn.innerHTML='🔭 Hunt our telemetry'; if(hnote){ hnote.textContent='⚠️ Network error.'; hnote.style.color='#b31d28'; } });
+    });
+  }
+
+  var initialHunt = {{ hunt|tojson }};
+  if(initialHunt && initialHunt.status){ applyHunt(initialHunt); if(initialHunt.status==='running') startHuntPolling(); }
+
+  /* ---- Pre-flight hunt plan (engine plan()) ---- */
+  var pbtn = document.getElementById('atd-plan-btn');
+  var pbody = document.getElementById('atd-plan-body');
+  var planLoaded = false;
+
+  function renderPlan(plan){
+    if(!plan || !plan.sources){ pbody.innerHTML='<div class="atd-empty">No plan available for these indicators.</div>'; return; }
+    var c = plan.counts||{}; var parts=[];
+    ['ips','domains','urls','filenames','hashes','emails'].forEach(function(k){ if(c[k]) parts.push(c[k]+' '+k); });
+    var html='<div class="atd-plan-head">📋 Pre-flight — what we’d hunt: '+esc(parts.join(' · ')||'no indicators')
+      +'<small>Representative queries the sweep would run. Review them, or jump straight into the console — nothing runs until you hunt.</small></div>';
+    Object.keys(plan.sources).forEach(function(n){
+      var s=plan.sources[n]||{};
+      var qs=(s.queries||[]).map(function(q){
+        var link = q.console_url
+          ? '<a class="atd-plan-link" href="'+esc(q.console_url)+'" target="_blank" rel="noopener">🔗 Open in console</a>'
+          : '<span class="atd-plan-nolink">no console deep-link</span>';
+        return '<div class="atd-plan-q"><div class="atd-plan-qtop"><span class="atd-plan-qtype">'+esc(q.type||'query')+'</span>'+link
+          +'</div><pre class="atd-plan-code">'+esc(q.query||'')+'</pre></div>';
+      }).join('');
+      if(!qs) qs='<div class="atd-empty">No queries for this source.</div>';
+      html+='<div class="atd-plan-src"><div class="atd-plan-srcname">'+esc((s.emoji||'')+' '+(s.label||n))
+        +'<span class="atd-plan-win">'+(s.window_days||0)+'d window</span></div>'+qs+'</div>';
+    });
+    pbody.innerHTML=html;
+  }
+
+  if(pbtn){
+    pbtn.addEventListener('click', function(){
+      if(planLoaded){
+        pbody.hidden=!pbody.hidden;
+        pbtn.innerHTML = pbody.hidden ? '🔎 Preview hunt plan' : '🔼 Hide hunt plan';
+        return;
+      }
+      pbtn.disabled=true; pbtn.innerHTML='<span class="atd-spin"></span> Building plan…';
+      fetch('/api/active-threats/'+encodeURIComponent(key)+'/hunt-plan')
+        .then(function(r){ return r.json(); })
+        .then(function(j){
+          pbtn.disabled=false; pbody.hidden=false;
+          if(!j.ok){ pbtn.innerHTML='🔎 Preview hunt plan'; pbody.innerHTML='<div class="atd-src-err">'+esc(j.error||'Failed to build plan.')+'</div>'; return; }
+          if(!j.plan){ pbtn.innerHTML='🔎 Preview hunt plan'; pbody.innerHTML='<div class="atd-empty">'+esc(j.note||'No indicators to plan.')+'</div>'; return; }
+          renderPlan(j.plan); planLoaded=true; pbtn.innerHTML='🔼 Hide hunt plan';
+        })
+        .catch(function(){ pbtn.disabled=false; pbtn.innerHTML='🔎 Preview hunt plan'; pbody.hidden=false; pbody.innerHTML='<div class="atd-src-err">Network error building the plan.</div>'; });
+    });
+  }
+
+  /* ---- Containment block (slice 4) ---- */
+  var bbtn = document.getElementById('atd-block-btn');
+  var bdone = document.getElementById('atd-block-done');
+  var bpicker = document.getElementById('atd-block-picker');
+  var bnote = document.getElementById('atd-block-note');
+  var bpoll = null;
+
+  function applyBlock(blob){
+    if(!blob || !bdone) return;
+    if(blob.status==='blocking'){
+      if(bbtn){ bbtn.disabled=true; bbtn.innerHTML='<span class="atd-spin"></span> Blocking…'; }
+      if(bnote) bnote.textContent='Creating the CIRT case and firing the URL-block playbook…';
+      return;
+    }
+    if(blob.status==='none' || !blob.status) return;
+    // terminal: blocked | partial | error
+    var rows = blob.blocked || [];
+    var html='';
+    rows.forEach(function(r){
+      var cls = r.success ? 'ok' : 'fail';
+      var ic = r.success ? '✅' : '⚠️';
+      var tail = r.success ? ('blocked'+(r.ticket_id?(' · case #'+esc(r.ticket_id)):'')) : ('failed'+(r.error?(' — '+esc(r.error)):''));
+      html += '<div class="atd-blk-done '+cls+'">'+ic+' <span class="atd-blk-val">'+esc(r.value)+'</span> <span>'+tail+'</span></div>';
+    });
+    if(blob.ticket_url && blob.ticket_id){
+      html += '<a class="atd-blk-ticket" href="'+esc(blob.ticket_url)+'" target="_blank" rel="noopener">🎫 Open CIRT case #'+esc(blob.ticket_id)+' ↗</a>';
+    }
+    bdone.innerHTML = html;
+    // collapse the picker once a block has run; offer re-block
+    if(bpicker) bpicker.style.display='none';
+    if(bbtn){
+      bbtn.disabled=false;
+      bbtn.innerHTML = (blob.status==='blocked') ? '🔁 Block more' : '🔁 Retry block';
+      bbtn.onclick = function(){ if(bpicker){ bpicker.style.display=''; } bdone.innerHTML=''; bbtn.innerHTML='🛑 Block selected'; bbtn.onclick=null; };
+    }
+    if(bnote){
+      bnote.style.color='';
+      bnote.textContent = (blob.count_ok||0)+' of '+(blob.count_total||rows.length)+' indicator(s) blocked'+(blob.finished_at?(' · '+esc(blob.finished_at)):'');
+    }
+  }
+
+  function startBlockPolling(){
+    if(bpoll) return;
+    bpoll=setInterval(function(){
+      fetch('/api/active-threats/'+encodeURIComponent(key)+'/block')
+        .then(function(r){ return r.json(); })
+        .then(function(blob){
+          applyBlock(blob);
+          if(blob && blob.status!=='blocking'){ clearInterval(bpoll); bpoll=null; }
+        })
+        .catch(function(){ clearInterval(bpoll); bpoll=null; });
+    }, 4000);
+  }
+
+  if(bbtn && bpicker){
+    bbtn.addEventListener('click', function(){
+      var vals = Array.prototype.slice.call(document.querySelectorAll('.atd-blk-cb:checked')).map(function(c){ return c.value; });
+      if(!vals.length){ if(bnote){ bnote.textContent='⚠️ Select at least one indicator to block.'; bnote.style.color='#b31d28'; } return; }
+      if(!confirm('Block '+vals.length+' indicator(s) via XSOAR? This creates a production CIRT case and fires the URL-block playbook.')) return;
+      bbtn.disabled=true; bbtn.innerHTML='<span class="atd-spin"></span> Blocking…';
+      fetch('/api/active-threats/'+encodeURIComponent(key)+'/block', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({values:vals})})
+        .then(function(r){ return r.json().then(function(j){ return {s:r.status, j:j}; }); })
+        .then(function(o){
+          if(!o.j.ok){ bbtn.disabled=false; bbtn.innerHTML='🛑 Block selected'; if(bnote){ bnote.textContent='⚠️ '+(o.j.error||'Failed to start.'); bnote.style.color='#b31d28'; } return; }
+          startBlockPolling();
+        })
+        .catch(function(){ bbtn.disabled=false; bbtn.innerHTML='🛑 Block selected'; if(bnote){ bnote.textContent='⚠️ Network error.'; bnote.style.color='#b31d28'; } });
+    });
+  }
+
+  var initialBlock = {{ block_state|tojson }};
+  if(initialBlock && initialBlock.status && initialBlock.status!=='none'){ applyBlock(initialBlock); if(initialBlock.status==='blocking') startBlockPolling(); }
+})();
+</script>
+{% endblock %}

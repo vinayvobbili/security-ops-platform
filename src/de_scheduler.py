@@ -294,6 +294,18 @@ def main() -> None:
             name="github_critical_advisories", timeout=900)
     )
 
+    # Recorded Future active-threat auto-ingest — pulls fresh actor/IOC reports
+    # into the Active Threats queue so the desk works adversaries off a live feed
+    # instead of manual paste. Read-only against RF + a local queue write (no
+    # outward action). Hourly at :35 (offset from the advisory polls); idempotent
+    # via a stable source_id + high-water cursor.
+    logger.info("Scheduling Recorded Future active-threat auto-ingest (hourly at :35)...")
+    schedule.every().hour.at(':35').do(
+        lambda: safe_run(
+            _lazy_component('services.active_threats_rf_feed', 'poll_rf_feed'),
+            name="active_threats_rf_feed", timeout=900)
+    )
+
     # Veracode SCA exposure index — daily rebuild (24h TTL). The portfolio
     # findings report is ~240k rows / ~6 min, so it's built here as a background
     # job; advisory + tipper CVE lookups only ever read the warm SQLite cache.

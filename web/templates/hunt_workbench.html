@@ -164,6 +164,12 @@
   .hw-tool .th.hit { color: #d12b4a; } .hw-tool .th.clean { color: #17a05a; }
   .hw-tool .tmeta { font-size: .82rem; color: #7c7693; }
   body.dark-mode .hw-tool .tmeta { color: #9fb0c9; }
+  .hw-tlink { margin-top: 5px; }
+  .hw-tlink a { display:inline-block; font-size:.74rem; font-weight:700; text-decoration:none;
+                color:#0046ad; background:linear-gradient(135deg,#e3ecff,#dff5ea);
+                border:1px solid #cdddff; border-radius:20px; padding:2px 11px; }
+  .hw-tlink a:hover { filter:brightness(.97); text-decoration:none; }
+  body.dark-mode .hw-tlink a { color:#8fd3ff; background:#0d1f33; border-color:#1b3a5b; }
   .hw-pill { display:inline-block; font-size:.66rem; font-weight:800; padding:3px 10px; border-radius:20px;
              text-transform:uppercase; letter-spacing:.5px; }
   .p-hit { background:#fbdce3; color:#b21e3c; } .p-clean { background:#d8f7e4; color:#0f7a3c; }
@@ -527,9 +533,11 @@ function hwIocCard(ioc){
                      : (hit ? '<span class="hw-pill p-hit">hit</span>' : '<span class="hw-pill p-clean">clean</span>');
     const sub = err ? esc(t.errors[0]).slice(0,120)
                     : (hit ? 'matched indicators in telemetry' : 'no matches');
+    const link = t.console_url
+      ? `<div class="hw-tlink"><a href="${esc(t.console_url)}" target="_blank" rel="noopener">🔗 Open in ${esc(meta[key][1])} console</a></div>` : '';
     rows += `<div class="hw-tool"><div class="tn">${meta[key][0]} ${meta[key][1]}</div>
         <div class="th ${hit?'hit':'clean'}">${num(t.total_hits||0)}</div>
-        <div style="flex:1"><div>${pill}</div><div class="tmeta">${sub}</div></div></div>`;
+        <div style="flex:1"><div>${pill}</div><div class="tmeta">${sub}</div>${link}</div></div>`;
   }
   const access = (ioc.access_issues || []).length
     ? `<div class="hw-note" style="margin-top:8px">🔒 Access notes: ${ioc.access_issues.map(esc).join('; ')}</div>` : '';
