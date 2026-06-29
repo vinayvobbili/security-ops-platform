@@ -8,6 +8,12 @@ stays scannable while the full prose is narrated underneath by the local Kokoro
 TTS service (natural voice; gTTS fallback). Slides + audio are stitched into
 web/static/videos/<topic>.mp4 with ffmpeg.
 
+The reel mechanics — screenshot each slide, narrate it, stitch with ffmpeg —
+live in the model-agnostic ``slidecast`` package; this script is the application
+seam. It owns the on-brand slide HTML, the topic-YAML content model, the SOC narration,
+and the local Kokoro voice (gTTS fallback), and hands finished slides to a
+``slidecast.Reel`` to render.
+
 Slides show short `bullets` (authored in the topic YAML); the narration always
 reads the full `summary` / `why_risky` / concept `body` prose, so nothing is
 lost from the audio track.
@@ -26,21 +32,29 @@ Re-running overwrites the existing mp4. Runs on Linux or macOS.
 import argparse
 import html
 import os
-import re
-import shutil
-import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
-import requests
 import yaml
+from slidecast import GTTSTTS, KokoroTTS, Reel
+from slidecast.ffmpeg import FFmpegNotFound, find_ffmpeg
 
 PROJECT_ROOT = Path(__file__).parent.parent
 TOPICS_DIR = PROJECT_ROOT / "data" / "training" / "topics"
 VIDEOS_DIR = PROJECT_ROOT / "web" / "static" / "videos"
+ASSETS_DIR = PROJECT_ROOT / "data" / "training" / "assets"
+# Low-key background bed laid under the narration (Pixabay Content License —
+# royalty-free, no attribution required). Overridable via $LESSON_BG_MUSIC or
+# --music; if the file is absent we render without music rather than failing.
+DEFAULT_MUSIC = ASSETS_DIR / "lesson_bg_music.mp3"
 
 WIDTH, HEIGHT = 1920, 1080
+
+# Finished-cut polish handed to slidecast's master step: ease the reel in, freeze
+# the last frame so it doesn't vanish mid-thought, ease out, and keep the music
+# bed quiet under the voice (~0.08 linear ≈ -22 dB).
+FADE_IN, FADE_OUT, END_HOLD = 0.8, 1.4, 2.5
+MUSIC_VOLUME = 0.08
 
 TTS_PROVIDER = os.environ.get("TTS_PROVIDER", "kokoro")
 KOKORO_URL = os.environ.get("KOKORO_URL", "http://127.0.0.1:8021")
@@ -137,71 +151,40 @@ def _slide_html(slide: dict) -> str:
 # Acronyms the TTS engine spells out letter-by-letter or otherwise mangles.
 # These rewrites apply to the spoken narration ONLY — the on-screen slide text
 # keeps the real spelling. "SOC" is said as a word ("sock"), not "S-O-C".
+# Passed to slidecast's TTS providers, which apply them before synthesis.
 _TTS_PHONETIC = {
     r"\bSOCs\b": "socks",
     r"\bSOC\b": "sock",
 }
 
 
-def _phonetic_for_tts(text: str) -> str:
-    """Rewrite known mispronounced acronyms phonetically for narration audio."""
-    for pattern, repl in _TTS_PHONETIC.items():
-        text = re.sub(pattern, repl, text)
-    return text
+class _KokoroWithGttsFallback:
+    """The house voice: local Kokoro (mp3), falling back to gTTS on any failure.
 
+    Implements slidecast's TTS shape (``synthesize(text, path) -> seconds|None``).
+    Kokoro emits mp3, so duration is unmeasurable and slidecast lets the audio
+    drive each segment's length (``-shortest``) — matching the original script.
+    """
 
-def _generate_narration(text: str, out_path: Path) -> None:
-    """Write an mp3 narration to out_path via Kokoro (gTTS fallback)."""
-    text = _phonetic_for_tts(text)
-    if TTS_PROVIDER == "kokoro":
+    def __init__(self):
+        self._kokoro = KokoroTTS(url=f"{KOKORO_URL}/v1/audio/speech",
+                                 voice=KOKORO_VOICE, response_format="mp3",
+                                 phonetic=_TTS_PHONETIC)
+        self._gtts = GTTSTTS(lang="en", tld="co.uk", phonetic=_TTS_PHONETIC)
+
+    def synthesize(self, text, out_path):
         try:
-            resp = requests.post(
-                f"{KOKORO_URL}/v1/audio/speech",
-                json={"input": text, "voice": KOKORO_VOICE, "response_format": "mp3"},
-                timeout=180,
-            )
-            resp.raise_for_status()
-            out_path.write_bytes(resp.content)
-            return
-        except Exception as exc:  # noqa: BLE001 — fall back to gTTS on any Kokoro failure
+            return self._kokoro.synthesize(text, out_path)
+        except Exception as exc:  # noqa: BLE001 — any Kokoro failure -> gTTS
             print(f"    Kokoro unavailable ({exc}); falling back to gTTS", file=sys.stderr)
-    from gtts import gTTS
-    gTTS(text=text, lang="en", tld="co.uk", slow=False).save(str(out_path))
+            return self._gtts.synthesize(text, out_path)
 
 
-def _build_segment(slide_png: Path, narration_audio: Path, out_mp4: Path) -> None:
-    subprocess.run(
-        [
-            "ffmpeg", "-y", "-loglevel", "error",
-            "-loop", "1", "-i", str(slide_png),
-            "-i", str(narration_audio),
-            "-c:v", "libx264", "-tune", "stillimage", "-pix_fmt", "yuv420p",
-            "-c:a", "aac", "-b:a", "192k",
-            "-shortest",
-            str(out_mp4),
-        ],
-        check=True,
-    )
-
-
-def _concat_segments(segments: list[Path], out_mp4: Path) -> None:
-    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
-        for seg in segments:
-            f.write(f"file '{seg.absolute()}'\n")
-        list_path = f.name
-    try:
-        subprocess.run(
-            [
-                "ffmpeg", "-y", "-loglevel", "error",
-                "-f", "concat", "-safe", "0",
-                "-i", list_path,
-                "-c", "copy",
-                str(out_mp4),
-            ],
-            check=True,
-        )
-    finally:
-        Path(list_path).unlink(missing_ok=True)
+def _build_tts():
+    """Pick the narration voice from TTS_PROVIDER (kokoro w/ gTTS fallback, or gTTS)."""
+    if TTS_PROVIDER == "gtts":
+        return GTTSTTS(lang="en", tld="co.uk", phonetic=_TTS_PHONETIC)
+    return _KokoroWithGttsFallback()
 
 
 def _fallback_bullets(text: str, n: int = 3) -> list[str]:
@@ -251,9 +234,22 @@ def _build_slides(topic: dict) -> list[dict]:
     return slides
 
 
-def generate_video(topic_id: str) -> Path:
-    from playwright.sync_api import sync_playwright
+def _resolve_music(explicit: str = None, enabled: bool = True):
+    """Return a Path to the background bed, or None to render silent-under.
 
+    Resolution: ``--music`` > ``$LESSON_BG_MUSIC`` > the bundled default. A
+    missing file is not fatal — we just render without a bed.
+    """
+    if not enabled:
+        return None
+    cand = Path(explicit) if explicit else Path(os.environ.get("LESSON_BG_MUSIC", DEFAULT_MUSIC))
+    if cand.is_file():
+        return cand
+    print(f"  (no music bed at {cand} — rendering without background music)")
+    return None
+
+
+def generate_video(topic_id: str, *, music: str = None, with_music: bool = True) -> Path:
     topic_path = TOPICS_DIR / f"{topic_id}.yaml"
     if not topic_path.is_file():
         raise SystemExit(f"Topic not found: {topic_path}")
@@ -261,35 +257,29 @@ def generate_video(topic_id: str) -> Path:
         topic = yaml.safe_load(f)
 
     VIDEOS_DIR.mkdir(parents=True, exist_ok=True)
-    workdir = Path(tempfile.mkdtemp(prefix=f"lesson_{topic_id}_"))
-
     slides = _build_slides(topic)
     total = len(slides)
     print(f"Generating {total} slides for {topic_id}...")
 
-    segments: list[Path] = []
-    with sync_playwright() as p:
-        browser = p.chromium.launch(args=["--force-color-profile=srgb"])
-        page = browser.new_context(viewport={"width": WIDTH, "height": HEIGHT},
-                                   device_scale_factor=1).new_page()
-        for s in slides:
-            i = s["idx"]
-            slide_png = workdir / f"slide_{i:02d}.png"
-            narration_mp3 = workdir / f"slide_{i:02d}.mp3"
-            segment_mp4 = workdir / f"slide_{i:02d}.mp4"
+    # Hand finished slide HTML + narration to slidecast; it screenshots, narrates,
+    # and stitches. Kept at device_scale_factor=1 / srgb to match the original.
+    reel = Reel(width=WIDTH, height=HEIGHT, tts=_build_tts())
+    headlines = [s["headline"] for s in slides]
+    for s in slides:
+        reel.add(_slide_html(s), s["narration"])
 
-            page.set_content(_slide_html(s), wait_until="networkidle")
-            page.wait_for_timeout(250)
-            page.screenshot(path=str(slide_png))
-            _generate_narration(s["narration"], narration_mp3)
-            _build_segment(slide_png, narration_mp3, segment_mp4)
-            segments.append(segment_mp4)
-            print(f"  [{i}/{total}] {s['headline']}")
-        browser.close()
+    def _progress(i, _total, _slide):
+        print(f"  [{i}/{total}] {headlines[i - 1]}")
 
     out_path = VIDEOS_DIR / f"{topic_id}.mp4"
-    _concat_segments(segments, out_path)
-    shutil.rmtree(workdir, ignore_errors=True)
+    bed = _resolve_music(music, with_music)
+    reel.render(
+        out_path, on_progress=_progress,
+        music=bed, fade_in=FADE_IN, fade_out=FADE_OUT, end_hold=END_HOLD,
+        music_volume=MUSIC_VOLUME,
+    )
+    if bed:
+        print(f"  bed: {bed.name} (low-volume, faded)")
     print(f"\n✓ Wrote {out_path}")
     return out_path
 
@@ -297,11 +287,18 @@ def generate_video(topic_id: str) -> Path:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate a training video for a lesson topic.")
     parser.add_argument("topic", help="Topic ID, e.g. 'citrix'")
+    parser.add_argument("--music", default=None,
+                        help="Path to a background-music file (default: $LESSON_BG_MUSIC "
+                             "or data/training/assets/lesson_bg_music.mp3)")
+    parser.add_argument("--no-music", action="store_true",
+                        help="Render without a background-music bed")
     args = parser.parse_args()
-    if not shutil.which("ffmpeg"):
-        print("ERROR: ffmpeg not found in PATH.", file=sys.stderr)
+    try:
+        find_ffmpeg()
+    except FFmpegNotFound as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
         return 1
-    generate_video(args.topic)
+    generate_video(args.topic, music=args.music, with_music=not args.no_music)
     return 0
 
 

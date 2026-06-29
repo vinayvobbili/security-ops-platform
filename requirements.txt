@@ -134,3 +134,9 @@ refutescan>=0.1.0
 # bank generation, time-limit/anti-cheat policy) through thin adapters that
 # inject the local LLM.
 quizforge>=0.3.0
+
+# Narrated-slide-reel → MP4 engine — vendor-neutral screenshot / TTS / ffmpeg
+# stitch with a master post-step (fades, end-hold, music bed). The lesson and
+# how-to video generators are thin seams that supply branded slide HTML + a
+# local Kokoro voice.
+slidecast>=0.2.0
